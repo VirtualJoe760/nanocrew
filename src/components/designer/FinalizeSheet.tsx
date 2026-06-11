@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { PlacementEditorBody } from '@/components/designer/PlacementEditor';
 import { ThemedText } from '@/components/themed-text';
@@ -120,7 +130,9 @@ export function FinalizeSheet({
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.backdrop}>
         <ThemedView type="background" style={styles.sheet}>
           <View style={styles.header}>
             <ThemedText type="smallBold">Review & finalize</ThemedText>
@@ -190,7 +202,10 @@ export function FinalizeSheet({
               </Pressable>
             </View>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.three }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ gap: Spacing.three }}>
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -254,7 +269,7 @@ export function FinalizeSheet({
             </ScrollView>
           )}
         </ThemedView>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
