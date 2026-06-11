@@ -152,6 +152,7 @@ export interface MockupPosition {
   height: number;
   top: number;
   left: number;
+  limit_to_print_area?: boolean; // false → art may bleed past the print area
 }
 
 export interface MockupFile {

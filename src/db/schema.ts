@@ -143,6 +143,7 @@ type PrintPosition = {
   height: number;
   top: number;
   left: number;
+  limitToPrintArea?: boolean; // false → art may bleed past the print area
 };
 
 export const compositions = pgTable(

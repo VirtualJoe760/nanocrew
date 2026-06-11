@@ -14,6 +14,7 @@ interface PositionInput {
   height: number;
   top: number;
   left: number;
+  limitToPrintArea?: boolean; // false → art may bleed past the print area
 }
 interface PlacementInput {
   placement: string;
@@ -24,11 +25,15 @@ interface PlacementInput {
 function clamp(p: PositionInput): PositionInput {
   const areaWidth = Math.max(1, Math.round(p.areaWidth));
   const areaHeight = Math.max(1, Math.round(p.areaHeight));
-  const width = Math.min(Math.max(1, Math.round(p.width)), areaWidth);
-  const height = Math.min(Math.max(1, Math.round(p.height)), areaHeight);
-  const left = Math.min(Math.max(0, Math.round(p.left)), areaWidth - width);
-  const top = Math.min(Math.max(0, Math.round(p.top)), areaHeight - height);
-  return { areaWidth, areaHeight, width, height, top, left };
+  // When bleed is allowed, the art may exceed the area and sit partly off-edge.
+  const bleed = p.limitToPrintArea === false;
+  const maxW = bleed ? areaWidth * 2 : areaWidth;
+  const maxH = bleed ? areaHeight * 2 : areaHeight;
+  const width = Math.min(Math.max(1, Math.round(p.width)), maxW);
+  const height = Math.min(Math.max(1, Math.round(p.height)), maxH);
+  const left = Math.min(Math.max(bleed ? -width : 0, Math.round(p.left)), areaWidth - (bleed ? 1 : width));
+  const top = Math.min(Math.max(bleed ? -height : 0, Math.round(p.top)), areaHeight - (bleed ? 1 : height));
+  return { areaWidth, areaHeight, width, height, top, left, limitToPrintArea: p.limitToPrintArea };
 }
 
 export async function POST(req: Request) {
@@ -75,6 +80,7 @@ export async function POST(req: Request) {
               height: p.position.height,
               top: p.position.top,
               left: p.position.left,
+              ...(p.position.limitToPrintArea === false ? { limit_to_print_area: false } : {}),
             },
           }
         : {}),

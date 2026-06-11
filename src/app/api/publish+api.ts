@@ -81,6 +81,7 @@ export async function POST(req: Request) {
                 height: p.position.height,
                 top: p.position.top,
                 left: p.position.left,
+                ...(p.position.limitToPrintArea === false ? { limit_to_print_area: false } : {}),
               } satisfies MockupPosition,
             }
           : {}),

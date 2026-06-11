@@ -15,6 +15,7 @@ import type { DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   cancelAnimation,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -22,6 +23,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 import { Image } from 'expo-image';
@@ -220,6 +222,25 @@ export default function DesignScreen() {
   useEffect(() => {
     setDockCollapsed(hasUngroupedTemplate);
   }, [hasUngroupedTemplate]);
+
+  // The dock handle: swipe up to expand the product list, swipe down to collapse it
+  // (a quick tap still toggles). Direction wins over distance via velocity.
+  const dockGesture = useMemo(
+    () =>
+      Gesture.Race(
+        Gesture.Tap().maxDuration(250).onEnd(() => runOnJS(setDockCollapsed)((c) => !c)),
+        Gesture.Pan()
+          .activeOffsetY([-8, 8])
+          .onEnd((e) => {
+            'worklet';
+            const up = e.translationY < -8 || e.velocityY < -250;
+            const down = e.translationY > 8 || e.velocityY > 250;
+            if (up) runOnJS(setDockCollapsed)(false);
+            else if (down) runOnJS(setDockCollapsed)(true);
+          }),
+      ),
+    [],
+  );
 
   const fabPulse = useSharedValue(1);
   useEffect(() => {
@@ -997,12 +1018,14 @@ export default function DesignScreen() {
           },
         ]}
         onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}>
-        <Pressable onPress={() => setDockCollapsed((c) => !c)} style={styles.dockHandle} hitSlop={8}>
-          <View style={[styles.dockGrip, { backgroundColor: theme.backgroundSelected }]} />
-          <ThemedText type="small" themeColor="textSecondary">
-            {dockCollapsed ? '▲  Products' : '▼  Products'}
-          </ThemedText>
-        </Pressable>
+        <GestureDetector gesture={dockGesture}>
+          <View style={styles.dockHandle}>
+            <View style={[styles.dockGrip, { backgroundColor: theme.backgroundSelected }]} />
+            <ThemedText type="small" themeColor="textSecondary">
+              {dockCollapsed ? '▲  Swipe up for products' : '▼  Swipe down to hide'}
+            </ThemedText>
+          </View>
+        </GestureDetector>
         {dockCollapsed ? null : (
           <TemplatesDock
             blanks={blanks}
@@ -1661,7 +1684,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dockWrap: { borderTopWidth: StyleSheet.hairlineWidth },
-  dockHandle: { alignItems: 'center', paddingTop: Spacing.one, paddingBottom: Spacing.half, gap: 2 },
+  dockHandle: { alignItems: 'center', paddingTop: Spacing.two, paddingBottom: Spacing.two, gap: 3 },
   dockGrip: { width: 44, height: 4, borderRadius: 2 },
   fab: {
     position: 'absolute',
