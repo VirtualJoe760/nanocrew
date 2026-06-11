@@ -1,31 +1,32 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
+import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 
-import { Colors } from '@/constants/theme';
-
+// SDK 54 native-tabs API: Icon and Label are separate children of each Trigger.
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
   return (
-    <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+    <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
-        />
+        <Icon sf="sparkles" />
+        <Label>Nanocrew</Label>
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
-        />
+      <NativeTabs.Trigger name="market">
+        <Icon sf="bag.fill" />
+        <Label>Market</Label>
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="studio">
+        <Icon sf="wand.and.stars" />
+        <Label>Studio</Label>
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="design">
+        <Icon sf="paintpalette.fill" />
+        <Label>Design</Label>
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="account">
+        <Icon sf="person.crop.circle.fill" />
+        <Label>Account</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

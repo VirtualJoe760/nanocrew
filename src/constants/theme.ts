@@ -14,6 +14,10 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    // The designer canvas reads as a recessed work surface, distinct from the app chrome.
+    canvas: '#E9EAEF',
+    canvasDot: '#B9BCC8',
+    canvasEdge: '#D4D6DE',
   },
   dark: {
     text: '#ffffff',
@@ -21,6 +25,9 @@ export const Colors = {
     backgroundElement: '#212225',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
+    canvas: '#121319',
+    canvasDot: '#34374a',
+    canvasEdge: '#23242e',
   },
 } as const;
 

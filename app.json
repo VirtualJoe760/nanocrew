@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "nanocrew",
+    "name": "Nanocrew",
     "slug": "nanocrew",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,7 +20,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
+      "output": "server",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -34,7 +34,8 @@
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

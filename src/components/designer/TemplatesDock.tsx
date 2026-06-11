@@ -1,0 +1,179 @@
+import { useMemo, useState } from 'react';
+import { Image } from 'expo-image';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { useTheme } from '@/hooks/use-theme';
+import { Spacing } from '@/constants/theme';
+import type { BlankCategory, CatalogBlank } from '@/lib/printful';
+
+const GENDERS: { key: BlankCategory; label: string }[] = [
+  { key: 'men', label: 'Men' },
+  { key: 'women', label: 'Women' },
+  { key: 'kids', label: 'Kids' },
+  { key: 'accessories', label: 'Access.' },
+];
+
+export const DOCK_TAB_CLEARANCE = 84;
+
+export function TemplatesDock({
+  blanks,
+  loading,
+  onAdd,
+}: {
+  blanks: CatalogBlank[];
+  loading: boolean;
+  onAdd: (b: CatalogBlank) => void;
+}) {
+  const theme = useTheme();
+  const [gender, setGender] = useState<BlankCategory>('men');
+  const [type, setType] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const searching = query.trim().length > 0;
+
+  const inGender = useMemo(() => blanks.filter((b) => b.category === gender), [blanks, gender]);
+
+  // Search filters by product name across the whole gender bucket (skips the type drill-down).
+  const matches = useMemo(() => {
+    if (!searching) return [];
+    const q = query.trim().toLowerCase();
+    return inGender.filter((b) => b.name.toLowerCase().includes(q)).slice(0, 60);
+  }, [inGender, query, searching]);
+
+  // Product types within the chosen gender (each with a representative thumbnail).
+  const types = useMemo(() => {
+    const m = new Map<string, { type: string; image: string; count: number }>();
+    for (const b of inGender) {
+      const e = m.get(b.type);
+      if (e) e.count++;
+      else m.set(b.type, { type: b.type, image: b.image, count: 1 });
+    }
+    return [...m.values()].sort((a, b) => a.type.localeCompare(b.type));
+  }, [inGender]);
+
+  const products = useMemo(
+    () => (type ? inGender.filter((b) => b.type === type) : []),
+    [inGender, type],
+  );
+
+  return (
+    <View style={styles.dock}>
+      <View style={styles.filterRow}>
+        {GENDERS.map((g) => {
+          const active = gender === g.key;
+          return (
+            <Pressable
+              key={g.key}
+              onPress={() => {
+                setGender(g.key);
+                setType(null);
+              }}>
+              <ThemedView
+                type={active ? 'backgroundSelected' : 'backgroundElement'}
+                style={styles.tab}>
+                <ThemedText type="small" themeColor={active ? 'text' : 'textSecondary'}>
+                  {g.label}
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          );
+        })}
+        {type ? (
+          <Pressable onPress={() => setType(null)} style={styles.back}>
+            <ThemedText type="small" themeColor="textSecondary">
+              ‹ {type}
+            </ThemedText>
+          </Pressable>
+        ) : null}
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search products…"
+          placeholderTextColor={theme.textSecondary}
+          autoCapitalize="none"
+          style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        />
+      </View>
+
+      {loading && !blanks.length ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.status}>
+          Loading catalogue…
+        </ThemedText>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.row}
+          // Pull the row to the right past its start → back to the categories.
+          onScrollEndDrag={(e) => {
+            if (type && e.nativeEvent.contentOffset.x < -48) setType(null);
+          }}
+          scrollEventThrottle={16}>
+          {type && !searching ? (
+            <Pressable onPress={() => setType(null)}>
+              <ThemedView type="backgroundElement" style={[styles.card, styles.backCard]}>
+                <ThemedText type="title" themeColor="textSecondary">
+                  ‹
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                  All {GENDERS.find((g) => g.key === gender)?.label}
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          ) : null}
+          {searching || type
+            ? (searching ? matches : products).map((b) => (
+                <Pressable key={b.id} onPress={() => onAdd(b)}>
+                  <ThemedView type="backgroundElement" style={styles.card}>
+                    <Image source={{ uri: b.image }} style={styles.cardImg} contentFit="contain" />
+                    <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                      {b.name}
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              ))
+            : types.map((t) => (
+                <Pressable key={t.type} onPress={() => setType(t.type)}>
+                  <ThemedView type="backgroundElement" style={styles.card}>
+                    <Image source={{ uri: t.image }} style={styles.cardImg} contentFit="contain" />
+                    <ThemedText type="small" numberOfLines={1}>
+                      {t.type}
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {t.count} items
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  dock: { paddingTop: Spacing.two, paddingBottom: DOCK_TAB_CLEARANCE, gap: Spacing.two },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingHorizontal: Spacing.three,
+  },
+  tab: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
+  back: { marginLeft: Spacing.two },
+  search: {
+    flex: 1,
+    minWidth: 90,
+    marginLeft: Spacing.two,
+    height: 30,
+    borderRadius: 999,
+    paddingHorizontal: Spacing.three,
+    fontSize: 13,
+  },
+  status: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
+  row: { gap: Spacing.two, paddingHorizontal: Spacing.three },
+  card: { width: 96, padding: Spacing.two, borderRadius: Spacing.three, alignItems: 'center', gap: 2 },
+  backCard: { width: 72, justifyContent: 'center' },
+  cardImg: { width: 68, height: 68, borderRadius: Spacing.two },
+});

@@ -7,3 +7,13 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* Web only: stop the browser's native image drag (the "ghost image") so the
+   canvas pan and node-drag gestures aren't hijacked when the pointer is over
+   an image (design tiles, product blanks, composites). */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
