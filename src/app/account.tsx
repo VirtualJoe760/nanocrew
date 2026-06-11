@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
+import { signInWithProvider, type OAuthProvider } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
 
 // Billing lives on the web portal (Stripe) — never in the app (Apple IAP avoidance).
@@ -46,6 +47,20 @@ export default function AccountScreen() {
       .then((d: { stores?: StoreRow[] }) => setStores(d.stores ?? []))
       .catch(() => {});
   }, [session]);
+
+  const social = async (provider: OAuthProvider) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await signInWithProvider(provider);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sign-in failed';
+      // A cancelled sheet isn't an error worth shouting about.
+      if (!/cancelled/i.test(msg)) setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (mode: 'in' | 'up') => {
     const e = email.trim().toLowerCase();
@@ -129,6 +144,19 @@ export default function AccountScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   Sign in to sync your designs, stores and sales.
                 </ThemedText>
+                <Pressable onPress={() => social('google')} disabled={busy}>
+                  <ThemedView type="backgroundElement" style={[styles.button, { opacity: busy ? 0.5 : 1 }]}>
+                    <ThemedText type="smallBold">Continue with Google</ThemedText>
+                  </ThemedView>
+                </Pressable>
+                <Pressable onPress={() => social('facebook')} disabled={busy}>
+                  <ThemedView type="backgroundElement" style={[styles.button, { opacity: busy ? 0.5 : 1 }]}>
+                    <ThemedText type="smallBold">Continue with Facebook</ThemedText>
+                  </ThemedView>
+                </Pressable>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.divider}>
+                  or with email
+                </ThemedText>
                 <TextInput
                   value={email}
                   onChangeText={setEmail}
@@ -192,6 +220,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   signOut: { marginTop: Spacing.four },
+  divider: { textAlign: 'center', marginVertical: Spacing.one },
   section: { gap: Spacing.two, marginTop: Spacing.three },
   storeRow: { padding: Spacing.three, borderRadius: Spacing.two, gap: 2 },
 });

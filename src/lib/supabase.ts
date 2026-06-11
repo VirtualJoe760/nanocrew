@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
 // Client-side Supabase (auth only — data goes through our API routes). The publishable
 // key is safe to ship in the bundle.
@@ -20,6 +21,8 @@ export const supabase = createClient(url, key, {
     storage,
     autoRefreshToken: !isServer,
     persistSession: !isServer,
-    detectSessionInUrl: false,
+    // Web OAuth comes back as a full-page redirect with tokens in the URL — let
+    // supabase-js pick them up there. On native we parse the callback ourselves.
+    detectSessionInUrl: Platform.OS === 'web' && !isServer,
   },
 });
