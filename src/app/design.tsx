@@ -1100,17 +1100,6 @@ export default function DesignScreen() {
                       <Pressable
                         onPress={() => {
                           setReviewId(null);
-                          setEditorComp({ id: node.refId, templateKey: node.blankRef! });
-                        }}>
-                        <ThemedView type="backgroundElement" style={styles.generate}>
-                          <ThemedText type="smallBold">Adjust size & placement</ThemedText>
-                        </ThemedView>
-                      </Pressable>
-                    ) : null}
-                    {node.refId && node.blankRef ? (
-                      <Pressable
-                        onPress={() => {
-                          setReviewId(null);
                           setFinalizeComp({
                             id: node.refId,
                             templateKey: node.blankRef!,
@@ -1119,7 +1108,7 @@ export default function DesignScreen() {
                         }}>
                         <View style={[styles.generate, { backgroundColor: theme.text }]}>
                           <ThemedText type="smallBold" style={{ color: theme.background }}>
-                            Approve & finalize
+                            Review & finalize
                           </ThemedText>
                         </View>
                       </Pressable>

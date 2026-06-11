@@ -123,7 +123,7 @@ export function FinalizeSheet({
       <View style={styles.backdrop}>
         <ThemedView type="background" style={styles.sheet}>
           <View style={styles.header}>
-            <ThemedText type="smallBold">Finalize & publish</ThemedText>
+            <ThemedText type="smallBold">Review & finalize</ThemedText>
             <Pressable onPress={onClose} hitSlop={10}>
               <ThemedText type="small" themeColor="textSecondary">
                 Close
@@ -131,16 +131,20 @@ export function FinalizeSheet({
             </Pressable>
           </View>
 
-          {/* Step toggle: adjust placement ⇄ price & publish */}
+          {/* Linear steps: review the print → price → publish. Step 1 is tappable from
+              step 2 so you can go back and tweak; you can't skip ahead. */}
           {!publishedId ? (
             <View style={styles.stepRow}>
               {(
                 [
-                  ['placement', 'Size & placement'],
-                  ['pricing', 'Price & publish'],
+                  ['placement', '1 · Review'],
+                  ['pricing', '2 · Pricing'],
                 ] as const
               ).map(([key, label]) => (
-                <Pressable key={key} onPress={() => setStep(key)} style={styles.stepBtn}>
+                <Pressable
+                  key={key}
+                  onPress={() => key === 'placement' && setStep('placement')}
+                  style={styles.stepBtn}>
                   <ThemedView
                     type={step === key ? 'backgroundSelected' : 'backgroundElement'}
                     style={styles.stepChip}>
@@ -154,12 +158,21 @@ export function FinalizeSheet({
           ) : null}
 
           {step === 'placement' && !publishedId ? (
-            <PlacementEditorBody
-              compositionId={compositionId}
-              templateKey={templateKey}
-              designs={designs}
-              onPreview={(url) => onPreview?.(url)}
-            />
+            <>
+              <PlacementEditorBody
+                compositionId={compositionId}
+                templateKey={templateKey}
+                designs={designs}
+                onPreview={(url) => onPreview?.(url)}
+              />
+              <Pressable onPress={() => setStep('pricing')}>
+                <View style={[styles.publish, { backgroundColor: theme.text }]}>
+                  <ThemedText type="smallBold" style={{ color: theme.background }}>
+                    Move on to pricing →
+                  </ThemedText>
+                </View>
+              </Pressable>
+            </>
           ) : loading ? (
             <ActivityIndicator style={{ marginVertical: Spacing.six }} />
           ) : publishedId ? (
