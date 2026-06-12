@@ -18,6 +18,9 @@ export type BrandResult = {
   logo: { exists: boolean; direction: string };
   designStyle: 'minimalist' | 'bold' | 'elegant' | 'extravagant';
   products: string[];
+  /** Website look/layout wishes in the creator's own words ("slideshow at the top",
+   *  "mobile bottom bar") — the storefront briefs translate these via VOCABULARY.md. */
+  siteNotes?: string[];
   designSystem: {
     palette: { role: string; hex: string }[];
     typography: { display: string; body: string };
@@ -58,7 +61,9 @@ You need answers to these, in roughly this order (skip anything they already cov
 2. Do they have a logo? If not, what should it look like?
 3. Colors — what palette do they want?
 4. Fonts and design temperament: do they prefer minimalist, bold, elegant, or extravagant?
-5. How should the brand's aesthetic feel and manifest on their website?
+5. How should the brand's aesthetic feel and manifest on their website? (Listen for
+   layout wishes — "a slideshow up top", "a video playing", "scrolling text" — and keep
+   their exact words for siteNotes.)
 6. What products are they most excited to sell?
 
 HARD RULE — never override an explicit choice. If they say "black and white", the palette
@@ -85,6 +90,7 @@ or
     "logo": {"exists": <true if they already have one>, "direction": "<what it looks like or should look like>"},
     "designStyle": "<minimalist|bold|elegant|extravagant — their stated preference>",
     "products": ["<the products they're excited to sell>"],
+    "siteNotes": ["<any website look/layout wishes, kept VERBATIM in their own words — e.g. 'a slideshow of photos at the top', 'a video playing behind the logo', 'buttons at the bottom on phones'. Empty array if none came up>"],
     "designSystem": {
       "palette": [{"role": "primary|secondary|accent|background|text", "hex": "#RRGGBB"}],
       "typography": {"display": "<display font style, honoring their preference>", "body": "<body font style>"},

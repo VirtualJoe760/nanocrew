@@ -102,7 +102,8 @@ function buildBrandBrief(input: ProvisionInput, template: string): string {
 
 You are branding a storefront for the clothing brand "${brand.name}". This repo is the
 "${template}" Nanocrew template; it was chosen because the creator's style is
-${brand.designStyle}. Read TEMPLATE.md first — its hard rules bind every edit you make.
+${brand.designStyle}. Read TEMPLATE.md first — its hard rules bind every edit you make —
+and VOCABULARY.md, which translates the creator's everyday words into blocks and files.
 
 ## Identity
 - Name: ${brand.name}
@@ -117,7 +118,17 @@ ${brand.designStyle}. Read TEMPLATE.md first — its hard rules bind every edit 
 - Texture cues: ${brand.designSystem.texture.join(', ')}
 - Motion cues: ${brand.designSystem.motion.join(', ')}
 
-## What to do
+${
+  brand.siteNotes?.length
+    ? `## The creator's site wishes (their own words — translate via VOCABULARY.md)
+${brand.siteNotes.map((n) => `- "${n}"`).join('\n')}
+Honor these by composing the matching blocks (VOCABULARY.md in this repo maps everyday
+phrases to blocks). If a wish has no matching block, note it at the end of your work —
+do not invent new components.
+
+`
+    : ''
+}## What to do
 brand.json is already written by the pipeline — treat every value in it as a hard
 constraint (the creator chose those colors and fonts explicitly; never substitute).
 
