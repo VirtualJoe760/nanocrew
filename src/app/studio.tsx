@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Dimensions, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -197,16 +198,35 @@ function FaceEntity({ state, onPress }: { state: EntityState; onPress: () => voi
   const talk = useSharedValue(0);
   const ring = useSharedValue(0);
 
+  // Decode discipline (the 2018 Intel sim melts otherwise): exactly one video plays at a
+  // time, and nothing plays while this tab is blurred.
+  const focused = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
+      idlePlayer.play();
+      return () => {
+        focused.current = false;
+        idlePlayer.pause();
+        talkingPlayer.pause();
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
   useEffect(() => {
+    if (!focused.current) return;
     if (state === 'speaking') {
       talkingPlayer.play();
       talk.value = withTiming(1, { duration: 450 });
-    } else {
-      talk.value = withTiming(0, { duration: 450 });
-      // Let the crossfade finish before freezing the talking take.
-      const t = setTimeout(() => talkingPlayer.pause(), 500);
+      // Once the talking take fully covers, stop decoding the idle take.
+      const t = setTimeout(() => idlePlayer.pause(), 500);
       return () => clearTimeout(t);
     }
+    idlePlayer.play(); // resume under the fade before the talking take disappears
+    talk.value = withTiming(0, { duration: 450 });
+    const t = setTimeout(() => talkingPlayer.pause(), 500);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
@@ -537,9 +557,10 @@ const styles = StyleSheet.create({
   markBadge: { transform: [{ scale: 0.32 }], width: 28, height: 28, marginLeft: -28, marginRight: -22 },
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.four },
   faceBox: {
-    width: '100%',
     flex: 1,
-    maxHeight: 520,
+    aspectRatio: 9 / 16, // match the takes exactly — the whole face, never cropped
+    alignSelf: 'center',
+    maxWidth: '100%',
     borderRadius: 6,
     overflow: 'hidden',
     backgroundColor: '#000',
