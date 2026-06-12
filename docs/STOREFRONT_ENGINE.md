@@ -183,3 +183,32 @@ brand sites POST `/api/public/beacon` per pageview into a `page_views` daily cou
 **Platform admin — inside the Nanocrew app.** Role-gated (platform admin emails) section
 on the Account tab backed by `/api/admin/platform`: all stores w/ status, platform-wide
 orders/revenue, and adjustment actions (suspend store, re-provision) as they're needed.
+
+## Post-launch creator controls (decided with Joe, 2026-06-12)
+
+Publishing is never final — everything stays editable:
+
+- **Products** remain fully editable after publish: the in-app designer owns
+  catalogues/designs/compositions, and republishing updates the live Printful product.
+  Auto-generated "first drop" products (see task #26) are ordinary rows — same editing.
+- **Rebrand**: creators can change their logo and even the brand's display name
+  post-launch, from Studio (Venus) or the site's /admin. Implementation: update the
+  store row + a revision brief updates brand.json. The slug — and therefore the site
+  URL and repo name — stays stable; only presentation changes.
+- **Blog**: journal posts are authored from BOTH the brand site's /admin dashboard and
+  Studio in the app. Posts live in the platform DB (`store_posts`) and are served by the
+  public API, so publishing is instant and free — no forge session, no redeploy.
+  Templates fetch posts dynamically and fall back to content/blog/*.md when offline.
+- **Studio as business cockpit**: earnings reports, order counts, traffic (beacon), and
+  top products surface as cards in the Studio tab; Venus can speak the summary
+  ("how did my store do this week?"). Data: /api/creator/stats + /api/creator/orders.
+
+## Public API status
+
+- `GET /api/public/stores/:slug/products` — LIVE in the codebase (published products +
+  variants, CORS open, 5-min cache; matches templates' lib/api.ts contract exactly).
+- `POST /api/public/beacon` — pageview tick (anonymous, daily counters).
+- Pending: checkout (needs Stripe), store-info (rebrand without redeploy), posts
+  (dynamic blog), and a public deployment for these routes — brand sites cannot call
+  localhost; candidates are EAS Hosting or a small Vercel server importing the same
+  Drizzle schema.
