@@ -24,6 +24,7 @@ import {
   useAudioRecorderState,
   useAudioSampleListener,
 } from 'expo-audio';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
@@ -33,6 +34,9 @@ import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiUrl } from '@/lib/api';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
+import { AI_VOICES, DEFAULT_VOICE, type AiVoice } from '@/lib/voices';
+
+const VOICE_KEY = 'nanocrew.voiceId';
 
 // The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
 // counter-rotating rings, digital rain behind — talks you through building your brand.
@@ -416,6 +420,42 @@ export default function StudioScreen() {
   const started = useRef(false);
   const playCount = useRef(0);
 
+  // Which AI they chose. First-time creators (no store, no saved pick) choose; everyone
+  // else goes straight to their consultant.
+  const [voiceId, setVoiceId] = useState<string | null>(null);
+  const [voiceResolved, setVoiceResolved] = useState(false);
+  const [needsSelection, setNeedsSelection] = useState(false);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    let alive = true;
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(VOICE_KEY);
+        if (!alive) return;
+        if (saved) {
+          setVoiceId(saved);
+        } else {
+          const r = await fetch(apiUrl('/api/me'), {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          const d = (await r.json()) as { stores?: unknown[] };
+          if (!alive) return;
+          if ((d.stores?.length ?? 0) > 0) setVoiceId(DEFAULT_VOICE.id);
+          else setNeedsSelection(true);
+        }
+      } catch {
+        if (alive) setVoiceId(DEFAULT_VOICE.id); // never block the studio on a lookup
+      } finally {
+        if (alive) setVoiceResolved(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [session]);
+
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const player = useAudioPlayer();
   const playerStatus = useAudioPlayerStatus(player);
@@ -492,7 +532,7 @@ export default function StudioScreen() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ ...body, messages: messages.current }),
+          body: JSON.stringify({ ...body, voiceId, messages: messages.current }),
         });
         const d = (await r.json()) as {
           userText?: string;
@@ -528,16 +568,16 @@ export default function StudioScreen() {
         setState('idle');
       }
     },
-    [session, playSpeech],
+    [session, playSpeech, voiceId],
   );
 
-  // Venus only speaks on her own stage: the conversation starts when the Studio tab is
-  // actually focused, and everything goes quiet the moment you leave it.
+  // The AI only speaks on its own stage: the conversation starts when the Studio tab is
+  // actually focused AND an AI has been chosen; everything goes quiet on blur.
   const focusedRef = useRef(false);
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
-      if (session && !started.current) {
+      if (session && voiceId && !started.current) {
         started.current = true;
         void turn({ init: true });
       }
@@ -550,7 +590,34 @@ export default function StudioScreen() {
         busyRef.current = false;
         setState('idle');
       };
-    }, [session, turn, player, recorder]),
+    }, [session, voiceId, turn, player, recorder]),
+  );
+
+  const chooseVoice = useCallback((v: AiVoice) => {
+    AsyncStorage.setItem(VOICE_KEY, v.id).catch(() => {});
+    setNeedsSelection(false);
+    setVoiceId(v.id); // the focus effect picks it up and the introduction begins
+  }, []);
+
+  const previewVoice = useCallback(
+    async (v: AiVoice) => {
+      if (!session || previewing) return;
+      setPreviewing(v.id);
+      try {
+        const r = await fetch(apiUrl('/api/voice'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ say: `Hi, I'm ${v.name}. Let's build your brand together.`, voiceId: v.id }),
+        });
+        const d = (await r.json()) as { speech?: string };
+        if (d.speech) await playSpeech(d.speech);
+      } catch {
+        // preview is best-effort
+      } finally {
+        setPreviewing(null);
+      }
+    },
+    [session, previewing, playSpeech],
   );
 
   const startListening = useCallback(async () => {
@@ -756,6 +823,49 @@ export default function StudioScreen() {
               {'> sign in on the Account tab\n> the entity will wake up'}
             </ThemedText>
           </View>
+        ) : !voiceResolved ? (
+          <ActivityIndicator style={styles.center} color="#00ff7f" />
+        ) : needsSelection && !voiceId ? (
+          <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
+            <ThemedText type="code" style={styles.brandEyebrow}>
+              {'// CHOOSE YOUR AI'}
+            </ThemedText>
+            <ThemedText type="small" style={styles.dim}>
+              Your consultant guides the whole journey — hear them first.
+            </ThemedText>
+            {AI_VOICES.map((v) => (
+              <View key={v.id} style={styles.voiceCard}>
+                <View style={styles.voiceMeta}>
+                  <ThemedText type="subtitle" style={styles.white}>
+                    {v.name}
+                  </ThemedText>
+                  <ThemedText type="code" style={styles.voiceVibe}>
+                    {v.vibe}
+                  </ThemedText>
+                </View>
+                <View style={styles.voiceActions}>
+                  <Pressable onPress={() => previewVoice(v)} disabled={!!previewing} hitSlop={6}>
+                    <View style={styles.voiceBtn}>
+                      {previewing === v.id ? (
+                        <ActivityIndicator size="small" color="#00ff7f" />
+                      ) : (
+                        <ThemedText type="code" style={styles.green}>
+                          ▶ hear
+                        </ThemedText>
+                      )}
+                    </View>
+                  </Pressable>
+                  <Pressable onPress={() => chooseVoice(v)} hitSlop={6}>
+                    <View style={[styles.voiceBtn, styles.voiceSelect]}>
+                      <ThemedText type="code" style={{ color: BG }}>
+                        select →
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
         ) : brand ? (
           <ScrollView
             style={styles.fill}
@@ -897,6 +1007,27 @@ const styles = StyleSheet.create({
   error: { color: '#ff5c5c', textAlign: 'center', paddingTop: Spacing.two },
 
   brandScroll: { gap: Spacing.three, paddingTop: Spacing.four },
+  selectScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: Spacing.four },
+  voiceCard: {
+    borderWidth: 1,
+    borderColor: '#134d31',
+    borderRadius: 6,
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
+  voiceMeta: { gap: 2 },
+  voiceVibe: { color: '#3fae77' },
+  voiceActions: { flexDirection: 'row', gap: Spacing.two },
+  voiceBtn: {
+    borderWidth: 1,
+    borderColor: '#1c5c3b',
+    borderRadius: 4,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    minWidth: 96,
+    alignItems: 'center',
+  },
+  voiceSelect: { backgroundColor: '#00ff7f', borderColor: '#00ff7f' },
   logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#134d31' },
   brandEyebrow: { color: '#1f7a4d' },
   white: { color: '#eafff3' },

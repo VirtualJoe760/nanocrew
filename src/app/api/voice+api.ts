@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { interviewSystem, parseTurn, type ChatMessage } from '@/lib/interview';
+import { resolveVoice } from '@/lib/voices';
 
 // POST /api/voice — one spoken turn of the Studio brand interview.
 // Body: { messages: ChatMessage[], audio?: base64 m4a, init?: true }
@@ -9,7 +10,6 @@ import { interviewSystem, parseTurn, type ChatMessage } from '@/lib/interview';
 // Returns: { userText?, done, question?, brand?, speech: base64 mp3 }
 const MODEL = 'gemini-2.5-flash';
 
-const ELEVEN_VOICE = process.env.ELEVENLABS_VOICE_ID ?? 'pFZP5JQG7iQjIQuC4Bku'; // "Lily" — British woman, warm + precise
 
 /** Subtle sci-fi room reverb via ffmpeg, when the host has it. Falls back to dry audio. */
 async function addReverb(mp3: Buffer): Promise<Buffer> {
@@ -34,11 +34,11 @@ async function addReverb(mp3: Buffer): Promise<Buffer> {
   }
 }
 
-async function speak(text: string): Promise<string> {
+async function speak(text: string, voiceId: string): Promise<string> {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) throw new Error('ELEVENLABS_API_KEY not configured');
   const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_VOICE}?output_format=mp3_44100_64`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`,
     {
       method: 'POST',
       headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
@@ -65,26 +65,32 @@ export async function POST(req: Request) {
   let audio: string | undefined;
   let init = false;
   let say: string | undefined;
+  let voiceId: string | undefined;
   try {
     const body = (await req.json()) as {
       messages?: ChatMessage[];
       audio?: string;
       init?: boolean;
       say?: string;
+      voiceId?: string;
     };
     messages = (body.messages ?? []).slice(-30);
     audio = body.audio;
     init = !!body.init;
     say = typeof body.say === 'string' ? body.say.slice(0, 300) : undefined;
+    voiceId = typeof body.voiceId === 'string' ? body.voiceId : undefined;
     if (!init && !audio && !say) throw new Error();
   } catch {
     return Response.json({ error: 'invalid body' }, { status: 400 });
   }
 
+  // Allowlisted roster only — unknown ids fall back to the default consultant.
+  const voice = resolveVoice(voiceId);
+
   // say mode: pure TTS — the app provides the line (e.g. announcing the store launch).
   if (say) {
     try {
-      return Response.json({ line: say, speech: await speak(say) });
+      return Response.json({ line: say, speech: await speak(say, voice.id) });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
     }
@@ -107,7 +113,7 @@ export async function POST(req: Request) {
       model: MODEL,
       contents: [...history, { role: 'user', parts: lastParts }],
       config: {
-        systemInstruction: interviewSystem(user.name),
+        systemInstruction: interviewSystem(user.name, voice.name),
         temperature: 0.9,
         responseMimeType: 'application/json',
       },
@@ -120,13 +126,13 @@ export async function POST(req: Request) {
     // on its own prompt examples — hand the floor back gently.
     if (!init && (turn.userText?.trim().length ?? 0) < 2) {
       const line = "I didn't catch that — tap me when you're ready.";
-      return Response.json({ empty: true, line, speech: await speak(line) });
+      return Response.json({ empty: true, line, speech: await speak(line, voice.id) });
     }
 
     const line = turn.done
       ? (turn.closing ?? `Your brand is ready. Take a look at ${turn.brand!.name}.`)
       : turn.question!;
-    const speech = await speak(line);
+    const speech = await speak(line, voice.id);
 
     return Response.json({
       userText: turn.userText,
