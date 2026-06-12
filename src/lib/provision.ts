@@ -120,6 +120,7 @@ export async function provisionStorefront(input: ProvisionInput): Promise<void> 
     //    droplet needs no GitHub credentials of its own.
     const brief = buildBrief(input.brand, input.logoUrl, input.transcript);
     const script = `set -e
+export PATH="$HOME/.local/bin:$PATH"
 mkdir -p ~/stores && cd ~/stores
 rm -rf ${repo}
 git clone https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git ${repo}
