@@ -99,42 +99,33 @@ function NetworkField() {
   );
 }
 
-// ---------- Nanocrew mark ----------
+// ---------- Nanocrew mark: the crewcut ----------
 
 const MARK = 88;
-const HEX = Array.from({ length: 6 }, (_, i) => {
-  const a = (Math.PI / 3) * i - Math.PI / 2;
-  return { x: MARK / 2 + Math.cos(a) * 40, y: MARK / 2 + Math.sin(a) * 40 };
+// Buzz crown: vertical bristles rising off the head's top arc. The center five end on a
+// dead-flat line (the flat top); the outer pair fades shorter (the taper).
+const HEAD_CX = 44;
+const HEAD_CY = 50;
+const HEAD_R = 25;
+const BRISTLES = [-16, -11, -6, -1, 5, 10, 15].map((dx, i, arr) => {
+  const onArc = HEAD_CY - Math.sqrt(HEAD_R * HEAD_R - dx * dx) + 1;
+  const isFade = i === 0 || i === arr.length - 1;
+  return { x: HEAD_CX + dx, y1: onArc, y2: isFade ? 19 : 13 };
 });
 
-/** Circuit-style Nanocrew "N" monogram inside a hex frame. */
+/** The Nanocrew crewcut: a minimal head with a flat-top buzz crown and a nucleus within. */
 function NanocrewMark({ color }: { color: string }) {
   return (
     <Svg width={MARK} height={MARK}>
-      {HEX.map((p, i) => {
-        const q = HEX[(i + 1) % 6];
-        return <Line key={`h${i}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke={color} strokeOpacity={0.55} strokeWidth={1.4} />;
-      })}
-      {HEX.map((p, i) => (
-        <Circle key={`hv${i}`} cx={p.x} cy={p.y} r={2} fill={color} fillOpacity={0.9} />
+      {/* head */}
+      <Circle cx={HEAD_CX} cy={HEAD_CY} r={HEAD_R} stroke={color} strokeWidth={2.2} fill="none" strokeOpacity={0.9} />
+      {/* the crewcut */}
+      {BRISTLES.map((b, i) => (
+        <Line key={i} x1={b.x} y1={b.y1} x2={b.x} y2={b.y2} stroke={color} strokeWidth={3} strokeLinecap="round" />
       ))}
-      {/* the N */}
-      <Line x1={31} y1={28} x2={31} y2={60} stroke={color} strokeWidth={3} strokeLinecap="round" />
-      <Line x1={31} y1={28} x2={57} y2={60} stroke={color} strokeWidth={3} strokeLinecap="round" />
-      <Line x1={57} y1={28} x2={57} y2={60} stroke={color} strokeWidth={3} strokeLinecap="round" />
-      {[
-        [31, 28],
-        [31, 60],
-        [57, 28],
-        [57, 60],
-      ].map(([x, y], i) => (
-        <Circle key={`n${i}`} cx={x} cy={y} r={3.4} fill={color} />
-      ))}
-      {/* circuit taps from the N out toward the hex frame */}
-      <Line x1={31} y1={44} x2={12} y2={44} stroke={color} strokeOpacity={0.5} strokeWidth={1.2} />
-      <Line x1={57} y1={44} x2={76} y2={44} stroke={color} strokeOpacity={0.5} strokeWidth={1.2} />
-      <Circle cx={12} cy={44} r={1.8} fill={color} fillOpacity={0.8} />
-      <Circle cx={76} cy={44} r={1.8} fill={color} fillOpacity={0.8} />
+      {/* the nucleus within */}
+      <Circle cx={HEAD_CX} cy={HEAD_CY} r={4} fill={color} />
+      <Circle cx={HEAD_CX} cy={HEAD_CY} r={10} stroke={color} strokeWidth={1} fill="none" strokeOpacity={0.45} />
     </Svg>
   );
 }
