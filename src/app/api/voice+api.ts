@@ -21,7 +21,8 @@ async function addReverb(mp3: Buffer): Promise<Buffer> {
     writeFileSync(`${base}.mp3`, mp3);
     execFileSync(
       'ffmpeg',
-      ['-y', '-i', `${base}.mp3`, '-af', 'aecho=0.8:0.55:38|57:0.16|0.10', '-b:a', '64k', `${base}-wet.mp3`],
+      // Gentle tempo pull-down (delicate pace) + a subtle sci-fi room echo.
+      ['-y', '-i', `${base}.mp3`, '-af', 'atempo=0.93,aecho=0.8:0.55:38|57:0.16|0.10', '-b:a', '64k', `${base}-wet.mp3`],
       { stdio: 'ignore', timeout: 10000 },
     );
     const wet = readFileSync(`${base}-wet.mp3`);
@@ -44,7 +45,7 @@ async function speak(text: string): Promise<string> {
       body: JSON.stringify({
         text,
         model_id: 'eleven_turbo_v2_5',
-        voice_settings: { stability: 0.55, similarity_boost: 0.75 },
+        voice_settings: { stability: 0.62, similarity_boost: 0.75 },
       }),
     },
   );

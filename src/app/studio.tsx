@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Dimensions, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -519,12 +520,27 @@ export default function StudioScreen() {
     [session, playSpeech],
   );
 
-  useEffect(() => {
-    if (session && !started.current) {
-      started.current = true;
-      void turn({ init: true });
-    }
-  }, [session, turn]);
+  // Venus only speaks on her own stage: the conversation starts when the Studio tab is
+  // actually focused, and everything goes quiet the moment you leave it.
+  const focusedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      focusedRef.current = true;
+      if (session && !started.current) {
+        started.current = true;
+        void turn({ init: true });
+      }
+      return () => {
+        focusedRef.current = false;
+        try {
+          player.pause();
+        } catch {}
+        recorder.stop().catch(() => {});
+        busyRef.current = false;
+        setState('idle');
+      };
+    }, [session, turn, player, recorder]),
+  );
 
   const startListening = useCallback(async () => {
     if (busyRef.current) return;
@@ -570,8 +586,10 @@ export default function StudioScreen() {
   // (Small delay so the audio session settles before the mic takes over.)
   useEffect(() => {
     if (!playerStatus.didJustFinish) return;
-    if (micGranted && !brand && started.current) {
-      const t = setTimeout(() => void startListening(), 450);
+    if (micGranted && !brand && started.current && focusedRef.current) {
+      const t = setTimeout(() => {
+        if (focusedRef.current) void startListening();
+      }, 450);
       return () => clearTimeout(t);
     }
     setState('idle');
