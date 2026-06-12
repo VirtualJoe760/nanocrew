@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     await db
       .insert(schema.creators)
       .values({ id: user.id, email: user.email })
-      .onConflictDoNothing({ target: schema.creators.id });
+      .onConflictDoNothing();
     const stores = await db
       .select({ id: schema.stores.id, name: schema.stores.name, slug: schema.stores.slug, status: schema.stores.status })
       .from(schema.stores)

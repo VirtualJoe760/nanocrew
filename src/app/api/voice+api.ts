@@ -9,7 +9,29 @@ import { INTERVIEW_SYSTEM, parseTurn, type ChatMessage } from '@/lib/interview';
 // Returns: { userText?, done, question?, brand?, speech: base64 mp3 }
 const MODEL = 'gemini-2.5-flash';
 
-const ELEVEN_VOICE = process.env.ELEVENLABS_VOICE_ID ?? 'JBFqnCBsd6RMkjVDRZzb'; // "George"
+const ELEVEN_VOICE = process.env.ELEVENLABS_VOICE_ID ?? 'onwK4e9ZLuTAKqWW03F9'; // "Daniel" — British, precise
+
+/** Subtle sci-fi room reverb via ffmpeg, when the host has it. Falls back to dry audio. */
+async function addReverb(mp3: Buffer): Promise<Buffer> {
+  try {
+    const { execFileSync } = await import('node:child_process');
+    const { writeFileSync, readFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const base = `${tmpdir()}/entity-${process.pid}-${Math.random().toString(36).slice(2)}`;
+    writeFileSync(`${base}.mp3`, mp3);
+    execFileSync(
+      'ffmpeg',
+      ['-y', '-i', `${base}.mp3`, '-af', 'aecho=0.8:0.55:38|57:0.16|0.10', '-b:a', '64k', `${base}-wet.mp3`],
+      { stdio: 'ignore', timeout: 10000 },
+    );
+    const wet = readFileSync(`${base}-wet.mp3`);
+    rmSync(`${base}.mp3`, { force: true });
+    rmSync(`${base}-wet.mp3`, { force: true });
+    return wet;
+  } catch {
+    return mp3; // no ffmpeg (or it failed) — ship the dry take
+  }
+}
 
 async function speak(text: string): Promise<string> {
   const key = process.env.ELEVENLABS_API_KEY;
@@ -22,12 +44,13 @@ async function speak(text: string): Promise<string> {
       body: JSON.stringify({
         text,
         model_id: 'eleven_turbo_v2_5',
-        voice_settings: { stability: 0.45, similarity_boost: 0.8 },
+        voice_settings: { stability: 0.55, similarity_boost: 0.75 },
       }),
     },
   );
   if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return Buffer.from(await res.arrayBuffer()).toString('base64');
+  const dry = Buffer.from(await res.arrayBuffer());
+  return (await addReverb(dry)).toString('base64');
 }
 
 export async function POST(req: Request) {

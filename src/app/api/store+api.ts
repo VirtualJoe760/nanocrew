@@ -20,11 +20,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Make sure the creators row exists (same bootstrap /api/me does).
+    // Make sure the creators row exists (same bootstrap /api/me does). Conflict-ignore
+    // without a target: an email collision (e.g. seeded data) must not explode here.
     await db
       .insert(schema.creators)
       .values({ id: user.id, email: user.email })
-      .onConflictDoNothing({ target: schema.creators.id });
+      .onConflictDoNothing();
 
     const base =
       brand.name

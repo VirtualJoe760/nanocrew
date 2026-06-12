@@ -11,7 +11,6 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
-  type SharedValue,
 } from 'react-native-reanimated';
 import {
   AudioModule,
@@ -194,38 +193,72 @@ function NodeWeb({ tempo }: { tempo: number }) {
   );
 }
 
-// ---------- Nano entity ----------
+// ---------- Nanocrew mark (the brain) ----------
 
-const PIXELS = 25; // 5×5 nano-pixel core
+const MARK = 88;
+const HEX = Array.from({ length: 6 }, (_, i) => {
+  const a = (Math.PI / 3) * i - Math.PI / 2;
+  return { x: MARK / 2 + Math.cos(a) * 40, y: MARK / 2 + Math.sin(a) * 40 };
+});
 
-function NanoPixel({ index, stage }: { index: number; stage: SharedValue<number> }) {
-  const flicker = useSharedValue(0.25 + Math.random() * 0.6);
+/** Circuit-style Nanocrew "N" monogram inside a hex frame. */
+function NanocrewMark({ color }: { color: string }) {
+  return (
+    <Svg width={MARK} height={MARK}>
+      {HEX.map((p, i) => {
+        const q = HEX[(i + 1) % 6];
+        return <Line key={`h${i}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke={color} strokeOpacity={0.55} strokeWidth={1.4} />;
+      })}
+      {HEX.map((p, i) => (
+        <Circle key={`hv${i}`} cx={p.x} cy={p.y} r={2} fill={color} fillOpacity={0.9} />
+      ))}
+      {/* the N */}
+      <Line x1={31} y1={28} x2={31} y2={60} stroke={color} strokeWidth={3} strokeLinecap="round" />
+      <Line x1={31} y1={28} x2={57} y2={60} stroke={color} strokeWidth={3} strokeLinecap="round" />
+      <Line x1={57} y1={28} x2={57} y2={60} stroke={color} strokeWidth={3} strokeLinecap="round" />
+      {[
+        [31, 28],
+        [31, 60],
+        [57, 28],
+        [57, 60],
+      ].map(([x, y], i) => (
+        <Circle key={`n${i}`} cx={x} cy={y} r={3.4} fill={color} />
+      ))}
+      {/* circuit taps from the N out toward the hex frame */}
+      <Line x1={31} y1={44} x2={12} y2={44} stroke={color} strokeOpacity={0.5} strokeWidth={1.2} />
+      <Line x1={57} y1={44} x2={76} y2={44} stroke={color} strokeOpacity={0.5} strokeWidth={1.2} />
+      <Circle cx={12} cy={44} r={1.8} fill={color} fillOpacity={0.8} />
+      <Circle cx={76} cy={44} r={1.8} fill={color} fillOpacity={0.8} />
+    </Svg>
+  );
+}
+
+/** A data packet racing outward from the core along a fixed bearing. */
+function SignalPulse({ angle, delay, color }: { angle: number; delay: number; color: string }) {
+  const t = useSharedValue(0);
   useEffect(() => {
-    flicker.value = withDelay(
-      Math.random() * 1200,
-      withRepeat(
-        withSequence(
-          withTiming(0.15 + Math.random() * 0.3, { duration: 240 + Math.random() * 700 }),
-          withTiming(0.6 + Math.random() * 0.4, { duration: 240 + Math.random() * 700 }),
-        ),
-        -1,
-      ),
-    );
-    return () => cancelAnimation(flicker);
+    t.value = withDelay(delay, withRepeat(withTiming(1, { duration: 1900, easing: Easing.out(Easing.quad) }), -1));
+    return () => cancelAnimation(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const style = useAnimatedStyle(() => ({
-    opacity: flicker.value,
-    backgroundColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
-  }));
-  // Center pixel stays solid — the "eye".
-  const isEye = index === 12;
-  return <Animated.View style={[styles.pixel, isEye && styles.pixelEye, style]} />;
+  const style = useAnimatedStyle(() => {
+    const r = 44 + t.value * 72;
+    return {
+      opacity: t.value < 0.05 ? 0 : 0.9 * (1 - t.value),
+      transform: [{ translateX: Math.cos(angle) * r }, { translateY: Math.sin(angle) * r }],
+    };
+  });
+  return <Animated.View style={[styles.signal, { backgroundColor: color }, style]} />;
 }
+
+// ---------- Nano entity ----------
+
+const PULSES = [0.4, 2.1, 3.7, 5.2]; // bearings (radians) for outbound signals
 
 function Entity({ state, onPress }: { state: EntityState; onPress: () => void }) {
   const stage = useSharedValue(0);
   const ring = useSharedValue(0);
+  const breath = useSharedValue(1);
 
   useEffect(() => {
     stage.value = withTiming(STATE_INDEX[state], { duration: 400 });
@@ -236,6 +269,15 @@ function Entity({ state, onPress }: { state: EntityState; onPress: () => void })
     } else {
       ring.value = withTiming(0, { duration: 250 });
     }
+    cancelAnimation(breath);
+    const tempo = state === 'thinking' ? 500 : state === 'speaking' ? 800 : 2400;
+    breath.value = withRepeat(
+      withSequence(
+        withTiming(1.07, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
@@ -246,21 +288,22 @@ function Entity({ state, onPress }: { state: EntityState; onPress: () => void })
   }));
   const glow = useAnimatedStyle(() => ({
     shadowColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
+    transform: [{ scale: breath.value }],
   }));
 
   // The web pulses faster the harder it's working.
   const tempo = state === 'thinking' ? 550 : state === 'speaking' ? 900 : 2600;
+  const color = STATE_COLORS[STATE_INDEX[state]];
 
   return (
     <Pressable onPress={onPress} hitSlop={30} style={styles.entityWrap}>
       <NodeWeb tempo={tempo} />
+      {PULSES.map((a, i) => (
+        <SignalPulse key={i} angle={a} delay={i * 480} color={color} />
+      ))}
       <Animated.View style={[styles.sonar, sonar]} />
       <Animated.View style={[styles.coreBox, glow]}>
-        <View style={styles.pixelGrid}>
-          {Array.from({ length: PIXELS }, (_, i) => (
-            <NanoPixel key={i} index={i} stage={stage} />
-          ))}
-        </View>
+        <NanocrewMark color={color} />
       </Animated.View>
     </Pressable>
   );
@@ -426,6 +469,11 @@ export default function StudioScreen() {
       {rain.map((c, i) => (
         <RainStrand key={i} col={c} />
       ))}
+      {/* HUD corner brackets */}
+      <View pointerEvents="none" style={[styles.corner, styles.cornerTL, { top: insets.top + 8 }]} />
+      <View pointerEvents="none" style={[styles.corner, styles.cornerTR, { top: insets.top + 8 }]} />
+      <View pointerEvents="none" style={[styles.corner, styles.cornerBL, { bottom: bottomPad - 8 }]} />
+      <View pointerEvents="none" style={[styles.corner, styles.cornerBR, { bottom: bottomPad - 8 }]} />
 
       <View style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <ThemedText type="code" style={styles.eyebrow}>
@@ -559,16 +607,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 20,
   },
-  pixelGrid: {
-    width: 80,
-    height: 80,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignContent: 'space-between',
+  signal: { position: 'absolute', width: 5, height: 5, borderRadius: 2.5 },
+  corner: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderColor: '#1c5c3b',
   },
-  pixel: { width: 12, height: 12, borderRadius: 2 },
-  pixelEye: { borderRadius: 6 },
+  cornerTL: { left: 12, borderLeftWidth: 1.5, borderTopWidth: 1.5 },
+  cornerTR: { right: 12, borderRightWidth: 1.5, borderTopWidth: 1.5 },
+  cornerBL: { left: 12, borderLeftWidth: 1.5, borderBottomWidth: 1.5 },
+  cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
   hint: { color: '#3fae77', letterSpacing: 1 },
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.three, minHeight: 96 },
