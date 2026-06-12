@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
-import type { BrandResult } from './interview+api';
+import type { BrandResult } from '@/lib/interview';
 
 // POST /api/store — persist a finished Studio interview as the creator's store:
 // brand identity → stores.brand_profile, design language → stores.design_system.
