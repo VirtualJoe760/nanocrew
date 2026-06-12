@@ -24,7 +24,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import Svg, { Circle, Line } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
@@ -39,53 +39,12 @@ import type { BrandResult, ChatMessage } from '@/lib/interview';
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 const BG = '#010604';
-const MATRIX_DIM = '#00ff8822';
 // idle green → listening mint → thinking cyan → speaking lime
 const STATE_COLORS = ['#00ff7f', '#8fffd0', '#39d9ff', '#c8ff4a'];
 const STATE_INDEX: Record<EntityState, number> = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
 
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
-// ---------- Digital rain ----------
-
-const GLYPHS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789Z';
-
-type RainColumn = { x: number; text: string; dur: number; delay: number; opacity: number };
-
-function makeRain(count: number): RainColumn[] {
-  return Array.from({ length: count }, (_, i) => ({
-    x: (SCREEN_W / count) * i + Math.random() * 14,
-    text: Array.from(
-      { length: 14 + Math.floor(Math.random() * 10) },
-      () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
-    ).join('\n'),
-    dur: 7000 + Math.random() * 9000,
-    delay: Math.random() * 6000,
-    opacity: 0.1 + Math.random() * 0.18,
-  }));
-}
-
-function RainStrand({ col }: { col: RainColumn }) {
-  const y = useSharedValue(-460);
-  useEffect(() => {
-    y.value = withDelay(
-      col.delay,
-      withRepeat(withTiming(SCREEN_H + 60, { duration: col.dur, easing: Easing.linear }), -1),
-    );
-    return () => cancelAnimation(y);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
-  return (
-    <Animated.Text
-      pointerEvents="none"
-      style={[styles.rain, { left: col.x, opacity: col.opacity }, style]}
-    >
-      {col.text}
-    </Animated.Text>
-  );
-}
 
 // ---------- Network mesh ----------
 
@@ -252,10 +211,20 @@ function FaceEntity({ state, onPress }: { state: EntityState; onPress: () => voi
 
   return (
     <Pressable onPress={onPress} style={styles.faceBox}>
-      <VideoView player={idlePlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+      <VideoView player={idlePlayer} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
       <Animated.View style={[StyleSheet.absoluteFill, talkingStyle]}>
-        <VideoView player={talkingPlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+        <VideoView player={talkingPlayer} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
       </Animated.View>
+      {/* Vignette: melt the video's not-quite-black edges into the scene. */}
+      <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Defs>
+          <RadialGradient id="fade" cx="50%" cy="46%" rx="58%" ry="52%">
+            <Stop offset="62%" stopColor={BG} stopOpacity="0" />
+            <Stop offset="100%" stopColor={BG} stopOpacity="1" />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#fade)" />
+      </Svg>
       <Animated.View pointerEvents="none" style={[styles.faceListenRing, listenStyle]} />
     </Pressable>
   );
@@ -266,7 +235,6 @@ function FaceEntity({ state, onPress }: { state: EntityState; onPress: () => voi
 export default function StudioScreen() {
   const insets = useSafeAreaInsets();
   const { session, loading } = useAuth();
-  const rain = useMemo(() => makeRain(8), []);
 
   const [state, setState] = useState<EntityState>('idle');
   const [line, setLine] = useState('');
@@ -435,9 +403,6 @@ export default function StudioScreen() {
   return (
     <View style={styles.container}>
       <NetworkField />
-      {rain.map((c, i) => (
-        <RainStrand key={i} col={c} />
-      ))}
       {/* HUD corner brackets */}
       <View pointerEvents="none" style={[styles.corner, styles.cornerTL, { top: insets.top + 8 }]} />
       <View pointerEvents="none" style={[styles.corner, styles.cornerTR, { top: insets.top + 8 }]} />
@@ -562,14 +527,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { color: '#1f7a4d', letterSpacing: 1 },
-  rain: {
-    position: 'absolute',
-    top: 0,
-    color: MATRIX_DIM,
-    fontFamily: MONO,
-    fontSize: 13,
-    lineHeight: 15,
-  },
   signInNote: { color: '#3fae77', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
@@ -577,14 +534,18 @@ const styles = StyleSheet.create({
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.four },
   faceBox: {
     flex: 1,
-    aspectRatio: 9 / 16, // match the takes exactly — the whole face, never cropped
-    alignSelf: 'center',
-    maxWidth: '100%',
-    borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#000',
+    width: '100%', // contain guarantees the whole face regardless of box shape
+    backgroundColor: 'transparent',
   },
-  faceListenRing: { ...StyleSheet.absoluteFillObject, borderWidth: 1.5, borderRadius: 6 },
+  faceListenRing: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '28%',
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    borderWidth: 1.5,
+  },
   corner: {
     position: 'absolute',
     width: 18,
