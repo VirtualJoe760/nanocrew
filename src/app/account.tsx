@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -47,6 +48,19 @@ export default function AccountScreen() {
       .then((d: { stores?: StoreRow[] }) => setStores(d.stores ?? []))
       .catch(() => {});
   }, [session]);
+
+  // Dev-only: deep-linking /account?auto=google|facebook starts the flow hands-free,
+  // so simulator test runs don't need a tap (clicks are unreliable to automate there).
+  const params = useLocalSearchParams<{ auto?: string }>();
+  const autoFired = useRef(false);
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (!loading && !session && !autoFired.current && (params.auto === 'google' || params.auto === 'facebook')) {
+      autoFired.current = true;
+      void social(params.auto);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, session, params.auto]);
 
   const social = async (provider: OAuthProvider) => {
     setBusy(true);
