@@ -22,6 +22,7 @@ import {
   useAudioRecorder,
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
+import Svg, { Circle, Line } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
@@ -84,6 +85,115 @@ function RainStrand({ col }: { col: RainColumn }) {
   );
 }
 
+// ---------- Network mesh ----------
+
+type Node = { x: number; y: number; r: number };
+type Edge = { a: Node; b: Node };
+
+function buildMesh(count: number, w: number, h: number, linkDist: number): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = Array.from({ length: count }, () => ({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    r: 1 + Math.random() * 1.8,
+  }));
+  const edges: Edge[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const dx = nodes[i].x - nodes[j].x;
+      const dy = nodes[i].y - nodes[j].y;
+      if (Math.sqrt(dx * dx + dy * dy) < linkDist) edges.push({ a: nodes[i], b: nodes[j] });
+    }
+  }
+  return { nodes, edges };
+}
+
+/** Faint network threading through the whole background, slowly breathing. */
+function NetworkField() {
+  const mesh = useMemo(() => buildMesh(26, SCREEN_W, SCREEN_H, 150), []);
+  const breath = useSharedValue(0.5);
+  useEffect(() => {
+    breath.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.45, { duration: 4200, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+    );
+    return () => cancelAnimation(breath);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const style = useAnimatedStyle(() => ({ opacity: breath.value }));
+  return (
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style]}>
+      <Svg width={SCREEN_W} height={SCREEN_H}>
+        {mesh.edges.map((e, i) => (
+          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="#00ff7f" strokeOpacity={0.09} strokeWidth={0.7} />
+        ))}
+        {mesh.nodes.map((n, i) => (
+          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill="#00ff7f" fillOpacity={0.22} />
+        ))}
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/** The entity's halo: an interconnected node web orbiting the core. */
+const WEB_SIZE = 240;
+const WEB_C = WEB_SIZE / 2;
+
+function buildWeb(): { nodes: Node[]; edges: Edge[]; spokes: Node[] } {
+  const nodes: Node[] = Array.from({ length: 12 }, (_, i) => {
+    const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.5;
+    const radius = 72 + Math.random() * 42;
+    return { x: WEB_C + Math.cos(angle) * radius, y: WEB_C + Math.sin(angle) * radius, r: 1.6 + Math.random() * 1.6 };
+  });
+  const edges: Edge[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    edges.push({ a: nodes[i], b: nodes[(i + 1) % nodes.length] }); // ring
+    if (i % 3 === 0) edges.push({ a: nodes[i], b: nodes[(i + 5) % nodes.length] }); // cross-links
+  }
+  const spokes = nodes.filter((_, i) => i % 2 === 0); // half the nodes wire into the core
+  return { nodes, edges, spokes };
+}
+
+function NodeWeb({ tempo }: { tempo: number }) {
+  const web = useMemo(buildWeb, []);
+  const spin = useSharedValue(0);
+  const pulse = useSharedValue(0.6);
+  useEffect(() => {
+    cancelAnimation(spin);
+    spin.value = withRepeat(withTiming(spin.value + 360, { duration: 36000, easing: Easing.linear }), -1);
+    cancelAnimation(pulse);
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.45, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tempo]);
+  const style = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+    transform: [{ rotate: `${spin.value}deg` }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.web, style]}>
+      <Svg width={WEB_SIZE} height={WEB_SIZE}>
+        {web.spokes.map((n, i) => (
+          <Line key={`s${i}`} x1={WEB_C} y1={WEB_C} x2={n.x} y2={n.y} stroke="#00ff7f" strokeOpacity={0.28} strokeWidth={0.8} />
+        ))}
+        {web.edges.map((e, i) => (
+          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="#00ff7f" strokeOpacity={0.42} strokeWidth={0.9} />
+        ))}
+        {web.nodes.map((n, i) => (
+          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill="#9affd2" fillOpacity={0.85} />
+        ))}
+      </Svg>
+    </Animated.View>
+  );
+}
+
 // ---------- Nano entity ----------
 
 const PIXELS = 25; // 5×5 nano-pixel core
@@ -115,17 +225,10 @@ function NanoPixel({ index, stage }: { index: number; stage: SharedValue<number>
 
 function Entity({ state, onPress }: { state: EntityState; onPress: () => void }) {
   const stage = useSharedValue(0);
-  const spinA = useSharedValue(0);
-  const spinB = useSharedValue(0);
   const ring = useSharedValue(0);
 
   useEffect(() => {
     stage.value = withTiming(STATE_INDEX[state], { duration: 400 });
-    const speed = state === 'thinking' ? 2200 : state === 'speaking' ? 4500 : 9000;
-    cancelAnimation(spinA);
-    cancelAnimation(spinB);
-    spinA.value = withRepeat(withTiming(spinA.value + 360, { duration: speed, easing: Easing.linear }), -1);
-    spinB.value = withRepeat(withTiming(spinB.value - 360, { duration: speed * 1.6, easing: Easing.linear }), -1);
     cancelAnimation(ring);
     if (state === 'listening') {
       ring.value = 0;
@@ -136,14 +239,6 @@ function Entity({ state, onPress }: { state: EntityState; onPress: () => void })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  const ringA = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${spinA.value}deg` }],
-    borderColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
-  }));
-  const ringB = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${spinB.value}deg` }],
-    borderColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
-  }));
   const sonar = useAnimatedStyle(() => ({
     transform: [{ scale: 1 + ring.value * 1.15 }],
     opacity: ring.value === 0 ? 0 : 0.7 * (1 - ring.value),
@@ -153,11 +248,13 @@ function Entity({ state, onPress }: { state: EntityState; onPress: () => void })
     shadowColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
   }));
 
+  // The web pulses faster the harder it's working.
+  const tempo = state === 'thinking' ? 550 : state === 'speaking' ? 900 : 2600;
+
   return (
     <Pressable onPress={onPress} hitSlop={30} style={styles.entityWrap}>
+      <NodeWeb tempo={tempo} />
       <Animated.View style={[styles.sonar, sonar]} />
-      <Animated.View style={[styles.ringOuter, ringA]} />
-      <Animated.View style={[styles.ringInner, ringB]} />
       <Animated.View style={[styles.coreBox, glow]}>
         <View style={styles.pixelGrid}>
           {Array.from({ length: PIXELS }, (_, i) => (
@@ -174,7 +271,7 @@ function Entity({ state, onPress }: { state: EntityState; onPress: () => void })
 export default function StudioScreen() {
   const insets = useSafeAreaInsets();
   const { session, loading } = useAuth();
-  const rain = useMemo(() => makeRain(11), []);
+  const rain = useMemo(() => makeRain(8), []);
 
   const [state, setState] = useState<EntityState>('idle');
   const [line, setLine] = useState('');
@@ -325,6 +422,7 @@ export default function StudioScreen() {
 
   return (
     <View style={styles.container}>
+      <NetworkField />
       {rain.map((c, i) => (
         <RainStrand key={i} col={c} />
       ))}
@@ -452,26 +550,9 @@ const styles = StyleSheet.create({
   signInNote: { color: '#3fae77', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
 
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.five },
-  entityWrap: { width: 220, height: 220, alignItems: 'center', justifyContent: 'center' },
+  entityWrap: { width: WEB_SIZE, height: WEB_SIZE, alignItems: 'center', justifyContent: 'center' },
+  web: { position: 'absolute', width: WEB_SIZE, height: WEB_SIZE },
   sonar: { position: 'absolute', width: 170, height: 170, borderRadius: 85, borderWidth: 1 },
-  ringOuter: {
-    position: 'absolute',
-    width: 168,
-    height: 168,
-    borderRadius: 84,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    opacity: 0.55,
-  },
-  ringInner: {
-    position: 'absolute',
-    width: 128,
-    height: 128,
-    borderRadius: 64,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    opacity: 0.8,
-  },
   coreBox: {
     shadowOpacity: 0.85,
     shadowRadius: 26,
