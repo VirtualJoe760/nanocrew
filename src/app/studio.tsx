@@ -25,7 +25,7 @@ import {
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
-import Svg, { Circle, Line } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
@@ -130,61 +130,138 @@ function NanocrewMark({ color }: { color: string }) {
   );
 }
 
-// ---------- The nucleus ----------
+// ---------- The nucleus: a JARVIS-grade orb ----------
+// Density without cost: each layer is a STATIC dense SVG (hundreds of arcs/ticks/
+// particles/links) animated as a whole — counter-rotation + parallax make it live.
 
-const WEB_SIZE = 260;
+const WEB_SIZE = 320;
 const WEB_C = WEB_SIZE / 2;
 
-function buildWeb(): { nodes: Node[]; edges: Edge[]; spokes: Node[] } {
-  const nodes: Node[] = Array.from({ length: 12 }, (_, i) => {
-    const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.5;
-    const radius = 84 + Math.random() * 40;
-    return { x: WEB_C + Math.cos(angle) * radius, y: WEB_C + Math.sin(angle) * radius, r: 1.6 + Math.random() * 1.6 };
-  });
-  const edges: Edge[] = [];
-  for (let i = 0; i < nodes.length; i++) {
-    edges.push({ a: nodes[i], b: nodes[(i + 1) % nodes.length] });
-    if (i % 3 === 0) edges.push({ a: nodes[i], b: nodes[(i + 5) % nodes.length] });
-  }
-  const spokes = nodes.filter((_, i) => i % 2 === 0);
-  return { nodes, edges, spokes };
+const TONES = ['#00ff7f', '#7dffc8', '#d8ffe9', '#1fbf6e'];
+const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+
+function arcPath(r: number, a0: number, a1: number): string {
+  const x0 = WEB_C + Math.cos(a0) * r;
+  const y0 = WEB_C + Math.sin(a0) * r;
+  const x1 = WEB_C + Math.cos(a1) * r;
+  const y1 = WEB_C + Math.sin(a1) * r;
+  const large = a1 - a0 > Math.PI ? 1 : 0;
+  return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`;
 }
 
-/** Orbiting interconnected node web around the nucleus. */
-function NodeWeb({ tempo }: { tempo: number }) {
-  const web = useMemo(buildWeb, []);
+type OrbSpec = {
+  arcs: { d: string; w: number; o: number; c: string }[];
+  ticks: { x1: number; y1: number; x2: number; y2: number; o: number; c: string }[];
+  links: { x1: number; y1: number; x2: number; y2: number; o: number }[];
+  dots: { x: number; y: number; r: number; o: number; c: string }[];
+};
+
+function buildOrbLayer(rMin: number, rMax: number, density: number): OrbSpec {
+  const arcs: OrbSpec['arcs'] = [];
+  const ticks: OrbSpec['ticks'] = [];
+  const links: OrbSpec['links'] = [];
+  const dots: OrbSpec['dots'] = [];
+
+  // Broken arc segments at many radii — the "tech rings".
+  for (let i = 0; i < Math.round(14 * density); i++) {
+    const r = rMin + Math.random() * (rMax - rMin);
+    const start = Math.random() * Math.PI * 2;
+    const span = 0.2 + Math.random() * 1.6;
+    arcs.push({ d: arcPath(r, start, start + span), w: 0.5 + Math.random() * 1.1, o: 0.12 + Math.random() * 0.4, c: pick(TONES) });
+  }
+  // Tick clusters along invisible circles — instrument detail.
+  for (let i = 0; i < Math.round(10 * density); i++) {
+    const r = rMin + Math.random() * (rMax - rMin);
+    const base = Math.random() * Math.PI * 2;
+    const count = 4 + Math.floor(Math.random() * 9);
+    for (let t = 0; t < count; t++) {
+      const a = base + t * 0.045;
+      const len = 2 + Math.random() * 5;
+      ticks.push({
+        x1: WEB_C + Math.cos(a) * r,
+        y1: WEB_C + Math.sin(a) * r,
+        x2: WEB_C + Math.cos(a) * (r + len),
+        y2: WEB_C + Math.sin(a) * (r + len),
+        o: 0.18 + Math.random() * 0.42,
+        c: pick(TONES),
+      });
+    }
+  }
+  // Interconnecting chords — links across the structure.
+  for (let i = 0; i < Math.round(9 * density); i++) {
+    const r1 = rMin + Math.random() * (rMax - rMin);
+    const r2 = rMin + Math.random() * (rMax - rMin);
+    const a1 = Math.random() * Math.PI * 2;
+    const a2 = a1 + (Math.random() - 0.5) * 2.2;
+    links.push({
+      x1: WEB_C + Math.cos(a1) * r1,
+      y1: WEB_C + Math.sin(a1) * r1,
+      x2: WEB_C + Math.cos(a2) * r2,
+      y2: WEB_C + Math.sin(a2) * r2,
+      o: 0.08 + Math.random() * 0.2,
+    });
+  }
+  // Particle dust, denser toward the inner radius.
+  for (let i = 0; i < Math.round(70 * density); i++) {
+    const r = rMin + Math.pow(Math.random(), 1.6) * (rMax - rMin);
+    const a = Math.random() * Math.PI * 2;
+    dots.push({
+      x: WEB_C + Math.cos(a) * r,
+      y: WEB_C + Math.sin(a) * r,
+      r: 0.5 + Math.random() * 1.4,
+      o: 0.15 + Math.random() * 0.65,
+      c: pick(TONES),
+    });
+  }
+  return { arcs, ticks, links, dots };
+}
+
+function OrbLayerSvg({ spec }: { spec: OrbSpec }) {
+  return (
+    <Svg width={WEB_SIZE} height={WEB_SIZE}>
+      {spec.links.map((l, i) => (
+        <Line key={`l${i}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#00ff7f" strokeOpacity={l.o} strokeWidth={0.5} />
+      ))}
+      {spec.arcs.map((a, i) => (
+        <Path key={`a${i}`} d={a.d} stroke={a.c} strokeOpacity={a.o} strokeWidth={a.w} fill="none" />
+      ))}
+      {spec.ticks.map((t, i) => (
+        <Line key={`t${i}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={t.c} strokeOpacity={t.o} strokeWidth={0.7} />
+      ))}
+      {spec.dots.map((d, i) => (
+        <Circle key={`d${i}`} cx={d.x} cy={d.y} r={d.r} fill={d.c} fillOpacity={d.o} />
+      ))}
+    </Svg>
+  );
+}
+
+/** One dense layer, spun and breathed as a whole. */
+function OrbLayer({
+  spec,
+  duration,
+  direction,
+  level,
+  drift,
+}: {
+  spec: OrbSpec;
+  duration: number;
+  direction: 1 | -1;
+  level: SharedValue<number>;
+  drift: number;
+}) {
   const spin = useSharedValue(0);
-  const pulse = useSharedValue(0.6);
   useEffect(() => {
-    cancelAnimation(spin);
-    spin.value = withRepeat(withTiming(spin.value + 360, { duration: 40000, easing: Easing.linear }), -1);
-    cancelAnimation(pulse);
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0.45, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-    );
+    spin.value = withRepeat(withTiming(360 * direction, { duration, easing: Easing.linear }), -1);
+    return () => cancelAnimation(spin);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tempo]);
+  }, []);
   const style = useAnimatedStyle(() => ({
-    opacity: pulse.value,
-    transform: [{ rotate: `${spin.value}deg` }],
+    opacity: 0.62 + level.value * 0.38,
+    transform: [{ rotate: `${spin.value}deg` }, { scale: 1 + level.value * drift }],
   }));
   return (
     <Animated.View pointerEvents="none" style={[styles.web, style]}>
-      <Svg width={WEB_SIZE} height={WEB_SIZE}>
-        {web.spokes.map((n, i) => (
-          <Line key={`s${i}`} x1={WEB_C} y1={WEB_C} x2={n.x} y2={n.y} stroke="#00ff7f" strokeOpacity={0.26} strokeWidth={0.8} />
-        ))}
-        {web.edges.map((e, i) => (
-          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="#00ff7f" strokeOpacity={0.4} strokeWidth={0.9} />
-        ))}
-        {web.nodes.map((n, i) => (
-          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill="#9affd2" fillOpacity={0.85} />
-        ))}
-      </Svg>
+      <OrbLayerSvg spec={spec} />
     </Animated.View>
   );
 }
@@ -197,17 +274,39 @@ function WaveBar({ index, level, color }: { index: number; level: SharedValue<nu
   const style = useAnimatedStyle(() => ({
     transform: [
       { rotate: `${(index / WAVE_BARS) * 360}deg` },
-      { translateY: -96 },
-      { scaleY: 0.18 + level.value * WAVE_MULTS[index] * 2.2 },
+      { translateY: -132 },
+      { scaleY: 0.18 + level.value * WAVE_MULTS[index] * 2.4 },
     ],
   }));
   return <Animated.View style={[styles.waveBar, { backgroundColor: color }, style]} />;
 }
 
+/** The blinding center: layered light with a white-hot heart, swelling with the audio. */
+function CoreLight({ level, color }: { level: SharedValue<number>; color: string }) {
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + level.value * 0.45 }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.coreLight, style]}>
+      <Svg width={120} height={120}>
+        <Defs>
+          <RadialGradient id="bloom" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+            <Stop offset="22%" stopColor="#eafff3" stopOpacity="0.95" />
+            <Stop offset="48%" stopColor={color} stopOpacity="0.55" />
+            <Stop offset="100%" stopColor={color} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={60} cy={60} r={60} fill="url(#bloom)" />
+      </Svg>
+    </Animated.View>
+  );
+}
+
 /**
- * The nucleus: the Nanocrew mark inside an orbiting node web, ringed by a live sound
- * wave — the bars ride HER voice while speaking and YOURS while listening, and the core
- * itself vibrates with the audio.
+ * The nucleus: a dense, layered orb of particles, broken rings, ticks and links —
+ * counter-rotating around a nucleus of light. The wave ring and core ride the live
+ * audio: HER voice while speaking, YOURS while listening.
  */
 function Nucleus({
   state,
@@ -219,24 +318,24 @@ function Nucleus({
   onPress: () => void;
 }) {
   const color = STATE_COLORS[STATE_INDEX[state]];
-  const tempo = state === 'thinking' ? 550 : state === 'speaking' ? 900 : 2600;
-
-  const coreStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: 1 + level.value * 0.16 },
-      { rotate: `${(level.value - 0.08) * 5}deg` }, // vibration shiver
+  const layers = useMemo(
+    () => [
+      buildOrbLayer(96, 152, 1.4), // outer halo — finest, sparsest
+      buildOrbLayer(58, 112, 1.7), // mid machinery — densest band
+      buildOrbLayer(24, 70, 1.1), // inner works
     ],
-  }));
+    [],
+  );
 
   return (
     <Pressable onPress={onPress} hitSlop={30} style={styles.nucleusWrap}>
-      <NodeWeb tempo={tempo} />
+      <OrbLayer spec={layers[0]} duration={74000} direction={1} level={level} drift={0.05} />
+      <OrbLayer spec={layers[1]} duration={46000} direction={-1} level={level} drift={0.09} />
+      <OrbLayer spec={layers[2]} duration={28000} direction={1} level={level} drift={0.14} />
       {Array.from({ length: WAVE_BARS }, (_, i) => (
         <WaveBar key={i} index={i} level={level} color={color} />
       ))}
-      <Animated.View style={[styles.coreBox, { shadowColor: color }, coreStyle]}>
-        <NanocrewMark color={color} />
-      </Animated.View>
+      <CoreLight level={level} color={color} />
     </Pressable>
   );
 }
@@ -575,13 +674,8 @@ const styles = StyleSheet.create({
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.four },
   nucleusWrap: { width: WEB_SIZE, height: WEB_SIZE, alignItems: 'center', justifyContent: 'center' },
   web: { position: 'absolute', width: WEB_SIZE, height: WEB_SIZE },
-  waveBar: { position: 'absolute', width: 2.5, height: 22, borderRadius: 1.25, opacity: 0.85 },
-  coreBox: {
-    shadowOpacity: 0.85,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 20,
-  },
+  waveBar: { position: 'absolute', width: 2, height: 20, borderRadius: 1, opacity: 0.8 },
+  coreLight: { position: 'absolute', width: 120, height: 120, alignItems: 'center', justifyContent: 'center' },
   corner: {
     position: 'absolute',
     width: 18,
