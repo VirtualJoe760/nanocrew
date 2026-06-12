@@ -91,6 +91,7 @@ export async function POST(req: Request) {
 
   let messages: ChatMessage[];
   let audio: string | undefined;
+  let text: string | undefined;
   let init = false;
   let say: string | undefined;
   let voiceId: string | undefined;
@@ -98,16 +99,18 @@ export async function POST(req: Request) {
     const body = (await req.json()) as {
       messages?: ChatMessage[];
       audio?: string;
+      text?: string;
       init?: boolean;
       say?: string;
       voiceId?: string;
     };
     messages = (body.messages ?? []).slice(-30);
     audio = body.audio;
+    text = typeof body.text === 'string' ? body.text.trim().slice(0, 1200) : undefined;
     init = !!body.init;
     say = typeof body.say === 'string' ? body.say.slice(0, 300) : undefined;
     voiceId = typeof body.voiceId === 'string' ? body.voiceId : undefined;
-    if (!init && !audio && !say) throw new Error();
+    if (!init && !audio && !say && !text) throw new Error();
   } catch {
     return Response.json({ error: 'invalid body' }, { status: 400 });
   }
@@ -133,10 +136,16 @@ export async function POST(req: Request) {
     }));
     const lastParts = init
       ? [{ text: 'Start the interview with your first spoken question.' }]
-      : [
-          { inlineData: { mimeType: 'audio/mp4', data: audio! } },
-          { text: 'This audio is my answer. Continue per the contract.' },
-        ];
+      : text
+        ? [
+            {
+              text: `I typed this answer (no audio): "${text}". Continue per the contract, setting userText to exactly what I typed.`,
+            },
+          ]
+        : [
+            { inlineData: { mimeType: 'audio/mp4', data: audio! } },
+            { text: 'This audio is my answer. Continue per the contract.' },
+          ];
 
     const res = await ai.models.generateContent({
       model: MODEL,

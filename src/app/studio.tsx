@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Dimensions, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -500,6 +510,10 @@ export default function StudioScreen() {
       .catch(() => {});
   }, [session]);
 
+  // Keyboard mode: type instead of talk (noisy environments). Her voice still replies.
+  const [keyboardMode, setKeyboardMode] = useState(false);
+  const [typed, setTyped] = useState('');
+
   // Voice-activity bookkeeping for auto-send.
   const spokeRef = useRef(false);
   const voicedCountRef = useRef(0);
@@ -521,7 +535,7 @@ export default function StudioScreen() {
   );
 
   const turn = useCallback(
-    async (body: { init?: boolean; audio?: string }) => {
+    async (body: { init?: boolean; audio?: string; text?: string }) => {
       if (!session) return;
       setState('thinking');
       setError(null);
@@ -673,14 +687,14 @@ export default function StudioScreen() {
       setState('idle');
       return;
     }
-    if (micGranted && !brand && started.current && focusedRef.current) {
+    if (micGranted && !brand && started.current && focusedRef.current && !keyboardMode) {
       const t = setTimeout(() => {
         if (focusedRef.current) void startListening();
       }, 450);
       return () => clearTimeout(t);
     }
     setState('idle');
-  }, [playerStatus.didJustFinish, micGranted, brand, startListening]);
+  }, [playerStatus.didJustFinish, micGranted, brand, startListening, keyboardMode]);
 
   // Silence detection: real speech is SUSTAINED loudness (3+ samples ≈ a third of a
   // second), not a noise spike. Once you've spoken, ~1.2s of quiet sends your turn. If
@@ -708,9 +722,30 @@ export default function StudioScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recState.metering, state, sendRecording]);
 
+  const toggleKeyboard = useCallback(() => {
+    setKeyboardMode((k) => {
+      const next = !k;
+      if (next && state === 'listening') {
+        recorder.stop().catch(() => {});
+        setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+        setState('idle');
+      }
+      return next;
+    });
+  }, [state, recorder]);
+
+  const sendTyped = useCallback(() => {
+    const t = typed.trim();
+    if (!t || state === 'thinking') return;
+    if (state === 'speaking') player.pause();
+    setTyped('');
+    void turn({ text: t });
+  }, [typed, state, player, turn]);
+
   const onEntityPress = useCallback(async () => {
     if (!session || brand) return;
     if (state === 'thinking') return;
+    setKeyboardMode(false); // touching the orb always means voice
     if (state === 'speaking') {
       player.pause(); // interrupt her — your turn
       void startListening();
@@ -818,7 +853,9 @@ export default function StudioScreen() {
       <View pointerEvents="none" style={[styles.corner, styles.cornerBL, { bottom: bottomPad - 8 }]} />
       <View pointerEvents="none" style={[styles.corner, styles.cornerBR, { bottom: bottomPad - 8 }]} />
 
-      <View style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <View style={styles.headerRow}>
           <View style={styles.markBadge}>
             <NanocrewMark color="#00ff7f" />
@@ -945,9 +982,34 @@ export default function StudioScreen() {
             <View style={styles.entityArea}>
               <Nucleus state={state} level={level} onPress={onEntityPress} />
               <ThemedText type="code" style={styles.hint}>
-                {hint}
+                {keyboardMode ? '[ keyboard mode ]' : hint}
               </ThemedText>
+              <Pressable onPress={toggleKeyboard} hitSlop={8}>
+                <ThemedText type="code" style={styles.modeToggle}>
+                  {keyboardMode ? '🎙 switch to voice' : '⌨ type instead'}
+                </ThemedText>
+              </Pressable>
             </View>
+            {keyboardMode ? (
+              <View style={styles.typeRow}>
+                <TextInput
+                  value={typed}
+                  onChangeText={setTyped}
+                  placeholder="type your answer…"
+                  placeholderTextColor="#2c7a55"
+                  multiline
+                  style={styles.typeInput}
+                  onSubmitEditing={sendTyped}
+                />
+                <Pressable onPress={sendTyped} disabled={!typed.trim() || state === 'thinking'} hitSlop={8}>
+                  <View style={[styles.typeSend, { opacity: !typed.trim() || state === 'thinking' ? 0.4 : 1 }]}>
+                    <ThemedText type="code" style={{ color: BG }}>
+                      send
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={styles.captions}>
               {state === 'speaking' && words.length ? (
                 <ThemedText style={styles.bigWord}>{words[wordIdx]}</ThemedText>
@@ -974,7 +1036,7 @@ export default function StudioScreen() {
             {'! ' + error}
           </ThemedText>
         ) : null}
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -1005,6 +1067,27 @@ const styles = StyleSheet.create({
   cornerBL: { left: 12, borderLeftWidth: 1.5, borderBottomWidth: 1.5 },
   cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
   hint: { color: '#3fae77', letterSpacing: 1 },
+  modeToggle: { color: '#1f7a4d', letterSpacing: 1, padding: Spacing.one },
+  typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },
+  typeInput: {
+    flex: 1,
+    minHeight: 42,
+    maxHeight: 110,
+    borderWidth: 1,
+    borderColor: '#134d31',
+    borderRadius: 4,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    color: '#d8ffe9',
+    fontFamily: MONO,
+    fontSize: 14,
+  },
+  typeSend: {
+    backgroundColor: '#00ff7f',
+    borderRadius: 4,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two + 2,
+  },
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.three, minHeight: 96 },
   heard: { color: '#2c7a55', textAlign: 'center' },
