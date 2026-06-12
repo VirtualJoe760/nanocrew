@@ -12,6 +12,7 @@ export const AI_VOICES: AiVoice[] = [
   { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Jarvis', vibe: 'precise · british · mission control' },
   { id: '1cuDPO8sIMatoOE4Z2Zv', name: 'Nova', vibe: 'bright · electric · first light' },
   { id: '1SM7GgM6IMuvQlz2BwM3', name: 'Sol', vibe: 'calm · steady · golden hour' },
+  { id: 'uYXf8XasLslADfZ2MB4u', name: 'Lyra', vibe: 'smooth · cosmic · night signal' },
 ];
 
 export const DEFAULT_VOICE = AI_VOICES[0];
