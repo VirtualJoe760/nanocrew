@@ -21,6 +21,7 @@ import {
   useAudioRecorder,
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import Svg, { Circle, Line } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
@@ -136,64 +137,7 @@ function NetworkField() {
   );
 }
 
-/** The entity's halo: an interconnected node web orbiting the core. */
-const WEB_SIZE = 240;
-const WEB_C = WEB_SIZE / 2;
-
-function buildWeb(): { nodes: Node[]; edges: Edge[]; spokes: Node[] } {
-  const nodes: Node[] = Array.from({ length: 12 }, (_, i) => {
-    const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.5;
-    const radius = 72 + Math.random() * 42;
-    return { x: WEB_C + Math.cos(angle) * radius, y: WEB_C + Math.sin(angle) * radius, r: 1.6 + Math.random() * 1.6 };
-  });
-  const edges: Edge[] = [];
-  for (let i = 0; i < nodes.length; i++) {
-    edges.push({ a: nodes[i], b: nodes[(i + 1) % nodes.length] }); // ring
-    if (i % 3 === 0) edges.push({ a: nodes[i], b: nodes[(i + 5) % nodes.length] }); // cross-links
-  }
-  const spokes = nodes.filter((_, i) => i % 2 === 0); // half the nodes wire into the core
-  return { nodes, edges, spokes };
-}
-
-function NodeWeb({ tempo }: { tempo: number }) {
-  const web = useMemo(buildWeb, []);
-  const spin = useSharedValue(0);
-  const pulse = useSharedValue(0.6);
-  useEffect(() => {
-    cancelAnimation(spin);
-    spin.value = withRepeat(withTiming(spin.value + 360, { duration: 36000, easing: Easing.linear }), -1);
-    cancelAnimation(pulse);
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0.45, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tempo]);
-  const style = useAnimatedStyle(() => ({
-    opacity: pulse.value,
-    transform: [{ rotate: `${spin.value}deg` }],
-  }));
-  return (
-    <Animated.View pointerEvents="none" style={[styles.web, style]}>
-      <Svg width={WEB_SIZE} height={WEB_SIZE}>
-        {web.spokes.map((n, i) => (
-          <Line key={`s${i}`} x1={WEB_C} y1={WEB_C} x2={n.x} y2={n.y} stroke="#00ff7f" strokeOpacity={0.28} strokeWidth={0.8} />
-        ))}
-        {web.edges.map((e, i) => (
-          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="#00ff7f" strokeOpacity={0.42} strokeWidth={0.9} />
-        ))}
-        {web.nodes.map((n, i) => (
-          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill="#9affd2" fillOpacity={0.85} />
-        ))}
-      </Svg>
-    </Animated.View>
-  );
-}
-
-// ---------- Nanocrew mark (the brain) ----------
+// ---------- Nanocrew mark ----------
 
 const MARK = 88;
 const HEX = Array.from({ length: 6 }, (_, i) => {
@@ -233,78 +177,65 @@ function NanocrewMark({ color }: { color: string }) {
   );
 }
 
-/** A data packet racing outward from the core along a fixed bearing. */
-function SignalPulse({ angle, delay, color }: { angle: number; delay: number; color: string }) {
-  const t = useSharedValue(0);
-  useEffect(() => {
-    t.value = withDelay(delay, withRepeat(withTiming(1, { duration: 1900, easing: Easing.out(Easing.quad) }), -1));
-    return () => cancelAnimation(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const style = useAnimatedStyle(() => {
-    const r = 44 + t.value * 72;
-    return {
-      opacity: t.value < 0.05 ? 0 : 0.9 * (1 - t.value),
-      transform: [{ translateX: Math.cos(angle) * r }, { translateY: Math.sin(angle) * r }],
-    };
+// ---------- The face ----------
+
+/**
+ * The entity's face: a wireframe-particle face (Veo-rendered) that idles in darkness and
+ * crossfades into a talking take while the voice plays. The whole face is the tap target.
+ */
+function FaceEntity({ state, onPress }: { state: EntityState; onPress: () => void }) {
+  const idlePlayer = useVideoPlayer(require('../../assets/videos/entity-idle.mp4'), (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
   });
-  return <Animated.View style={[styles.signal, { backgroundColor: color }, style]} />;
-}
+  const talkingPlayer = useVideoPlayer(require('../../assets/videos/entity-talking.mp4'), (p) => {
+    p.loop = true;
+    p.muted = true;
+  });
 
-// ---------- Nano entity ----------
-
-const PULSES = [0.4, 2.1, 3.7, 5.2]; // bearings (radians) for outbound signals
-
-function Entity({ state, onPress }: { state: EntityState; onPress: () => void }) {
-  const stage = useSharedValue(0);
+  const talk = useSharedValue(0);
   const ring = useSharedValue(0);
-  const breath = useSharedValue(1);
 
   useEffect(() => {
-    stage.value = withTiming(STATE_INDEX[state], { duration: 400 });
-    cancelAnimation(ring);
-    if (state === 'listening') {
-      ring.value = 0;
-      ring.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.out(Easing.quad) }), -1);
+    if (state === 'speaking') {
+      talkingPlayer.play();
+      talk.value = withTiming(1, { duration: 450 });
     } else {
-      ring.value = withTiming(0, { duration: 250 });
+      talk.value = withTiming(0, { duration: 450 });
+      // Let the crossfade finish before freezing the talking take.
+      const t = setTimeout(() => talkingPlayer.pause(), 500);
+      return () => clearTimeout(t);
     }
-    cancelAnimation(breath);
-    const tempo = state === 'thinking' ? 500 : state === 'speaking' ? 800 : 2400;
-    breath.value = withRepeat(
-      withSequence(
-        withTiming(1.07, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
-        withTiming(1, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  const sonar = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + ring.value * 1.15 }],
-    opacity: ring.value === 0 ? 0 : 0.7 * (1 - ring.value),
-    borderColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
-  }));
-  const glow = useAnimatedStyle(() => ({
-    shadowColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
-    transform: [{ scale: breath.value }],
-  }));
+  useEffect(() => {
+    cancelAnimation(ring);
+    if (state === 'listening') {
+      ring.value = withRepeat(
+        withSequence(withTiming(1, { duration: 700 }), withTiming(0.25, { duration: 700 })),
+        -1,
+      );
+    } else {
+      ring.value = withTiming(0, { duration: 300 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
-  // The web pulses faster the harder it's working.
-  const tempo = state === 'thinking' ? 550 : state === 'speaking' ? 900 : 2600;
-  const color = STATE_COLORS[STATE_INDEX[state]];
+  const talkingStyle = useAnimatedStyle(() => ({ opacity: talk.value }));
+  const listenStyle = useAnimatedStyle(() => ({
+    borderColor: STATE_COLORS[1],
+    opacity: ring.value,
+  }));
 
   return (
-    <Pressable onPress={onPress} hitSlop={30} style={styles.entityWrap}>
-      <NodeWeb tempo={tempo} />
-      {PULSES.map((a, i) => (
-        <SignalPulse key={i} angle={a} delay={i * 480} color={color} />
-      ))}
-      <Animated.View style={[styles.sonar, sonar]} />
-      <Animated.View style={[styles.coreBox, glow]}>
-        <NanocrewMark color={color} />
+    <Pressable onPress={onPress} style={styles.faceBox}>
+      <VideoView player={idlePlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+      <Animated.View style={[StyleSheet.absoluteFill, talkingStyle]}>
+        <VideoView player={talkingPlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
       </Animated.View>
+      <Animated.View pointerEvents="none" style={[styles.faceListenRing, listenStyle]} />
     </Pressable>
   );
 }
@@ -476,9 +407,14 @@ export default function StudioScreen() {
       <View pointerEvents="none" style={[styles.corner, styles.cornerBR, { bottom: bottomPad - 8 }]} />
 
       <View style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
-        <ThemedText type="code" style={styles.eyebrow}>
-          STUDIO // BRAND.SYS
-        </ThemedText>
+        <View style={styles.headerRow}>
+          <View style={styles.markBadge}>
+            <NanocrewMark color="#00ff7f" />
+          </View>
+          <ThemedText type="code" style={styles.eyebrow}>
+            STUDIO // BRAND.SYS
+          </ThemedText>
+        </View>
 
         {loading ? (
           <ActivityIndicator style={styles.center} color="#00ff7f" />
@@ -551,7 +487,7 @@ export default function StudioScreen() {
         ) : (
           <>
             <View style={styles.entityArea}>
-              <Entity state={state} onPress={onEntityPress} />
+              <FaceEntity state={state} onPress={onEntityPress} />
               <ThemedText type="code" style={styles.hint}>
                 {hint}
               </ThemedText>
@@ -597,17 +533,18 @@ const styles = StyleSheet.create({
   },
   signInNote: { color: '#3fae77', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
 
-  entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.five },
-  entityWrap: { width: WEB_SIZE, height: WEB_SIZE, alignItems: 'center', justifyContent: 'center' },
-  web: { position: 'absolute', width: WEB_SIZE, height: WEB_SIZE },
-  sonar: { position: 'absolute', width: 170, height: 170, borderRadius: 85, borderWidth: 1 },
-  coreBox: {
-    shadowOpacity: 0.85,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 20,
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  markBadge: { transform: [{ scale: 0.32 }], width: 28, height: 28, marginLeft: -28, marginRight: -22 },
+  entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.four },
+  faceBox: {
+    width: '100%',
+    flex: 1,
+    maxHeight: 520,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: '#000',
   },
-  signal: { position: 'absolute', width: 5, height: 5, borderRadius: 2.5 },
+  faceListenRing: { ...StyleSheet.absoluteFillObject, borderWidth: 1.5, borderRadius: 6 },
   corner: {
     position: 'absolute',
     width: 18,
