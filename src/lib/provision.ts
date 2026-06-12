@@ -121,6 +121,7 @@ export async function provisionStorefront(input: ProvisionInput): Promise<void> 
     const brief = buildBrief(input.brand, input.logoUrl, input.transcript);
     const script = `set -e
 export PATH="$HOME/.local/bin:$PATH"
+[ -f ~/.claude-env ] && source ~/.claude-env
 mkdir -p ~/stores && cd ~/stores
 rm -rf ${repo}
 git clone https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git ${repo}
