@@ -22,7 +22,7 @@ async function addReverb(mp3: Buffer): Promise<Buffer> {
     execFileSync(
       'ffmpeg',
       // Gentle tempo pull-down (delicate pace) + a subtle sci-fi room echo.
-      ['-y', '-i', `${base}.mp3`, '-af', 'atempo=0.93,aecho=0.8:0.55:38|57:0.16|0.10', '-b:a', '64k', `${base}-wet.mp3`],
+      ['-y', '-i', `${base}.mp3`, '-af', 'atempo=0.87,aecho=0.8:0.55:38|57:0.16|0.10', '-b:a', '64k', `${base}-wet.mp3`],
       { stdio: 'ignore', timeout: 10000 },
     );
     const wet = readFileSync(`${base}-wet.mp3`);
@@ -115,6 +115,13 @@ export async function POST(req: Request) {
     const raw = res.text?.trim();
     if (!raw) throw new Error('empty model response');
     const turn = parseTurn(raw);
+
+    // Hallucination guard: if the audio carried no real words, do NOT let the model riff
+    // on its own prompt examples — hand the floor back gently.
+    if (!init && (turn.userText?.trim().length ?? 0) < 2) {
+      const line = "I didn't catch that — tap me when you're ready.";
+      return Response.json({ empty: true, line, speech: await speak(line) });
+    }
 
     const line = turn.done
       ? (turn.closing ?? `Your brand is ready. Take a look at ${turn.brand!.name}.`)

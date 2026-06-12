@@ -462,9 +462,11 @@ export default function StudioScreen() {
 
   // Voice-activity bookkeeping for auto-send.
   const spokeRef = useRef(false);
+  const voicedCountRef = useRef(0);
   const lastLoudRef = useRef(0);
   const recStartRef = useRef(0);
   const busyRef = useRef(false);
+  const lastTurnEmptyRef = useRef(false);
 
   const playSpeech = useCallback(
     async (b64: string) => {
@@ -498,9 +500,18 @@ export default function StudioScreen() {
           brand?: BrandResult;
           line?: string;
           speech?: string;
+          empty?: boolean;
           error?: string;
         };
         if (d.error) throw new Error(d.error);
+        lastTurnEmptyRef.current = !!d.empty;
+        if (d.empty) {
+          // Nothing was actually said — she acknowledges and parks (no history written).
+          if (d.line) setLine(d.line);
+          if (d.speech) await playSpeech(d.speech);
+          else setState('idle');
+          return;
+        }
         if (d.userText) {
           messages.current.push({ role: 'user', text: d.userText });
           setHeard(d.userText);
@@ -552,6 +563,7 @@ export default function StudioScreen() {
         await recorder.prepareToRecordAsync();
         recorder.record();
         spokeRef.current = false;
+        voicedCountRef.current = 0;
         lastLoudRef.current = 0;
         recStartRef.current = Date.now();
         setState('listening');
@@ -586,6 +598,12 @@ export default function StudioScreen() {
   // (Small delay so the audio session settles before the mic takes over.)
   useEffect(() => {
     if (!playerStatus.didJustFinish) return;
+    if (lastTurnEmptyRef.current) {
+      // She asked for a tap — wait for it instead of re-opening the mic.
+      lastTurnEmptyRef.current = false;
+      setState('idle');
+      return;
+    }
     if (micGranted && !brand && started.current && focusedRef.current) {
       const t = setTimeout(() => {
         if (focusedRef.current) void startListening();
@@ -595,28 +613,28 @@ export default function StudioScreen() {
     setState('idle');
   }, [playerStatus.didJustFinish, micGranted, brand, startListening]);
 
-  // Silence detection: once you've spoken, ~1.2s of quiet ends your turn automatically.
+  // Silence detection: real speech is SUSTAINED loudness (3+ samples ≈ a third of a
+  // second), not a noise spike. Once you've spoken, ~1.2s of quiet sends your turn. If
+  // you say nothing at all, she parks — no send, idle until you tap her awake.
   useEffect(() => {
     if (state !== 'listening' || busyRef.current) return;
     const db = recState.metering;
     if (typeof db !== 'number') return;
     const now = Date.now();
-    if (db > -38) {
-      spokeRef.current = true;
+    if (db > -36) {
+      voicedCountRef.current++;
       lastLoudRef.current = now;
+      if (voicedCountRef.current >= 3) spokeRef.current = true;
     }
     if (spokeRef.current && (now - lastLoudRef.current > 1200 || now - recStartRef.current > 30000)) {
       void sendRecording();
       return;
     }
-    if (!spokeRef.current && now - recStartRef.current > 15000) {
-      // Nothing said yet — restart the take so files stay small, keep listening.
-      recStartRef.current = now;
-      recorder
-        .stop()
-        .then(() => recorder.prepareToRecordAsync())
-        .then(() => recorder.record())
-        .catch(() => {});
+    if (!spokeRef.current && now - recStartRef.current > 12000) {
+      // Nothing said — go quiet until they re-initiate by tapping.
+      recorder.stop().catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      setState('idle');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recState.metering, state, sendRecording]);
