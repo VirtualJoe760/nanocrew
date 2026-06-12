@@ -3,6 +3,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
+import { provisionStorefront } from '@/lib/provision';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // POST /api/store — persist a finished Studio interview as the creator's store:
@@ -104,6 +105,15 @@ export async function POST(req: Request) {
           storeId: store.id,
           name: firstProduct ? `First drop — ${firstProduct}` : 'First drop',
           slug: 'first-drop',
+        });
+        // Storefront engine: clone the template into a per-brand repo and let a Claude
+        // session on the VPS apply the brand. Fire-and-forget — creation never waits.
+        void provisionStorefront({
+          storeId: store.id,
+          slug: store.slug,
+          brand,
+          logoUrl,
+          transcript,
         });
         return Response.json({ store });
       } catch (e) {
