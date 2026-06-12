@@ -300,6 +300,21 @@ export const orderItems = pgTable('order_items', {
   variantSnapshot: text('variant_snapshot').notNull(),
 });
 
+// ---------- Traffic (brand-site beacon) ----------
+
+export const pageViews = pgTable(
+  'page_views',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    storeId: uuid('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    day: text('day').notNull(), // YYYY-MM-DD — daily counter granularity
+    views: integer('views').notNull().default(0),
+  },
+  (v) => ({ storeDayIdx: uniqueIndex('page_views_store_day_idx').on(v.storeId, v.day) }),
+);
+
 // ---------- Creator billing (web portal) ----------
 
 export const subscriptions = pgTable('subscriptions', {
