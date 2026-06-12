@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Dimensions, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -12,6 +11,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import {
   AudioModule,
@@ -20,11 +20,12 @@ import {
   useAudioPlayer,
   useAudioPlayerStatus,
   useAudioRecorder,
+  useAudioRecorderState,
+  useAudioSampleListener,
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import Svg, { Circle, Defs, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Line } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
@@ -138,94 +139,113 @@ function NanocrewMark({ color }: { color: string }) {
   );
 }
 
-// ---------- The face ----------
+// ---------- The nucleus ----------
+
+const WEB_SIZE = 260;
+const WEB_C = WEB_SIZE / 2;
+
+function buildWeb(): { nodes: Node[]; edges: Edge[]; spokes: Node[] } {
+  const nodes: Node[] = Array.from({ length: 12 }, (_, i) => {
+    const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.5;
+    const radius = 84 + Math.random() * 40;
+    return { x: WEB_C + Math.cos(angle) * radius, y: WEB_C + Math.sin(angle) * radius, r: 1.6 + Math.random() * 1.6 };
+  });
+  const edges: Edge[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    edges.push({ a: nodes[i], b: nodes[(i + 1) % nodes.length] });
+    if (i % 3 === 0) edges.push({ a: nodes[i], b: nodes[(i + 5) % nodes.length] });
+  }
+  const spokes = nodes.filter((_, i) => i % 2 === 0);
+  return { nodes, edges, spokes };
+}
+
+/** Orbiting interconnected node web around the nucleus. */
+function NodeWeb({ tempo }: { tempo: number }) {
+  const web = useMemo(buildWeb, []);
+  const spin = useSharedValue(0);
+  const pulse = useSharedValue(0.6);
+  useEffect(() => {
+    cancelAnimation(spin);
+    spin.value = withRepeat(withTiming(spin.value + 360, { duration: 40000, easing: Easing.linear }), -1);
+    cancelAnimation(pulse);
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.45, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tempo]);
+  const style = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+    transform: [{ rotate: `${spin.value}deg` }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.web, style]}>
+      <Svg width={WEB_SIZE} height={WEB_SIZE}>
+        {web.spokes.map((n, i) => (
+          <Line key={`s${i}`} x1={WEB_C} y1={WEB_C} x2={n.x} y2={n.y} stroke="#00ff7f" strokeOpacity={0.26} strokeWidth={0.8} />
+        ))}
+        {web.edges.map((e, i) => (
+          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="#00ff7f" strokeOpacity={0.4} strokeWidth={0.9} />
+        ))}
+        {web.nodes.map((n, i) => (
+          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill="#9affd2" fillOpacity={0.85} />
+        ))}
+      </Svg>
+    </Animated.View>
+  );
+}
+
+const WAVE_BARS = 28;
+const WAVE_MULTS = Array.from({ length: WAVE_BARS }, (_, i) => 0.45 + Math.abs(Math.sin(i * 2.7)) * 0.55);
+
+/** One radial bar of the sound-wave ring; length rides the live audio level. */
+function WaveBar({ index, level, color }: { index: number; level: SharedValue<number>; color: string }) {
+  const style = useAnimatedStyle(() => ({
+    transform: [
+      { rotate: `${(index / WAVE_BARS) * 360}deg` },
+      { translateY: -96 },
+      { scaleY: 0.18 + level.value * WAVE_MULTS[index] * 2.2 },
+    ],
+  }));
+  return <Animated.View style={[styles.waveBar, { backgroundColor: color }, style]} />;
+}
 
 /**
- * The entity's face: a wireframe-particle face (Veo-rendered) that idles in darkness and
- * crossfades into a talking take while the voice plays. The whole face is the tap target.
+ * The nucleus: the Nanocrew mark inside an orbiting node web, ringed by a live sound
+ * wave — the bars ride HER voice while speaking and YOURS while listening, and the core
+ * itself vibrates with the audio.
  */
-function FaceEntity({ state, onPress }: { state: EntityState; onPress: () => void }) {
-  const idlePlayer = useVideoPlayer(require('../../assets/videos/entity-idle.mp4'), (p) => {
-    p.loop = true;
-    p.muted = true;
-    p.play();
-  });
-  const talkingPlayer = useVideoPlayer(require('../../assets/videos/entity-talking.mp4'), (p) => {
-    p.loop = true;
-    p.muted = true;
-  });
+function Nucleus({
+  state,
+  level,
+  onPress,
+}: {
+  state: EntityState;
+  level: SharedValue<number>;
+  onPress: () => void;
+}) {
+  const color = STATE_COLORS[STATE_INDEX[state]];
+  const tempo = state === 'thinking' ? 550 : state === 'speaking' ? 900 : 2600;
 
-  const talk = useSharedValue(0);
-  const ring = useSharedValue(0);
-
-  // Decode discipline (the 2018 Intel sim melts otherwise): exactly one video plays at a
-  // time, and nothing plays while this tab is blurred.
-  const focused = useRef(true);
-  useFocusEffect(
-    useCallback(() => {
-      focused.current = true;
-      idlePlayer.play();
-      return () => {
-        focused.current = false;
-        idlePlayer.pause();
-        talkingPlayer.pause();
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
-  );
-
-  useEffect(() => {
-    if (!focused.current) return;
-    if (state === 'speaking') {
-      talkingPlayer.play();
-      talk.value = withTiming(1, { duration: 450 });
-      // Once the talking take fully covers, stop decoding the idle take.
-      const t = setTimeout(() => idlePlayer.pause(), 500);
-      return () => clearTimeout(t);
-    }
-    idlePlayer.play(); // resume under the fade before the talking take disappears
-    talk.value = withTiming(0, { duration: 450 });
-    const t = setTimeout(() => talkingPlayer.pause(), 500);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
-
-  useEffect(() => {
-    cancelAnimation(ring);
-    if (state === 'listening') {
-      ring.value = withRepeat(
-        withSequence(withTiming(1, { duration: 700 }), withTiming(0.25, { duration: 700 })),
-        -1,
-      );
-    } else {
-      ring.value = withTiming(0, { duration: 300 });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
-
-  const talkingStyle = useAnimatedStyle(() => ({ opacity: talk.value }));
-  const listenStyle = useAnimatedStyle(() => ({
-    borderColor: STATE_COLORS[1],
-    opacity: ring.value,
+  const coreStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: 1 + level.value * 0.16 },
+      { rotate: `${(level.value - 0.08) * 5}deg` }, // vibration shiver
+    ],
   }));
 
   return (
-    <Pressable onPress={onPress} style={styles.faceBox}>
-      <VideoView player={idlePlayer} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
-      <Animated.View style={[StyleSheet.absoluteFill, talkingStyle]}>
-        <VideoView player={talkingPlayer} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
+    <Pressable onPress={onPress} hitSlop={30} style={styles.nucleusWrap}>
+      <NodeWeb tempo={tempo} />
+      {Array.from({ length: WAVE_BARS }, (_, i) => (
+        <WaveBar key={i} index={i} level={level} color={color} />
+      ))}
+      <Animated.View style={[styles.coreBox, { shadowColor: color }, coreStyle]}>
+        <NanocrewMark color={color} />
       </Animated.View>
-      {/* Vignette: melt the video's not-quite-black edges into the scene. */}
-      <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
-        <Defs>
-          <RadialGradient id="fade" cx="50%" cy="46%" rx="58%" ry="52%">
-            <Stop offset="62%" stopColor={BG} stopOpacity="0" />
-            <Stop offset="100%" stopColor={BG} stopOpacity="1" />
-          </RadialGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#fade)" />
-      </Svg>
-      <Animated.View pointerEvents="none" style={[styles.faceListenRing, listenStyle]} />
     </Pressable>
   );
 }
@@ -249,9 +269,39 @@ export default function StudioScreen() {
   const started = useRef(false);
   const playCount = useRef(0);
 
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const player = useAudioPlayer();
   const playerStatus = useAudioPlayerStatus(player);
+
+  // Live audio level (0..1) driving the nucleus: her voice while speaking, yours while
+  // listening. PCM RMS from the player; dBFS metering from the recorder.
+  const level = useSharedValue(0);
+  useAudioSampleListener(player, (sample) => {
+    const frames = sample.channels?.[0]?.frames;
+    if (!frames?.length) return;
+    const step = Math.max(1, Math.floor(frames.length / 64));
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < frames.length; i += step) {
+      sum += frames[i] * frames[i];
+      n++;
+    }
+    const rms = Math.sqrt(sum / n);
+    level.value = withTiming(Math.min(1, rms * 4.5), { duration: 90 });
+  });
+  const recState = useAudioRecorderState(recorder, 120);
+  useEffect(() => {
+    if (state !== 'listening') return;
+    const db = recState.metering;
+    if (typeof db !== 'number') return;
+    const amp = Math.min(1, Math.max(0, (db + 50) / 50)); // -50dB..0dB → 0..1
+    level.value = withTiming(amp, { duration: 110 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recState.metering, state]);
+  useEffect(() => {
+    if (state === 'idle' || state === 'thinking') level.value = withTiming(0, { duration: 500 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   useEffect(() => {
     if (playerStatus.didJustFinish) setState('idle');
@@ -491,7 +541,7 @@ export default function StudioScreen() {
         ) : (
           <>
             <View style={styles.entityArea}>
-              <FaceEntity state={state} onPress={onEntityPress} />
+              <Nucleus state={state} level={level} onPress={onEntityPress} />
               <ThemedText type="code" style={styles.hint}>
                 {hint}
               </ThemedText>
@@ -532,19 +582,14 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   markBadge: { transform: [{ scale: 0.32 }], width: 28, height: 28, marginLeft: -28, marginRight: -22 },
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.four },
-  faceBox: {
-    flex: 1,
-    width: '100%', // contain guarantees the whole face regardless of box shape
-    backgroundColor: 'transparent',
-  },
-  faceListenRing: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '28%',
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    borderWidth: 1.5,
+  nucleusWrap: { width: WEB_SIZE, height: WEB_SIZE, alignItems: 'center', justifyContent: 'center' },
+  web: { position: 'absolute', width: WEB_SIZE, height: WEB_SIZE },
+  waveBar: { position: 'absolute', width: 2.5, height: 22, borderRadius: 1.25, opacity: 0.85 },
+  coreBox: {
+    shadowOpacity: 0.85,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 20,
   },
   corner: {
     position: 'absolute',
