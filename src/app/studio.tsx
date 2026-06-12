@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -11,6 +11,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import {
   AudioModule,
@@ -28,123 +29,156 @@ import { useAuth } from '@/hooks/use-auth';
 import { apiUrl } from '@/lib/api';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
-// The Studio: a voice-first brand interview. A glowing entity floats in space and talks
-// you through building your brand — tap it to speak, it listens, thinks, and answers
-// aloud (Gemini hears the audio, ElevenLabs gives it a voice).
+// The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
+// counter-rotating rings, digital rain behind — talks you through building your brand.
+// Tap it to speak; Gemini hears the audio, ElevenLabs gives the reply a voice.
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
-const SPACE_BG = '#030514';
-// idle indigo → listening green → thinking violet → speaking cyan
-const STATE_COLORS = ['#5b6cff', '#27e0a3', '#a05bff', '#22d3ee'];
+const BG = '#010604';
+const MATRIX_DIM = '#00ff8822';
+// idle green → listening mint → thinking cyan → speaking lime
+const STATE_COLORS = ['#00ff7f', '#8fffd0', '#39d9ff', '#c8ff4a'];
 const STATE_INDEX: Record<EntityState, number> = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
 
+const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-type Star = { x: number; y: number; size: number; base: number; dur: number; delay: number };
+// ---------- Digital rain ----------
 
-function makeStars(count: number): Star[] {
-  return Array.from({ length: count }, () => ({
-    x: Math.random() * SCREEN_W,
-    y: Math.random() * SCREEN_H,
-    size: 1 + Math.random() * 2.2,
-    base: 0.15 + Math.random() * 0.5,
-    dur: 1200 + Math.random() * 2600,
-    delay: Math.random() * 2000,
+const GLYPHS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789Z';
+
+type RainColumn = { x: number; text: string; dur: number; delay: number; opacity: number };
+
+function makeRain(count: number): RainColumn[] {
+  return Array.from({ length: count }, (_, i) => ({
+    x: (SCREEN_W / count) * i + Math.random() * 14,
+    text: Array.from(
+      { length: 14 + Math.floor(Math.random() * 10) },
+      () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
+    ).join('\n'),
+    dur: 7000 + Math.random() * 9000,
+    delay: Math.random() * 6000,
+    opacity: 0.1 + Math.random() * 0.18,
   }));
 }
 
-function TwinklingStar({ star }: { star: Star }) {
-  const opacity = useSharedValue(star.base);
+function RainStrand({ col }: { col: RainColumn }) {
+  const y = useSharedValue(-460);
   useEffect(() => {
-    opacity.value = withDelay(
-      star.delay,
+    y.value = withDelay(
+      col.delay,
+      withRepeat(withTiming(SCREEN_H + 60, { duration: col.dur, easing: Easing.linear }), -1),
+    );
+    return () => cancelAnimation(y);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+  return (
+    <Animated.Text
+      pointerEvents="none"
+      style={[styles.rain, { left: col.x, opacity: col.opacity }, style]}
+    >
+      {col.text}
+    </Animated.Text>
+  );
+}
+
+// ---------- Nano entity ----------
+
+const PIXELS = 25; // 5×5 nano-pixel core
+
+function NanoPixel({ index, stage }: { index: number; stage: SharedValue<number> }) {
+  const flicker = useSharedValue(0.25 + Math.random() * 0.6);
+  useEffect(() => {
+    flicker.value = withDelay(
+      Math.random() * 1200,
       withRepeat(
         withSequence(
-          withTiming(Math.min(1, star.base + 0.5), { duration: star.dur, easing: Easing.inOut(Easing.quad) }),
-          withTiming(star.base, { duration: star.dur, easing: Easing.inOut(Easing.quad) }),
+          withTiming(0.15 + Math.random() * 0.3, { duration: 240 + Math.random() * 700 }),
+          withTiming(0.6 + Math.random() * 0.4, { duration: 240 + Math.random() * 700 }),
         ),
         -1,
       ),
     );
-    return () => cancelAnimation(opacity);
+    return () => cancelAnimation(flicker);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.star,
-        { left: star.x, top: star.y, width: star.size, height: star.size, borderRadius: star.size / 2 },
-        style,
-      ]}
-    />
-  );
+  const style = useAnimatedStyle(() => ({
+    opacity: flicker.value,
+    backgroundColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
+  }));
+  // Center pixel stays solid — the "eye".
+  const isEye = index === 12;
+  return <Animated.View style={[styles.pixel, isEye && styles.pixelEye, style]} />;
 }
 
 function Entity({ state, onPress }: { state: EntityState; onPress: () => void }) {
   const stage = useSharedValue(0);
-  const breath = useSharedValue(1);
+  const spinA = useSharedValue(0);
+  const spinB = useSharedValue(0);
   const ring = useSharedValue(0);
 
   useEffect(() => {
-    stage.value = withTiming(STATE_INDEX[state], { duration: 450 });
-    cancelAnimation(breath);
-    const tempo = state === 'thinking' ? 420 : state === 'speaking' ? 600 : 2600;
-    const amp = state === 'speaking' ? 1.18 : state === 'thinking' ? 1.08 : 1.1;
-    breath.value = withRepeat(
-      withSequence(
-        withTiming(amp, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
-        withTiming(1, { duration: tempo, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-    );
+    stage.value = withTiming(STATE_INDEX[state], { duration: 400 });
+    const speed = state === 'thinking' ? 2200 : state === 'speaking' ? 4500 : 9000;
+    cancelAnimation(spinA);
+    cancelAnimation(spinB);
+    spinA.value = withRepeat(withTiming(spinA.value + 360, { duration: speed, easing: Easing.linear }), -1);
+    spinB.value = withRepeat(withTiming(spinB.value - 360, { duration: speed * 1.6, easing: Easing.linear }), -1);
     cancelAnimation(ring);
     if (state === 'listening') {
       ring.value = 0;
-      ring.value = withRepeat(withTiming(1, { duration: 1500, easing: Easing.out(Easing.quad) }), -1);
+      ring.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.out(Easing.quad) }), -1);
     } else {
-      ring.value = withTiming(0, { duration: 300 });
+      ring.value = withTiming(0, { duration: 250 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  const color = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
-    shadowColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
-  }));
-  const glowStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: breath.value * 1.45 }],
-    opacity: 0.22,
-    backgroundColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
-  }));
-  const coreStyle = useAnimatedStyle(() => ({ transform: [{ scale: breath.value }] }));
-  const ringStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + ring.value * 1.1 }],
-    opacity: ring.value === 0 ? 0 : 0.65 * (1 - ring.value),
+  const ringA = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spinA.value}deg` }],
     borderColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
+  }));
+  const ringB = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spinB.value}deg` }],
+    borderColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
+  }));
+  const sonar = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + ring.value * 1.15 }],
+    opacity: ring.value === 0 ? 0 : 0.7 * (1 - ring.value),
+    borderColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
+  }));
+  const glow = useAnimatedStyle(() => ({
+    shadowColor: interpolateColor(stage.value, [0, 1, 2, 3], STATE_COLORS),
   }));
 
   return (
     <Pressable onPress={onPress} hitSlop={30} style={styles.entityWrap}>
-      <Animated.View style={[styles.entityGlow, glowStyle]} />
-      <Animated.View style={[styles.entityRing, ringStyle]} />
-      <Animated.View style={[styles.entityCore, color, coreStyle]}>
-        <View style={styles.entityInner} />
+      <Animated.View style={[styles.sonar, sonar]} />
+      <Animated.View style={[styles.ringOuter, ringA]} />
+      <Animated.View style={[styles.ringInner, ringB]} />
+      <Animated.View style={[styles.coreBox, glow]}>
+        <View style={styles.pixelGrid}>
+          {Array.from({ length: PIXELS }, (_, i) => (
+            <NanoPixel key={i} index={i} stage={stage} />
+          ))}
+        </View>
       </Animated.View>
     </Pressable>
   );
 }
 
+// ---------- Screen ----------
+
 export default function StudioScreen() {
   const insets = useSafeAreaInsets();
   const { session, loading } = useAuth();
-  const stars = useMemo(() => makeStars(30), []);
+  const rain = useMemo(() => makeRain(11), []);
 
   const [state, setState] = useState<EntityState>('idle');
-  const [line, setLine] = useState(''); // what the entity last said
-  const [heard, setHeard] = useState(''); // last transcript of the user
+  const [line, setLine] = useState('');
+  const [heard, setHeard] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [brand, setBrand] = useState<BrandResult | null>(null);
   const [creating, setCreating] = useState(false);
@@ -158,7 +192,6 @@ export default function StudioScreen() {
   const player = useAudioPlayer();
   const playerStatus = useAudioPlayerStatus(player);
 
-  // When the entity finishes speaking, go back to idle.
   useEffect(() => {
     if (playerStatus.didJustFinish) setState('idle');
   }, [playerStatus.didJustFinish]);
@@ -192,7 +225,6 @@ export default function StudioScreen() {
         const d = (await r.json()) as {
           userText?: string;
           done?: boolean;
-          question?: string;
           brand?: BrandResult;
           line?: string;
           speech?: string;
@@ -218,7 +250,6 @@ export default function StudioScreen() {
     [session, playSpeech],
   );
 
-  // Opening line once signed in.
   useEffect(() => {
     if (session && !started.current) {
       started.current = true;
@@ -229,10 +260,9 @@ export default function StudioScreen() {
   const onEntityPress = useCallback(async () => {
     if (!session || brand) return;
     if (state === 'thinking') return;
-    if (state === 'speaking') player.pause(); // interrupt — go straight to listening
+    if (state === 'speaking') player.pause();
 
     if (state === 'listening') {
-      // Done talking → ship the audio.
       try {
         await recorder.stop();
         await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
@@ -247,7 +277,6 @@ export default function StudioScreen() {
       return;
     }
 
-    // idle (or interrupted speaking) → start listening
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) {
@@ -285,32 +314,32 @@ export default function StudioScreen() {
 
   const hint =
     state === 'listening'
-      ? 'listening — tap when done'
+      ? '[ listening — tap to send ]'
       : state === 'thinking'
-        ? 'thinking…'
+        ? '[ processing… ]'
         : state === 'speaking'
-          ? 'tap to interrupt'
-          : 'tap to speak';
+          ? '[ tap to interrupt ]'
+          : '[ tap to speak ]';
 
   const bottomPad = BottomTabInset + insets.bottom + Spacing.three;
 
   return (
     <View style={styles.container}>
-      {stars.map((s, i) => (
-        <TwinklingStar key={i} star={s} />
+      {rain.map((c, i) => (
+        <RainStrand key={i} col={c} />
       ))}
 
       <View style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <ThemedText type="code" style={styles.eyebrow}>
-          Studio
+          STUDIO // BRAND.SYS
         </ThemedText>
 
         {loading ? (
-          <ActivityIndicator style={styles.center} color="#8a93b8" />
+          <ActivityIndicator style={styles.center} color="#00ff7f" />
         ) : !session ? (
           <View style={styles.center}>
             <ThemedText style={styles.signInNote}>
-              Sign in on the Account tab and the entity will wake up.
+              {'> sign in on the Account tab\n> the entity will wake up'}
             </ThemedText>
           </View>
         ) : brand ? (
@@ -320,7 +349,7 @@ export default function StudioScreen() {
             showsVerticalScrollIndicator={false}
           >
             <ThemedText type="code" style={styles.brandEyebrow}>
-              Your brand
+              {'// BRAND COMPILED'}
             </ThemedText>
             <ThemedText type="subtitle" style={styles.white}>
               {brand.name}
@@ -341,7 +370,7 @@ export default function StudioScreen() {
             <View style={styles.chipsRow}>
               {brand.vibeKeywords.map((k) => (
                 <View key={k} style={styles.chip}>
-                  <ThemedText type="small" style={styles.dim}>
+                  <ThemedText type="code" style={styles.chipText}>
                     {k}
                   </ThemedText>
                 </View>
@@ -352,8 +381,8 @@ export default function StudioScreen() {
             </ThemedText>
             {created ? (
               <View style={[styles.createBtn, styles.createdBox]}>
-                <ThemedText type="smallBold" style={styles.white}>
-                  Store created · @{created}
+                <ThemedText type="code" style={styles.green}>
+                  {'> store online · @' + created}
                 </ThemedText>
                 <ThemedText type="small" style={styles.dim}>
                   Head to Design to start your first drop.
@@ -363,9 +392,9 @@ export default function StudioScreen() {
               <Pressable onPress={createStore} disabled={creating}>
                 <View style={[styles.createBtn, { opacity: creating ? 0.5 : 1 }]}>
                   {creating ? (
-                    <ActivityIndicator color={SPACE_BG} />
+                    <ActivityIndicator color={BG} />
                   ) : (
-                    <ThemedText type="smallBold" style={{ color: SPACE_BG }}>
+                    <ThemedText type="smallBold" style={{ color: BG }}>
                       Create my store
                     </ThemedText>
                   )}
@@ -377,14 +406,14 @@ export default function StudioScreen() {
           <>
             <View style={styles.entityArea}>
               <Entity state={state} onPress={onEntityPress} />
-              <ThemedText type="small" style={styles.hint}>
+              <ThemedText type="code" style={styles.hint}>
                 {hint}
               </ThemedText>
             </View>
             <View style={styles.captions}>
               {heard ? (
-                <ThemedText type="small" style={styles.heard} numberOfLines={2}>
-                  “{heard}”
+                <ThemedText type="code" style={styles.heard} numberOfLines={2}>
+                  {'you > ' + heard}
                 </ThemedText>
               ) : null}
               {line ? (
@@ -397,8 +426,8 @@ export default function StudioScreen() {
         )}
 
         {error ? (
-          <ThemedText type="small" style={styles.error}>
-            {error}
+          <ThemedText type="code" style={styles.error}>
+            {'! ' + error}
           </ThemedText>
         ) : null}
       </View>
@@ -407,68 +436,92 @@ export default function StudioScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: SPACE_BG },
+  container: { flex: 1, backgroundColor: BG },
   content: { flex: 1, paddingHorizontal: Spacing.four },
   fill: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { textTransform: 'uppercase', color: '#5e6587' },
-  star: { position: 'absolute', backgroundColor: '#cdd6ff' },
-  signInNote: { color: '#8a93b8', textAlign: 'center', maxWidth: 280 },
+  eyebrow: { color: '#1f7a4d', letterSpacing: 1 },
+  rain: {
+    position: 'absolute',
+    top: 0,
+    color: MATRIX_DIM,
+    fontFamily: MONO,
+    fontSize: 13,
+    lineHeight: 15,
+  },
+  signInNote: { color: '#3fae77', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
 
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.five },
-  entityWrap: { width: 200, height: 200, alignItems: 'center', justifyContent: 'center' },
-  entityGlow: { position: 'absolute', width: 140, height: 140, borderRadius: 70 },
-  entityRing: { position: 'absolute', width: 150, height: 150, borderRadius: 75, borderWidth: 1.5 },
-  entityCore: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOpacity: 0.9,
-    shadowRadius: 32,
+  entityWrap: { width: 220, height: 220, alignItems: 'center', justifyContent: 'center' },
+  sonar: { position: 'absolute', width: 170, height: 170, borderRadius: 85, borderWidth: 1 },
+  ringOuter: {
+    position: 'absolute',
+    width: 168,
+    height: 168,
+    borderRadius: 84,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    opacity: 0.55,
+  },
+  ringInner: {
+    position: 'absolute',
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    opacity: 0.8,
+  },
+  coreBox: {
+    shadowOpacity: 0.85,
+    shadowRadius: 26,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 24,
+    elevation: 20,
   },
-  entityInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    opacity: 0.35,
+  pixelGrid: {
+    width: 80,
+    height: 80,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignContent: 'space-between',
   },
-  hint: { color: '#8a93b8' },
+  pixel: { width: 12, height: 12, borderRadius: 2 },
+  pixelEye: { borderRadius: 6 },
+  hint: { color: '#3fae77', letterSpacing: 1 },
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.three, minHeight: 96 },
-  heard: { color: '#5e6587', textAlign: 'center' },
-  line: { color: '#e7ebff', textAlign: 'center', fontSize: 17, lineHeight: 24 },
-  error: { color: '#ff6b6a', textAlign: 'center', paddingTop: Spacing.two },
+  heard: { color: '#2c7a55', textAlign: 'center' },
+  line: { color: '#d8ffe9', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: MONO },
+  error: { color: '#ff5c5c', textAlign: 'center', paddingTop: Spacing.two },
 
   brandScroll: { gap: Spacing.three, paddingTop: Spacing.four },
-  brandEyebrow: { textTransform: 'uppercase', color: '#5e6587' },
-  white: { color: '#ffffff' },
-  dim: { color: '#aab3d6' },
+  brandEyebrow: { color: '#1f7a4d' },
+  white: { color: '#eafff3' },
+  dim: { color: '#7dd6a8' },
+  green: { color: '#00ff7f' },
   paletteRow: { flexDirection: 'row', gap: Spacing.two },
   swatchCol: { alignItems: 'center', gap: Spacing.one, flex: 1 },
-  swatch: { width: '100%', aspectRatio: 1, borderRadius: Spacing.two },
-  swatchLabel: { fontSize: 10, color: '#5e6587' },
+  swatch: { width: '100%', aspectRatio: 1, borderRadius: 3 },
+  swatchLabel: { fontSize: 10, color: '#3fae77' },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   chip: {
     borderWidth: 1,
-    borderColor: '#2a3052',
-    borderRadius: 999,
+    borderColor: '#134d31',
+    borderRadius: 3,
     paddingHorizontal: Spacing.two + 2,
     paddingVertical: Spacing.one,
   },
+  chipText: { color: '#7dd6a8', fontSize: 11 },
   createBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.three,
-    borderRadius: 999,
+    borderRadius: 4,
     minHeight: 48,
-    backgroundColor: '#e7ebff',
+    backgroundColor: '#00ff7f',
     gap: 2,
     marginTop: Spacing.two,
   },
-  createdBox: { backgroundColor: '#141a33' },
+  createdBox: { backgroundColor: '#06281a' },
 });
