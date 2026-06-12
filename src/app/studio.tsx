@@ -170,6 +170,31 @@ function DustField({
   );
 }
 
+/** Minimal keyboard glyph: the type-instead-of-talk toggle. Translucent until active. */
+function KeyboardIcon({ active }: { active: boolean }) {
+  const c = active ? '#00ff7f' : '#3fae77';
+  const o = active ? 0.95 : 0.4;
+  const keyRows: [number, number[]][] = [
+    [9.5, [6, 10, 14, 18, 22]],
+    [13.5, [7, 11, 15, 19, 21.5]],
+  ];
+  return (
+    <Svg width={28} height={26} opacity={o}>
+      {/* body */}
+      <Line x1={3} y1={6} x2={25} y2={6} stroke={c} strokeWidth={1.5} strokeLinecap="round" />
+      <Line x1={3} y1={20} x2={25} y2={20} stroke={c} strokeWidth={1.5} strokeLinecap="round" />
+      <Line x1={3} y1={6} x2={3} y2={20} stroke={c} strokeWidth={1.5} strokeLinecap="round" />
+      <Line x1={25} y1={6} x2={25} y2={20} stroke={c} strokeWidth={1.5} strokeLinecap="round" />
+      {/* keys */}
+      {keyRows.flatMap(([y, xs]) =>
+        xs.map((x) => <Circle key={`${x}-${y}`} cx={x} cy={y} r={1.1} fill={c} />),
+      )}
+      {/* spacebar */}
+      <Line x1={9} y1={17} x2={19} y2={17} stroke={c} strokeWidth={1.6} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 // ---------- Nanocrew mark: the crewcut ----------
 
 const MARK = 88;
@@ -863,6 +888,12 @@ export default function StudioScreen() {
           <ThemedText type="code" style={styles.eyebrow}>
             STUDIO // BRAND.SYS
           </ThemedText>
+          <View style={styles.headerSpacer} />
+          {session && !brand ? (
+            <Pressable onPress={toggleKeyboard} hitSlop={10}>
+              <KeyboardIcon active={keyboardMode} />
+            </Pressable>
+          ) : null}
         </View>
 
         {loading ? (
@@ -982,13 +1013,8 @@ export default function StudioScreen() {
             <View style={styles.entityArea}>
               <Nucleus state={state} level={level} onPress={onEntityPress} />
               <ThemedText type="code" style={styles.hint}>
-                {keyboardMode ? '[ keyboard mode ]' : hint}
+                {keyboardMode ? '[ keyboard mode — tap the orb for voice ]' : hint}
               </ThemedText>
-              <Pressable onPress={toggleKeyboard} hitSlop={8}>
-                <ThemedText type="code" style={styles.modeToggle}>
-                  {keyboardMode ? '🎙 switch to voice' : '⌨ type instead'}
-                </ThemedText>
-              </Pressable>
             </View>
             {keyboardMode ? (
               <View style={styles.typeRow}>
@@ -1067,7 +1093,7 @@ const styles = StyleSheet.create({
   cornerBL: { left: 12, borderLeftWidth: 1.5, borderBottomWidth: 1.5 },
   cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
   hint: { color: '#3fae77', letterSpacing: 1 },
-  modeToggle: { color: '#1f7a4d', letterSpacing: 1, padding: Spacing.one },
+  headerSpacer: { flex: 1 },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },
   typeInput: {
     flex: 1,
