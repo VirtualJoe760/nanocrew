@@ -63,14 +63,30 @@ export async function POST(req: Request) {
   let messages: ChatMessage[];
   let audio: string | undefined;
   let init = false;
+  let say: string | undefined;
   try {
-    const body = (await req.json()) as { messages?: ChatMessage[]; audio?: string; init?: boolean };
+    const body = (await req.json()) as {
+      messages?: ChatMessage[];
+      audio?: string;
+      init?: boolean;
+      say?: string;
+    };
     messages = (body.messages ?? []).slice(-30);
     audio = body.audio;
     init = !!body.init;
-    if (!init && !audio) throw new Error();
+    say = typeof body.say === 'string' ? body.say.slice(0, 300) : undefined;
+    if (!init && !audio && !say) throw new Error();
   } catch {
     return Response.json({ error: 'invalid body' }, { status: 400 });
+  }
+
+  // say mode: pure TTS — the app provides the line (e.g. announcing the store launch).
+  if (say) {
+    try {
+      return Response.json({ line: say, speech: await speak(say) });
+    } catch (e) {
+      return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
+    }
   }
 
   try {

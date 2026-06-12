@@ -1,11 +1,49 @@
-import { eq } from 'drizzle-orm';
+import { GoogleGenAI, Modality } from '@google/genai';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { uploadImage } from '@/lib/cloudinary';
 import type { BrandResult } from '@/lib/interview';
 
 // POST /api/store — persist a finished Studio interview as the creator's store:
-// brand identity → stores.brand_profile, design language → stores.design_system.
+// brand identity → stores.brand_profile, design language → stores.design_system, and a
+// generated logo (from the interview's logo direction + palette) → stores.logo_url.
+
+interface InlinePart {
+  inlineData?: { data?: string; mimeType?: string };
+}
+interface GenResponse {
+  candidates?: Array<{ content?: { parts?: InlinePart[] } }>;
+}
+
+/** Generate a logo mark from the interview's direction, honoring the stated palette. */
+async function generateLogo(brand: BrandResult): Promise<string | null> {
+  try {
+    const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
+    if (!apiKey) return null;
+    const ai = new GoogleGenAI({ apiKey });
+    const palette = brand.designSystem.palette.map((p) => `${p.role}: ${p.hex}`).join(', ');
+    const prompt =
+      `Logo for the clothing brand "${brand.name}". ${brand.logo.direction}. ` +
+      `${brand.designStyle} design style. Use ONLY these brand colors: ${palette}. ` +
+      'A clean, iconic mark centered on a plain solid background matching the brand ' +
+      'background color. Square 1:1. No text other than the brand name, and only if the ' +
+      'description asks for it. No watermark.';
+    const res = (await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: { responseModalities: [Modality.IMAGE] },
+    })) as GenResponse;
+    const part = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+    if (!part?.inlineData?.data) return null;
+    return await uploadImage(Buffer.from(part.inlineData.data, 'base64'), {
+      folder: 'nanocrew/logos',
+    });
+  } catch {
+    return null; // a store without a logo beats a failed creation
+  }
+}
+
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -35,6 +73,7 @@ export async function POST(req: Request) {
         .slice(0, 40) || 'store';
 
     const { designSystem, ...profile } = brand;
+    const logoUrl = await generateLogo(brand);
 
     // Retry on slug collision with a numeric suffix.
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -50,13 +89,18 @@ export async function POST(req: Request) {
             descriptionMd: brand.story,
             brandProfile: profile,
             designSystem,
+            logoUrl,
             status: 'building',
           })
-          .returning({ id: schema.stores.id, slug: schema.stores.slug });
-        // A fresh store needs a first catalogue so the Designer has somewhere to work.
-        await db
-          .insert(schema.catalogues)
-          .values({ storeId: store.id, name: 'First drop', slug: 'first-drop' });
+          .returning({ id: schema.stores.id, slug: schema.stores.slug, logoUrl: schema.stores.logoUrl });
+        // A fresh store needs a first catalogue so the Designer has somewhere to work —
+        // named after what they said they're most excited to sell.
+        const firstProduct = brand.products?.[0]?.trim();
+        await db.insert(schema.catalogues).values({
+          storeId: store.id,
+          name: firstProduct ? `First drop — ${firstProduct}` : 'First drop',
+          slug: 'first-drop',
+        });
         return Response.json({ store });
       } catch (e) {
         const msg = e instanceof Error ? e.message : '';

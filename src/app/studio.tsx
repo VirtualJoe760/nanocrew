@@ -22,6 +22,7 @@ import {
   useAudioRecorder,
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Svg, { Circle, Line } from 'react-native-svg';
 
@@ -274,6 +275,7 @@ export default function StudioScreen() {
   const [brand, setBrand] = useState<BrandResult | null>(null);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   const messages = useRef<ChatMessage[]>([]);
   const started = useRef(false);
@@ -393,15 +395,31 @@ export default function StudioScreen() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ brand }),
       });
-      const d = (await r.json()) as { store?: { slug: string }; error?: string };
+      const d = (await r.json()) as {
+        store?: { slug: string; logoUrl?: string | null };
+        error?: string;
+      };
       if (!d.store) throw new Error(d.error || 'Failed to create store');
       setCreated(d.store.slug);
+      setLogoUrl(d.store.logoUrl ?? null);
+      // The entity announces the launch.
+      try {
+        const v = await fetch(apiUrl('/api/voice'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ say: `${brand.name} is online. Head to the Design tab — let's make your first drop.` }),
+        });
+        const s = (await v.json()) as { speech?: string };
+        if (s.speech) await playSpeech(s.speech);
+      } catch {
+        // launch fanfare is optional
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create store');
     } finally {
       setCreating(false);
     }
-  }, [session, brand]);
+  }, [session, brand, playSpeech]);
 
   const hint =
     state === 'listening'
@@ -453,6 +471,7 @@ export default function StudioScreen() {
             <ThemedText type="code" style={styles.brandEyebrow}>
               {'// BRAND COMPILED'}
             </ThemedText>
+            {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="cover" /> : null}
             <ThemedText type="subtitle" style={styles.white}>
               {brand.name}
             </ThemedText>
@@ -584,6 +603,7 @@ const styles = StyleSheet.create({
   error: { color: '#ff5c5c', textAlign: 'center', paddingTop: Spacing.two },
 
   brandScroll: { gap: Spacing.three, paddingTop: Spacing.four },
+  logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#134d31' },
   brandEyebrow: { color: '#1f7a4d' },
   white: { color: '#eafff3' },
   dim: { color: '#7dd6a8' },
