@@ -169,3 +169,17 @@ Public API the templates consume (to build in the nanocrew app):
    sessions; blog creation flow; Studio media upload → Cloudinary.
 9. Token metering per revision session (billing hooks come with the portal).
 ```
+
+## Dashboards (added 2026-06-12)
+
+**Creator dashboard — `/admin` on every brand site.** Same Supabase login as the app
+(magic-link via REST for Google-auth creators, password as alternative; a single
+`https://*.vercel.app/**` entry in the Supabase redirect allow-list covers all sites).
+The dashboard is thin: it calls platform `/api/creator/*` endpoints with the creator's
+token; the API verifies store ownership. V1 surface: revenue + order count + 30-day
+traffic (overview cards), order list with status. Traffic comes from a public beacon —
+brand sites POST `/api/public/beacon` per pageview into a `page_views` daily counter.
+
+**Platform admin — inside the Nanocrew app.** Role-gated (platform admin emails) section
+on the Account tab backed by `/api/admin/platform`: all stores w/ status, platform-wide
+orders/revenue, and adjustment actions (suspend store, re-provision) as they're needed.
