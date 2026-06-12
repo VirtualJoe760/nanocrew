@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
-import { interviewSystem, parseTurn, type ChatMessage } from '@/lib/interview';
+import { interviewSystem, parseTurn, type ChatMessage, type TimedWord } from '@/lib/interview';
 import { resolveVoice } from '@/lib/voices';
 
 // POST /api/voice — one spoken turn of the Studio brand interview.
@@ -34,11 +34,31 @@ async function addReverb(mp3: Buffer): Promise<Buffer> {
   }
 }
 
-async function speak(text: string, voiceId: string): Promise<string> {
+const TEMPO = 0.87; // must match the atempo factor in addReverb
+
+/** Map ElevenLabs character alignment → per-word start times, scaled for our tempo. */
+function toWordTimings(chars: string[], starts: number[]): TimedWord[] {
+  const words: TimedWord[] = [];
+  let current = '';
+  let start = 0;
+  chars.forEach((c, i) => {
+    if (/\s/.test(c)) {
+      if (current) words.push({ w: current, t: start / TEMPO });
+      current = '';
+    } else {
+      if (!current) start = starts[i] ?? 0;
+      current += c;
+    }
+  });
+  if (current) words.push({ w: current, t: start / TEMPO });
+  return words;
+}
+
+async function speak(text: string, voiceId: string): Promise<{ speech: string; words: TimedWord[] }> {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) throw new Error('ELEVENLABS_API_KEY not configured');
   const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps?output_format=mp3_44100_64`,
     {
       method: 'POST',
       headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
@@ -50,8 +70,16 @@ async function speak(text: string, voiceId: string): Promise<string> {
     },
   );
   if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const dry = Buffer.from(await res.arrayBuffer());
-  return (await addReverb(dry)).toString('base64');
+  const data = (await res.json()) as {
+    audio_base64: string;
+    alignment?: { characters: string[]; character_start_times_seconds: number[] };
+  };
+  const dry = Buffer.from(data.audio_base64, 'base64');
+  const speech = (await addReverb(dry)).toString('base64');
+  const words = data.alignment
+    ? toWordTimings(data.alignment.characters, data.alignment.character_start_times_seconds)
+    : [];
+  return { speech, words };
 }
 
 export async function POST(req: Request) {
@@ -90,7 +118,8 @@ export async function POST(req: Request) {
   // say mode: pure TTS — the app provides the line (e.g. announcing the store launch).
   if (say) {
     try {
-      return Response.json({ line: say, speech: await speak(say, voice.id) });
+      const tts = await speak(say, voice.id);
+      return Response.json({ line: say, speech: tts.speech, words: tts.words });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
     }
@@ -126,13 +155,14 @@ export async function POST(req: Request) {
     // on its own prompt examples — hand the floor back gently.
     if (!init && (turn.userText?.trim().length ?? 0) < 2) {
       const line = "I didn't catch that — tap me when you're ready.";
-      return Response.json({ empty: true, line, speech: await speak(line, voice.id) });
+      const tts = await speak(line, voice.id);
+      return Response.json({ empty: true, line, speech: tts.speech, words: tts.words });
     }
 
     const line = turn.done
       ? (turn.closing ?? `Your brand is ready. Take a look at ${turn.brand!.name}.`)
       : turn.question!;
-    const speech = await speak(line, voice.id);
+    const tts = await speak(line, voice.id);
 
     return Response.json({
       userText: turn.userText,
@@ -140,7 +170,8 @@ export async function POST(req: Request) {
       question: turn.question,
       brand: turn.brand,
       line,
-      speech,
+      speech: tts.speech,
+      words: tts.words,
     });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });

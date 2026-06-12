@@ -33,7 +33,7 @@ import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiUrl } from '@/lib/api';
-import type { BrandResult, ChatMessage } from '@/lib/interview';
+import type { BrandResult, ChatMessage, TimedWord } from '@/lib/interview';
 import { AI_VOICES, DEFAULT_VOICE, type AiVoice } from '@/lib/voices';
 
 const VOICE_KEY = 'nanocrew.voiceId';
@@ -540,11 +540,13 @@ export default function StudioScreen() {
           brand?: BrandResult;
           line?: string;
           speech?: string;
+          words?: TimedWord[];
           empty?: boolean;
           error?: string;
         };
         if (d.error) throw new Error(d.error);
         lastTurnEmptyRef.current = !!d.empty;
+        setTimedWords(d.words ?? []);
         if (d.empty) {
           // Nothing was actually said — she acknowledges and parks (no history written).
           if (d.line) setLine(d.line);
@@ -728,20 +730,31 @@ export default function StudioScreen() {
     void startListening();
   }, [session, brand, state, player, startListening, sendRecording]);
 
-  // Word-by-word subtitles paced to the actual audio clock.
+  // Word-by-word subtitles synced to the speech itself: ElevenLabs character timestamps
+  // give each word its true start time (tempo-adjusted server-side). Linear fallback if
+  // alignment is missing.
   const [wordIdx, setWordIdx] = useState(0);
-  const words = useMemo(() => line.split(/\s+/).filter(Boolean), [line]);
+  const [timedWords, setTimedWords] = useState<TimedWord[]>([]);
+  const words = useMemo(
+    () => (timedWords.length ? timedWords.map((x) => x.w) : line.split(/\s+/).filter(Boolean)),
+    [timedWords, line],
+  );
   useEffect(() => {
     if (state !== 'speaking' || !words.length) return;
     setWordIdx(0);
     const id = setInterval(() => {
-      const dur = player.duration;
-      if (dur > 0) {
-        setWordIdx(Math.min(words.length - 1, Math.floor((player.currentTime / dur) * words.length)));
+      const ct = player.currentTime;
+      if (timedWords.length) {
+        let i = 0;
+        while (i + 1 < timedWords.length && timedWords[i + 1].t <= ct) i++;
+        setWordIdx(i);
+      } else {
+        const dur = player.duration;
+        if (dur > 0) setWordIdx(Math.min(words.length - 1, Math.floor((ct / dur) * words.length)));
       }
-    }, 80);
+    }, 60);
     return () => clearInterval(id);
-  }, [state, words, player]);
+  }, [state, words, timedWords, player]);
 
   const createStore = useCallback(async () => {
     if (!session || !brand) return;

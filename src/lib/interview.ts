@@ -4,6 +4,9 @@
 
 export type ChatMessage = { role: 'user' | 'assistant'; text: string };
 
+/** A spoken word with its start time (seconds) in the generated audio. */
+export type TimedWord = { w: string; t: number };
+
 export type BrandResult = {
   name: string;
   tagline: string;
