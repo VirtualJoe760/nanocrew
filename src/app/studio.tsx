@@ -99,6 +99,62 @@ function NetworkField() {
   );
 }
 
+// ---------- Spatial dust ----------
+
+type Dust = { x: number; y: number; r: number; o: number; c: string };
+
+function buildDust(count: number, rMax: number): Dust[] {
+  return Array.from({ length: count }, () => ({
+    x: Math.random() * (SCREEN_W + 60) - 30,
+    y: Math.random() * (SCREEN_H + 60) - 30,
+    r: 0.4 + Math.random() * rMax,
+    o: 0.08 + Math.random() * 0.5,
+    c: pick(TONES),
+  }));
+}
+
+/** A full-screen field of motes drifting as one — layered at different speeds for depth. */
+function DustField({
+  count,
+  rMax,
+  driftX,
+  driftY,
+  period,
+}: {
+  count: number;
+  rMax: number;
+  driftX: number;
+  driftY: number;
+  period: number;
+}) {
+  const dust = useMemo(() => buildDust(count, rMax), [count, rMax]);
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: period, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: period, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+    );
+    return () => cancelAnimation(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.55 + t.value * 0.45,
+    transform: [{ translateX: t.value * driftX }, { translateY: t.value * driftY }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style]}>
+      <Svg width={SCREEN_W} height={SCREEN_H}>
+        {dust.map((d, i) => (
+          <Circle key={i} cx={d.x} cy={d.y} r={d.r} fill={d.c} fillOpacity={d.o} />
+        ))}
+      </Svg>
+    </Animated.View>
+  );
+}
+
 // ---------- Nanocrew mark: the crewcut ----------
 
 const MARK = 88;
@@ -543,6 +599,10 @@ export default function StudioScreen() {
   return (
     <View style={styles.container}>
       <NetworkField />
+      {/* Spatial dust — three depths drifting at different rates */}
+      <DustField count={34} rMax={0.9} driftX={-9} driftY={14} period={16000} />
+      <DustField count={26} rMax={1.5} driftX={12} driftY={-10} period={22000} />
+      <DustField count={16} rMax={2.2} driftX={-18} driftY={-22} period={29000} />
       {/* HUD corner brackets */}
       <View pointerEvents="none" style={[styles.corner, styles.cornerTL, { top: insets.top + 8 }]} />
       <View pointerEvents="none" style={[styles.corner, styles.cornerTR, { top: insets.top + 8 }]} />
