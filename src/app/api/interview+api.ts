@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
-import { INTERVIEW_SYSTEM, parseTurn, type ChatMessage } from '@/lib/interview';
+import { interviewSystem, parseTurn, type ChatMessage } from '@/lib/interview';
 
 // POST /api/interview — the text version of the Studio brand interview (the voice route
 // /api/voice is the primary experience; this stays for fallback/testing).
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
         ? messages.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] }))
         : [{ role: 'user', parts: [{ text: 'Start the interview with your first question.' }] }],
       config: {
-        systemInstruction: INTERVIEW_SYSTEM,
+        systemInstruction: interviewSystem(user.name),
         temperature: 0.9,
         responseMimeType: 'application/json',
       },

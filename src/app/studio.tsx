@@ -449,9 +449,21 @@ export default function StudioScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  // Fluid conversation: ask for the mic once, then the entity listens by itself after
+  // each reply — silence ends your turn, no tapping.
+  const [micGranted, setMicGranted] = useState(false);
   useEffect(() => {
-    if (playerStatus.didJustFinish) setState('idle');
-  }, [playerStatus.didJustFinish]);
+    if (!session) return;
+    AudioModule.requestRecordingPermissionsAsync()
+      .then((p) => setMicGranted(p.granted))
+      .catch(() => {});
+  }, [session]);
+
+  // Voice-activity bookkeeping for auto-send.
+  const spokeRef = useRef(false);
+  const lastLoudRef = useRef(0);
+  const recStartRef = useRef(0);
+  const busyRef = useRef(false);
 
   const playSpeech = useCallback(
     async (b64: string) => {
@@ -514,40 +526,119 @@ export default function StudioScreen() {
     }
   }, [session, turn]);
 
+  const startListening = useCallback(async () => {
+    if (busyRef.current) return;
+    // The recorder can fail to prepare while the player is still releasing the audio
+    // session (especially in the simulator) — be patient before falling back to tap mode.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        await recorder.prepareToRecordAsync();
+        recorder.record();
+        spokeRef.current = false;
+        lastLoudRef.current = 0;
+        recStartRef.current = Date.now();
+        setState('listening');
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 700));
+      }
+    }
+    setError('mic hiccup — tap the orb to talk');
+    setState('idle');
+  }, [recorder]);
+
+  const sendRecording = useCallback(async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      const uri = recorder.uri;
+      if (!uri) throw new Error('No recording captured');
+      const audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      await turn({ audio });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Recording failed');
+      setState('idle');
+    } finally {
+      busyRef.current = false;
+    }
+  }, [recorder, turn]);
+
+  // When she finishes speaking, she starts listening — the conversation just flows.
+  // (Small delay so the audio session settles before the mic takes over.)
+  useEffect(() => {
+    if (!playerStatus.didJustFinish) return;
+    if (micGranted && !brand && started.current) {
+      const t = setTimeout(() => void startListening(), 450);
+      return () => clearTimeout(t);
+    }
+    setState('idle');
+  }, [playerStatus.didJustFinish, micGranted, brand, startListening]);
+
+  // Silence detection: once you've spoken, ~1.2s of quiet ends your turn automatically.
+  useEffect(() => {
+    if (state !== 'listening' || busyRef.current) return;
+    const db = recState.metering;
+    if (typeof db !== 'number') return;
+    const now = Date.now();
+    if (db > -38) {
+      spokeRef.current = true;
+      lastLoudRef.current = now;
+    }
+    if (spokeRef.current && (now - lastLoudRef.current > 1200 || now - recStartRef.current > 30000)) {
+      void sendRecording();
+      return;
+    }
+    if (!spokeRef.current && now - recStartRef.current > 15000) {
+      // Nothing said yet — restart the take so files stay small, keep listening.
+      recStartRef.current = now;
+      recorder
+        .stop()
+        .then(() => recorder.prepareToRecordAsync())
+        .then(() => recorder.record())
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recState.metering, state, sendRecording]);
+
   const onEntityPress = useCallback(async () => {
     if (!session || brand) return;
     if (state === 'thinking') return;
-    if (state === 'speaking') player.pause();
-
-    if (state === 'listening') {
-      try {
-        await recorder.stop();
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-        const uri = recorder.uri;
-        if (!uri) throw new Error('No recording captured');
-        const audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        void turn({ audio });
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Recording failed');
-        setState('idle');
-      }
+    if (state === 'speaking') {
+      player.pause(); // interrupt her — your turn
+      void startListening();
       return;
     }
-
-    try {
-      const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) {
-        setError('Microphone permission needed — enable it in Settings.');
-        return;
-      }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      setState('listening');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start the microphone');
+    if (state === 'listening') {
+      void sendRecording(); // manual send without waiting for silence
+      return;
     }
-  }, [session, brand, state, player, recorder, turn]);
+    // idle — mic was denied or conversation hasn't started
+    const perm = await AudioModule.requestRecordingPermissionsAsync();
+    if (!perm.granted) {
+      setError('Microphone permission needed — enable it in Settings.');
+      return;
+    }
+    setMicGranted(true);
+    void startListening();
+  }, [session, brand, state, player, startListening, sendRecording]);
+
+  // Word-by-word subtitles paced to the actual audio clock.
+  const [wordIdx, setWordIdx] = useState(0);
+  const words = useMemo(() => line.split(/\s+/).filter(Boolean), [line]);
+  useEffect(() => {
+    if (state !== 'speaking' || !words.length) return;
+    setWordIdx(0);
+    const id = setInterval(() => {
+      const dur = player.duration;
+      if (dur > 0) {
+        setWordIdx(Math.min(words.length - 1, Math.floor((player.currentTime / dur) * words.length)));
+      }
+    }, 80);
+    return () => clearInterval(id);
+  }, [state, words, player]);
 
   const createStore = useCallback(async () => {
     if (!session || !brand) return;
@@ -557,7 +648,7 @@ export default function StudioScreen() {
       const r = await fetch(apiUrl('/api/store'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ brand }),
+        body: JSON.stringify({ brand, transcript: messages.current }),
       });
       const d = (await r.json()) as {
         store?: { slug: string; logoUrl?: string | null };
@@ -587,12 +678,14 @@ export default function StudioScreen() {
 
   const hint =
     state === 'listening'
-      ? '[ listening — tap to send ]'
+      ? '[ listening — just talk ]'
       : state === 'thinking'
         ? '[ processing… ]'
         : state === 'speaking'
           ? '[ tap to interrupt ]'
-          : '[ tap to speak ]';
+          : micGranted
+            ? '[ tap to wake ]'
+            : '[ tap to enable the mic ]';
 
   const bottomPad = BottomTabInset + insets.bottom + Spacing.three;
 
@@ -697,16 +790,22 @@ export default function StudioScreen() {
               </ThemedText>
             </View>
             <View style={styles.captions}>
-              {heard ? (
-                <ThemedText type="code" style={styles.heard} numberOfLines={2}>
-                  {'you > ' + heard}
-                </ThemedText>
-              ) : null}
-              {line ? (
-                <ThemedText style={styles.line} numberOfLines={4}>
-                  {line}
-                </ThemedText>
-              ) : null}
+              {state === 'speaking' && words.length ? (
+                <ThemedText style={styles.bigWord}>{words[wordIdx]}</ThemedText>
+              ) : (
+                <>
+                  {heard ? (
+                    <ThemedText type="code" style={styles.heard} numberOfLines={2}>
+                      {'you > ' + heard}
+                    </ThemedText>
+                  ) : null}
+                  {line ? (
+                    <ThemedText style={styles.line} numberOfLines={3}>
+                      {line}
+                    </ThemedText>
+                  ) : null}
+                </>
+              )}
             </View>
           </>
         )}
@@ -750,6 +849,14 @@ const styles = StyleSheet.create({
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.three, minHeight: 96 },
   heard: { color: '#2c7a55', textAlign: 'center' },
+  bigWord: {
+    color: '#eafff3',
+    textAlign: 'center',
+    fontFamily: MONO,
+    fontSize: 32,
+    lineHeight: 40,
+    fontWeight: '700',
+  },
   line: { color: '#d8ffe9', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: MONO },
   error: { color: '#ff5c5c', textAlign: 'center', paddingTop: Spacing.two },
 

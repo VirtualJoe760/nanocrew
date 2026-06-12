@@ -8,6 +8,8 @@ const PUBLISHABLE_KEY =
 export interface AuthedUser {
   id: string;
   email: string;
+  /** Display name from the auth provider (e.g. Google), when available. */
+  name?: string;
 }
 
 export async function getUserFromRequest(req: Request): Promise<AuthedUser | null> {
@@ -19,9 +21,14 @@ export async function getUserFromRequest(req: Request): Promise<AuthedUser | nul
       headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
-    const user = (await res.json()) as { id?: string; email?: string };
+    const user = (await res.json()) as {
+      id?: string;
+      email?: string;
+      user_metadata?: { full_name?: string; name?: string };
+    };
     if (!user.id || !user.email) return null;
-    return { id: user.id, email: user.email };
+    const name = user.user_metadata?.full_name ?? user.user_metadata?.name;
+    return { id: user.id, email: user.email, name };
   } catch {
     return null;
   }

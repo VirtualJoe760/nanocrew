@@ -3,7 +3,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
-import type { BrandResult } from '@/lib/interview';
+import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // POST /api/store — persist a finished Studio interview as the creator's store:
 // brand identity → stores.brand_profile, design language → stores.design_system, and a
@@ -49,10 +49,12 @@ export async function POST(req: Request) {
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   let brand: BrandResult;
+  let transcript: ChatMessage[] = [];
   try {
-    const body = (await req.json()) as { brand?: BrandResult };
+    const body = (await req.json()) as { brand?: BrandResult; transcript?: ChatMessage[] };
     if (!body.brand?.name) throw new Error();
     brand = body.brand;
+    transcript = (body.transcript ?? []).slice(0, 80);
   } catch {
     return Response.json({ error: 'invalid body' }, { status: 400 });
   }
@@ -87,7 +89,9 @@ export async function POST(req: Request) {
             slug,
             tagline: brand.tagline,
             descriptionMd: brand.story,
-            brandProfile: profile,
+            // The raw interview is brand data too — the template engine and future
+            // revisions mine what the creator actually said.
+            brandProfile: { ...profile, transcript },
             designSystem,
             logoUrl,
             status: 'building',
