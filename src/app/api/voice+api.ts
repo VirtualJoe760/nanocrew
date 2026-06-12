@@ -9,7 +9,7 @@ import { INTERVIEW_SYSTEM, parseTurn, type ChatMessage } from '@/lib/interview';
 // Returns: { userText?, done, question?, brand?, speech: base64 mp3 }
 const MODEL = 'gemini-2.5-flash';
 
-const ELEVEN_VOICE = process.env.ELEVENLABS_VOICE_ID ?? 'onwK4e9ZLuTAKqWW03F9'; // "Daniel" — British, precise
+const ELEVEN_VOICE = process.env.ELEVENLABS_VOICE_ID ?? 'pFZP5JQG7iQjIQuC4Bku'; // "Lily" — British woman, warm + precise
 
 /** Subtle sci-fi room reverb via ffmpeg, when the host has it. Falls back to dry audio. */
 async function addReverb(mp3: Buffer): Promise<Buffer> {
