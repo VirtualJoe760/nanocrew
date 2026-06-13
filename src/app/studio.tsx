@@ -40,6 +40,7 @@ import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import { EarningsCockpit } from '@/components/earnings-cockpit';
+import { StudioComposer } from '@/components/studio-composer';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -210,6 +211,17 @@ function MetricsIcon() {
         <Line key={x} x1={x} y1={21} x2={x} y2={21 - h} stroke={c} strokeWidth={2.4} strokeLinecap="round" />
       ))}
       <Line x1={2} y1={22.5} x2={26} y2={22.5} stroke={c} strokeWidth={1.3} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function ManageIcon() {
+  const c = '#3fae77';
+  return (
+    <Svg width={28} height={26} opacity={0.5}>
+      {/* pencil */}
+      <Path d="M7 19 L7 16 L17 6 L20 9 L10 19 Z" fill="none" stroke={c} strokeWidth={1.5} strokeLinejoin="round" />
+      <Line x1={15} y1={8} x2={18} y2={11} stroke={c} strokeWidth={1.5} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -481,6 +493,8 @@ export default function StudioScreen() {
   const [needsSelection, setNeedsSelection] = useState(false);
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [showCockpit, setShowCockpit] = useState(false);
+  const [showComposer, setShowComposer] = useState(false);
+  const [hasStore, setHasStore] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -491,14 +505,21 @@ export default function StudioScreen() {
         if (!alive) return;
         if (saved) {
           setVoiceId(saved);
+          // Returning creator — confirm a store exists so the Manage panel shows.
+          fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } })
+            .then((r) => r.json())
+            .then((d: { stores?: unknown[] }) => alive && setHasStore((d.stores?.length ?? 0) > 0))
+            .catch(() => {});
         } else {
           const r = await fetch(apiUrl('/api/me'), {
             headers: { Authorization: `Bearer ${session.access_token}` },
           });
           const d = (await r.json()) as { stores?: unknown[] };
           if (!alive) return;
-          if ((d.stores?.length ?? 0) > 0) setVoiceId(DEFAULT_VOICE.id);
-          else setNeedsSelection(true);
+          if ((d.stores?.length ?? 0) > 0) {
+            setVoiceId(DEFAULT_VOICE.id);
+            setHasStore(true);
+          } else setNeedsSelection(true);
         }
       } catch {
         if (alive) setVoiceId(DEFAULT_VOICE.id); // never block the studio on a lookup
@@ -852,6 +873,7 @@ export default function StudioScreen() {
       };
       if (!d.store) throw new Error(d.error || 'Failed to create store');
       setCreated(d.store.slug);
+      setHasStore(true);
       setLogoUrl(d.store.logoUrl ?? null);
       // The entity announces the launch.
       try {
@@ -911,6 +933,11 @@ export default function StudioScreen() {
           <View style={styles.headerSpacer} />
           {session && !brand ? (
             <View style={styles.headerIcons}>
+              {hasStore ? (
+                <Pressable onPress={() => setShowComposer(true)} hitSlop={10}>
+                  <ManageIcon />
+                </Pressable>
+              ) : null}
               <Pressable onPress={() => setShowCockpit(true)} hitSlop={10}>
                 <MetricsIcon />
               </Pressable>
@@ -921,7 +948,10 @@ export default function StudioScreen() {
           ) : null}
         </View>
         {session ? (
-          <EarningsCockpit visible={showCockpit} onClose={() => setShowCockpit(false)} token={session.access_token} />
+          <>
+            <EarningsCockpit visible={showCockpit} onClose={() => setShowCockpit(false)} token={session.access_token} />
+            <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} />
+          </>
         ) : null}
 
         {loading ? (
