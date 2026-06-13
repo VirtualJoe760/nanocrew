@@ -1,56 +1,29 @@
-# Welcome to your Expo app 👋
+# Nanocrew
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+AI-native creator commerce. A creator talks to **Venus** (voice or typed AI) to define a clothing
+brand; Nanocrew auto-generates a Printful-backed shop **and** a per-brand storefront website, then
+lets them design products, post, sell video ads, and edit their site by chatting — all from the app.
 
-## Get started
+## Documentation
+Full docs live in **[`docs/`](docs/README.md)**:
+- [Architecture](docs/ARCHITECTURE.md) · [Pages & sections](docs/PAGES.md) · [API reference](docs/API.md)
+- [Remaining features](docs/REMAINING_FEATURES.md) · [Production checklist](docs/PRODUCTION_CHECKLIST.md)
+- [Database plan](docs/DATABASE_PLAN.md) · [Storefront engine](docs/STOREFRONT_ENGINE.md)
 
-1. Install dependencies
+## Stack
+Expo SDK / React Native + expo-router · Supabase Postgres + Drizzle ORM · Gemini "Nano Banana"
+(design) + ElevenLabs (voice) · Printful (fulfilment) · Stripe (billing) · Cloudinary (media) ·
+a Next.js public API (`platform-api/`, deployed to Vercel) · `nanocrew-templates` storefront
+monorepo provisioned by a headless-Claude "forge" VPS.
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Develop
 
 ```bash
-npm run reset-project
+npm install
+npm start            # Expo dev server (Metro hosts the +api routes)
+npm run db:generate  # drizzle-kit generate after a schema change
+npm run db:migrate   # apply migrations
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Copy `src/db/schema.ts` → `platform-api/db/schema.ts` after every migration. Required environment
+variables are listed in [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md).
