@@ -107,19 +107,35 @@ and files). Apply ONLY the requested change. Stay inside the allowed edit surfac
 brand.json tokens, content/**, app/globals.css fallback vars, and composing existing
 blocks inside app/*/page.tsx. NEVER add dependencies, new routes, or touch lib/api.ts,
 lib/cart.tsx, platform-auth, the beacon, or the /admin pages. If a request maps to no
-existing block, note it in your final message instead of inventing one. Run \`npm run
+existing block, note it in your final message instead of inventing one. Run \`pnpm run
 build\` and fix what you break.`;
 
   try {
+    // Persistent per-store clone (reuse + pnpm shared deps → fast, tiny disk) under a per-store
+    // lock so two jobs never touch the same clone. node_modules is gitignored, so reset/clean keep it.
     const script = `set -e
 export PATH="$HOME/.local/bin:$PATH"
 [ -f ~/.claude-env ] && source ~/.claude-env
 unset ANTHROPIC_API_KEY
 mkdir -p ~/stores && cd ~/stores
-rm -rf ${repo}
-git clone --depth 1 https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git ${repo}
-cd ${repo}
-git checkout -b ${input.branch}
+exec 9>".${repo}.lock"
+flock -w 1800 9 || { echo LOCK_TIMEOUT; exit 1; }
+AUTH="https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git"
+if [ -d ${repo}/.git ]; then
+  cd ${repo}
+  git remote set-url origin "$AUTH"
+  git fetch -q --depth 1 origin main
+  git checkout -q -f main
+  git reset -q --hard origin/main
+  git branch -D ${input.branch} 2>/dev/null || true
+  git clean -qfd
+  git checkout -q -b ${input.branch}
+else
+  rm -rf ${repo}
+  git clone -q --depth 1 "$AUTH" ${repo}
+  cd ${repo}
+  git checkout -q -b ${input.branch}
+fi
 mkdir -p briefs/screenshots
 N=$(ls briefs/03-REVISION-*.md 2>/dev/null | wc -l | tr -d ' ')
 BRIEF="briefs/03-REVISION-$((N+1)).md"
@@ -127,9 +143,9 @@ cat > "$BRIEF" <<'NANOCREW_REVISION_EOF'
 ${brief}
 NANOCREW_REVISION_EOF
 ${renderShots}
-npm install --no-audit --no-fund 2>&1 | tail -1
-claude -p "Read $BRIEF and look at any images in briefs/screenshots/, then apply exactly that change. Then run npm run build and fix anything you broke." --dangerously-skip-permissions --max-turns 60 < /dev/null > /tmp/${repo}-revise.log 2>&1 || true
-npm run build > /tmp/${repo}-revise-build.log 2>&1 && echo BUILD_OK || echo BUILD_FAILED
+pnpm install --silent 2>&1 | tail -1
+claude -p "Read $BRIEF and look at any images in briefs/screenshots/, then apply exactly that change. Then run pnpm run build and fix anything you broke." --dangerously-skip-permissions --max-turns 60 < /dev/null > /tmp/${repo}-revise.log 2>&1 || true
+pnpm run build > /tmp/${repo}-revise-build.log 2>&1 && echo BUILD_OK || echo BUILD_FAILED
 rm -rf briefs/screenshots
 git add -A
 git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "Revision (review): ${input.requestMd.slice(0, 60).replace(/"/g, "'").replace(/\n/g, ' ')}" || true

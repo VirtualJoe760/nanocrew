@@ -156,7 +156,7 @@ function buildTestBrief(brandName: string): string {
 
 Before you finish, ALL of these must hold:
 
-1. \`npm run build\` completes with no errors. If it fails, fix what you broke and rerun.
+1. \`pnpm run build\` completes with no errors. If it fails, fix what you broke and rerun.
 2. You added no dependencies (package.json deps unchanged) and created no new routes.
 3. lib/api.ts, lib/cart.tsx, lib/platform-auth.ts, components/blocks/beacon.tsx and the
    /admin pages are untouched.
@@ -276,6 +276,8 @@ export PATH="$HOME/.local/bin:$PATH"
 [ -f ~/.claude-env ] && source ~/.claude-env
 unset ANTHROPIC_API_KEY
 mkdir -p ~/stores && cd ~/stores
+exec 9>".${repo}.lock"
+flock -w 1800 9 || { echo LOCK_TIMEOUT; exit 1; }
 rm -rf ${repo} ${repo}-src
 git clone --depth 1 --filter=blob:none --sparse https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${cfg.TEMPLATES_REPO}.git ${repo}-src
 git -C ${repo}-src sparse-checkout set templates/${template}
@@ -295,10 +297,10 @@ ${testBrief}
 NANOCREW_BRIEF_02
 git init -b main -q
 git remote add origin https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git
-npm install --no-audit --no-fund 2>&1 | tail -2
+pnpm install --silent 2>&1 | tail -2
 claude -p "Read briefs/01-BRAND.md and apply it to this storefront. Then verify every item in briefs/02-TEST.md and fix anything that fails." --dangerously-skip-permissions --max-turns 80 < /dev/null > /tmp/${repo}-claude.log 2>&1 || true
 tail -1 /tmp/${repo}-claude.log
-npm run build > /tmp/${repo}-build.log 2>&1 && echo "BUILD_OK" || echo "BUILD_FAILED"
+pnpm run build > /tmp/${repo}-build.log 2>&1 && echo "BUILD_OK" || echo "BUILD_FAILED"
 git add -A
 git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "Apply ${input.brand.name.replace(/"/g, '')} brand via Nanocrew studio"
 git push -q -u origin main
