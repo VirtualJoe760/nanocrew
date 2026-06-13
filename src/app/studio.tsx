@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Dimensions,
@@ -223,6 +223,24 @@ function ManageIcon() {
       {/* pencil */}
       <Path d="M7 19 L7 16 L17 6 L20 9 L10 19 Z" fill="none" stroke={c} strokeWidth={1.5} strokeLinejoin="round" />
       <Line x1={15} y1={8} x2={18} y2={11} stroke={c} strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** A calm, static holographic mark for the signed-out CTA — Venus at rest. */
+function IntroGlyph() {
+  return (
+    <Svg width={96} height={96}>
+      <Defs>
+        <RadialGradient id="intro" cx="50%" cy="50%" r="50%">
+          <Stop offset="0%" stopColor="#eaf6ff" stopOpacity={1} />
+          <Stop offset="40%" stopColor="#35d6ff" stopOpacity={0.85} />
+          <Stop offset="100%" stopColor="#35d6ff" stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Circle cx={48} cy={48} r={46} fill="none" stroke="#35d6ff" strokeWidth={0.6} opacity={0.25} />
+      <Circle cx={48} cy={48} r={34} fill="none" stroke="#8b7bff" strokeWidth={0.6} opacity={0.3} />
+      <Circle cx={48} cy={48} r={20} fill="url(#intro)" />
     </Svg>
   );
 }
@@ -1001,9 +1019,27 @@ export default function StudioScreen() {
         {loading ? (
           <ActivityIndicator style={styles.center} color="#35d6ff" />
         ) : !session ? (
-          <View style={styles.center}>
-            <ThemedText style={styles.signInNote}>
-              {'> sign in on the Account tab\n> the entity will wake up'}
+          <View style={styles.introWrap}>
+            <IntroGlyph />
+            <ThemedText type="title" style={styles.introTitle}>
+              Meet Venus
+            </ThemedText>
+            <ThemedText type="small" style={styles.introBody}>
+              Your AI brand consultant. Talk it through, and Venus designs your clothing
+              brand, builds the store, and launches your website.
+            </ThemedText>
+            <Pressable onPress={() => router.navigate('/account')} style={styles.ctaPrimary}>
+              <ThemedText type="smallBold" style={{ color: BG }}>
+                Create an account
+              </ThemedText>
+            </Pressable>
+            <Pressable onPress={() => router.navigate('/account')} hitSlop={8} style={styles.ctaSecondary}>
+              <ThemedText type="code" style={styles.ctaSecondaryText}>
+                I already have one — log in
+              </ThemedText>
+            </Pressable>
+            <ThemedText type="code" style={styles.introFoot}>
+              Free to explore. You only need a plan to launch a store.
             </ThemedText>
           </View>
         ) : !voiceResolved || mode === 'loading' ? (
@@ -1189,6 +1225,13 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { color: '#1f5a9c', letterSpacing: 1 },
   signInNote: { color: '#5193c9', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
+  introWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, paddingHorizontal: Spacing.four },
+  introTitle: { color: '#fff', fontSize: 30 },
+  introBody: { color: '#d6ecff', textAlign: 'center', maxWidth: 320, lineHeight: 22, opacity: 0.85 },
+  ctaPrimary: { backgroundColor: '#35d6ff', borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.three },
+  ctaSecondary: { paddingVertical: Spacing.two },
+  ctaSecondaryText: { color: '#7db8e6' },
+  introFoot: { color: '#5193c9', fontSize: 12, marginTop: Spacing.three, textAlign: 'center' },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   markBadge: { transform: [{ scale: 0.32 }], width: 28, height: 28, marginLeft: -28, marginRight: -22 },
