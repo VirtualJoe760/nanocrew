@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 
+import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
@@ -15,7 +17,14 @@ const GREEN = '#00ff7f';
 const DIM = 'rgba(220,255,235,0.55)';
 const FIELD = 'rgba(0,255,127,0.06)';
 
-type StoreRow = { slug: string; name: string };
+type StoreRow = { slug: string; name: string; deploymentUrl?: string | null };
+
+/** The public storefront URL — the deployment when known, else the default subdomain. */
+function siteUrlFor(s: StoreRow | undefined): string | null {
+  if (!s) return null;
+  if (s.deploymentUrl && !s.deploymentUrl.includes('github.com')) return s.deploymentUrl;
+  return `https://store-${s.slug}.vercel.app`;
+}
 type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; isPublished: boolean };
 type Draft = { id?: string; title: string; excerpt: string; bodyMd: string };
 const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '' };
@@ -27,11 +36,13 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [change, setChange] = useState('');
   const [changeState, setChangeState] = useState<'idle' | 'sending' | 'queued'>('idle');
+  const [showPreview, setShowPreview] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const siteUrl = siteUrlFor(stores.find((s) => s.slug === active));
 
   const loadStores = useCallback(async () => {
     setLoading(true);
@@ -161,6 +172,19 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
                 </View>
               ) : null}
 
+              {/* Live site preview */}
+              {siteUrl ? (
+                <>
+                  <ThemedText type="code" style={styles.sectionLabel}>YOUR SITE</ThemedText>
+                  <Pressable onPress={() => setShowPreview(true)} style={styles.previewFrame}>
+                    <WebView source={{ uri: siteUrl }} style={styles.previewWeb} pointerEvents="none" scrollEnabled={false} />
+                    <View style={styles.previewTap}>
+                      <ThemedText type="code" style={styles.previewTapText}>tap to explore your live site →</ThemedText>
+                    </View>
+                  </Pressable>
+                </>
+              ) : null}
+
               {/* Site changes */}
               <ThemedText type="code" style={styles.sectionLabel}>IMPROVE YOUR SITE</ThemedText>
               <ThemedText type="small" style={styles.dim}>Describe a change in your own words — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo;</ThemedText>
@@ -208,6 +232,7 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
           )}
         </View>
       </SafeAreaView>
+      {siteUrl ? <SitePreview visible={showPreview} url={siteUrl} onClose={() => setShowPreview(false)} /> : null}
     </Modal>
   );
 }
@@ -223,6 +248,10 @@ const styles = StyleSheet.create({
   pill: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(0,255,127,0.2)' },
   pillOn: { backgroundColor: GREEN, borderColor: GREEN },
   sectionLabel: { color: GREEN, letterSpacing: 1.5, fontSize: 11 },
+  previewFrame: { height: 240, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,255,127,0.22)', backgroundColor: '#fff' },
+  previewWeb: { flex: 1, opacity: 0.99 },
+  previewTap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: Spacing.two, alignItems: 'center', backgroundColor: 'rgba(4,20,12,0.82)' },
+  previewTapText: { color: GREEN, fontSize: 11, letterSpacing: 0.5 },
   input: { borderWidth: 1, borderColor: 'rgba(0,255,127,0.2)', backgroundColor: FIELD, borderRadius: 10, padding: Spacing.three, color: '#fff', fontSize: 15 },
   body: { minHeight: 220, textAlignVertical: 'top' },
   change: { minHeight: 90, textAlignVertical: 'top' },

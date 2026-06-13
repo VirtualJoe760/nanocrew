@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   try {
     const stores = await db
-      .select({ id: schema.stores.id, slug: schema.stores.slug, name: schema.stores.name })
+      .select({ id: schema.stores.id, slug: schema.stores.slug, name: schema.stores.name, deploymentUrl: schema.stores.deploymentUrl })
       .from(schema.stores)
       .where(eq(schema.stores.creatorId, user.id));
     if (!stores.length) return Response.json({ stores: [] });
