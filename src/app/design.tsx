@@ -213,6 +213,7 @@ export default function DesignScreen() {
   const [catalogues, setCatalogues] = useState<{ id: string; name: string }[]>([]);
   const [catSheetOpen, setCatSheetOpen] = useState(false);
   const [newCat, setNewCat] = useState('');
+  const [newCatSeason, setNewCatSeason] = useState<string | null>(null);
   const catalogueRef = useRef<{ id: string; name: string } | null>(null);
   catalogueRef.current = catalogue;
   const [blanks, setBlanks] = useState<CatalogBlank[]>([]);
@@ -772,13 +773,13 @@ export default function DesignScreen() {
     loadCatalogue(cat.id);
   };
 
-  const createCatalogue = (name: string) => {
+  const createCatalogue = (name: string, season?: string) => {
     const n = name.trim();
     if (!n) return;
     fetch(apiUrl('/api/catalogues'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: n }),
+      body: JSON.stringify({ name: n, season }),
     })
       .then((r) => r.json())
       .then((d: { catalogue?: { id: string; name: string } }) => {
@@ -1354,11 +1355,35 @@ export default function DesignScreen() {
                   </ThemedText>
                 </Pressable>
               ))}
+              <ThemedText type="small" themeColor="textSecondary" style={styles.catPresetLabel}>
+                New collection / drop
+              </ThemedText>
+              <View style={styles.catPresetRow}>
+                {(['Spring', 'Summer', 'Fall', 'Winter', 'Drop'] as const).map((s) => {
+                  const season = s.toLowerCase();
+                  const on = newCatSeason === season;
+                  return (
+                    <Pressable
+                      key={s}
+                      onPress={() => {
+                        setNewCatSeason(season);
+                        setNewCat(s === 'Drop' ? '' : `${s} ${new Date().getFullYear()}`);
+                      }}
+                      hitSlop={4}>
+                      <ThemedView type={on ? 'backgroundSelected' : 'backgroundElement'} style={styles.catPreset}>
+                        <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'}>
+                          {s}
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
+                  );
+                })}
+              </View>
               <View style={styles.catCreateRow}>
                 <TextInput
                   value={newCat}
                   onChangeText={setNewCat}
-                  placeholder="New catalogue name"
+                  placeholder="Collection name, e.g. Summer 2026"
                   placeholderTextColor={theme.textSecondary}
                   style={[
                     styles.input,
@@ -1366,7 +1391,12 @@ export default function DesignScreen() {
                     { color: theme.text, backgroundColor: theme.backgroundElement },
                   ]}
                 />
-                <Pressable onPress={() => createCatalogue(newCat)} hitSlop={6}>
+                <Pressable
+                  onPress={() => {
+                    createCatalogue(newCat, newCatSeason ?? undefined);
+                    setNewCatSeason(null);
+                  }}
+                  hitSlop={6}>
                   <ThemedView type="backgroundSelected" style={styles.chip}>
                     <ThemedText type="small">Create</ThemedText>
                   </ThemedView>
@@ -1778,6 +1808,9 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     marginTop: Spacing.two,
   },
+  catPresetLabel: { marginTop: Spacing.three },
+  catPresetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.two },
+  catPreset: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: 999 },
   input: {
     minHeight: 72,
     borderRadius: Spacing.three,

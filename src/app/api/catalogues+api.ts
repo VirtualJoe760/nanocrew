@@ -27,13 +27,14 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => null)) as { name?: string } | null;
+    const body = (await req.json().catch(() => null)) as { name?: string; season?: string } | null;
     const name = body?.name?.trim();
     if (!name) return Response.json({ error: 'name is required' }, { status: 400 });
+    const season = body?.season?.trim() || null;
     const store = await getDefaultStore();
     const [row] = await db
       .insert(schema.catalogues)
-      .values({ storeId: store.id, name, slug: slugify(name) })
+      .values({ storeId: store.id, name, slug: slugify(name), season })
       .returning({ id: schema.catalogues.id, name: schema.catalogues.name, slug: schema.catalogues.slug });
     return Response.json({ catalogue: row });
   } catch (e) {
