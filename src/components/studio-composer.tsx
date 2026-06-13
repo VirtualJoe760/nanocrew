@@ -322,7 +322,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                 </>
               ) : null}
 
-              {/* Site changes — only when a website exists; a brand can sell on the Nanocrew shop alone */}
+              {/* Edit the site by chatting with Venus — a brand can also sell on the shop with no site */}
               {!siteUrl ? (
                 <View style={styles.noSite}>
                   <ThemedText type="code" style={styles.sectionLabel}>NO WEBSITE YET</ThemedText>
@@ -333,49 +333,49 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                 </View>
               ) : (
                 <>
-                  <ThemedText type="code" style={styles.sectionLabel}>ASK VENUS TO EDIT</ThemedText>
-                  <ThemedText type="small" style={styles.dim}>Tell Venus what to change in plain words — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; She builds it on a preview first; nothing goes live until you approve.</ThemedText>
-                  <TextInput style={[styles.input, styles.change]} placeholder="What would you like to change?" placeholderTextColor={pal.dim} value={change} onChangeText={(t) => { setChange(t); setChangeState('idle'); }} multiline />
-                  {changeState === 'queued' ? (
-                    <ThemedText type="small" style={styles.green}>On it — Venus is building a preview. We&rsquo;ll notify you when it&rsquo;s ready to review below.</ThemedText>
-                  ) : (
-                    <Pressable onPress={sendChange} disabled={changeState === 'sending' || !change.trim()} style={[styles.primaryBtn, (!change.trim() || changeState === 'sending') && { opacity: 0.5 }]}>
-                      <ThemedText type="smallBold" style={{ color: pal.onAccent }}>{changeState === 'sending' ? 'Sending…' : 'Send to Venus'}</ThemedText>
-                    </Pressable>
-                  )}
-                </>
-              )}
+                  <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.three }]}>CHAT WITH VENUS</ThemedText>
+                  <View style={styles.venusBubble}>
+                    <ThemedText type="small" style={styles.bubbleVenusText}>Tell me what to change about your site — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; I build it on a preview first; nothing goes live until you approve.</ThemedText>
+                  </View>
 
-              {/* Changes in review */}
-              {siteUrl && revisions.length ? (
-                <>
-                  <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>CHANGES IN REVIEW</ThemedText>
-                  {revisions.slice(0, 6).map((rev) => (
-                    <View key={rev.id} style={styles.revRow}>
-                      <View style={{ flex: 1 }}>
-                        <ThemedText type="small" style={styles.white} numberOfLines={2}>{rev.requestMd}</ThemedText>
-                        <ThemedText type="code" style={styles.revStatus}>
-                          {rev.status === 'building' ? 'preparing a preview…' : rev.status === 'ready' ? 'ready to review' : rev.status === 'approved' ? 'published' : 'needs another try'}
-                        </ThemedText>
+                  {revisions.slice(0, 8).reverse().map((rev) => (
+                    <View key={rev.id}>
+                      <View style={styles.youBubble}>
+                        <ThemedText type="small" style={styles.bubbleYouText} numberOfLines={4}>{rev.requestMd}</ThemedText>
                       </View>
-                      {rev.status === 'ready' ? (
-                        <View style={styles.revActions}>
-                          {rev.previewUrl ? (
-                            <Pressable onPress={() => setPreviewTarget(rev.previewUrl)} hitSlop={6}>
-                              <ThemedText type="code" style={styles.dim}>review</ThemedText>
+                      <View style={styles.venusBubble}>
+                        <ThemedText type="small" style={styles.bubbleVenusText}>
+                          {rev.status === 'building' ? 'On it — building a preview…' : rev.status === 'ready' ? 'Ready to review.' : rev.status === 'approved' ? 'Published — it’s live.' : 'That one didn’t take — try rewording it.'}
+                        </ThemedText>
+                        {rev.status === 'ready' ? (
+                          <View style={styles.revActions}>
+                            {rev.previewUrl ? (
+                              <Pressable onPress={() => setPreviewTarget(rev.previewUrl)} hitSlop={6}>
+                                <ThemedText type="code" style={styles.dim}>review</ThemedText>
+                              </Pressable>
+                            ) : null}
+                            <Pressable onPress={() => approve(rev)} hitSlop={6}>
+                              <ThemedText type="code" style={styles.green}>publish →</ThemedText>
                             </Pressable>
-                          ) : null}
-                          <Pressable onPress={() => approve(rev)} hitSlop={6}>
-                            <ThemedText type="code" style={styles.green}>publish</ThemedText>
-                          </Pressable>
-                        </View>
-                      ) : rev.status === 'building' ? (
-                        <ActivityIndicator size="small" color={pal.accent} />
-                      ) : null}
+                          </View>
+                        ) : rev.status === 'building' ? (
+                          <ActivityIndicator size="small" color={pal.accent} style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+                        ) : null}
+                      </View>
                     </View>
                   ))}
+
+                  <View style={styles.composerRow}>
+                    <TextInput style={styles.composerInput} placeholder="Message Venus…" placeholderTextColor={pal.dim} value={change} onChangeText={(t) => { setChange(t); setChangeState('idle'); }} multiline />
+                    <Pressable onPress={sendChange} disabled={changeState === 'sending' || !change.trim()} hitSlop={6} style={[styles.composerSend, (!change.trim() || changeState === 'sending') && { opacity: 0.4 }]}>
+                      <ThemedText type="code" style={{ color: pal.onAccent }}>{changeState === 'sending' ? '…' : 'send'}</ThemedText>
+                    </Pressable>
+                  </View>
+                  {changeState === 'queued' ? (
+                    <ThemedText type="code" style={styles.green}>Sent — I’ll notify you when the preview’s ready.</ThemedText>
+                  ) : null}
                 </>
-              ) : null}
+              )}
                 </>
               ) : null}
 
@@ -542,6 +542,13 @@ function makeStyles(pal: StudioPalette) {
     metric: { flex: 1, backgroundColor: pal.card, borderWidth: 1, borderColor: pal.line, borderRadius: 14, padding: Spacing.four, gap: Spacing.one, marginBottom: Spacing.three },
     metricLabel: { color: pal.dim, fontSize: 10, letterSpacing: 1.5 },
     metricBig: { color: pal.ink, fontSize: 24 },
+    venusBubble: { alignSelf: 'flex-start', maxWidth: '88%', backgroundColor: pal.card, borderWidth: 1, borderColor: pal.line, borderRadius: 14, borderTopLeftRadius: 4, padding: Spacing.three, marginTop: Spacing.two, gap: Spacing.one },
+    youBubble: { alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: pal.accent, borderRadius: 14, borderTopRightRadius: 4, padding: Spacing.three, marginTop: Spacing.two },
+    bubbleVenusText: { color: pal.ink },
+    bubbleYouText: { color: pal.onAccent },
+    composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, marginTop: Spacing.three },
+    composerInput: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: pal.line, backgroundColor: pal.field, borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, color: pal.ink, fontSize: 15, textAlignVertical: 'top' },
+    composerSend: { backgroundColor: pal.accent, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, alignItems: 'center', justifyContent: 'center' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.six },
     scroll: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
     pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.two },
