@@ -349,6 +349,44 @@ export const storePostsRelations = relations(storePosts, ({ one }) => ({
   store: one(stores, { fields: [storePosts.storeId], references: [stores.id] }),
 }));
 
+// ---------- Site revisions (the visual editing loop) ----------
+// A creator's requested change is applied on a WORKING BRANCH (never main), which
+// Vercel deploys as a preview. The creator reviews the preview, then approves — only
+// then does the branch merge to main and go to production.
+
+export const revisionStatus = pgEnum('revision_status', [
+  'building', // forge is applying the change on the branch
+  'ready', // branch pushed, preview deployed, awaiting creator review
+  'approved', // merged to main → production
+  'failed',
+]);
+
+export const storeRevisions = pgTable(
+  'store_revisions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    storeId: uuid('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    requestMd: text('request_md').notNull(), // the change request as markdown
+    screenshots: jsonb('screenshots'), // annotated screenshot URLs the creator/Venus marked up
+    status: revisionStatus('status').notNull().default('building'),
+    branch: text('branch').notNull(),
+    previewUrl: text('preview_url'),
+    errorMsg: text('error_msg'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (r) => ({ storeIdx: index('store_revisions_store_idx').on(r.storeId, r.status) }),
+);
+
+export const storeRevisionsRelations = relations(storeRevisions, ({ one }) => ({
+  store: one(stores, { fields: [storeRevisions.storeId], references: [stores.id] }),
+}));
+
 // ---------- Creator billing (web portal) ----------
 
 export const subscriptions = pgTable('subscriptions', {
@@ -449,3 +487,4 @@ export type Product = typeof products.$inferSelect;
 export type Variant = typeof variants.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type StorePost = typeof storePosts.$inferSelect;
+export type StoreRevision = typeof storeRevisions.$inferSelect;

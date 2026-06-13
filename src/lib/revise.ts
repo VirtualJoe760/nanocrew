@@ -1,26 +1,30 @@
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
+import { notifyRevisionReady } from '@/lib/notify';
 
-// Post-launch site revisions: the creator describes a change in plain words (via Studio),
-// and a constrained Claude session on the forge applies it to their existing store repo
-// — same edit surface as branding (tokens/copy/composition only, never structure or
-// commerce). The brand site redeploys on push. Fire-and-forget, like provisioning.
+// The visual revision loop. A creator's change (markdown + annotated screenshots) is
+// applied by a constrained Claude session on the forge — ALWAYS on a working branch,
+// NEVER on main. Vercel deploys the branch as a preview; the creator reviews it and
+// only then approves, which merges the branch to main → production.
 //
-// Env contract mirrors provision.ts: GITHUB_TOKEN / GITHUB_OWNER / VPS_HOST / VPS_USER
-// (+ optional VPS_SSH_KEY). Silently skips when unset.
+// Env: GITHUB_TOKEN / GITHUB_OWNER / VPS_HOST / VPS_USER (+ optional VPS_SSH_KEY) like
+// provisioning; VERCEL_TOKEN to resolve the branch preview URL.
 
 type ReviseInput = {
+  revisionId: string;
   storeId: string;
   slug: string;
   storeName: string;
-  request: string; // the creator's own words
+  branch: string;
+  requestMd: string;
+  screenshots: string[]; // image URLs the creator/Venus annotated
 };
 
 function config() {
-  const { GITHUB_TOKEN, GITHUB_OWNER, VPS_HOST, VPS_USER } = process.env;
+  const { GITHUB_TOKEN, GITHUB_OWNER, VPS_HOST, VPS_USER, VERCEL_TOKEN } = process.env;
   if (!GITHUB_TOKEN || !GITHUB_OWNER || !VPS_HOST || !VPS_USER) return null;
-  return { GITHUB_TOKEN, GITHUB_OWNER, VPS_HOST, VPS_USER };
+  return { GITHUB_TOKEN, GITHUB_OWNER, VPS_HOST, VPS_USER, VERCEL_TOKEN: VERCEL_TOKEN ?? null };
 }
 
 async function run(cmd: string, args: string[], opts?: { input?: string; timeoutMs?: number }) {
@@ -39,7 +43,37 @@ async function run(cmd: string, args: string[], opts?: { input?: string; timeout
   });
 }
 
-/** Apply one plain-language change to a store's already-provisioned site. */
+async function ssh(cfg: NonNullable<ReturnType<typeof config>>, script: string, timeoutMs: number) {
+  const { homedir } = await import('node:os');
+  const sshKey = process.env.VPS_SSH_KEY ?? `${homedir()}/.ssh/nanocrew`;
+  return run('ssh', ['-i', sshKey, '-o', 'StrictHostKeyChecking=accept-new', `${cfg.VPS_USER}@${cfg.VPS_HOST}`, 'bash -s'], {
+    input: script,
+    timeoutMs,
+  });
+}
+
+/** Poll Vercel for the branch's preview deployment URL (READY). Null if not found. */
+async function resolvePreviewUrl(cfg: NonNullable<ReturnType<typeof config>>, slug: string, branch: string): Promise<string | null> {
+  if (!cfg.VERCEL_TOKEN) return null;
+  const app = `store-${slug}`;
+  for (let i = 0; i < 18; i++) {
+    try {
+      const res = await fetch(`https://api.vercel.com/v6/deployments?app=${app}&limit=20`, {
+        headers: { Authorization: `Bearer ${cfg.VERCEL_TOKEN}` },
+      });
+      const data = (await res.json()) as { deployments?: { url: string; readyState: string; meta?: { githubCommitRef?: string } }[] };
+      const match = (data.deployments ?? []).find((d) => d.meta?.githubCommitRef === branch);
+      if (match?.readyState === 'READY') return `https://${match.url}`;
+      if (match && (match.readyState === 'ERROR' || match.readyState === 'CANCELED')) return null;
+    } catch {
+      /* keep polling */
+    }
+    await new Promise((r) => setTimeout(r, 10_000));
+  }
+  return null;
+}
+
+/** Apply one change on a working branch; the site's preview deploy updates, not main. */
 export async function reviseStorefront(input: ReviseInput): Promise<void> {
   const cfg = config();
   if (!cfg) {
@@ -48,19 +82,24 @@ export async function reviseStorefront(input: ReviseInput): Promise<void> {
   }
   const repo = `store-${input.slug}`;
   const fullRepo = `${cfg.GITHUB_OWNER}/${repo}`;
+  const shotFetches = input.screenshots
+    .map((url, i) => `curl -fsSL "${url.replace(/"/g, '')}" -o "briefs/screenshots/shot-${i + 1}.png" || true`)
+    .join('\n');
   const brief = `# REVISION — ${input.storeName}
 
-The creator asked for this change to their live storefront, in their own words:
+The creator requested this change to their live storefront, in their own words:
 
-"${input.request.replace(/"/g, "'")}"
+${input.requestMd}
 
-Read TEMPLATE.md and VOCABULARY.md first. VOCABULARY.md translates everyday phrases
-("slideshow", "the menu", "mobile bottom bar") into the blocks and files to edit. Apply
-ONLY this change. Stay inside the allowed edit surface: brand.json tokens, content/**,
-app/globals.css fallback vars, and composing existing blocks inside app/*/page.tsx.
-NEVER add dependencies, new routes, or touch lib/api.ts, lib/cart.tsx, platform-auth, the
-beacon, or the /admin pages. If the request maps to no existing block, leave a note in
-your final message instead of inventing one. Run \`npm run build\` and fix what you break.`;
+${input.screenshots.length ? `Annotated screenshots are in briefs/screenshots/ — the boxes/marks show exactly which areas to change. Look at them.` : ''}
+
+Read TEMPLATE.md and VOCABULARY.md first (VOCABULARY.md maps everyday phrases to blocks
+and files). Apply ONLY the requested change. Stay inside the allowed edit surface:
+brand.json tokens, content/**, app/globals.css fallback vars, and composing existing
+blocks inside app/*/page.tsx. NEVER add dependencies, new routes, or touch lib/api.ts,
+lib/cart.tsx, platform-auth, the beacon, or the /admin pages. If a request maps to no
+existing block, note it in your final message instead of inventing one. Run \`npm run
+build\` and fix what you break.`;
 
   try {
     const script = `set -e
@@ -71,31 +110,72 @@ mkdir -p ~/stores && cd ~/stores
 rm -rf ${repo}
 git clone --depth 1 https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git ${repo}
 cd ${repo}
-mkdir -p briefs
+git checkout -b ${input.branch}
+mkdir -p briefs/screenshots
 N=$(ls briefs/03-REVISION-*.md 2>/dev/null | wc -l | tr -d ' ')
 BRIEF="briefs/03-REVISION-$((N+1)).md"
 cat > "$BRIEF" <<'NANOCREW_REVISION_EOF'
 ${brief}
 NANOCREW_REVISION_EOF
+${shotFetches}
 npm install --no-audit --no-fund 2>&1 | tail -1
-claude -p "Read $BRIEF and apply exactly that change. Then run npm run build and fix anything you broke." --dangerously-skip-permissions --max-turns 60 < /dev/null > /tmp/${repo}-revise.log 2>&1 || true
+claude -p "Read $BRIEF and look at any images in briefs/screenshots/, then apply exactly that change. Then run npm run build and fix anything you broke." --dangerously-skip-permissions --max-turns 60 < /dev/null > /tmp/${repo}-revise.log 2>&1 || true
 npm run build > /tmp/${repo}-revise-build.log 2>&1 && echo BUILD_OK || echo BUILD_FAILED
 git add -A
-git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "Revision: ${input.request.slice(0, 60).replace(/"/g, "'")}" || true
-git push -q origin HEAD
+git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "Revision (review): ${input.requestMd.slice(0, 60).replace(/"/g, "'").replace(/\n/g, ' ')}" || true
+git push -q -u origin ${input.branch}
 echo REVISE_DONE
 `;
-    const { homedir } = await import('node:os');
-    const sshKey = process.env.VPS_SSH_KEY ?? `${homedir()}/.ssh/nanocrew`;
-    const out = await run(
-      'ssh',
-      ['-i', sshKey, '-o', 'StrictHostKeyChecking=accept-new', `${cfg.VPS_USER}@${cfg.VPS_HOST}`, 'bash -s'],
-      { input: script, timeoutMs: 30 * 60 * 1000 },
-    );
+    const out = await ssh(cfg, script, 30 * 60 * 1000);
     if (!out.includes('REVISE_DONE')) throw new Error('forge revision did not complete');
-    await db.update(schema.stores).set({ updatedAt: new Date() }).where(eq(schema.stores.id, input.storeId));
-    console.log(`[revise] ${fullRepo}: applied "${input.request.slice(0, 50)}"`);
+    if (out.includes('BUILD_FAILED')) console.warn(`[revise] ${repo}: build failing on branch ${input.branch}`);
+
+    const previewUrl = await resolvePreviewUrl(cfg, input.slug, input.branch);
+    await db
+      .update(schema.storeRevisions)
+      .set({ status: 'ready', previewUrl: previewUrl ?? null })
+      .where(eq(schema.storeRevisions.id, input.revisionId));
+    await notifyRevisionReady({ storeId: input.storeId, storeName: input.storeName, previewUrl });
+    console.log(`[revise] ${fullRepo} branch ${input.branch} ready — ${previewUrl ?? 'no preview url'}`);
   } catch (e) {
-    console.error(`[revise] ${repo}: ${e instanceof Error ? e.message : 'failed'}`);
+    const msg = e instanceof Error ? e.message : 'revise failed';
+    console.error(`[revise] ${repo}: ${msg}`);
+    await db
+      .update(schema.storeRevisions)
+      .set({ status: 'failed', errorMsg: msg.slice(0, 500) })
+      .where(eq(schema.storeRevisions.id, input.revisionId))
+      .catch(() => {});
+  }
+}
+
+/** Creator approved the preview → merge the branch into main (production deploy). */
+export async function approveRevision(input: { revisionId: string; slug: string; branch: string }): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  const repo = `store-${input.slug}`;
+  const fullRepo = `${cfg.GITHUB_OWNER}/${repo}`;
+  try {
+    const script = `set -e
+cd ~/stores 2>/dev/null || { mkdir -p ~/stores && cd ~/stores; }
+rm -rf ${repo}-merge
+git clone https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git ${repo}-merge
+cd ${repo}-merge
+git checkout main
+git merge --no-ff origin/${input.branch} -m "Merge revision ${input.branch}" || { echo MERGE_CONFLICT; exit 1; }
+git push -q origin main
+git push -q origin --delete ${input.branch} || true
+echo MERGE_DONE
+`;
+    const out = await ssh(cfg, script, 5 * 60 * 1000);
+    if (!out.includes('MERGE_DONE')) throw new Error('merge did not complete');
+    await db
+      .update(schema.storeRevisions)
+      .set({ status: 'approved' })
+      .where(eq(schema.storeRevisions.id, input.revisionId));
+    console.log(`[revise] ${fullRepo} branch ${input.branch} merged to main`);
+    return true;
+  } catch (e) {
+    console.error(`[revise approve] ${repo}: ${e instanceof Error ? e.message : 'failed'}`);
+    return false;
   }
 }

@@ -26,6 +26,7 @@ function siteUrlFor(s: StoreRow | undefined): string | null {
   return `https://store-${s.slug}.vercel.app`;
 }
 type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; isPublished: boolean };
+type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null };
 type Draft = { id?: string; title: string; excerpt: string; bodyMd: string };
 const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '' };
 
@@ -36,7 +37,8 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [change, setChange] = useState('');
   const [changeState, setChangeState] = useState<'idle' | 'sending' | 'queued'>('idle');
-  const [showPreview, setShowPreview] = useState(false);
+  const [previewTarget, setPreviewTarget] = useState<string | null>(null);
+  const [revisions, setRevisions] = useState<Revision[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -71,12 +73,33 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
     }
   }, [active, token]);
 
+  const loadRevisions = useCallback(async () => {
+    if (!active) return;
+    try {
+      const r = await fetch(apiUrl(`/api/creator/revisions?storeSlug=${encodeURIComponent(active)}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = (await r.json()) as { revisions?: Revision[] };
+      setRevisions(d.revisions ?? []);
+    } catch {
+      /* leave as-is */
+    }
+  }, [active, token]);
+
   useEffect(() => {
     if (visible) void loadStores();
   }, [visible, loadStores]);
   useEffect(() => {
-    if (visible && active) void loadPosts();
-  }, [visible, active, loadPosts]);
+    if (visible && active) {
+      void loadPosts();
+      void loadRevisions();
+    }
+  }, [visible, active, loadPosts, loadRevisions]);
+
+  const approve = async (rev: Revision) => {
+    await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), { method: 'POST', headers });
+    await loadRevisions();
+  };
 
   const savePost = async (publish: boolean) => {
     if (!draft?.title.trim() || !active) {
@@ -108,10 +131,11 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
     if (!change.trim() || !active) return;
     setChangeState('sending');
     try {
-      const res = await fetch(apiUrl('/api/creator/revise'), { method: 'POST', headers, body: JSON.stringify({ storeSlug: active, request: change.trim() }) });
+      const res = await fetch(apiUrl('/api/creator/revise'), { method: 'POST', headers, body: JSON.stringify({ storeSlug: active, requestMd: change.trim() }) });
       if (!res.ok) throw new Error();
       setChange('');
       setChangeState('queued');
+      await loadRevisions();
     } catch {
       setChangeState('idle');
       setNote('Could not send your change.');
@@ -176,7 +200,7 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
               {siteUrl ? (
                 <>
                   <ThemedText type="code" style={styles.sectionLabel}>YOUR SITE</ThemedText>
-                  <Pressable onPress={() => setShowPreview(true)} style={styles.previewFrame}>
+                  <Pressable onPress={() => setPreviewTarget(siteUrl)} style={styles.previewFrame}>
                     <WebView source={{ uri: siteUrl }} style={styles.previewWeb} pointerEvents="none" scrollEnabled={false} />
                     <View style={styles.previewTap}>
                       <ThemedText type="code" style={styles.previewTapText}>tap to explore your live site →</ThemedText>
@@ -187,15 +211,46 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
 
               {/* Site changes */}
               <ThemedText type="code" style={styles.sectionLabel}>IMPROVE YOUR SITE</ThemedText>
-              <ThemedText type="small" style={styles.dim}>Describe a change in your own words — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo;</ThemedText>
+              <ThemedText type="small" style={styles.dim}>Describe a change in your own words — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; Venus builds it on a preview first; nothing goes live until you approve.</ThemedText>
               <TextInput style={[styles.input, styles.change]} placeholder="What would you like to change?" placeholderTextColor={DIM} value={change} onChangeText={(t) => { setChange(t); setChangeState('idle'); }} multiline />
               {changeState === 'queued' ? (
-                <ThemedText type="small" style={styles.green}>On it — Venus is updating your site. It goes live in a few minutes.</ThemedText>
+                <ThemedText type="small" style={styles.green}>On it — Venus is building a preview. We&rsquo;ll notify you when it&rsquo;s ready to review below.</ThemedText>
               ) : (
                 <Pressable onPress={sendChange} disabled={changeState === 'sending' || !change.trim()} style={[styles.primaryBtn, (!change.trim() || changeState === 'sending') && { opacity: 0.5 }]}>
                   <ThemedText type="smallBold" style={{ color: BG }}>{changeState === 'sending' ? 'Sending…' : 'Send to Venus'}</ThemedText>
                 </Pressable>
               )}
+
+              {/* Changes in review */}
+              {revisions.length ? (
+                <>
+                  <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>CHANGES IN REVIEW</ThemedText>
+                  {revisions.slice(0, 6).map((rev) => (
+                    <View key={rev.id} style={styles.revRow}>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText type="small" style={styles.white} numberOfLines={2}>{rev.requestMd}</ThemedText>
+                        <ThemedText type="code" style={styles.revStatus}>
+                          {rev.status === 'building' ? 'preparing a preview…' : rev.status === 'ready' ? 'ready to review' : rev.status === 'approved' ? 'published' : 'needs another try'}
+                        </ThemedText>
+                      </View>
+                      {rev.status === 'ready' ? (
+                        <View style={styles.revActions}>
+                          {rev.previewUrl ? (
+                            <Pressable onPress={() => setPreviewTarget(rev.previewUrl)} hitSlop={6}>
+                              <ThemedText type="code" style={styles.dim}>review</ThemedText>
+                            </Pressable>
+                          ) : null}
+                          <Pressable onPress={() => approve(rev)} hitSlop={6}>
+                            <ThemedText type="code" style={styles.green}>publish</ThemedText>
+                          </Pressable>
+                        </View>
+                      ) : rev.status === 'building' ? (
+                        <ActivityIndicator size="small" color={GREEN} />
+                      ) : null}
+                    </View>
+                  ))}
+                </>
+              ) : null}
 
               {/* Journal */}
               <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.five }]}>JOURNAL</ThemedText>
@@ -232,7 +287,7 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
           )}
         </View>
       </SafeAreaView>
-      {siteUrl ? <SitePreview visible={showPreview} url={siteUrl} onClose={() => setShowPreview(false)} /> : null}
+      {previewTarget ? <SitePreview visible={!!previewTarget} url={previewTarget} onClose={() => setPreviewTarget(null)} /> : null}
     </Modal>
   );
 }
@@ -252,6 +307,9 @@ const styles = StyleSheet.create({
   previewWeb: { flex: 1, opacity: 0.99 },
   previewTap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: Spacing.two, alignItems: 'center', backgroundColor: 'rgba(4,20,12,0.82)' },
   previewTapText: { color: GREEN, fontSize: 11, letterSpacing: 0.5 },
+  revRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  revStatus: { color: DIM, fontSize: 11, marginTop: 2 },
+  revActions: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center' },
   input: { borderWidth: 1, borderColor: 'rgba(0,255,127,0.2)', backgroundColor: FIELD, borderRadius: 10, padding: Spacing.three, color: '#fff', fontSize: 15 },
   body: { minHeight: 220, textAlignVertical: 'top' },
   change: { minHeight: 90, textAlignVertical: 'top' },
