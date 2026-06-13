@@ -1,0 +1,16 @@
+[Unit]
+Description=Nanocrew forge worker — drains the store_revisions queue one job at a time
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=forge
+WorkingDirectory=/home/forge/forge-worker
+EnvironmentFile=/home/forge/forge-worker/.env
+ExecStart=/usr/bin/env node /home/forge/forge-worker/worker.mjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

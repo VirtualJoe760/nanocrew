@@ -1,0 +1,11 @@
+{
+  "name": "nanocrew-forge-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Persistent worker on the forge droplet that drains the store_revisions queue one job at a time.",
+  "scripts": { "start": "node worker.mjs" },
+  "dependencies": {
+    "postgres": "^3.4.5"
+  }
+}
