@@ -6,17 +6,18 @@ import {
   Linking,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
 import { signInWithProvider, type OAuthProvider } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
@@ -29,6 +30,7 @@ type StoreRow = { id: string; name: string; slug: string; status: string };
 export default function AccountScreen() {
   const theme = useTheme();
   const { session, loading } = useAuth();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -103,7 +105,11 @@ export default function AccountScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.flex}>
-          <View style={styles.content}>
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={[styles.content, { paddingBottom: BottomTabInset + insets.bottom + Spacing.four }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
             <ThemedText type="code" themeColor="textSecondary">
               Account
             </ThemedText>
@@ -112,7 +118,9 @@ export default function AccountScreen() {
               <ActivityIndicator style={{ marginTop: Spacing.six }} />
             ) : session ? (
               <>
-                <ThemedText type="title">{session.user.email}</ThemedText>
+                <ThemedText type="subtitle" numberOfLines={1}>
+                  {session.user.email}
+                </ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   Signed in · creator {session.user.id.slice(0, 8)}
                 </ThemedText>
@@ -213,7 +221,7 @@ export default function AccountScreen() {
                 </Pressable>
               </>
             )}
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
@@ -223,7 +231,7 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
-  content: { flex: 1, padding: Spacing.four, gap: Spacing.three, maxWidth: 520, width: '100%', alignSelf: 'center' },
+  content: { flexGrow: 1, padding: Spacing.four, gap: Spacing.three, maxWidth: 520, width: '100%', alignSelf: 'center' },
   input: { borderRadius: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, fontSize: 15 },
   button: {
     alignItems: 'center',
