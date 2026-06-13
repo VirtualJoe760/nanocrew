@@ -39,6 +39,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
 
+import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -191,6 +192,24 @@ function KeyboardIcon({ active }: { active: boolean }) {
       )}
       {/* spacebar */}
       <Line x1={9} y1={17} x2={19} y2={17} stroke={c} strokeWidth={1.6} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function MetricsIcon() {
+  const c = '#3fae77';
+  const bars: [number, number][] = [
+    [5, 14],
+    [11, 8],
+    [17, 17],
+    [23, 11],
+  ];
+  return (
+    <Svg width={28} height={26} opacity={0.5}>
+      {bars.map(([x, h]) => (
+        <Line key={x} x1={x} y1={21} x2={x} y2={21 - h} stroke={c} strokeWidth={2.4} strokeLinecap="round" />
+      ))}
+      <Line x1={2} y1={22.5} x2={26} y2={22.5} stroke={c} strokeWidth={1.3} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -461,6 +480,7 @@ export default function StudioScreen() {
   const [voiceResolved, setVoiceResolved] = useState(false);
   const [needsSelection, setNeedsSelection] = useState(false);
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [showCockpit, setShowCockpit] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -890,11 +910,19 @@ export default function StudioScreen() {
           </ThemedText>
           <View style={styles.headerSpacer} />
           {session && !brand ? (
-            <Pressable onPress={toggleKeyboard} hitSlop={10}>
-              <KeyboardIcon active={keyboardMode} />
-            </Pressable>
+            <View style={styles.headerIcons}>
+              <Pressable onPress={() => setShowCockpit(true)} hitSlop={10}>
+                <MetricsIcon />
+              </Pressable>
+              <Pressable onPress={toggleKeyboard} hitSlop={10}>
+                <KeyboardIcon active={keyboardMode} />
+              </Pressable>
+            </View>
           ) : null}
         </View>
+        {session ? (
+          <EarningsCockpit visible={showCockpit} onClose={() => setShowCockpit(false)} token={session.access_token} />
+        ) : null}
 
         {loading ? (
           <ActivityIndicator style={styles.center} color="#00ff7f" />
@@ -1094,6 +1122,7 @@ const styles = StyleSheet.create({
   cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
   hint: { color: '#3fae77', letterSpacing: 1 },
   headerSpacer: { flex: 1 },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },
   typeInput: {
     flex: 1,
