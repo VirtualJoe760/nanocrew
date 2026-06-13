@@ -93,7 +93,7 @@ function BrandCard({ brand, onOpen }: { brand: Brand; onOpen: (slug: string) => 
         </View>
         {url ? (
           <Pressable onPress={() => openBrowserAsync(url)} hitSlop={8} style={styles.visitBtn}>
-            <ThemedText type="small" themeColor="text">
+            <ThemedText type="small" themeColor="tint">
               Visit →
             </ThemedText>
           </Pressable>
@@ -147,7 +147,7 @@ export default function MarketScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.inner}>
           <View style={styles.header}>
-            <ThemedText type="code" style={styles.eyebrow}>
+            <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>
               Marketplace
             </ThemedText>
             <ThemedText type="title" style={styles.title}>
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   inner: { flex: 1, width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.four },
   center: { marginTop: Spacing.six },
   header: { gap: Spacing.one, paddingTop: Spacing.three },
-  eyebrow: { textTransform: 'uppercase' },
+  eyebrow: { textTransform: 'uppercase', letterSpacing: 2 },
   title: {},
   search: {
     marginTop: Spacing.three,

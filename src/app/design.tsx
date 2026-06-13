@@ -920,7 +920,7 @@ export default function DesignScreen() {
     return (
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.gateWrap}>
-          <ThemedText style={[styles.gateSpark, { color: theme.text }]}>✦</ThemedText>
+          <ThemedText style={[styles.gateSpark, { color: theme.tint }]}>✦</ThemedText>
           <ThemedText type="title" style={styles.gateTitle}>
             Design your products
           </ThemedText>
@@ -954,7 +954,7 @@ export default function DesignScreen() {
       <SafeAreaView edges={['top']}>
         <View style={styles.topBar}>
           <Pressable onPress={() => setCatSheetOpen(true)} style={styles.catChip} hitSlop={6}>
-            <ThemedText type="code" style={styles.eyebrow} numberOfLines={1}>
+            <ThemedText type="code" themeColor="tint" style={styles.eyebrow} numberOfLines={1}>
               {catalogue?.name ?? 'Design'} ▾
             </ThemedText>
           </Pressable>

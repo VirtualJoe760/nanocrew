@@ -110,7 +110,7 @@ export default function AccountScreen() {
             contentContainerStyle={[styles.content, { paddingBottom: BottomTabInset + insets.bottom + Spacing.four }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
-            <ThemedText type="code" themeColor="textSecondary">
+            <ThemedText type="code" themeColor="tint" style={{ letterSpacing: 2, textTransform: 'uppercase' }}>
               Account
             </ThemedText>
 
