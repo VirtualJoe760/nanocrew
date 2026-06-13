@@ -21,7 +21,7 @@ export default function Privacy() {
         <ul>
           <li><strong>Account info</strong> — name and email when you sign up or join the waitlist.</li>
           <li><strong>Brand &amp; content</strong> — the brands, products, and posts you create.</li>
-          <li><strong>Payment info</strong> — handled by Stripe; we never store full card numbers.</li>
+          <li><strong>Payment info</strong> — processed securely at checkout; we never store full card numbers.</li>
           <li><strong>Usage data</strong> — basic analytics to operate and improve the Service.</li>
         </ul>
 
@@ -34,9 +34,8 @@ export default function Privacy() {
 
         <h2>Sharing</h2>
         <p>
-          We share data only with processors that run the Service on our behalf — including Stripe
-          (payments), our print-on-demand partner (fulfillment), and our hosting and infrastructure
-          providers — under agreements that protect your data.
+          We share data only with the service providers that operate the platform on our behalf — for
+          checkout, fulfillment, and hosting — under agreements that protect your data.
         </p>
 
         <h2>Your choices</h2>

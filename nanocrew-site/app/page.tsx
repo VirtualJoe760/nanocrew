@@ -10,12 +10,12 @@ const FEATURES = [
   {
     n: '02',
     title: 'Get a shop and a site',
-    body: 'Nanocrew generates a Printful-backed store and a custom storefront website for your brand, wired to payments and manufacturing from day one.',
+    body: 'Nanocrew generates a shop and a custom storefront website for your brand — checkout and fulfillment handled for you from day one.',
   },
   {
     n: '03',
     title: 'Design and sell',
-    body: 'Create products by prompt, post, and turn a photo into on-model shots and short films — all from your phone. Edit your site just by talking to it.',
+    body: 'Create products by prompt and post from your phone. When you make a sale, our online fulfillment prints your design and ships it — you never touch inventory. And you can redesign your site just by talking to it.',
   },
 ];
 

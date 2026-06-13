@@ -19,9 +19,9 @@ export default function Terms() {
 
         <h2>1. The Service</h2>
         <p>
-          Nanocrew lets creators design and run a clothing brand: it generates a storefront, lists
-          products fulfilled by our print-on-demand partner, and processes payments. Creators are
-          responsible for the brands, content, and products they publish.
+          Nanocrew lets creators design and run a clothing brand: it generates a storefront and lists
+          products that our online fulfillment prints and ships when they sell, with payments handled at
+          checkout. Creators are responsible for the brands, content, and products they publish.
         </p>
 
         <h2>2. Accounts &amp; subscriptions</h2>
@@ -33,16 +33,17 @@ export default function Terms() {
 
         <h2>3. Payments &amp; payouts</h2>
         <p>
-          Payments are processed by Stripe. When you sell through your storefront, you are the merchant
-          of record for those sales; Nanocrew collects a platform fee on each transaction. You are
-          responsible for taxes on your sales.
+          When you sell through your storefront, you are the merchant of record for those sales;
+          Nanocrew collects a platform fee on each transaction, and payments are processed securely at
+          checkout. You are responsible for taxes on your sales.
         </p>
 
         <h2>4. Orders, fulfillment &amp; refunds</h2>
         <p>
-          Products are made to order and fulfilled by our manufacturing partner. Because items are
-          produced on demand, returns are limited to defective or misprinted goods. Refund and
-          replacement requests should be sent to support within 30 days of delivery.
+          Products are made to order — when you make a sale, our online fulfillment prints your design
+          and ships it. Because items are produced on demand, returns are limited to defective or
+          misprinted goods. Refund and replacement requests should be sent to support within 30 days of
+          delivery.
         </p>
 
         <h2>5. Acceptable use</h2>
