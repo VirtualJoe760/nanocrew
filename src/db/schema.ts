@@ -19,7 +19,10 @@ import { relations } from 'drizzle-orm';
 
 // ---------- Enums ----------
 
-export const storeStatus = pgEnum('store_status', ['draft', 'building', 'live', 'suspended']);
+// Lifecycle: draft (interview saved) → building (forge provisioning) → ready (deployed to the
+// store-<slug>.vercel.app preview, creator reviewing/editing) → live (custom domain attached &
+// published). suspended = disabled.
+export const storeStatus = pgEnum('store_status', ['draft', 'building', 'ready', 'live', 'suspended']);
 
 export const compositionStatus = pgEnum('composition_status', [
   'generating',

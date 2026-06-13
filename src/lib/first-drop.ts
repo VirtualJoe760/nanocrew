@@ -237,7 +237,8 @@ Reply with ONLY a JSON array, no markdown fences:
       log(`  ✓ ${idea.name} live`);
     }
 
-    await db.update(schema.stores).set({ status: 'live' }).where(eq(schema.stores.id, store.id));
+    // Products published + site provisioned → 'ready' (not 'live' — live means a domain is attached).
+    await db.update(schema.stores).set({ status: 'ready' }).where(eq(schema.stores.id, store.id));
     log('── done ──');
   } catch (e) {
     log('failed:', e instanceof Error ? e.message : e);

@@ -318,9 +318,11 @@ echo "FORGE_DONE"
 
     // 3. Vercel project + first deploy (skipped without VERCEL_TOKEN).
     const url = await deployToVercel(cfg, fullRepo, repo);
+    // Provisioned + deployed to the preview URL → 'ready' (reviewable/editable). It becomes
+    // 'live' only when a custom domain is attached (Phase C go-live).
     await db
       .update(schema.stores)
-      .set({ deploymentUrl: url ?? `https://github.com/${fullRepo}` })
+      .set({ deploymentUrl: url ?? `https://github.com/${fullRepo}`, status: 'ready' })
       .where(eq(schema.stores.id, input.storeId));
     console.log(`[provision] ${fullRepo} branded, pushed${url ? `, deploying at ${url}` : ' (no Vercel token — repo only)'}`);
   } catch (e) {

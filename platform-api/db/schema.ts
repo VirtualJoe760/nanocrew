@@ -22,7 +22,7 @@ import { relations } from 'drizzle-orm';
 
 // ---------- Enums ----------
 
-export const storeStatus = pgEnum('store_status', ['draft', 'building', 'live', 'suspended']);
+export const storeStatus = pgEnum('store_status', ['draft', 'building', 'ready', 'live', 'suspended']);
 
 export const compositionStatus = pgEnum('composition_status', [
   'generating',

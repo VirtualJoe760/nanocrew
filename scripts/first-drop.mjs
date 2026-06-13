@@ -186,9 +186,9 @@ for (const idea of ideas) {
   log(`  ✓ ${idea.name} live`);
 }
 
-await sql`update stores set status = 'live' where id = ${store.id}`;
+await sql`update stores set status = 'ready' where id = ${store.id}`;
 const [{ count }] = await sql`
   select count(*)::int as count from products where store_id = ${store.id} and is_published = true`;
-log(`── done: ${count} published products; store status → live ──`);
+log(`── done: ${count} published products; store status → ready ──`);
 await sql.end();
 process.exit(0);

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."store_status" ADD VALUE 'ready' BEFORE 'live';
