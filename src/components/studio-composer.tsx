@@ -47,6 +47,8 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [changeState, setChangeState] = useState<'idle' | 'sending' | 'queued'>('idle');
   const [previewTarget, setPreviewTarget] = useState<string | null>(null);
   const [critiquePreview, setCritiquePreview] = useState(false);
+  const [siteAction, setSiteAction] = useState<'idle' | 'building' | 'importing'>('idle');
+  const [importUrl, setImportUrl] = useState('');
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [credits, setCredits] = useState<number | null>(null);
@@ -188,6 +190,8 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   useEffect(() => {
     if (visible) {
       setTab('edit');
+      setSiteAction('idle');
+      setImportUrl('');
       void loadStores();
       void loadCredits();
     }
@@ -200,6 +204,35 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
       void loadInsights();
     }
   }, [visible, active, loadPosts, loadRevisions, loadProducts, loadInsights]);
+
+  const buildSite = async () => {
+    if (!active) return;
+    setSiteAction('building');
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl('/api/creator/build-site'), { method: 'POST', headers, body: JSON.stringify({ storeSlug: active }) });
+      if (!res.ok) throw new Error();
+      setNote('Building your site — Venus will have it ready shortly. Check back in a few minutes.');
+    } catch {
+      setNote('Could not start building your site.');
+      setSiteAction('idle');
+    }
+  };
+
+  const importSite = async () => {
+    if (!active || !importUrl.trim()) return;
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl('/api/creator/import-site'), { method: 'POST', headers, body: JSON.stringify({ storeSlug: active, url: importUrl.trim() }) });
+      const d = (await res.json()) as { ok?: boolean };
+      if (!res.ok || !d.ok) throw new Error();
+      setImportUrl('');
+      setSiteAction('idle');
+      await loadStores();
+    } catch {
+      setNote('Could not connect that site — check the URL.');
+    }
+  };
 
   const approve = async (rev: Revision) => {
     await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), { method: 'POST', headers });
@@ -333,11 +366,40 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
               {/* Edit the site by chatting with Venus — a brand can also sell on the shop with no site */}
               {!siteUrl ? (
                 <View style={styles.noSite}>
-                  <ThemedText type="code" style={styles.sectionLabel}>NO WEBSITE YET</ThemedText>
-                  <ThemedText type="small" style={styles.dim}>
-                    This brand sells on the Nanocrew shop. Launch a website any time to get a
-                    storefront you can customize.
-                  </ThemedText>
+                  {siteAction === 'building' ? (
+                    <>
+                      <ThemedText type="code" style={styles.sectionLabel}>BUILDING YOUR SITE</ThemedText>
+                      <ThemedText type="small" style={styles.dim}>Venus is building your storefront — this takes a few minutes. It’ll appear here when it’s ready.</ThemedText>
+                    </>
+                  ) : siteAction === 'importing' ? (
+                    <>
+                      <ThemedText type="code" style={styles.sectionLabel}>IMPORT A SITE</ThemedText>
+                      <ThemedText type="small" style={styles.dim}>Already have a website? Connect it by URL and we’ll link your shop to it.</ThemedText>
+                      <TextInput style={styles.input} placeholder="yourbrand.com" placeholderTextColor={pal.dim} value={importUrl} onChangeText={setImportUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+                      <View style={styles.row}>
+                        <Pressable onPress={importSite} disabled={!importUrl.trim()} style={[styles.primaryBtn, !importUrl.trim() && { opacity: 0.5 }]}>
+                          <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Connect</ThemedText>
+                        </Pressable>
+                        <Pressable onPress={() => { setSiteAction('idle'); setNote(null); }} hitSlop={8}>
+                          <ThemedText type="code" style={styles.dim}>cancel</ThemedText>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <ThemedText type="code" style={styles.sectionLabel}>NO WEBSITE YET</ThemedText>
+                      <ThemedText type="small" style={styles.dim}>This brand sells on the Nanocrew shop. Give it a storefront:</ThemedText>
+                      <View style={styles.row}>
+                        <Pressable onPress={buildSite} style={styles.primaryBtn}>
+                          <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Build site</ThemedText>
+                        </Pressable>
+                        <Pressable onPress={() => { setSiteAction('importing'); setNote(null); }} style={styles.secondaryBtn}>
+                          <ThemedText type="smallBold" style={styles.accentText}>Import site</ThemedText>
+                        </Pressable>
+                      </View>
+                    </>
+                  )}
+                  {note && !draft ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
                 </View>
               ) : (
                 <>
@@ -590,7 +652,9 @@ function makeStyles(pal: StudioPalette) {
     body: { minHeight: 220, textAlignVertical: 'top' },
     change: { minHeight: 90, textAlignVertical: 'top' },
     row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginTop: Spacing.one },
-    primaryBtn: { backgroundColor: pal.accent, borderRadius: 10, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.one },
+    primaryBtn: { backgroundColor: pal.accent, borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.four, alignItems: 'center', marginTop: Spacing.one },
+    secondaryBtn: { borderWidth: 1, borderColor: pal.accent, borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.four, alignItems: 'center', marginTop: Spacing.one },
+    accentText: { color: pal.accent },
     postRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
     postTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
     postExcerpt: { color: pal.dim, fontSize: 11, marginTop: 2 },
