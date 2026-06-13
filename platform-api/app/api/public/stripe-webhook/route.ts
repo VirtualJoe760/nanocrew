@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 import { db, schema } from '@/lib/db';
+import { submitOrderToPrintful } from '@/lib/fulfill';
 import { stripe, WEBHOOK_SECRET } from '@/lib/stripe';
 
 // POST /api/public/stripe-webhook — Stripe events (no CORS: server-to-server).
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
     if (event.type === 'checkout.session.completed') {
       const s = event.data.object as Stripe.Checkout.Session;
       const collected = (s as { collected_information?: { shipping_details?: unknown } }).collected_information;
-      await db
+      const [order] = await db
         .update(schema.orders)
         .set({
           status: 'paid',
@@ -35,7 +36,12 @@ export async function POST(req: Request) {
           totalCents: s.amount_total ?? undefined,
           shippingAddress: collected?.shipping_details ?? s.customer_details ?? null,
         })
-        .where(eq(schema.orders.stripeSessionId, s.id));
+        .where(eq(schema.orders.stripeSessionId, s.id))
+        .returning({ id: schema.orders.id });
+      // Hand the paid order to Printful (draft until PRINTFUL_CONFIRM_ORDERS=1).
+      // Awaited so the serverless runtime can't kill it mid-flight; failures only
+      // log — Stripe gets its 200 and the backfill script can resubmit.
+      if (order) await submitOrderToPrintful(order.id).catch((e) => console.error('[fulfill]', e));
     } else if (event.type === 'checkout.session.expired') {
       const s = event.data.object as Stripe.Checkout.Session;
       await db
