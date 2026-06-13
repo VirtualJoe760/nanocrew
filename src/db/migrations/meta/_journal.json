@@ -43,6 +43,13 @@
       "when": 1781322996760,
       "tag": "0005_thankful_lorna_dane",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781324225962,
+      "tag": "0006_tired_hawkeye",
+      "breakpoints": true
     }
   ]
 }

@@ -228,6 +228,7 @@ export const products = pgTable(
     imageUrl: text('image_url'),
     videoUrl: text('video_url'), // Veo-generated product video for the feed
     isPublished: boolean('is_published').notNull().default(false),
+    shareCount: integer('share_count').notNull().default(0), // social proof on the feed
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -464,6 +465,28 @@ export const canvasNodesRelations = relations(canvasNodes, ({ one }) => ({
 export const productsRelations = relations(products, ({ one, many }) => ({
   store: one(stores, { fields: [products.storeId], references: [stores.id] }),
   variants: many(variants),
+  likes: many(productLikes),
+}));
+
+// Feed likes — one row per (product, viewer). likeCount = count of these.
+export const productLikes = pgTable(
+  'product_likes',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(), // Supabase auth user id (a free account is enough)
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (l) => ({
+    uniqueIdx: uniqueIndex('product_likes_product_user_idx').on(l.productId, l.userId),
+    productIdx: index('product_likes_product_idx').on(l.productId),
+  }),
+);
+
+export const productLikesRelations = relations(productLikes, ({ one }) => ({
+  product: one(products, { fields: [productLikes.productId], references: [products.id] }),
 }));
 
 export const variantsRelations = relations(variants, ({ one }) => ({

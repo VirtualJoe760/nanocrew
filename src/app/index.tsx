@@ -4,6 +4,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  Share,
   StyleSheet,
   View,
   type ViewToken,
@@ -15,6 +16,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { apiUrl } from '@/lib/api';
 
 // The Nanocrew tab: a TikTok-style full-screen vertical feed of published products
@@ -23,13 +25,25 @@ import { apiUrl } from '@/lib/api';
 type FeedItem = {
   id: string;
   name: string;
+  slug: string;
   imageUrl: string | null;
   videoUrl: string | null;
   descriptionMd: string | null;
   storeName: string;
   storeSlug: string;
   priceCents: number | null;
+  likeCount: number;
+  shareCount: number;
+  likedByMe: boolean;
 };
+
+function siteUrlFor(slug: string): string {
+  return `https://store-${slug}.vercel.app`;
+}
+
+function fmtCount(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`;
+}
 
 function VideoCard({ url, active }: { url: string; active: boolean }) {
   const player = useVideoPlayer(url, (p) => {
@@ -48,11 +62,15 @@ function FeedCard({
   height,
   active,
   onTryOn,
+  onLike,
+  onShare,
 }: {
   item: FeedItem;
   height: number;
   active: boolean;
   onTryOn: (item: FeedItem) => void;
+  onLike: (item: FeedItem) => void;
+  onShare: (item: FeedItem) => void;
 }) {
   return (
     <View style={[styles.card, { height }]}>
@@ -81,7 +99,21 @@ function FeedCard({
 
       {/* Right-side actions */}
       <View style={styles.actions}>
-        <Pressable onPress={() => onTryOn(item)} style={styles.actionBtn}>
+        <Pressable onPress={() => onLike(item)} style={styles.actionBtn} hitSlop={6}>
+          <ThemedText style={[styles.actionGlyph, item.likedByMe && styles.liked]}>
+            {item.likedByMe ? '♥' : '♡'}
+          </ThemedText>
+          <ThemedText type="small" style={styles.actionLabel}>
+            {item.likeCount > 0 ? fmtCount(item.likeCount) : 'Like'}
+          </ThemedText>
+        </Pressable>
+        <Pressable onPress={() => onShare(item)} style={styles.actionBtn} hitSlop={6}>
+          <ThemedText style={styles.actionGlyph}>↗</ThemedText>
+          <ThemedText type="small" style={styles.actionLabel}>
+            {item.shareCount > 0 ? fmtCount(item.shareCount) : 'Share'}
+          </ThemedText>
+        </Pressable>
+        <Pressable onPress={() => onTryOn(item)} style={styles.actionBtn} hitSlop={6}>
           <ThemedText style={styles.actionGlyph}>🤳</ThemedText>
           <ThemedText type="small" style={styles.actionLabel}>
             Try on
@@ -93,6 +125,7 @@ function FeedCard({
 }
 
 export default function FeedScreen() {
+  const { session } = useAuth();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -100,17 +133,54 @@ export default function FeedScreen() {
   const [tryOn, setTryOn] = useState<{ item: FeedItem; busy: boolean; result?: string; error?: string } | null>(null);
 
   useEffect(() => {
-    fetch(apiUrl('/api/feed'))
+    fetch(apiUrl('/api/feed'), session ? { headers: { Authorization: `Bearer ${session.access_token}` } } : undefined)
       .then((r) => r.json())
       .then((d: { items?: FeedItem[] }) => setItems(d.items ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [session]);
 
   const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const first = viewableItems.find((v) => v.isViewable);
     if (first?.index != null) setActiveIndex(first.index);
   }).current;
+
+  // Optimistic like toggle — a free account is enough; signed-out taps no-op gracefully.
+  const onLike = useCallback(
+    async (item: FeedItem) => {
+      if (!session) return;
+      const liked = !item.likedByMe;
+      setItems((prev) =>
+        prev.map((p) => (p.id === item.id ? { ...p, likedByMe: liked, likeCount: p.likeCount + (liked ? 1 : -1) } : p)),
+      );
+      try {
+        const r = await fetch(apiUrl(`/api/feed/${item.id}/like`), {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const d = (await r.json()) as { liked?: boolean; likeCount?: number };
+        if (typeof d.likeCount === 'number') {
+          setItems((prev) => prev.map((p) => (p.id === item.id ? { ...p, likedByMe: !!d.liked, likeCount: d.likeCount! } : p)));
+        }
+      } catch {
+        /* leave optimistic state */
+      }
+    },
+    [session],
+  );
+
+  const onShare = useCallback(async (item: FeedItem) => {
+    const url = `${siteUrlFor(item.storeSlug)}/product/${item.slug}`;
+    try {
+      const res = await Share.share({ message: `${item.name} by ${item.storeName} — ${url}`, url });
+      if (res.action === Share.sharedAction) {
+        setItems((prev) => prev.map((p) => (p.id === item.id ? { ...p, shareCount: p.shareCount + 1 } : p)));
+        fetch(apiUrl(`/api/feed/${item.id}/share`), { method: 'POST' }).catch(() => {});
+      }
+    } catch {
+      /* share cancelled */
+    }
+  }, []);
 
   const startTryOn = useCallback(async (item: FeedItem) => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -148,7 +218,14 @@ export default function FeedScreen() {
             data={items}
             keyExtractor={(i) => i.id}
             renderItem={({ item, index }) => (
-              <FeedCard item={item} height={pageHeight} active={index === activeIndex} onTryOn={startTryOn} />
+              <FeedCard
+                item={item}
+                height={pageHeight}
+                active={index === activeIndex}
+                onTryOn={startTryOn}
+                onLike={onLike}
+                onShare={onShare}
+              />
             )}
             pagingEnabled
             showsVerticalScrollIndicator={false}
@@ -222,7 +299,8 @@ const styles = StyleSheet.create({
   sub: { color: '#fff', opacity: 0.8 },
   actions: { position: 'absolute', right: Spacing.three, bottom: 130, alignItems: 'center', gap: Spacing.four },
   actionBtn: { alignItems: 'center', gap: 2 },
-  actionGlyph: { fontSize: 30 },
+  actionGlyph: { fontSize: 30, color: '#fff' },
+  liked: { color: '#ff3b6b' },
   actionLabel: { color: '#fff' },
   tryOnBackdrop: {
     flex: 1,
