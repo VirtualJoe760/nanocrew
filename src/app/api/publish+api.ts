@@ -2,7 +2,7 @@ import { eq, inArray } from 'drizzle-orm';
 
 import { uploadImage } from '@/lib/cloudinary';
 import { db, schema } from '@/lib/db';
-import { createSyncProduct, upscaleForPrint, type MockupPosition } from '@/lib/printful';
+import { createSyncProduct, getCatalogVariants, upscaleForPrint, type MockupPosition } from '@/lib/printful';
 
 /** Printful mockup URLs are temporary S3 links (~72h) — persist to Cloudinary. */
 async function persistMockup(url: string | null): Promise<string | null> {
@@ -138,6 +138,16 @@ export async function POST(req: Request) {
       })
       .returning({ id: schema.products.id, slug: schema.products.slug });
 
+    // Capture our Printful cost per variant so the cockpit can show real margin. Best
+    // effort — a pricing hiccup must not fail the publish (cost stays null, margin hidden).
+    const costByVariant = new Map<number, number>();
+    try {
+      const catalog = await getCatalogVariants(comp.templateKey);
+      for (const cv of catalog) costByVariant.set(cv.id, cv.priceCents);
+    } catch {
+      /* leave costs null */
+    }
+
     await db.insert(schema.variants).values(
       body.variants.map((v) => ({
         productId: product.id,
@@ -145,6 +155,7 @@ export async function POST(req: Request) {
         color: v.color,
         size: v.size,
         retailPriceCents: v.retailPriceCents,
+        printfulCostCents: costByVariant.get(v.printfulVariantId) ?? null,
       })),
     );
 
