@@ -2,6 +2,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
+import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 
 // Nano Banana — Gemini 2.5 Flash Image. Runs server-side only (the key never
@@ -42,6 +43,8 @@ interface GenResponse {
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const limited = await guardRate(`gen:${user.id}`, 40, 60);
+  if (limited) return limited;
 
   const body = (await req.json().catch(() => null)) as {
     prompt?: string;

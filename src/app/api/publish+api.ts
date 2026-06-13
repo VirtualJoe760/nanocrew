@@ -3,6 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
 import { db, schema } from '@/lib/db';
+import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCompositionOwner } from '@/lib/tenant';
 import { createSyncProduct, getCatalogVariants, upscaleForPrint, type MockupPosition } from '@/lib/printful';
 
@@ -43,6 +44,8 @@ function slugify(name: string): string {
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const limited = await guardRate(`pf:${user.id}`, 30, 60);
+  if (limited) return limited;
   try {
     const body = (await req.json().catch(() => null)) as {
       compositionId?: string;

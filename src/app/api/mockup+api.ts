@@ -2,6 +2,7 @@ import { eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCompositionOwner } from '@/lib/tenant';
 import { getProductMeta, renderMockups, type MockupFile } from '@/lib/printful';
 
@@ -41,6 +42,8 @@ function clamp(p: PositionInput): PositionInput {
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const limited = await guardRate(`pf:${user.id}`, 60, 60);
+  if (limited) return limited;
   try {
     const body = (await req.json().catch(() => null)) as {
       compositionId?: string;

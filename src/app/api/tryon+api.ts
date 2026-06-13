@@ -2,6 +2,8 @@ import { eq } from 'drizzle-orm';
 import { GoogleGenAI, Modality } from '@google/genai';
 
 import { db, schema } from '@/lib/db';
+import { getUserFromRequest } from '@/lib/auth';
+import { guardRate } from '@/lib/rate-limit';
 import { uploadImage } from '@/lib/cloudinary';
 
 // POST /api/tryon { selfie: dataURL, productId } — Nano Banana renders the person from
@@ -30,6 +32,10 @@ async function urlToInline(url: string): Promise<InlinePart> {
 }
 
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const limited = await guardRate(`tryon:${user.id}`, 15, 60);
+  if (limited) return limited;
   try {
     const body = (await req.json().catch(() => null)) as {
       selfie?: string;

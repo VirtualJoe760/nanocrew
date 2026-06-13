@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { interviewSystem, parseTurn, type ChatMessage, type TimedWord } from '@/lib/interview';
+import { guardRate } from '@/lib/rate-limit';
 import { resolveVoice } from '@/lib/voices';
 
 // POST /api/voice — one spoken turn of the Studio brand interview.
@@ -85,6 +86,8 @@ async function speak(text: string, voiceId: string): Promise<{ speech: string; w
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const limited = await guardRate(`voice:${user.id}`, 40, 60);
+  if (limited) return limited;
 
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });

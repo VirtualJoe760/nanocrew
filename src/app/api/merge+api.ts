@@ -4,6 +4,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
+import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 
 // POST /api/merge — the blend tool: feed Nano Banana BOTH design images plus the
@@ -32,6 +33,8 @@ async function urlToInline(url: string): Promise<InlinePart> {
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const limited = await guardRate(`gen:${user.id}`, 20, 60);
+  if (limited) return limited;
   try {
     const body = (await req.json().catch(() => null)) as {
       designAId?: string;

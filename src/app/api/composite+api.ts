@@ -2,6 +2,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
+import { guardRate } from '@/lib/rate-limit';
 
 // Review-only composite: Nano Banana renders the design ON the garment photo.
 // NOT a print file — just for the operator's aesthetic judgment (mirrors
@@ -27,6 +28,8 @@ async function fetchAsInlineData(url: string): Promise<InlinePart> {
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const limited = await guardRate(`gen:${user.id}`, 40, 60);
+  if (limited) return limited;
   const body = (await req.json().catch(() => null)) as {
     designUrl?: string;
     garmentUrl?: string;

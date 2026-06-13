@@ -390,6 +390,16 @@ export const creditLedger = pgTable(
   (l) => ({ creatorIdx: index('credit_ledger_creator_idx').on(l.creatorId, l.createdAt) }),
 );
 
+// ---------- Rate limiting ----------
+// A fixed-window counter per (bucket) — e.g. "gen:<creatorId>". Deployment-agnostic
+// (works on serverless, unlike in-memory) and cheap: one upsert per guarded request.
+
+export const rateLimits = pgTable('rate_limits', {
+  bucket: text('bucket').primaryKey(), // "<op>:<creatorId>"
+  count: integer('count').notNull().default(0),
+  windowStart: timestamp('window_start').notNull().defaultNow(),
+});
+
 // ---------- Push notifications ----------
 // Expo push tokens registered per creator device — the target for "your revision preview
 // is ready" and future order/sale alerts. One row per device token; a creator can have

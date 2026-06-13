@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { clampEffort, ideaGuidance } from '@/lib/effort';
+import { guardRate } from '@/lib/rate-limit';
 
 // GET /api/idea?effort=1..4 → one random AI-invented clothing-graphic prompt (the 🎲 button).
 // `effort` dictates how detailed the invented concept is.
@@ -28,6 +29,8 @@ const VIBES = [
 export async function GET(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const limited = await guardRate(`ai:${user.id}`, 60, 60);
+  if (limited) return limited;
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });
   const effort = clampEffort(new URL(req.url).searchParams.get('effort'));

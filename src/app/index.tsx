@@ -17,7 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
-import { apiUrl } from '@/lib/api';
+import { apiFetch, apiUrl } from '@/lib/api';
 
 // The Nanocrew tab: a TikTok-style full-screen vertical feed of published products
 // across all stores — Veo product videos where available, mockups otherwise.
@@ -183,6 +183,10 @@ export default function FeedScreen() {
   }, []);
 
   const startTryOn = useCallback(async (item: FeedItem) => {
+    if (!session) {
+      setTryOn({ item, busy: false, error: 'Sign in to try things on.' });
+      return;
+    }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (perm.status !== 'granted') return;
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.85 });
@@ -191,7 +195,7 @@ export default function FeedScreen() {
     const selfie = `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`;
     setTryOn({ item, busy: true });
     try {
-      const r = await fetch(apiUrl('/api/tryon'), {
+      const r = await apiFetch('/api/tryon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ selfie, productId: item.id }),
@@ -202,7 +206,7 @@ export default function FeedScreen() {
     } catch (e) {
       setTryOn({ item, busy: false, error: e instanceof Error ? e.message : 'Try-on failed' });
     }
-  }, []);
+  }, [session]);
 
   return (
     <ThemedView style={styles.container}>

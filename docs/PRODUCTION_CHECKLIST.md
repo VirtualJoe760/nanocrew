@@ -11,8 +11,10 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
   (`getCreatorStore` / `assertCatalogueOwner` / `assertCompositionOwner` / `assertDesignOwner`); the
   client sends the token through `apiFetch`. **Follow-up:** the server-to-server first-drop callers
   now need an internal-service auth path before `AUTO_FIRST_DROP` can be enabled (see REMAINING_FEATURES).
-- [ ] **[code] Rate-limit / cost-guard AI endpoints** (`/api/generate`, `/api/tryon`, `/api/video`,
-  `/api/voice`) — they hit paid APIs. Gate behind auth + credits or a per-IP/per-user limit.
+- [x] **[code] Rate-limit the AI endpoints** ✅ Done (2026-06-13). A DB-backed fixed-window limiter
+  (`src/lib/rate-limit.ts` + `rate_limits` table) guards generate/merge/composite/tryon (gen),
+  voice (voice), enhance/idea (ai), mockup/publish (pf) per creator/min; `/api/video` is already
+  credit-gated. Over-limit returns `429` with `Retry-After`. tryon is now authed too.
 - [ ] Rotate any secrets that have been pasted in chat/commits; confirm `.env*` is git-ignored.
 - [ ] Confirm **Supabase RLS** posture: the app uses server routes with the service path, but verify no
   table is publicly writable via the anon key.
