@@ -25,6 +25,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
         descriptionMd: schema.products.descriptionMd,
         imageUrl: schema.products.imageUrl,
         category: schema.products.category,
+        collectionSlug: schema.catalogues.slug,
+        collectionName: schema.catalogues.name,
         variantId: schema.variants.id,
         sku: schema.variants.sku,
         color: schema.variants.color,
@@ -34,6 +36,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       })
       .from(schema.products)
       .leftJoin(schema.variants, eq(schema.variants.productId, schema.products.id))
+      .leftJoin(schema.catalogues, eq(schema.catalogues.id, schema.products.catalogueId))
       .where(and(eq(schema.products.storeId, store.id), eq(schema.products.isPublished, true)))
       .orderBy(asc(schema.products.createdAt));
 
@@ -44,13 +47,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       descriptionMd: string | null;
       imageUrl: string | null;
       category: string | null;
+      collection: { slug: string; name: string } | null;
       variants: { id: string; sku: string; color: string | null; size: string | null; retailPriceCents: number; inStock: boolean }[];
     };
     const byId = new Map<string, Out>();
     for (const r of rows) {
       let p = byId.get(r.id);
       if (!p) {
-        p = { id: r.id, slug: r.slug, name: r.name, descriptionMd: r.descriptionMd, imageUrl: r.imageUrl, category: r.category, variants: [] };
+        p = {
+          id: r.id,
+          slug: r.slug,
+          name: r.name,
+          descriptionMd: r.descriptionMd,
+          imageUrl: r.imageUrl,
+          category: r.category,
+          collection: r.collectionSlug ? { slug: r.collectionSlug, name: r.collectionName! } : null,
+          variants: [],
+        };
         byId.set(r.id, p);
       }
       if (r.variantId) {

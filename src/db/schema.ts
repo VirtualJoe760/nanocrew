@@ -106,6 +106,9 @@ export const catalogues = pgTable(
       .references(() => stores.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     slug: text('slug').notNull(),
+    // A catalogue IS a collection/drop. season tags the preset for storefront grouping.
+    season: text('season'), // spring | summer | fall | winter | drop | null
+    coverImageUrl: text('cover_image_url'),
     isActive: boolean('is_active').notNull().default(true),
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -215,6 +218,8 @@ export const products = pgTable(
     storeId: uuid('store_id')
       .notNull()
       .references(() => stores.id, { onDelete: 'cascade' }),
+    // Which collection/drop this product belongs to (for storefront grouping).
+    catalogueId: uuid('catalogue_id').references(() => catalogues.id, { onDelete: 'set null' }),
     printfulSyncProductId: text('printful_sync_product_id').unique(),
     slug: text('slug').notNull(),
     name: text('name').notNull(),

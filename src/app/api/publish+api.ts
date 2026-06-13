@@ -128,6 +128,7 @@ export async function POST(req: Request) {
       .insert(schema.products)
       .values({
         storeId: comp.storeId,
+        catalogueId: comp.catalogueId ?? null, // the collection/drop this product lives in
         printfulSyncProductId: syncProductId,
         slug: `${slugify(name)}-${syncProductId}`,
         name,
