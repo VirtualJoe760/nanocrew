@@ -46,6 +46,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [change, setChange] = useState('');
   const [changeState, setChangeState] = useState<'idle' | 'sending' | 'queued'>('idle');
   const [previewTarget, setPreviewTarget] = useState<string | null>(null);
+  const [critiquePreview, setCritiquePreview] = useState(false);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [credits, setCredits] = useState<number | null>(null);
@@ -314,7 +315,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
               {siteUrl ? (
                 <>
                   <ThemedText type="code" style={styles.sectionLabel}>YOUR SITE</ThemedText>
-                  <Pressable onPress={() => setPreviewTarget(siteUrl)} style={styles.previewFrame}>
+                  <Pressable onPress={() => { setPreviewTarget(siteUrl); setCritiquePreview(true); }} style={styles.previewFrame}>
                     {ogImageUrl ? (
                       <Image source={{ uri: ogImageUrl }} style={styles.previewImg} contentFit="cover" />
                     ) : (
@@ -357,7 +358,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                         {rev.status === 'ready' ? (
                           <View style={styles.revActions}>
                             {rev.previewUrl ? (
-                              <Pressable onPress={() => setPreviewTarget(rev.previewUrl)} hitSlop={6}>
+                              <Pressable onPress={() => { setPreviewTarget(rev.previewUrl); setCritiquePreview(false); }} hitSlop={6}>
                                 <ThemedText type="code" style={styles.dim}>review</ThemedText>
                               </Pressable>
                             ) : null}
@@ -527,7 +528,14 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
           )}
         </View>
       </SafeAreaView>
-      {previewTarget ? <SitePreview visible={!!previewTarget} url={previewTarget} onClose={() => setPreviewTarget(null)} /> : null}
+      {previewTarget ? (
+        <SitePreview
+          visible={!!previewTarget}
+          url={previewTarget}
+          onClose={() => setPreviewTarget(null)}
+          critique={critiquePreview && active ? { slug: active, token, onSent: () => { void loadRevisions(); } } : undefined}
+        />
+      ) : null}
     </Modal>
   );
 }
