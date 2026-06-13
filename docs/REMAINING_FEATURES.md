@@ -39,7 +39,11 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 - 🟢 **Product-page model gallery** — done (Task #31): `products.model_shots` + `/api/creator/model-shots`
   (Nano Banana, credit-gated) + Sell-tab trigger; surfaced on the storefront product page (all 4 templates)
   via the public catalog. Generating spends real AI credits — validate on one product.
-- ⚪ **Veo model videos on websites** + a featured video gallery on the sites. (Task #33)
+- 🟢 **Veo on-model videos on websites** — done (Task #33): `products.model_videos` +
+  `/api/creator/model-videos` (Veo, ownership + rate-limited + 400-credit-gated, appends up to 3
+  angles) + Studio Sell-tab "film" trigger. Surfaced on the storefront product page (on-model film
+  gallery) and the homepage **featured video wall** (new `VideoGallery` block, all 4 templates) via
+  the public `/videos` endpoint. Generating spends real Veo credits — validate on one product.
 - 🟢 **Template polish** — done (Task #32): dependency-free premium-motion layer (smooth scroll,
   transitions, image hover-zoom, page-entrance fade) in all 4 templates' `globals.css`.
 - 🟢 **In-app platform admin** — done: Account → "Platform admin" (admin emails only) opens a

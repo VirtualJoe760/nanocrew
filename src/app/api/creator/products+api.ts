@@ -25,6 +25,7 @@ export async function GET(req: Request) {
         imageUrl: schema.products.imageUrl,
         videoUrl: schema.products.videoUrl,
         modelShots: schema.products.modelShots,
+        modelVideos: schema.products.modelVideos,
         isPublished: schema.products.isPublished,
       })
       .from(schema.products)

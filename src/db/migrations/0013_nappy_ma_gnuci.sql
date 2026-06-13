@@ -1,0 +1,1 @@
+ALTER TABLE "products" ADD COLUMN "model_videos" jsonb DEFAULT '[]'::jsonb;

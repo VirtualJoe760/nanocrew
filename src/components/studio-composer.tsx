@@ -24,7 +24,7 @@ function siteUrlFor(s: StoreRow | undefined): string | null {
 }
 type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; coverImageUrl?: string | null; isPublished: boolean };
 type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null };
-type Product = { id: string; name: string; imageUrl: string | null; videoUrl: string | null; modelShots?: string[] | null; isPublished: boolean };
+type Product = { id: string; name: string; imageUrl: string | null; videoUrl: string | null; modelShots?: string[] | null; modelVideos?: string[] | null; isPublished: boolean };
 type Draft = { id?: string; title: string; excerpt: string; bodyMd: string; coverImageUrl?: string | null };
 const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '', coverImageUrl: null };
 
@@ -53,6 +53,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [products, setProducts] = useState<Product[]>([]);
   const [credits, setCredits] = useState<number | null>(null);
   const [voiceoverCost, setVoiceoverCost] = useState(25);
+  const [veoCost, setVeoCost] = useState(400);
   const [genId, setGenId] = useState<string | null>(null); // product currently generating an ad
   const [uploading, setUploading] = useState(false); // post cover image upload in flight
   const [loading, setLoading] = useState(true);
@@ -148,9 +149,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const loadCredits = useCallback(async () => {
     try {
       const r = await fetch(apiUrl('/api/creator/credits'), { headers: { Authorization: `Bearer ${token}` } });
-      const d = (await r.json()) as { balance?: number; costs?: { video_voiceover?: number } };
+      const d = (await r.json()) as { balance?: number; costs?: { video_voiceover?: number; video_veo?: number } };
       if (typeof d.balance === 'number') setCredits(d.balance);
       if (typeof d.costs?.video_voiceover === 'number') setVoiceoverCost(d.costs.video_voiceover);
+      if (typeof d.costs?.video_veo === 'number') setVeoCost(d.costs.video_veo);
     } catch {
       /* leave as-is */
     }
@@ -205,6 +207,40 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
       await Promise.all([loadProducts(), loadCredits()]);
     } catch {
       setNote('Could not make on-model shots — your credits were not charged.');
+    } finally {
+      setGenId(null);
+    }
+  };
+
+  const makeModelVideo = async (p: Product) => {
+    if (genId) return;
+    if (credits !== null && credits < veoCost) {
+      setNote(`You need ${veoCost} credits for an on-model video — you have ${credits}.`);
+      return;
+    }
+    setGenId(p.id);
+    setNote('Filming your on-model video — this takes a few minutes.');
+    try {
+      const res = await fetch(apiUrl('/api/creator/model-videos'), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ productId: p.id }),
+      });
+      const d = (await res.json()) as { modelVideos?: string[]; error?: string; needed?: number; balance?: number };
+      if (res.status === 402) {
+        setCredits(d.balance ?? credits);
+        setNote(`Not enough credits — an on-model video costs ${d.needed ?? veoCost}.`);
+        return;
+      }
+      if (res.status === 429) {
+        setNote('Slow down a moment — on-model videos are rate-limited. Try again shortly.');
+        return;
+      }
+      if (!res.ok || !d.modelVideos?.length) throw new Error(d.error ?? 'failed');
+      setNote(null);
+      await Promise.all([loadProducts(), loadCredits()]);
+    } catch {
+      setNote('Could not make the on-model video — your credits were not charged.');
     } finally {
       setGenId(null);
     }
@@ -482,7 +518,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                       </Pressable>
                     ) : null}
                   </View>
-                  <ThemedText type="small" style={styles.dim}>Venus turns a product into a short video ad for the feed — {voiceoverCost} credits each.</ThemedText>
+                  <ThemedText type="small" style={styles.dim}>Venus turns a product into a feed video ad ({voiceoverCost}), on-model shots (20), or an on-model film for your website ({veoCost}).</ThemedText>
                   {note && !draft ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
                   {note && !draft && onOpenBilling && credits !== null && credits < voiceoverCost ? (
                     <Pressable onPress={onOpenBilling} style={styles.primaryBtn}>
@@ -499,7 +535,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                       <View style={{ flex: 1 }}>
                         <ThemedText type="small" style={styles.white} numberOfLines={1}>{p.name}</ThemedText>
                         <ThemedText type="code" style={styles.dim}>
-                          {p.videoUrl ? 'video ad ✓' : 'no video'} · {p.modelShots?.length ? `${p.modelShots.length} model shots ✓` : 'no model shots'}
+                          {p.videoUrl ? 'video ad ✓' : 'no video'} · {p.modelShots?.length ? `${p.modelShots.length} shots ✓` : 'no shots'} · {p.modelVideos?.length ? `${p.modelVideos.length} films ✓` : 'no film'}
                         </ThemedText>
                       </View>
                       {genId === p.id ? (
@@ -507,7 +543,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                       ) : (
                         <View style={styles.adActions}>
                           <Pressable onPress={() => makeModelShots(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
-                            <ThemedText type="code" style={styles.adBtnText}>{p.modelShots?.length ? 'model ↻' : 'model · 20'}</ThemedText>
+                            <ThemedText type="code" style={styles.adBtnText}>{p.modelShots?.length ? 'shots ↻' : 'shots · 20'}</ThemedText>
+                          </Pressable>
+                          <Pressable onPress={() => makeModelVideo(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
+                            <ThemedText type="code" style={styles.adBtnText}>{p.modelVideos?.length ? `film ↻ · ${veoCost}` : `film · ${veoCost}`}</ThemedText>
                           </Pressable>
                           <Pressable onPress={() => makeVideoAd(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
                             <ThemedText type="code" style={styles.adBtnText}>{p.videoUrl ? 'video ↻' : `video · ${voiceoverCost}`}</ThemedText>

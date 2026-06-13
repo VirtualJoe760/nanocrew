@@ -25,6 +25,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
         descriptionMd: schema.products.descriptionMd,
         imageUrl: schema.products.imageUrl,
         modelShots: schema.products.modelShots,
+        modelVideos: schema.products.modelVideos,
         category: schema.products.category,
         collectionSlug: schema.catalogues.slug,
         collectionName: schema.catalogues.name,
@@ -48,6 +49,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       descriptionMd: string | null;
       imageUrl: string | null;
       modelShots: string[];
+      modelVideos: string[];
       category: string | null;
       collection: { slug: string; name: string } | null;
       variants: { id: string; sku: string; color: string | null; size: string | null; retailPriceCents: number; inStock: boolean }[];
@@ -63,6 +65,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
           descriptionMd: r.descriptionMd,
           imageUrl: r.imageUrl,
           modelShots: r.modelShots ?? [],
+          modelVideos: r.modelVideos ?? [],
           category: r.category,
           collection: r.collectionSlug ? { slug: r.collectionSlug, name: r.collectionName! } : null,
           variants: [],

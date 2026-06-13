@@ -46,8 +46,8 @@ Full, current documentation lives in **`docs/`** — read these before working:
 All **code-side launch blockers are done** (designer auth, rate limiting, Apple Sign In, account
 deletion, billing portal). Remaining go-live work is mostly Joe's config (Stripe live keys + webhooks,
 Printful confirm + resale cert, Supabase Site URL revert, Meta app, the EAS build, legal). Open code:
-**#33** (Veo videos on the websites — mirrors the on-model pipeline) and **#24** (creator `/admin` on
-brand sites). See `docs/REMAINING_FEATURES.md` + `docs/PRODUCTION_CHECKLIST.md` for the live list.
+**#24** (creator `/admin` on brand sites). See `docs/REMAINING_FEATURES.md` +
+`docs/PRODUCTION_CHECKLIST.md` for the live list.
 
 ## Run
 `npm run ios` · `npm run android` · `npm run web`

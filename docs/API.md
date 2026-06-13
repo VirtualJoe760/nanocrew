@@ -58,6 +58,8 @@ Common status codes: 400 bad request · 401/403 auth · **402 billing/credits** 
 | POST | `/api/feed/:id/share` | — | Bump share count. |
 | POST | `/api/tryon` | — | Render the product on a selfie (selfie not stored). |
 | POST | `/api/video` | bearer | Generate a product video (`voiceover` cheap / `veo` premium). Debits credits; refunds on failure; **402** if short. |
+| POST | `/api/creator/model-shots` | bearer | On-model image gallery (Nano Banana). Debits 20; refunds on failure; **402** if short. |
+| POST | `/api/creator/model-videos` | bearer | On-model Veo film for the website (appends, max 3 angles). Debits 400; rate-limited (4 / 10 min); refunds on failure; **402** / **429**. |
 
 ## E. Shop & storefront (read)
 | Method | Path | Purpose |
@@ -65,7 +67,8 @@ Common status codes: 400 bad request · 401/403 auth · **402 billing/credits** 
 | GET | `/api/market?q=` | Market tab data (trending + brands). |
 | GET | `/api/store/:slug` | In-app storefront (brand + products grouped by collection). |
 | GET | `/api/public/stores/:slug` | Brand facts for the live OG overlay. |
-| GET | `/api/public/stores/:slug/products` | Headless catalog for the website. |
+| GET | `/api/public/stores/:slug/products` | Headless catalog for the website (incl. `modelShots`, `modelVideos`). |
+| GET | `/api/public/stores/:slug/videos` | Featured on-model film wall (Veo) for the website homepage. |
 | GET | `/api/public/stores/:slug/collections` | Drops + counts. |
 | GET | `/api/public/stores/:slug/posts[/:postSlug]` | Published journal for the website. |
 
