@@ -1,4 +1,4 @@
-import { desc, sql } from 'drizzle-orm';
+import { desc, inArray, sql } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
@@ -25,12 +25,14 @@ export async function GET(req: Request) {
       })
       .from(schema.stores)
       .orderBy(desc(schema.stores.createdAt));
+    // Paid+ orders only — pending/cancelled carts aren't revenue.
     const [totals] = await db
       .select({
         orders: sql<number>`count(*)`.mapWith(Number),
         revenueCents: sql<number>`coalesce(sum(${schema.orders.totalCents}), 0)`.mapWith(Number),
       })
-      .from(schema.orders);
+      .from(schema.orders)
+      .where(inArray(schema.orders.status, ['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered']));
     const [creators] = await db
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.creators);

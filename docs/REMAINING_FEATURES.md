@@ -40,8 +40,8 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   (Task #31)
 - ⚪ **Veo model videos on websites** + a featured video gallery on the sites. (Task #33)
 - ⚪ **Template polish** — CSS animations / premium motion in the 4 storefront templates. (Task #32)
-- ⚪ **In-app platform admin** — `/api/platform/admin` returns data but there's no in-app admin screen.
-  (Task #25)
+- 🟢 **In-app platform admin** — done: Account → "Platform admin" (admin emails only) opens a
+  metrics + all-stores overview. (Task #25)
 - 🟡 **Creator /admin on the brand websites** — the public creator endpoints + beacon exist; the
   website-side `/admin` surface is partial. (Tasks #23/#24)
 - 🟡 **Studio media uploads** — Cloudinary image upload from the composer (post cover images, etc.)
