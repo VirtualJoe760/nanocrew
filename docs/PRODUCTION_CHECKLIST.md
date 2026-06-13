@@ -47,7 +47,9 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
   Services ID + key, and allow-list the redirect URLs. (Native button is a dev-build upgrade.)
 
 ### App store
-- [ ] **EAS dev/production build** (unblocks IAP, push, critique screenshots — all three).
+- [ ] **EAS dev/production build** (unblocks IAP, push, critique screenshots — all three). Scaffolding
+  is in (`eas.json`, bundle id `com.nanocrew.app`); follow **[DEV_BUILD.md](DEV_BUILD.md)** for the
+  native-dep installs + wiring (don't install them while you still want Expo Go).
 - [ ] **Apple IAP** must sell in-app credits/subscriptions on iOS (Apple rejects Stripe for digital
   goods). Configure App Store Connect consumables + `APPLE_IAP_SHARED_SECRET`, enable `IAP_ENABLED`.
 - [ ] App icon, splash, App Store screenshots/metadata, privacy nutrition labels, age rating.

@@ -11,6 +11,7 @@ Printful shop **and** a per-brand storefront website.
 ## Plan & ship
 - **[REMAINING_FEATURES.md](REMAINING_FEATURES.md)** — what's still open, grouped by blocker.
 - **[PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md)** — go-live checklist (security, payments, env, app store).
+- **[DEV_BUILD.md](DEV_BUILD.md)** — EAS dev-build runbook (unlocks IAP, push, critique screenshots).
 
 ## Deep dives (pre-existing)
 - **[DATABASE_PLAN.md](DATABASE_PLAN.md)** — multi-tenant schema design.
