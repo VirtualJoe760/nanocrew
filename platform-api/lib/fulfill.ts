@@ -61,7 +61,8 @@ export async function submitOrderToPrintful(orderId: string): Promise<void> {
       ...(storeId ? { 'X-PF-Store-Id': storeId } : {}),
     },
     body: JSON.stringify({
-      external_id: orderId,
+      // Printful caps external_id at 32 chars — a dashless UUID is exactly 32.
+      external_id: orderId.replace(/-/g, ''),
       recipient: {
         name: ship?.name ?? 'Customer',
         email: order.customerEmail,

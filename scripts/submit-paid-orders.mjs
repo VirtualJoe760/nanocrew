@@ -32,7 +32,7 @@ for (const o of orders) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      external_id: o.id,
+      external_id: o.id.replace(/-/g, ''),
       recipient: {
         name: o.ship?.name ?? 'Customer',
         email: o.customer_email,
