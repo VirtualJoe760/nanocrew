@@ -1,0 +1,1 @@
+ALTER TABLE "variants" ADD COLUMN "printful_cost_cents" integer;

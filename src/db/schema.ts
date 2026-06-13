@@ -40,7 +40,9 @@ export const orderStatus = pgEnum('order_status', [
   'refunded',
 ]);
 
-export const subscriptionPlan = pgEnum('subscription_plan', ['free', 'pro']);
+// Free = browse + shop only. The three paid tiers gate launching a store (Joe, 2026-06-12):
+// starter $10 · pro $49 · advanced $199. Each carries a monthly credit allotment + brand cap.
+export const subscriptionPlan = pgEnum('subscription_plan', ['free', 'starter', 'pro', 'advanced']);
 
 export const subscriptionStatus = pgEnum('subscription_status', [
   'active',
@@ -254,6 +256,7 @@ export const variants = pgTable(
     color: text('color'),
     size: text('size'),
     retailPriceCents: integer('retail_price_cents').notNull(),
+    printfulCostCents: integer('printful_cost_cents'), // our cost from Printful, captured at publish
     currency: varchar('currency', { length: 3 }).notNull().default('USD'),
     inStock: boolean('in_stock').notNull().default(true),
     imageUrl: text('image_url'),
@@ -354,6 +357,58 @@ export const storePosts = pgTable(
 export const storePostsRelations = relations(storePosts, ({ one }) => ({
   store: one(stores, { fields: [storePosts.storeId], references: [stores.id] }),
 }));
+
+// ---------- Credits (metering AI spend) ----------
+// Every creator has a credit balance; AI operations debit it (cost + markup). Top-ups
+// (Stripe on web, Apple IAP in-app) and subscription monthly grants credit it. The
+// ledger is the audit trail — balance is the running sum, cached on the account.
+
+export const creditAccounts = pgTable('credit_accounts', {
+  creatorId: uuid('creator_id')
+    .primaryKey()
+    .references(() => creators.id, { onDelete: 'cascade' }),
+  balance: integer('balance').notNull().default(0), // credits (1 credit ≈ $0.01 retail)
+  updatedAt: timestamp('updated_at')
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export const creditLedger = pgTable(
+  'credit_ledger',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    creatorId: uuid('creator_id')
+      .notNull()
+      .references(() => creators.id, { onDelete: 'cascade' }),
+    delta: integer('delta').notNull(), // +grant / −debit
+    reason: text('reason').notNull(), // signup_bonus | video_voiceover | video_veo | topup | …
+    refId: text('ref_id'), // e.g. the product/composition id
+    balanceAfter: integer('balance_after').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (l) => ({ creatorIdx: index('credit_ledger_creator_idx').on(l.creatorId, l.createdAt) }),
+);
+
+// ---------- Push notifications ----------
+// Expo push tokens registered per creator device — the target for "your revision preview
+// is ready" and future order/sale alerts. One row per device token; a creator can have
+// several (phone + tablet). Minting the token needs a dev build (Expo Go can't).
+
+export const deviceTokens = pgTable(
+  'device_tokens',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    creatorId: uuid('creator_id')
+      .notNull()
+      .references(() => creators.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique(),
+    platform: text('platform'), // ios | android
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at').notNull().defaultNow(),
+  },
+  (t) => ({ creatorIdx: index('device_tokens_creator_idx').on(t.creatorId) }),
+);
 
 // ---------- Site revisions (the visual editing loop) ----------
 // A creator's requested change is applied on a WORKING BRANCH (never main), which
