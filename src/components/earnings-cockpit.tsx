@@ -10,9 +10,9 @@ import { apiUrl } from '@/lib/api';
 // Reads the same authed endpoints the brand-site /admin uses (/api/creator/*).
 // Venus can speak a summary; this is the visual surface.
 
-const BG = '#04140c';
-const GREEN = '#00ff7f';
-const DIM = 'rgba(220,255,235,0.55)';
+const BG = '#060b16';
+const GREEN = '#35d6ff';
+const DIM = 'rgba(214,234,255,0.55)';
 
 type StoreStat = { id: string; slug: string; name: string; orders: number; revenueCents: number; views30d: number };
 type OrderRow = { id: string; storeSlug?: string; status: string; totalCents: number; createdAt: string; trackingUrl: string | null };
@@ -195,14 +195,14 @@ export function EarningsCockpit({ visible, onClose, token }: { visible: boolean;
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: BG, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: 'rgba(0,255,127,0.18)', overflow: 'hidden' },
+  sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: BG, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: 'rgba(53,214,255,0.18)', overflow: 'hidden' },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },
   eyebrow: { color: GREEN, letterSpacing: 2 },
   close: { color: DIM },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.six },
   scroll: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
   cardRow: { flexDirection: 'row', gap: Spacing.three },
-  card: { flex: 1, backgroundColor: 'rgba(0,255,127,0.05)', borderWidth: 1, borderColor: 'rgba(0,255,127,0.15)', borderRadius: 14, padding: Spacing.four, gap: Spacing.one },
+  card: { flex: 1, backgroundColor: 'rgba(53,214,255,0.05)', borderWidth: 1, borderColor: 'rgba(53,214,255,0.15)', borderRadius: 14, padding: Spacing.four, gap: Spacing.one },
   cardLabel: { color: DIM, fontSize: 10, letterSpacing: 1.5 },
   cardBig: { color: '#fff', fontSize: 26 },
   alert: { color: '#ffcf3f' },
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   orderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)' },
   orderMeta: { color: DIM, fontSize: 11 },
   badge: { paddingHorizontal: Spacing.three, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)' },
-  badgeShip: { backgroundColor: 'rgba(0,255,127,0.18)' },
+  badgeShip: { backgroundColor: 'rgba(53,214,255,0.18)' },
   badgeText: { color: '#fff', fontSize: 10, letterSpacing: 0.5 },
   white: { color: '#fff' },
   dim: { color: DIM },

@@ -12,10 +12,10 @@ import { apiUrl } from '@/lib/api';
 // words (→ forge revision) and write journal posts. Calls the same creator endpoints
 // the brand-site /admin uses. Opens from the Studio header.
 
-const BG = '#04140c';
-const GREEN = '#00ff7f';
-const DIM = 'rgba(220,255,235,0.55)';
-const FIELD = 'rgba(0,255,127,0.06)';
+const BG = '#060b16';
+const GREEN = '#35d6ff';
+const DIM = 'rgba(214,234,255,0.55)';
+const FIELD = 'rgba(53,214,255,0.06)';
 
 type StoreRow = { slug: string; name: string; deploymentUrl?: string | null };
 
@@ -294,23 +294,23 @@ export function StudioComposer({ visible, onClose, token }: { visible: boolean; 
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: BG, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: 'rgba(0,255,127,0.18)', overflow: 'hidden' },
+  sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: BG, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: 'rgba(53,214,255,0.18)', overflow: 'hidden' },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },
   eyebrow: { color: GREEN, letterSpacing: 2 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.six },
   scroll: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.two },
-  pill: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(0,255,127,0.2)' },
+  pill: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(53,214,255,0.2)' },
   pillOn: { backgroundColor: GREEN, borderColor: GREEN },
   sectionLabel: { color: GREEN, letterSpacing: 1.5, fontSize: 11 },
-  previewFrame: { height: 240, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,255,127,0.22)', backgroundColor: '#fff' },
+  previewFrame: { height: 240, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(53,214,255,0.22)', backgroundColor: '#fff' },
   previewWeb: { flex: 1, opacity: 0.99 },
-  previewTap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: Spacing.two, alignItems: 'center', backgroundColor: 'rgba(4,20,12,0.82)' },
+  previewTap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: Spacing.two, alignItems: 'center', backgroundColor: 'rgba(6,11,22,0.82)' },
   previewTapText: { color: GREEN, fontSize: 11, letterSpacing: 0.5 },
   revRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)' },
   revStatus: { color: DIM, fontSize: 11, marginTop: 2 },
   revActions: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center' },
-  input: { borderWidth: 1, borderColor: 'rgba(0,255,127,0.2)', backgroundColor: FIELD, borderRadius: 10, padding: Spacing.three, color: '#fff', fontSize: 15 },
+  input: { borderWidth: 1, borderColor: 'rgba(53,214,255,0.2)', backgroundColor: FIELD, borderRadius: 10, padding: Spacing.three, color: '#fff', fontSize: 15 },
   body: { minHeight: 220, textAlignVertical: 'top' },
   change: { minHeight: 90, textAlignVertical: 'top' },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginTop: Spacing.one },
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   postExcerpt: { color: DIM, fontSize: 11, marginTop: 2 },
   postActions: { flexDirection: 'row', gap: Spacing.three },
   badge: { paddingHorizontal: Spacing.two, paddingVertical: 2, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.1)' },
-  badgeLive: { backgroundColor: 'rgba(0,255,127,0.18)' },
+  badgeLive: { backgroundColor: 'rgba(53,214,255,0.18)' },
   badgeText: { color: '#fff', fontSize: 9, letterSpacing: 0.5 },
   white: { color: '#fff' },
   dim: { color: DIM },

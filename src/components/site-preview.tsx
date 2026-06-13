@@ -10,9 +10,9 @@ import { Spacing } from '@/constants/theme';
 // A live, navigable view of the creator's real storefront — the in-app "iframe".
 // Full-screen modal with a slim chrome bar (back, reload, open-in-browser, host).
 
-const BG = '#04140c';
-const GREEN = '#00ff7f';
-const DIM = 'rgba(220,255,235,0.6)';
+const BG = '#060b16';
+const GREEN = '#35d6ff';
+const DIM = 'rgba(214,234,255,0.6)';
 
 function host(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: BG },
   bar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   iconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  urlPill: { flex: 1, backgroundColor: 'rgba(0,255,127,0.06)', borderWidth: 1, borderColor: 'rgba(0,255,127,0.18)', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 6 },
+  urlPill: { flex: 1, backgroundColor: 'rgba(53,214,255,0.06)', borderWidth: 1, borderColor: 'rgba(53,214,255,0.18)', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 6 },
   urlText: { color: DIM, fontSize: 12 },
   webWrap: { flex: 1, backgroundColor: '#fff' },
   web: { flex: 1 },

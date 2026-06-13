@@ -10,9 +10,9 @@ import { apiUrl } from '@/lib/api';
 // The returning creator's Studio landing — no auto-AI. A small Venus presence, a live
 // thumbnail of each brand's site (tap → edit mode), and a way to start a new brand.
 
-const BG = '#04140c';
-const GREEN = '#00ff7f';
-const DIM = 'rgba(220,255,235,0.55)';
+const BG = '#060b16';
+const GREEN = '#35d6ff';
+const DIM = 'rgba(214,234,255,0.55)';
 
 type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; deploymentUrl?: string | null };
 
@@ -27,7 +27,7 @@ function VenusGlyph() {
     <Svg width={40} height={40}>
       <Defs>
         <RadialGradient id="vg" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor="#eafff4" stopOpacity={1} />
+          <Stop offset="0%" stopColor="#eaf6ff" stopOpacity={1} />
           <Stop offset="45%" stopColor={GREEN} stopOpacity={0.9} />
           <Stop offset="100%" stopColor={GREEN} stopOpacity={0} />
         </RadialGradient>
@@ -115,13 +115,13 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: Spacing.six, gap: Spacing.four },
   venusRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingTop: Spacing.two },
   eyebrow: { color: GREEN, letterSpacing: 2 },
-  brandCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,255,127,0.2)', backgroundColor: 'rgba(0,255,127,0.04)' },
+  brandCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(53,214,255,0.2)', backgroundColor: 'rgba(53,214,255,0.04)' },
   thumb: { height: 200, backgroundColor: '#fff' },
   thumbWeb: { flex: 1 },
   editTag: { position: 'absolute', right: Spacing.three, bottom: Spacing.three, backgroundColor: GREEN, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 5 },
   editTagText: { color: BG, fontSize: 11, letterSpacing: 0.5 },
   brandMeta: { padding: Spacing.three, gap: 2 },
-  newBrand: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(0,255,127,0.3)', padding: Spacing.four },
+  newBrand: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(53,214,255,0.3)', padding: Spacing.four },
   plus: { color: GREEN, fontSize: 28, width: 30, textAlign: 'center' },
   white: { color: '#fff' },
   dim: { color: DIM },

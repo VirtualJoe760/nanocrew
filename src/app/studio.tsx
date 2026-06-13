@@ -57,9 +57,9 @@ const VOICE_KEY = 'nanocrew.voiceId';
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
-const BG = '#010604';
+const BG = '#01060e';
 // idle green → listening mint → thinking cyan → speaking lime
-const STATE_COLORS = ['#00ff7f', '#8fffd0', '#39d9ff', '#c8ff4a'];
+const STATE_COLORS = ['#35d6ff', '#9be8ff', '#35d6ff', '#8b7bff'];
 const STATE_INDEX: Record<EntityState, number> = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
 
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
@@ -107,10 +107,10 @@ function NetworkField() {
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style]}>
       <Svg width={SCREEN_W} height={SCREEN_H}>
         {mesh.edges.map((e, i) => (
-          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="#00ff7f" strokeOpacity={0.09} strokeWidth={0.7} />
+          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="#35d6ff" strokeOpacity={0.09} strokeWidth={0.7} />
         ))}
         {mesh.nodes.map((n, i) => (
-          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill="#00ff7f" fillOpacity={0.22} />
+          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill="#35d6ff" fillOpacity={0.22} />
         ))}
       </Svg>
     </Animated.View>
@@ -175,7 +175,7 @@ function DustField({
 
 /** Minimal keyboard glyph: the type-instead-of-talk toggle. Translucent until active. */
 function KeyboardIcon({ active }: { active: boolean }) {
-  const c = active ? '#00ff7f' : '#3fae77';
+  const c = active ? '#35d6ff' : '#5193c9';
   const o = active ? 0.95 : 0.4;
   const keyRows: [number, number[]][] = [
     [9.5, [6, 10, 14, 18, 22]],
@@ -199,7 +199,7 @@ function KeyboardIcon({ active }: { active: boolean }) {
 }
 
 function MetricsIcon() {
-  const c = '#3fae77';
+  const c = '#5193c9';
   const bars: [number, number][] = [
     [5, 14],
     [11, 8],
@@ -217,7 +217,7 @@ function MetricsIcon() {
 }
 
 function ManageIcon() {
-  const c = '#3fae77';
+  const c = '#5193c9';
   return (
     <Svg width={28} height={26} opacity={0.5}>
       {/* pencil */}
@@ -265,7 +265,7 @@ function NanocrewMark({ color }: { color: string }) {
 const WEB_SIZE = 320;
 const WEB_C = WEB_SIZE / 2;
 
-const TONES = ['#00ff7f', '#7dffc8', '#d8ffe9', '#1fbf6e'];
+const TONES = ['#35d6ff', '#7de0ff', '#d6ecff', '#1f9fd6'];
 const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 
 function arcPath(r: number, a0: number, a1: number): string {
@@ -348,7 +348,7 @@ function OrbLayerSvg({ spec }: { spec: OrbSpec }) {
   return (
     <Svg width={WEB_SIZE} height={WEB_SIZE}>
       {spec.links.map((l, i) => (
-        <Line key={`l${i}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#00ff7f" strokeOpacity={l.o} strokeWidth={0.5} />
+        <Line key={`l${i}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#35d6ff" strokeOpacity={l.o} strokeWidth={0.5} />
       ))}
       {spec.arcs.map((a, i) => (
         <Path key={`a${i}`} d={a.d} stroke={a.c} strokeOpacity={a.o} strokeWidth={a.w} fill="none" />
@@ -420,7 +420,7 @@ function CoreLight({ level, color }: { level: SharedValue<number>; color: string
         <Defs>
           <RadialGradient id="bloom" cx="50%" cy="50%" r="50%">
             <Stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
-            <Stop offset="22%" stopColor="#eafff3" stopOpacity="0.95" />
+            <Stop offset="22%" stopColor="#eaf6ff" stopOpacity="0.95" />
             <Stop offset="48%" stopColor={color} stopOpacity="0.55" />
             <Stop offset="100%" stopColor={color} stopOpacity="0" />
           </RadialGradient>
@@ -967,7 +967,7 @@ export default function StudioScreen() {
         style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <View style={styles.headerRow}>
           <View style={styles.markBadge}>
-            <NanocrewMark color="#00ff7f" />
+            <NanocrewMark color="#35d6ff" />
           </View>
           <ThemedText type="code" style={styles.eyebrow}>
             STUDIO // BRAND.SYS
@@ -999,7 +999,7 @@ export default function StudioScreen() {
         ) : null}
 
         {loading ? (
-          <ActivityIndicator style={styles.center} color="#00ff7f" />
+          <ActivityIndicator style={styles.center} color="#35d6ff" />
         ) : !session ? (
           <View style={styles.center}>
             <ThemedText style={styles.signInNote}>
@@ -1007,7 +1007,7 @@ export default function StudioScreen() {
             </ThemedText>
           </View>
         ) : !voiceResolved || mode === 'loading' ? (
-          <ActivityIndicator style={styles.center} color="#00ff7f" />
+          <ActivityIndicator style={styles.center} color="#35d6ff" />
         ) : mode === 'dashboard' ? (
           <StudioDashboard
             token={session.access_token}
@@ -1097,7 +1097,7 @@ export default function StudioScreen() {
                   <Pressable onPress={() => previewVoice(v)} disabled={!!previewing} hitSlop={6}>
                     <View style={styles.voiceBtn}>
                       {previewing === v.id ? (
-                        <ActivityIndicator size="small" color="#00ff7f" />
+                        <ActivityIndicator size="small" color="#35d6ff" />
                       ) : (
                         <ThemedText type="code" style={styles.green}>
                           ▶ hear
@@ -1137,7 +1137,7 @@ export default function StudioScreen() {
                   value={typed}
                   onChangeText={setTyped}
                   placeholder="type your answer…"
-                  placeholderTextColor="#2c7a55"
+                  placeholderTextColor="#3a6a9c"
                   multiline
                   style={styles.typeInput}
                   onSubmitEditing={sendTyped}
@@ -1187,8 +1187,8 @@ const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: Spacing.four },
   fill: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { color: '#1f7a4d', letterSpacing: 1 },
-  signInNote: { color: '#3fae77', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
+  eyebrow: { color: '#1f5a9c', letterSpacing: 1 },
+  signInNote: { color: '#5193c9', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   markBadge: { transform: [{ scale: 0.32 }], width: 28, height: 28, marginLeft: -28, marginRight: -22 },
@@ -1201,13 +1201,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 18,
     height: 18,
-    borderColor: '#1c5c3b',
+    borderColor: '#1c3f6c',
   },
   cornerTL: { left: 12, borderLeftWidth: 1.5, borderTopWidth: 1.5 },
   cornerTR: { right: 12, borderRightWidth: 1.5, borderTopWidth: 1.5 },
   cornerBL: { left: 12, borderLeftWidth: 1.5, borderBottomWidth: 1.5 },
   cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
-  hint: { color: '#3fae77', letterSpacing: 1 },
+  hint: { color: '#5193c9', letterSpacing: 1 },
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },
@@ -1216,85 +1216,85 @@ const styles = StyleSheet.create({
     minHeight: 42,
     maxHeight: 110,
     borderWidth: 1,
-    borderColor: '#134d31',
+    borderColor: '#13294d',
     borderRadius: 4,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    color: '#d8ffe9',
+    color: '#d6ecff',
     fontFamily: MONO,
     fontSize: 14,
   },
   typeSend: {
-    backgroundColor: '#00ff7f',
+    backgroundColor: '#35d6ff',
     borderRadius: 4,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two + 2,
   },
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.four, minHeight: 96 },
-  heard: { color: '#2c7a55', textAlign: 'center' },
+  heard: { color: '#3a6a9c', textAlign: 'center' },
   bigWord: {
-    color: '#eafff3',
+    color: '#eaf6ff',
     textAlign: 'center',
     fontFamily: MONO,
     fontSize: 32,
     lineHeight: 40,
     fontWeight: '700',
   },
-  line: { color: '#d8ffe9', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: MONO },
+  line: { color: '#d6ecff', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: MONO },
   error: { color: '#ff5c5c', textAlign: 'center', paddingTop: Spacing.two },
 
   brandScroll: { gap: Spacing.three, paddingTop: Spacing.four },
   selectScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: Spacing.four },
   voiceCard: {
     borderWidth: 1,
-    borderColor: '#134d31',
+    borderColor: '#13294d',
     borderRadius: 6,
     padding: Spacing.three,
     gap: Spacing.three,
   },
   voiceMeta: { gap: 2 },
-  voiceVibe: { color: '#3fae77' },
+  voiceVibe: { color: '#5193c9' },
   voiceActions: { flexDirection: 'row', gap: Spacing.two },
   voiceBtn: {
     borderWidth: 1,
-    borderColor: '#1c5c3b',
+    borderColor: '#1c3f6c',
     borderRadius: 4,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     minWidth: 96,
     alignItems: 'center',
   },
-  voiceSelect: { backgroundColor: '#00ff7f', borderColor: '#00ff7f' },
-  voiceCardOn: { borderColor: '#00ff7f' },
-  getStarted: { backgroundColor: '#00ff7f', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
-  logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#134d31' },
-  brandEyebrow: { color: '#1f7a4d' },
-  white: { color: '#eafff3' },
-  dim: { color: '#7dd6a8' },
-  green: { color: '#00ff7f' },
+  voiceSelect: { backgroundColor: '#35d6ff', borderColor: '#35d6ff' },
+  voiceCardOn: { borderColor: '#35d6ff' },
+  getStarted: { backgroundColor: '#35d6ff', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
+  logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#13294d' },
+  brandEyebrow: { color: '#1f5a9c' },
+  white: { color: '#eaf6ff' },
+  dim: { color: '#7db8e6' },
+  green: { color: '#35d6ff' },
   paletteRow: { flexDirection: 'row', gap: Spacing.two },
   swatchCol: { alignItems: 'center', gap: Spacing.one, flex: 1 },
   swatch: { width: '100%', aspectRatio: 1, borderRadius: 3 },
-  swatchLabel: { fontSize: 10, color: '#3fae77' },
+  swatchLabel: { fontSize: 10, color: '#5193c9' },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   chip: {
     borderWidth: 1,
-    borderColor: '#134d31',
+    borderColor: '#13294d',
     borderRadius: 3,
     paddingHorizontal: Spacing.two + 2,
     paddingVertical: Spacing.one,
   },
-  chipText: { color: '#7dd6a8', fontSize: 11 },
+  chipText: { color: '#7db8e6', fontSize: 11 },
   createBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.three,
     borderRadius: 4,
     minHeight: 48,
-    backgroundColor: '#00ff7f',
+    backgroundColor: '#35d6ff',
     gap: 2,
     marginTop: Spacing.two,
   },
-  createdBox: { backgroundColor: '#06281a' },
+  createdBox: { backgroundColor: '#07182e' },
 });
