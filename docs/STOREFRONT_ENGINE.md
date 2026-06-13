@@ -208,7 +208,12 @@ Publishing is never final — everything stays editable:
 - `GET /api/public/stores/:slug/products` — LIVE in the codebase (published products +
   variants, CORS open, 5-min cache; matches templates' lib/api.ts contract exactly).
 - `POST /api/public/beacon` — pageview tick (anonymous, daily counters).
-- Pending: checkout (needs Stripe), store-info (rebrand without redeploy), posts
-  (dynamic blog), and a public deployment for these routes — brand sites cannot call
-  localhost; candidates are EAS Hosting or a small Vercel server importing the same
-  Drizzle schema.
+- **DEPLOYED: https://nanocrew-api.vercel.app** — Vercel project `nanocrew-api`,
+  rootDirectory `platform-api/` in the nanocrew repo, auto-deploys on push to main.
+  Routes live: stores/:slug (rebrand facts), stores/:slug/products, beacon (all
+  verified in production), creator/stats + creator/orders (Supabase bearer auth).
+  Env on Vercel: DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY.
+  CAUTION: platform-api/db/schema.ts is a COPY of src/db/schema.ts — sync it on
+  every migration. New stores get apiBase from PLATFORM_API_BASE in provisioning.
+- Pending: checkout (needs Stripe + application-fee model) and store_posts blog
+  endpoints (dynamic journal).
