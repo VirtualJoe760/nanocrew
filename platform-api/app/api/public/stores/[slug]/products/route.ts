@@ -57,10 +57,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
         p.variants.push({ id: r.variantId, sku: r.sku!, color: r.color, size: r.size, retailPriceCents: r.retailPriceCents!, inStock: r.inStock! });
       }
     }
-    return corsJson(
-      { products: [...byId.values()].filter((p) => p.variants.length > 0) },
-      { headers: { 'Cache-Control': 'public, max-age=300' } },
-    );
+    const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+    const products = [...byId.values()].filter((p) => p.variants.length > 0);
+    for (const p of products) {
+      p.variants.sort((a, b) => SIZE_ORDER.indexOf(a.size ?? '') - SIZE_ORDER.indexOf(b.size ?? ''));
+    }
+    return corsJson({ products }, { headers: { 'Cache-Control': 'public, max-age=300' } });
   } catch (e) {
     console.error('[public/products]', e instanceof Error ? e.message : e);
     return corsJson({ error: 'internal' }, { status: 500 });
