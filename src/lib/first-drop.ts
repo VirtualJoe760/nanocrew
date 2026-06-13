@@ -32,11 +32,24 @@ export async function generateFirstDrop(opts: { storeId: string; baseUrl: string
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
   const log = (...a: unknown[]) => console.log('[first-drop]', ...a);
 
+  // The designer routes require auth. We call them server-to-server AS the store's creator
+  // via the internal-service key (INTERNAL_API_KEY) — set once the store is loaded below.
+  let actingCreatorId = '';
+  const headers = (): Record<string, string> => {
+    const h: Record<string, string> = { 'Content-Type': 'application/json' };
+    const key = process.env.INTERNAL_API_KEY;
+    if (key && actingCreatorId) {
+      h['x-internal-key'] = key;
+      h['x-internal-creator'] = actingCreatorId;
+    }
+    return h;
+  };
+
   const post = async (path: string, body: unknown): Promise<Record<string, unknown>> => {
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(opts.baseUrl + path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers(),
         body: JSON.stringify(body),
       });
       const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -52,7 +65,7 @@ export async function generateFirstDrop(opts: { storeId: string; baseUrl: string
     }
   };
   const get = async (path: string): Promise<Record<string, unknown>> => {
-    const res = await fetch(opts.baseUrl + path);
+    const res = await fetch(opts.baseUrl + path, { headers: headers() });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok || json.error) throw new Error(`${path}: ${json.error ?? res.status}`);
     return json;
@@ -60,10 +73,12 @@ export async function generateFirstDrop(opts: { storeId: string; baseUrl: string
 
   try {
     if (!apiKey) throw new Error('no Gemini API key');
+    if (!process.env.INTERNAL_API_KEY) throw new Error('INTERNAL_API_KEY not configured (needed for server-side generation)');
 
     const [store] = await db
       .select({
         id: schema.stores.id,
+        creatorId: schema.stores.creatorId,
         name: schema.stores.name,
         tagline: schema.stores.tagline,
         brandProfile: schema.stores.brandProfile,
@@ -73,6 +88,7 @@ export async function generateFirstDrop(opts: { storeId: string; baseUrl: string
       .where(eq(schema.stores.id, opts.storeId))
       .limit(1);
     if (!store) throw new Error('store not found');
+    actingCreatorId = store.creatorId;
 
     const profile = (store.brandProfile ?? {}) as {
       products?: string[];

@@ -5,13 +5,14 @@ import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
 
-// Social sign-in (Google/Facebook) through Supabase OAuth. On native we run the flow in
-// an auth session browser and hand the callback tokens to supabase-js ourselves; on web
-// Supabase's normal full-page redirect does the work.
+// Social sign-in (Apple/Google/Facebook) through Supabase OAuth. On native we run the flow
+// in an auth session browser and hand the callback tokens to supabase-js ourselves; on web
+// Supabase's normal full-page redirect does the work. (Apple uses the same web OAuth flow;
+// the native "Sign in with Apple" button is a dev-build upgrade via expo-apple-authentication.)
 
 WebBrowser.maybeCompleteAuthSession();
 
-export type OAuthProvider = 'google' | 'facebook';
+export type OAuthProvider = 'apple' | 'google' | 'facebook';
 
 // In Expo Go this is exp://<host>/--/auth; in a dev/standalone build nanocrew://auth.
 // Both (plus the web origin) must be allow-listed in Supabase → Auth → Redirect URLs.

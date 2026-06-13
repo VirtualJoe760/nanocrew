@@ -12,7 +12,18 @@ export interface AuthedUser {
   name?: string;
 }
 
+// Trusted server-to-server calls (e.g. first-drop generation) carry a shared internal key
+// plus the creator they act on behalf of, so the normal auth + ownership checks all apply.
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY ?? '';
+
 export async function getUserFromRequest(req: Request): Promise<AuthedUser | null> {
+  // Internal service path: a valid key + creator id authenticates AS that creator.
+  const internalKey = req.headers.get('x-internal-key');
+  if (internalKey && INTERNAL_API_KEY && internalKey === INTERNAL_API_KEY) {
+    const creatorId = req.headers.get('x-internal-creator');
+    if (creatorId) return { id: creatorId, email: 'internal@nanocrew', name: 'internal' };
+  }
+
   const header = req.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token || !SUPABASE_URL) return null;

@@ -9,8 +9,9 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
 - [x] **[code] Authenticate the designer endpoints.** ✅ Done (2026-06-13). All designer routes now
   require a Supabase bearer token and scope to the creator's store via `src/lib/tenant.ts`
   (`getCreatorStore` / `assertCatalogueOwner` / `assertCompositionOwner` / `assertDesignOwner`); the
-  client sends the token through `apiFetch`. **Follow-up:** the server-to-server first-drop callers
-  now need an internal-service auth path before `AUTO_FIRST_DROP` can be enabled (see REMAINING_FEATURES).
+  client sends the token through `apiFetch`. The server-to-server first-drop path is handled by an
+  internal-service key (`INTERNAL_API_KEY` + `x-internal-creator` header) so it authenticates as the
+  store's creator — set `INTERNAL_API_KEY` to enable `AUTO_FIRST_DROP`.
 - [x] **[code] Rate-limit the AI endpoints** ✅ Done (2026-06-13). A DB-backed fixed-window limiter
   (`src/lib/rate-limit.ts` + `rate_limits` table) guards generate/merge/composite/tryon (gen),
   voice (voice), enhance/idea (ai), mockup/publish (pf) per creator/min; `/api/video` is already
@@ -41,7 +42,9 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
   production URL; verify OAuth redirect URLs for Google + Facebook.
 - [ ] **Meta app** approved for "Continue with Facebook" (icon, privacy policy, data-deletion URL,
   category) — or hide the FB button for v1.
-- [ ] **Apple Sign In** — App Store requires it if you offer other social logins on iOS.
+- [x] **Apple Sign In** ✅ Code done (2026-06-13) — "Continue with Apple" button (iOS-first) via
+  Supabase OAuth. **You still must:** enable the Apple provider in Supabase, configure the Apple
+  Services ID + key, and allow-list the redirect URLs. (Native button is a dev-build upgrade.)
 
 ### App store
 - [ ] **EAS dev/production build** (unblocks IAP, push, critique screenshots — all three).
@@ -63,7 +66,7 @@ Set in `.env.local` (dev) **and** the Vercel projects (app server + `platform-ap
 | Billing | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_BILLING_WEBHOOK_SECRET`, `STRIPE_PRICE_*`, `BILLING_RETURN_URL` |
 | Provisioning | `GITHUB_TOKEN`, `GITHUB_OWNER`, `TEMPLATES_REPO`, `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VERCEL_TOKEN`, `PLATFORM_API_BASE` |
 | Email | `RESEND_API_KEY`, `EMAIL_FROM` |
-| Flags/admin | `AUTO_FIRST_DROP`, `APPLE_IAP_SHARED_SECRET`, `PLATFORM_ADMIN_EMAILS` |
+| Flags/admin | `AUTO_FIRST_DROP`, `APPLE_IAP_SHARED_SECRET`, `PLATFORM_ADMIN_EMAILS`, `INTERNAL_API_KEY` (server-to-server first-drop) |
 
 - [ ] On **every migration**: regenerate, apply, and **copy `src/db/schema.ts` → `platform-api/db/schema.ts`**.
 - [ ] Confirm the forge VPS is reachable and `VERCEL_TOKEN` deploys (otherwise "Build site" pushes a

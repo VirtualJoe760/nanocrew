@@ -166,6 +166,14 @@ export default function AccountScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   Sign in to sync your designs, stores and sales.
                 </ThemedText>
+                {/* Apple requires Sign in with Apple first on iOS when other social logins exist. */}
+                {Platform.OS === 'ios' ? (
+                  <Pressable onPress={() => social('apple')} disabled={busy}>
+                    <View style={[styles.button, styles.appleButton, { opacity: busy ? 0.5 : 1 }]}>
+                      <ThemedText type="smallBold" style={styles.appleText}> Continue with Apple</ThemedText>
+                    </View>
+                  </Pressable>
+                ) : null}
                 <Pressable onPress={() => social('google')} disabled={busy}>
                   <ThemedView type="backgroundElement" style={[styles.button, { opacity: busy ? 0.5 : 1 }]}>
                     <ThemedText type="smallBold">Continue with Google</ThemedText>
@@ -241,6 +249,8 @@ const styles = StyleSheet.create({
     gap: 2,
     minHeight: 48,
   },
+  appleButton: { backgroundColor: '#000' },
+  appleText: { color: '#fff' },
   signOut: { marginTop: Spacing.four },
   divider: { textAlign: 'center', marginVertical: Spacing.one },
   section: { gap: Spacing.two, marginTop: Spacing.three },

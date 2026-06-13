@@ -24,10 +24,9 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   swap test → live keys at launch. (See PRODUCTION_CHECKLIST.)
 - 🟡 **Auto first-drop** — `generateFirstDrop()` is wired into store creation but gated by
   `AUTO_FIRST_DROP=1` (real Gemini + Printful spend). Validate on one brand, then enable. (Task #26)
-  **Note:** now that the designer routes require auth, `first-drop.ts` and `scripts/first-drop.mjs`
-  (which call `/api/generate|compositions|mockup|publish` server-to-server with no token) will 401.
-  Before enabling, give them an internal-service auth path (e.g. an `INTERNAL_API_KEY` the routes
-  accept) or have first-drop call the lib logic directly instead of over HTTP.
+  **Resolved:** `first-drop.ts` now authenticates server-to-server via `INTERNAL_API_KEY` +
+  `x-internal-creator` (acts as the store's creator), so set that env to enable it. (The CLI
+  `scripts/first-drop.mjs` would need the same headers if used directly.)
 - ⚪ **Meta (Facebook) app** — required for the "Continue with Facebook" button: icon, privacy policy,
   data-deletion URL, category, review. (Task #18)
 
@@ -51,8 +50,7 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 ## 5. Brand / polish cleanup (small)
 - ⚪ **General Sans font** — the brand typeface isn't bundled (system sans stand-in). Needs the font
   files + `expo-font`.
-- ⚪ **Brand-store accent fallback** — `src/components/brand-store.tsx` falls back to cyan `#35d6ff`
-  when a brand has no accent; should fall back to gold.
+- 🟢 **Brand-store accent fallback** — fixed: falls back to gold `#c9a86a` (was cyan).
 - ⚪ **Custom tab-bar glyphs** — tabs use SF Symbols + gold tint; true NC-monogram glyphs would need a
   custom JS tab bar.
 - ⚪ **Designer endpoints auth** — `/api/generate`, `/api/compositions`, `/api/publish`, etc. are
