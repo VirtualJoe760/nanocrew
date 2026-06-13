@@ -38,7 +38,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
-import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 
 import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { StudioComposer } from '@/components/studio-composer';
@@ -59,34 +59,151 @@ const VOICE_KEY = 'nanocrew.voiceId';
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
-// Dark ink used for text ON the cyan accent buttons — cyan is light, so dark text reads
-// in both light and dark mode. (The screen background comes from the palette below.)
-const BG = '#06121f';
-// idle → listening → thinking → speaking. Saturated cyan/violet that read on light + dark.
-const STATE_COLORS = ['#35d6ff', '#9be8ff', '#35d6ff', '#8b7bff'];
+// Dark ink used for text ON the gold accent buttons — gold is light, so dark text reads in
+// both modes. (The screen background comes from the palette below.)
+const BG = '#0a0a0c';
+// idle → listening → thinking → speaking. Champagne gold resting, brightening to near-white
+// as Venus speaks — monochrome + gold, per the Nano Crew brand.
+const STATE_COLORS = ['#c9a86a', '#e3cd97', '#d8bd82', '#f3ede0'];
 const STATE_INDEX: Record<EntityState, number> = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
 
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
+const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Theme-aware palette — Venus is a holographic entity that works on light AND dark. The
-// accents (cyan/violet) hold on both; the surface, ink and white-hot core flip.
+// Nano Crew palette — monochrome black/white with a single champagne-gold accent. Black
+// silk on dark, warm paper on light; gold holds on both.
 type Palette = ReturnType<typeof makePalette>;
 function makePalette(dark: boolean) {
   return {
     dark,
-    bg: dark ? '#060b16' : '#eef3fa',
-    ink: dark ? '#eaf6ff' : '#0c1726',
-    dim: dark ? '#7db8e6' : '#586a82',
-    faint: dark ? '#5193c9' : '#93a2b6',
-    accent: '#35d6ff',
-    accent2: '#8b7bff',
-    line: dark ? 'rgba(53,214,255,0.10)' : 'rgba(31,112,153,0.14)',
-    coreInner: dark ? '#ffffff' : '#16b6e0',
+    bg: dark ? '#0a0a0c' : '#f4f3f0',
+    bgTop: dark ? '#141417' : '#fbfaf8', // top of the vertical wash
+    wave: dark
+      ? ['#101013', '#0d0d10', '#131318', '#0b0b0e'] // silk fold tones on black
+      : ['#eeeae4', '#e7e6e1', '#f0efeb', '#e3e2dc'],
+    ink: dark ? '#f3f1ec' : '#16140f',
+    dim: dark ? '#9a978f' : '#6b675e',
+    faint: dark ? '#56544e' : '#a6a299',
+    accent: dark ? '#c9a86a' : '#a8884e', // champagne gold (darker on light for contrast)
+    accent2: dark ? '#e3cd97' : '#8a6d3a',
+    line: dark ? 'rgba(201,168,106,0.16)' : 'rgba(168,136,78,0.20)',
+    coreInner: dark ? '#f5efe1' : '#caa860',
   };
 }
 function usePalette(): Palette {
   return makePalette(useColorScheme() !== 'light');
+}
+
+// ---------- Static silk background (flat, no per-frame animation) ----------
+// Smooth bezier "folds" filled in near-black tones evoke black silk, with one soft gold
+// glow behind the nucleus. Entirely static — the laggy network/dust fields are gone.
+
+function wavePath(yBase: number, amp: number): string {
+  const W = SCREEN_W;
+  const H = SCREEN_H;
+  return (
+    `M0 ${yBase}` +
+    ` C ${W * 0.28} ${yBase - amp}, ${W * 0.42} ${yBase + amp}, ${W * 0.56} ${yBase}` +
+    ` C ${W * 0.72} ${yBase - amp}, ${W * 0.88} ${yBase + amp * 1.15}, ${W} ${yBase - amp * 0.35}` +
+    ` L ${W} ${H} L 0 ${H} Z`
+  );
+}
+
+const WAVES = [
+  { y: SCREEN_H * 0.34, amp: 64, tone: 0, op: 0.9 },
+  { y: SCREEN_H * 0.48, amp: 82, tone: 1, op: 0.85 },
+  { y: SCREEN_H * 0.62, amp: 70, tone: 2, op: 0.9 },
+  { y: SCREEN_H * 0.76, amp: 92, tone: 3, op: 0.85 },
+  { y: SCREEN_H * 0.88, amp: 60, tone: 0, op: 0.95 },
+];
+
+function FabricBackground({ p }: { p: Palette }) {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width={SCREEN_W} height={SCREEN_H}>
+        <Defs>
+          <LinearGradient id="nc-wash" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={p.bgTop} />
+            <Stop offset="1" stopColor={p.bg} />
+          </LinearGradient>
+          <RadialGradient id="nc-glow" cx="50%" cy="34%" r="52%">
+            <Stop offset="0" stopColor={p.accent} stopOpacity={p.dark ? 0.12 : 0.07} />
+            <Stop offset="1" stopColor={p.accent} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect width={SCREEN_W} height={SCREEN_H} fill="url(#nc-wash)" />
+        {WAVES.map((w, i) => (
+          <Path key={i} d={wavePath(w.y, w.amp)} fill={p.wave[w.tone]} opacity={w.op} />
+        ))}
+        <Rect width={SCREEN_W} height={SCREEN_H} fill="url(#nc-glow)" />
+      </Svg>
+    </View>
+  );
+}
+
+// ---------- The NC monogram + circular nucleus ----------
+
+/** The Nano Crew "NC" serif monogram. */
+function NCMark({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <SvgText x="50" y="71" fill={color} fontFamily={SERIF} fontSize={62} fontWeight="500" textAnchor="middle" letterSpacing={-6}>
+        NC
+      </SvgText>
+    </Svg>
+  );
+}
+
+/** The circular logo as the entity's nucleus: a thin gold ring around the NC monogram, on
+ *  a soft glow. Optionally breathes with the live audio level (one cheap animated node). */
+function NCNucleus({
+  size,
+  p,
+  level,
+  state,
+  onPress,
+}: {
+  size: number;
+  p: Palette;
+  level?: SharedValue<number>;
+  state?: EntityState;
+  onPress?: () => void;
+}) {
+  const ring = state ? STATE_COLORS[STATE_INDEX[state]] : p.accent;
+  const glow = useAnimatedStyle(() => {
+    const v = level ? level.value : 0;
+    return { opacity: 0.4 + v * 0.45, transform: [{ scale: 1 + v * 0.05 }] };
+  });
+  const r = size / 2;
+  const body = (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={[StyleSheet.absoluteFill, glow]} pointerEvents="none">
+        <Svg width={size} height={size}>
+          <Defs>
+            <RadialGradient id="nuc-glow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor={p.coreInner} stopOpacity={p.dark ? 0.5 : 0.35} />
+              <Stop offset="55%" stopColor={p.accent} stopOpacity={0.18} />
+              <Stop offset="100%" stopColor={p.accent} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Circle cx={r} cy={r} r={r * 0.7} fill="url(#nuc-glow)" />
+        </Svg>
+      </Animated.View>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Circle cx={r} cy={r} r={r - 2} fill="none" stroke={ring} strokeWidth={1} strokeOpacity={0.7} />
+        <Circle cx={r} cy={r} r={r - 8} fill="none" stroke={ring} strokeWidth={0.5} strokeOpacity={0.25} />
+      </Svg>
+      <NCMark size={size * 0.58} color={p.ink} />
+    </View>
+  );
+  return onPress ? (
+    <Pressable onPress={onPress} hitSlop={24}>
+      {body}
+    </Pressable>
+  ) : (
+    body
+  );
 }
 
 // ---------- Network mesh ----------
@@ -200,7 +317,7 @@ function DustField({
 
 /** Minimal keyboard glyph: the type-instead-of-talk toggle. Translucent until active. */
 function KeyboardIcon({ active }: { active: boolean }) {
-  const c = active ? '#35d6ff' : '#5193c9';
+  const c = active ? '#c9a86a' : '#9a978f';
   const o = active ? 0.95 : 0.4;
   const keyRows: [number, number[]][] = [
     [9.5, [6, 10, 14, 18, 22]],
@@ -224,7 +341,7 @@ function KeyboardIcon({ active }: { active: boolean }) {
 }
 
 function MetricsIcon() {
-  const c = '#5193c9';
+  const c = '#9a978f';
   const bars: [number, number][] = [
     [5, 14],
     [11, 8],
@@ -242,7 +359,7 @@ function MetricsIcon() {
 }
 
 function ManageIcon() {
-  const c = '#5193c9';
+  const c = '#9a978f';
   return (
     <Svg width={28} height={26} opacity={0.5}>
       {/* pencil */}
@@ -259,12 +376,12 @@ function IntroGlyph() {
       <Defs>
         <RadialGradient id="intro" cx="50%" cy="50%" r="50%">
           <Stop offset="0%" stopColor="#eaf6ff" stopOpacity={1} />
-          <Stop offset="40%" stopColor="#35d6ff" stopOpacity={0.85} />
-          <Stop offset="100%" stopColor="#35d6ff" stopOpacity={0} />
+          <Stop offset="40%" stopColor="#c9a86a" stopOpacity={0.85} />
+          <Stop offset="100%" stopColor="#c9a86a" stopOpacity={0} />
         </RadialGradient>
       </Defs>
-      <Circle cx={48} cy={48} r={46} fill="none" stroke="#35d6ff" strokeWidth={0.6} opacity={0.25} />
-      <Circle cx={48} cy={48} r={34} fill="none" stroke="#8b7bff" strokeWidth={0.6} opacity={0.3} />
+      <Circle cx={48} cy={48} r={46} fill="none" stroke="#c9a86a" strokeWidth={0.6} opacity={0.25} />
+      <Circle cx={48} cy={48} r={34} fill="none" stroke="#e3cd97" strokeWidth={0.6} opacity={0.3} />
       <Circle cx={48} cy={48} r={20} fill="url(#intro)" />
     </Svg>
   );
@@ -308,7 +425,7 @@ function NanocrewMark({ color }: { color: string }) {
 const WEB_SIZE = 320;
 const WEB_C = WEB_SIZE / 2;
 
-const TONES = ['#35d6ff', '#7de0ff', '#d6ecff', '#1f9fd6'];
+const TONES = ['#c9a86a', '#7de0ff', '#d6ecff', '#1f9fd6'];
 const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 
 function arcPath(r: number, a0: number, a1: number): string {
@@ -391,7 +508,7 @@ function OrbLayerSvg({ spec }: { spec: OrbSpec }) {
   return (
     <Svg width={WEB_SIZE} height={WEB_SIZE}>
       {spec.links.map((l, i) => (
-        <Line key={`l${i}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#35d6ff" strokeOpacity={l.o} strokeWidth={0.5} />
+        <Line key={`l${i}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#c9a86a" strokeOpacity={l.o} strokeWidth={0.5} />
       ))}
       {spec.arcs.map((a, i) => (
         <Path key={`a${i}`} d={a.d} stroke={a.c} strokeOpacity={a.o} strokeWidth={a.w} fill="none" />
@@ -1004,26 +1121,15 @@ export default function StudioScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: p.bg }]}>
-      <NetworkField />
-      {/* Spatial dust — three depths drifting at different rates */}
-      <DustField count={34} rMax={0.9} driftX={-9} driftY={14} period={16000} />
-      <DustField count={26} rMax={1.5} driftX={12} driftY={-10} period={22000} />
-      <DustField count={16} rMax={2.2} driftX={-18} driftY={-22} period={29000} />
-      {/* HUD corner brackets */}
-      <View pointerEvents="none" style={[styles.corner, styles.cornerTL, { top: insets.top + 8, borderColor: p.accent }]} />
-      <View pointerEvents="none" style={[styles.corner, styles.cornerTR, { top: insets.top + 8, borderColor: p.accent }]} />
-      <View pointerEvents="none" style={[styles.corner, styles.cornerBL, { bottom: bottomPad - 8, borderColor: p.accent }]} />
-      <View pointerEvents="none" style={[styles.corner, styles.cornerBR, { bottom: bottomPad - 8, borderColor: p.accent }]} />
+      <FabricBackground p={p} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <View style={styles.headerRow}>
-          <View style={styles.markBadge}>
-            <NanocrewMark color="#35d6ff" />
-          </View>
-          <ThemedText type="code" style={styles.eyebrow}>
-            STUDIO // BRAND.SYS
+          <NCMark size={22} color={p.ink} />
+          <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>
+            STUDIO
           </ThemedText>
           <View style={styles.headerSpacer} />
           {session && !brand && (mode === 'interview' || mode === 'dashboard') ? (
@@ -1053,18 +1159,21 @@ export default function StudioScreen() {
         ) : null}
 
         {loading ? (
-          <ActivityIndicator style={styles.center} color="#35d6ff" />
+          <ActivityIndicator style={styles.center} color="#c9a86a" />
         ) : !session ? (
           <View style={styles.introWrap}>
-            <IntroGlyph />
+            <NCNucleus size={132} p={p} />
+            <ThemedText type="code" style={[styles.introTag, { color: p.dim }]}>
+              INTELLIGENCE IS THE NEW FABRIC
+            </ThemedText>
             <ThemedText type="title" style={[styles.introTitle, { color: p.ink }]}>
               Meet Venus
             </ThemedText>
-            <ThemedText type="small" style={[styles.introBody, { color: p.ink }]}>
+            <ThemedText type="small" style={[styles.introBody, { color: p.dim }]}>
               Your AI brand consultant. Talk it through, and Venus designs your clothing
               brand, builds the store, and launches your website.
             </ThemedText>
-            <Pressable onPress={() => router.navigate('/account')} style={styles.ctaPrimary}>
+            <Pressable onPress={() => router.navigate('/account')} style={[styles.ctaPrimary, { backgroundColor: p.accent }]}>
               <ThemedText type="smallBold" style={{ color: BG }}>
                 Create an account
               </ThemedText>
@@ -1079,7 +1188,7 @@ export default function StudioScreen() {
             </ThemedText>
           </View>
         ) : !voiceResolved || mode === 'loading' ? (
-          <ActivityIndicator style={styles.center} color="#35d6ff" />
+          <ActivityIndicator style={styles.center} color="#c9a86a" />
         ) : mode === 'dashboard' ? (
           <StudioDashboard
             token={session.access_token}
@@ -1170,7 +1279,7 @@ export default function StudioScreen() {
                   <Pressable onPress={() => previewVoice(v)} disabled={!!previewing} hitSlop={6}>
                     <View style={styles.voiceBtn}>
                       {previewing === v.id ? (
-                        <ActivityIndicator size="small" color="#35d6ff" />
+                        <ActivityIndicator size="small" color="#c9a86a" />
                       ) : (
                         <ThemedText type="code" style={styles.green}>
                           ▶ hear
@@ -1199,9 +1308,9 @@ export default function StudioScreen() {
         ) : (
           <>
             <View style={styles.entityArea}>
-              <Nucleus state={state} level={level} onPress={onEntityPress} />
+              <NCNucleus size={232} p={p} level={level} state={state} onPress={onEntityPress} />
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
-                {keyboardMode ? '[ keyboard mode — tap the orb for voice ]' : hint}
+                {keyboardMode ? '[ keyboard mode — tap the mark for voice ]' : hint}
               </ThemedText>
             </View>
             {keyboardMode ? (
@@ -1210,7 +1319,7 @@ export default function StudioScreen() {
                   value={typed}
                   onChangeText={setTyped}
                   placeholder="type your answer…"
-                  placeholderTextColor="#3a6a9c"
+                  placeholderTextColor="#56544e"
                   multiline
                   style={styles.typeInput}
                   onSubmitEditing={sendTyped}
@@ -1260,15 +1369,16 @@ const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: Spacing.four },
   fill: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { color: '#1f5a9c', letterSpacing: 1 },
-  signInNote: { color: '#5193c9', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
+  eyebrow: { color: '#8a8780', letterSpacing: 1 },
+  signInNote: { color: '#9a978f', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
   introWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, paddingHorizontal: Spacing.four },
-  introTitle: { color: '#fff', fontSize: 30 },
-  introBody: { color: '#d6ecff', textAlign: 'center', maxWidth: 320, lineHeight: 22, opacity: 0.85 },
-  ctaPrimary: { backgroundColor: '#35d6ff', borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.three },
+  introTag: { letterSpacing: 3, fontSize: 10, marginTop: Spacing.two },
+  introTitle: { fontSize: 30, fontFamily: SERIF, letterSpacing: 0.5 },
+  introBody: { textAlign: 'center', maxWidth: 320, lineHeight: 22 },
+  ctaPrimary: { backgroundColor: '#c9a86a', borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.three },
   ctaSecondary: { paddingVertical: Spacing.two },
-  ctaSecondaryText: { color: '#7db8e6' },
-  introFoot: { color: '#5193c9', fontSize: 12, marginTop: Spacing.three, textAlign: 'center' },
+  ctaSecondaryText: { color: '#9a978f' },
+  introFoot: { color: '#9a978f', fontSize: 12, marginTop: Spacing.three, textAlign: 'center' },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   markBadge: { transform: [{ scale: 0.32 }], width: 28, height: 28, marginLeft: -28, marginRight: -22 },
@@ -1287,7 +1397,7 @@ const styles = StyleSheet.create({
   cornerTR: { right: 12, borderRightWidth: 1.5, borderTopWidth: 1.5 },
   cornerBL: { left: 12, borderLeftWidth: 1.5, borderBottomWidth: 1.5 },
   cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
-  hint: { color: '#5193c9', letterSpacing: 1 },
+  hint: { color: '#9a978f', letterSpacing: 1 },
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },
@@ -1305,14 +1415,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   typeSend: {
-    backgroundColor: '#35d6ff',
+    backgroundColor: '#c9a86a',
     borderRadius: 4,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two + 2,
   },
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.four, minHeight: 96 },
-  heard: { color: '#3a6a9c', textAlign: 'center' },
+  heard: { color: '#56544e', textAlign: 'center' },
   bigWord: {
     color: '#eaf6ff',
     textAlign: 'center',
@@ -1334,7 +1444,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   voiceMeta: { gap: 2 },
-  voiceVibe: { color: '#5193c9' },
+  voiceVibe: { color: '#9a978f' },
   voiceActions: { flexDirection: 'row', gap: Spacing.two },
   voiceBtn: {
     borderWidth: 1,
@@ -1345,18 +1455,18 @@ const styles = StyleSheet.create({
     minWidth: 96,
     alignItems: 'center',
   },
-  voiceSelect: { backgroundColor: '#35d6ff', borderColor: '#35d6ff' },
-  voiceCardOn: { borderColor: '#35d6ff' },
-  getStarted: { backgroundColor: '#35d6ff', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
+  voiceSelect: { backgroundColor: '#c9a86a', borderColor: '#c9a86a' },
+  voiceCardOn: { borderColor: '#c9a86a' },
+  getStarted: { backgroundColor: '#c9a86a', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
   logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#13294d' },
-  brandEyebrow: { color: '#1f5a9c' },
+  brandEyebrow: { color: '#8a8780' },
   white: { color: '#eaf6ff' },
-  dim: { color: '#7db8e6' },
-  green: { color: '#35d6ff' },
+  dim: { color: '#9a978f' },
+  green: { color: '#c9a86a' },
   paletteRow: { flexDirection: 'row', gap: Spacing.two },
   swatchCol: { alignItems: 'center', gap: Spacing.one, flex: 1 },
   swatch: { width: '100%', aspectRatio: 1, borderRadius: 3 },
-  swatchLabel: { fontSize: 10, color: '#5193c9' },
+  swatchLabel: { fontSize: 10, color: '#9a978f' },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   chip: {
     borderWidth: 1,
@@ -1365,16 +1475,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two + 2,
     paddingVertical: Spacing.one,
   },
-  chipText: { color: '#7db8e6', fontSize: 11 },
+  chipText: { color: '#9a978f', fontSize: 11 },
   createBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.three,
     borderRadius: 4,
     minHeight: 48,
-    backgroundColor: '#35d6ff',
+    backgroundColor: '#c9a86a',
     gap: 2,
     marginTop: Spacing.two,
   },
-  createdBox: { backgroundColor: '#07182e' },
+  createdBox: { backgroundColor: '#141417' },
 });
