@@ -14,6 +14,7 @@ import { openBrowserAsync } from 'expo-web-browser';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { BrandStore } from '@/components/brand-store';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { apiUrl } from '@/lib/api';
@@ -52,9 +53,9 @@ function storeUrl(brand: Brand): string | null {
   return brand.deploymentUrl ?? null;
 }
 
-function TrendingCard({ item }: { item: TrendingItem }) {
+function TrendingCard({ item, onOpen }: { item: TrendingItem; onOpen: (slug: string) => void }) {
   return (
-    <View style={styles.trendCard}>
+    <Pressable style={styles.trendCard} onPress={() => onOpen(item.storeSlug)}>
       {item.imageUrl ? (
         <Image source={{ uri: item.imageUrl }} style={styles.trendImg} contentFit="cover" />
       ) : (
@@ -67,13 +68,14 @@ function TrendingCard({ item }: { item: TrendingItem }) {
         @{item.storeSlug}
         {item.priceCents != null ? ` · ${price(item.priceCents)}` : ''}
       </ThemedText>
-    </View>
+    </Pressable>
   );
 }
 
-function BrandCard({ brand }: { brand: Brand }) {
+function BrandCard({ brand, onOpen }: { brand: Brand; onOpen: (slug: string) => void }) {
   const url = storeUrl(brand);
   return (
+    <Pressable onPress={() => onOpen(brand.slug)}>
     <ThemedView type="backgroundElement" style={styles.brandCard}>
       <View style={styles.brandHeader}>
         {brand.logoUrl ? (
@@ -106,6 +108,7 @@ function BrandCard({ brand }: { brand: Brand }) {
         </View>
       ) : null}
     </ThemedView>
+    </Pressable>
   );
 }
 
@@ -137,6 +140,7 @@ export default function MarketScreen() {
   const trending = data?.trending ?? [];
   const brands = data?.brands ?? [];
   const searching = query.trim().length > 0;
+  const [storeSlug, setStoreSlug] = useState<string | null>(null);
 
   return (
     <ThemedView style={styles.container}>
@@ -187,7 +191,7 @@ export default function MarketScreen() {
                     contentContainerStyle={styles.trendRow}
                   >
                     {trending.map((item) => (
-                      <TrendingCard key={item.id} item={item} />
+                      <TrendingCard key={item.id} item={item} onOpen={setStoreSlug} />
                     ))}
                   </ScrollView>
                 </View>
@@ -198,7 +202,7 @@ export default function MarketScreen() {
                   {searching ? 'Brands' : 'All brands'}
                 </ThemedText>
                 {brands.length ? (
-                  brands.map((brand) => <BrandCard key={brand.id} brand={brand} />)
+                  brands.map((brand) => <BrandCard key={brand.id} brand={brand} onOpen={setStoreSlug} />)
                 ) : (
                   <ThemedText type="small" themeColor="textSecondary">
                     {searching ? `No brands match "${query.trim()}".` : 'No live storefronts yet.'}
@@ -209,6 +213,7 @@ export default function MarketScreen() {
           )}
         </View>
       </SafeAreaView>
+      <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
     </ThemedView>
   );
 }
