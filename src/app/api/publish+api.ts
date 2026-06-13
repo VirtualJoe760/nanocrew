@@ -1,7 +1,21 @@
 import { eq, inArray } from 'drizzle-orm';
 
+import { uploadImage } from '@/lib/cloudinary';
 import { db, schema } from '@/lib/db';
 import { createSyncProduct, upscaleForPrint, type MockupPosition } from '@/lib/printful';
+
+/** Printful mockup URLs are temporary S3 links (~72h) — persist to Cloudinary. */
+async function persistMockup(url: string | null): Promise<string | null> {
+  if (!url) return null;
+  if (!/printful.*amazonaws|\/tmp\//.test(url)) return url; // already permanent
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return url;
+    return await uploadImage(Buffer.from(await res.arrayBuffer()), { folder: 'nanocrew/mockups' });
+  } catch {
+    return url;
+  }
+}
 
 // POST /api/publish — turn a composition into a LIVE Printful sync product and mirror it
 // into the local products/variants tables. The print file is always the upscaled RAW
@@ -118,7 +132,7 @@ export async function POST(req: Request) {
         slug: `${slugify(name)}-${syncProductId}`,
         name,
         descriptionMd: body.description?.trim() || null,
-        imageUrl: comp.previewUrl ?? null,
+        imageUrl: await persistMockup(comp.previewUrl ?? null),
         isPublished: true,
       })
       .returning({ id: schema.products.id, slug: schema.products.slug });
