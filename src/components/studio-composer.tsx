@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 
 import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
@@ -21,11 +22,11 @@ function siteUrlFor(s: StoreRow | undefined): string | null {
   if (!s?.deploymentUrl || s.deploymentUrl.includes('github.com')) return null;
   return s.deploymentUrl;
 }
-type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; isPublished: boolean };
+type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; coverImageUrl?: string | null; isPublished: boolean };
 type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null };
 type Product = { id: string; name: string; imageUrl: string | null; videoUrl: string | null; isPublished: boolean };
-type Draft = { id?: string; title: string; excerpt: string; bodyMd: string };
-const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '' };
+type Draft = { id?: string; title: string; excerpt: string; bodyMd: string; coverImageUrl?: string | null };
+const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '', coverImageUrl: null };
 
 type Insights = { revenueCents: number; orders: number; views30d: number; avgMarginPct: number | null; margins: MarginRow[] };
 type MarginRow = { productId: string; name: string; retailCents: number | null; costCents: number | null; marginCents: number | null; marginPct: number | null };
@@ -53,6 +54,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [credits, setCredits] = useState<number | null>(null);
   const [voiceoverCost, setVoiceoverCost] = useState(25);
   const [genId, setGenId] = useState<string | null>(null); // product currently generating an ad
+  const [uploading, setUploading] = useState(false); // post cover image upload in flight
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -217,6 +219,27 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
     }
   };
 
+  const pickCover = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') return;
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.85 });
+    const a = res.assets?.[0];
+    if (res.canceled || !a?.base64) return;
+    const dataUrl = `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`;
+    setUploading(true);
+    setNote(null);
+    try {
+      const r = await fetch(apiUrl('/api/creator/upload'), { method: 'POST', headers, body: JSON.stringify({ dataUrl }) });
+      const d = (await r.json()) as { url?: string };
+      if (d.url) setDraft((dr) => (dr ? { ...dr, coverImageUrl: d.url } : dr));
+      else setNote('Could not upload the image.');
+    } catch {
+      setNote('Could not upload the image.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const approve = async (rev: Revision) => {
     await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), { method: 'POST', headers });
     await loadRevisions();
@@ -230,7 +253,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
     setBusy(true);
     setNote(null);
     try {
-      const body = JSON.stringify({ storeSlug: active, title: draft.title, excerpt: draft.excerpt, bodyMd: draft.bodyMd, publish });
+      const body = JSON.stringify({ storeSlug: active, title: draft.title, excerpt: draft.excerpt, bodyMd: draft.bodyMd, coverImageUrl: draft.coverImageUrl ?? null, publish });
       const url = draft.id ? apiUrl(`/api/creator/posts/${draft.id}`) : apiUrl('/api/creator/posts');
       const res = await fetch(url, { method: draft.id ? 'PATCH' : 'POST', headers, body });
       if (!res.ok) throw new Error('save failed');
@@ -292,6 +315,15 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
             </View>
           ) : draft ? (
             <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+              {draft.coverImageUrl ? (
+                <Pressable onPress={pickCover} disabled={uploading}>
+                  <Image source={{ uri: draft.coverImageUrl }} style={styles.coverImg} contentFit="cover" />
+                </Pressable>
+              ) : (
+                <Pressable onPress={pickCover} disabled={uploading} style={styles.coverPick}>
+                  <ThemedText type="code" style={styles.dim}>{uploading ? 'uploading…' : '+ add cover image'}</ThemedText>
+                </Pressable>
+              )}
               <TextInput style={styles.input} placeholder="Post title" placeholderTextColor={pal.dim} value={draft.title} onChangeText={(t) => setDraft({ ...draft, title: t })} />
               <TextInput style={styles.input} placeholder="Short excerpt" placeholderTextColor={pal.dim} value={draft.excerpt} onChangeText={(t) => setDraft({ ...draft, excerpt: t })} />
               <TextInput style={[styles.input, styles.body]} placeholder="Write your post… Markdown works." placeholderTextColor={pal.dim} value={draft.bodyMd} onChangeText={(t) => setDraft({ ...draft, bodyMd: t })} multiline />
@@ -479,7 +511,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                     <ThemedText type="code" style={styles.postExcerpt} numberOfLines={1}>{p.excerpt ?? '—'}</ThemedText>
                   </View>
                   <View style={styles.postActions}>
-                    <Pressable onPress={() => setDraft({ id: p.id, title: p.title, excerpt: p.excerpt ?? '', bodyMd: p.bodyMd })} hitSlop={6}>
+                    <Pressable onPress={() => setDraft({ id: p.id, title: p.title, excerpt: p.excerpt ?? '', bodyMd: p.bodyMd, coverImageUrl: p.coverImageUrl ?? null })} hitSlop={6}>
                       <ThemedText type="code" style={styles.dim}>edit</ThemedText>
                     </Pressable>
                     <Pressable onPress={() => mutatePost(p, 'PATCH', { publish: !p.isPublished })} hitSlop={6}>
@@ -583,6 +615,8 @@ function makeStyles(pal: StudioPalette) {
     metric: { flex: 1, backgroundColor: pal.card, borderWidth: 1, borderColor: pal.line, borderRadius: 14, padding: Spacing.four, gap: Spacing.one, marginBottom: Spacing.three },
     metricLabel: { color: pal.dim, fontSize: 10, letterSpacing: 1.5 },
     metricBig: { color: pal.ink, fontSize: 24 },
+    coverImg: { width: '100%', height: 160, borderRadius: 12, marginBottom: Spacing.two },
+    coverPick: { height: 72, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: pal.line, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.two },
     venusBubble: { alignSelf: 'flex-start', maxWidth: '88%', backgroundColor: pal.card, borderWidth: 1, borderColor: pal.line, borderRadius: 14, borderTopLeftRadius: 4, padding: Spacing.three, marginTop: Spacing.two, gap: Spacing.one },
     youBubble: { alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: pal.accent, borderRadius: 14, borderTopRightRadius: 4, padding: Spacing.three, marginTop: Spacing.two },
     bubbleVenusText: { color: pal.ink },
