@@ -56,15 +56,18 @@ Cross-cutting guarantees:
 
 ## Roadmap
 
-### Phase A — Forge reliability (G1)  ·  unblocks everything, partly already agreed
-- Reinstall Playwright/Chromium + `render.mjs` under the **`forge`** user (currently under `root`).
-- **Persistent per-store clone**: `git fetch && checkout main && reset --hard && clean -fd` then branch,
-  instead of `rm -rf && clone` each time. Reuse `node_modules`.
-- **Shared deps** via pnpm content-addressed store (all stores share identical Next deps) → repos go
-  back to ~tiny. (Alt: LRU-evict idle clones.)
-- **Queue + single forge worker**: API route only enqueues (`status:'building'`); a worker on the
-  forge drains one job at a time with a **per-store lock**. Fixes serverless-can't-run-30-min-jobs and
-  multi-user contention. Parallelism later needs a bigger droplet.
+### Phase A — Forge reliability (G1)  ·  unblocks everything
+- ✅ Playwright/Chromium + `render.mjs` reinstalled under the **`forge`** user (was under `root` →
+  screenshots silently no-op'd). Verified rendering as forge.
+- ✅ **Persistent per-store clone**: revise reuses the clone (`git fetch → reset --hard → clean →
+  branch`); `node_modules` is gitignored so it survives. Warm `pnpm install` ≈ 2.3s.
+- ✅ **Shared deps** via pnpm content-addressed store: a 2nd identical store adds ~7 MB (vs ~534 MB
+  with npm); ~100 stores ≈ 1.2 GB not ~53 GB. Build verified clean under pnpm.
+- ✅ **Per-store `flock` lock** in provision + revise (same-store safety).
+- ⏳ **Queue + single forge worker** (remaining): API route only enqueues (`status:'building'`); a
+  worker on the forge drains one job at a time with a **global concurrency cap**. Fixes
+  serverless-can't-run-30-min-jobs and multi-user RAM contention across *different* stores. The
+  per-store lock already covers same-store collisions. Parallelism beyond ~1–2 needs a bigger droplet.
 
 ### Phase B — Lifecycle state machine (G2)
 - Define transitions: `building` (provisioning) → `ready` (preview deployed, creator reviewing) →
