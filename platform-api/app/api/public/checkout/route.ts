@@ -89,6 +89,21 @@ export async function POST(req: Request) {
         },
       })),
       shipping_address_collection: { allowed_countries: ['US', 'CA'] },
+      // Flat-rate shipping so Printful's fulfillment shipping isn't eaten by margin.
+      // SHIPPING_FLAT_CENTS env overrides; Printful US apparel runs ~$4.70-$8.50.
+      shipping_options: [
+        {
+          shipping_rate_data: {
+            display_name: 'Standard shipping',
+            type: 'fixed_amount',
+            fixed_amount: { amount: Number(process.env.SHIPPING_FLAT_CENTS ?? 799), currency: 'usd' },
+            delivery_estimate: {
+              minimum: { unit: 'business_day', value: 5 },
+              maximum: { unit: 'business_day', value: 10 },
+            },
+          },
+        },
+      ],
       metadata: { orderId: order.id, storeSlug: store.slug, storeName: store.name },
       success_url: `${origin}/cart?checkout=success`,
       cancel_url: `${origin}/cart?checkout=cancelled`,
