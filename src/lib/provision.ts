@@ -86,7 +86,9 @@ function buildBrandJson(input: ProvisionInput, cfg: NonNullable<ReturnType<typeo
     vibeKeywords: brand.vibeKeywords,
     products: brand.products,
     social: {},
-    apiBase: '', // platform API not deployed yet — templates fall back to placeholders
+    // The deployed platform API (e.g. https://nanocrew-api.vercel.app). Empty →
+    // templates fall back to placeholder products.
+    apiBase: process.env.PLATFORM_API_BASE ?? '',
     platform: { supabaseUrl: cfg.SUPABASE_URL, supabaseAnonKey: cfg.SUPABASE_ANON_KEY },
   };
 }
