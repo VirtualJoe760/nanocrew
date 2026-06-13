@@ -28,7 +28,7 @@ const COACHING = 'Tap me to talk, circle what you want to change, tell me the ad
 
 type Pt = { x: number; y: number };
 type Critique = { slug: string; token: string; onSent?: () => void };
-type EditItem = { id: string; note: string; regions: string[]; strokes: Pt[][] };
+type EditItem = { id: string; note: string; regions: string[]; strokes: Pt[][]; url: string; width: number };
 
 function host(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -105,6 +105,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   const ref = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState(url); // the page each edit is drawn on (may navigate)
 
   // Document-anchored marks: track the page's live scroll so strokes stay on their section.
   const scrollYRef = useRef(0);
@@ -310,7 +311,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       return;
     }
     const regions = draftStrokes.map((s, i) => draftHits[i] || regionLabel(s, size.w, size.h));
-    const item: EditItem = { id: String(editSeq.current++), note: text || '(no description)', regions, strokes: draftStrokes };
+    const item: EditItem = { id: String(editSeq.current++), note: text || '(no description)', regions, strokes: draftStrokes, url: currentUrl, width: size.w || 390 };
     setEdits((e) => [...e, item]);
     setDraftStrokes([]);
     setDraftHits({});
@@ -357,11 +358,12 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       .map((e, i) => `${i + 1}. ${e.note}${e.regions.length ? `\n   (circled: ${e.regions.join('; ')})` : ''}`)
       .join('\n\n');
     const md = `The creator requested these changes to their live storefront, in their own words:\n\n${body}\n\n(About the page: ${url})`;
+    const annotations = edits.filter((e) => e.strokes.length).map((e) => ({ url: e.url, width: e.width, strokes: e.strokes }));
     try {
       const res = await fetch(apiUrl('/api/creator/revise'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${critique.token}` },
-        body: JSON.stringify({ storeSlug: critique.slug, requestMd: md, screenshots: [] }),
+        body: JSON.stringify({ storeSlug: critique.slug, requestMd: md, annotations }),
       });
       if (!res.ok) throw new Error();
       setEdits([]);
@@ -419,7 +421,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
             source={{ uri: url }}
             onLoadStart={() => setLoading(true)}
             onLoadEnd={() => setLoading(false)}
-            onNavigationStateChange={(s) => setCanGoBack(s.canGoBack)}
+            onNavigationStateChange={(s) => { setCanGoBack(s.canGoBack); if (s.url) setCurrentUrl(s.url); }}
             onMessage={onWebMessage}
             injectedJavaScript={SCROLL_SCRIPT}
             style={styles.web}

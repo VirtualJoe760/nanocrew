@@ -11,6 +11,10 @@ import { notifyRevisionReady } from '@/lib/notify';
 // Env: GITHUB_TOKEN / GITHUB_OWNER / VPS_HOST / VPS_USER (+ optional VPS_SSH_KEY) like
 // provisioning; VERCEL_TOKEN to resolve the branch preview URL.
 
+// One circled change: the page it was drawn on + the strokes (in document coordinates) so
+// the forge can re-render the live page and overlay the marks into an annotated screenshot.
+type Annotation = { url: string; width: number; strokes: { x: number; y: number }[][] };
+
 type ReviseInput = {
   revisionId: string;
   storeId: string;
@@ -18,7 +22,8 @@ type ReviseInput = {
   storeName: string;
   branch: string;
   requestMd: string;
-  screenshots: string[]; // image URLs the creator/Venus annotated
+  screenshots: string[]; // legacy: pre-hosted annotated image URLs (now unused by the app)
+  annotations?: Annotation[]; // circles to render into briefs/screenshots/ on the forge
 };
 
 function config() {
@@ -82,16 +87,20 @@ export async function reviseStorefront(input: ReviseInput): Promise<void> {
   }
   const repo = `store-${input.slug}`;
   const fullRepo = `${cfg.GITHUB_OWNER}/${repo}`;
-  const shotFetches = input.screenshots
-    .map((url, i) => `curl -fsSL "${url.replace(/"/g, '')}" -o "briefs/screenshots/shot-${i + 1}.png" || true`)
-    .join('\n');
+  // Re-render each circled page on the forge and overlay the marks → briefs/screenshots/.
+  // Best-effort: a render hiccup must never block a revision. base64 keeps the payload shell-safe.
+  const annotations = (input.annotations ?? []).filter((a) => a?.url && Array.isArray(a.strokes) && a.strokes.length > 0).slice(0, 8);
+  const annB64 = annotations.length ? Buffer.from(JSON.stringify(annotations)).toString('base64') : '';
+  const renderShots = annB64
+    ? `ANN=$(mktemp); printf '%s' '${annB64}' | base64 -d > "$ANN"; node ~/critique-shot/render.mjs "$ANN" briefs/screenshots > /tmp/${repo}-shots.log 2>&1 || true; rm -f "$ANN"`
+    : '';
   const brief = `# REVISION — ${input.storeName}
 
 The creator requested this change to their live storefront, in their own words:
 
 ${input.requestMd}
 
-${input.screenshots.length ? `Annotated screenshots are in briefs/screenshots/ — the boxes/marks show exactly which areas to change. Look at them.` : ''}
+${annotations.length ? `Annotated screenshots are in briefs/screenshots/ — the gold circles mark exactly which areas to change. Look at them.` : ''}
 
 Read TEMPLATE.md and VOCABULARY.md first (VOCABULARY.md maps everyday phrases to blocks
 and files). Apply ONLY the requested change. Stay inside the allowed edit surface:
@@ -117,10 +126,11 @@ BRIEF="briefs/03-REVISION-$((N+1)).md"
 cat > "$BRIEF" <<'NANOCREW_REVISION_EOF'
 ${brief}
 NANOCREW_REVISION_EOF
-${shotFetches}
+${renderShots}
 npm install --no-audit --no-fund 2>&1 | tail -1
 claude -p "Read $BRIEF and look at any images in briefs/screenshots/, then apply exactly that change. Then run npm run build and fix anything you broke." --dangerously-skip-permissions --max-turns 60 < /dev/null > /tmp/${repo}-revise.log 2>&1 || true
 npm run build > /tmp/${repo}-revise-build.log 2>&1 && echo BUILD_OK || echo BUILD_FAILED
+rm -rf briefs/screenshots
 git add -A
 git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "Revision (review): ${input.requestMd.slice(0, 60).replace(/"/g, "'").replace(/\n/g, ' ')}" || true
 git push -q -u origin ${input.branch}
