@@ -276,7 +276,7 @@ export PATH="$HOME/.local/bin:$PATH"
 [ -f ~/.claude-env ] && source ~/.claude-env
 unset ANTHROPIC_API_KEY
 mkdir -p ~/stores && cd ~/stores
-exec 9>".${repo}.lock"
+exec 9>".forge.lock"
 flock -w 1800 9 || { echo LOCK_TIMEOUT; exit 1; }
 rm -rf ${repo} ${repo}-src
 git clone --depth 1 --filter=blob:none --sparse https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${cfg.TEMPLATES_REPO}.git ${repo}-src

@@ -118,7 +118,7 @@ export PATH="$HOME/.local/bin:$PATH"
 [ -f ~/.claude-env ] && source ~/.claude-env
 unset ANTHROPIC_API_KEY
 mkdir -p ~/stores && cd ~/stores
-exec 9>".${repo}.lock"
+exec 9>".forge.lock"
 flock -w 1800 9 || { echo LOCK_TIMEOUT; exit 1; }
 AUTH="https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git"
 if [ -d ${repo}/.git ]; then
