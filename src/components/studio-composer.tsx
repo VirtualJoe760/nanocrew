@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
@@ -28,11 +28,20 @@ type Product = { id: string; name: string; imageUrl: string | null; videoUrl: st
 type Draft = { id?: string; title: string; excerpt: string; bodyMd: string };
 const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '' };
 
-export function StudioComposer({ visible, onClose, token, onOpenBilling }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void }) {
+type Insights = { revenueCents: number; orders: number; views30d: number; avgMarginPct: number | null; margins: MarginRow[] };
+type MarginRow = { productId: string; name: string; retailCents: number | null; costCents: number | null; marginCents: number | null; marginPct: number | null };
+type OrderRow = { id: string; status: string; totalCents: number; createdAt: string; storeSlug?: string };
+type ConsoleTab = 'edit' | 'posts' | 'sell' | 'insights';
+const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', sell: 'Sell', insights: 'Insights' };
+
+export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, brandName }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; slug?: string; brandName?: string }) {
   const pal = useStudioPalette();
   const styles = useMemo(() => makeStyles(pal), [pal]);
+  const [tab, setTab] = useState<ConsoleTab>('edit');
+  const [insights, setInsights] = useState<Insights | null>(null);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
-  const [active, setActive] = useState<string | null>(null);
+  const [active, setActive] = useState<string | null>(slug ?? null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [change, setChange] = useState('');
@@ -56,13 +65,41 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
       const r = await fetch(apiUrl('/api/creator/stats'), { headers: { Authorization: `Bearer ${token}` } });
       const d = (await r.json()) as { stores?: StoreRow[] };
       setStores(d.stores ?? []);
-      setActive((a) => a ?? d.stores?.[0]?.slug ?? null);
+      setActive((a) => slug ?? a ?? d.stores?.[0]?.slug ?? null);
     } catch {
       setNote('Could not reach your store.');
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, slug]);
+
+  const loadInsights = useCallback(async () => {
+    if (!active) return;
+    try {
+      const [statsRes, ordersRes, marginsRes] = await Promise.all([
+        fetch(apiUrl('/api/creator/stats'), { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(apiUrl('/api/creator/orders'), { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(apiUrl('/api/creator/margins'), { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const sd = (await statsRes.json()) as { stores?: { slug: string; name: string; revenueCents: number; orders: number; views30d: number }[] };
+      const store = sd.stores?.find((s) => s.slug === active);
+      const od = (await ordersRes.json()) as { orders?: OrderRow[] };
+      const md = (await marginsRes.json()) as { products?: (MarginRow & { storeName: string })[] };
+      const name = brandName ?? store?.name;
+      const mine = (md.products ?? []).filter((m) => m.storeName === name);
+      const withCost = mine.filter((m) => m.marginPct != null);
+      setInsights({
+        revenueCents: store?.revenueCents ?? 0,
+        orders: store?.orders ?? 0,
+        views30d: store?.views30d ?? 0,
+        avgMarginPct: withCost.length ? Math.round(withCost.reduce((n, m) => n + (m.marginPct ?? 0), 0) / withCost.length) : null,
+        margins: mine,
+      });
+      setOrders((od.orders ?? []).filter((o) => o.storeSlug === active).slice(0, 10));
+    } catch {
+      /* leave as-is */
+    }
+  }, [active, token, brandName]);
 
   const loadPosts = useCallback(async () => {
     if (!active) return;
@@ -144,7 +181,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
   };
 
   useEffect(() => {
+    if (slug) setActive(slug);
+  }, [slug]);
+  useEffect(() => {
     if (visible) {
+      setTab('edit');
       void loadStores();
       void loadCredits();
     }
@@ -154,8 +195,9 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
       void loadPosts();
       void loadRevisions();
       void loadProducts();
+      void loadInsights();
     }
-  }, [visible, active, loadPosts, loadRevisions, loadProducts]);
+  }, [visible, active, loadPosts, loadRevisions, loadProducts, loadInsights]);
 
   const approve = async (rev: Revision) => {
     await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), { method: 'POST', headers });
@@ -208,8 +250,8 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
       <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
         <View style={styles.sheet}>
           <View style={styles.headerRow}>
-            <ThemedText type="code" style={styles.eyebrow}>
-              {draft ? '// WRITE A POST' : '// MANAGE YOUR STORE'}
+            <ThemedText type="subtitle" style={styles.consoleTitle} numberOfLines={1}>
+              {draft ? 'Write a post' : (brandName ?? stores.find((s) => s.slug === active)?.name ?? 'Brand console')}
             </ThemedText>
             <View style={{ flex: 1 }} />
             <Pressable onPress={draft ? () => { setDraft(null); setNote(null); } : onClose} hitSlop={12}>
@@ -247,7 +289,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
             </ScrollView>
           ) : (
             <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-              {stores.length > 1 ? (
+              {!slug && stores.length > 1 ? (
                 <View style={styles.pills}>
                   {stores.map((s) => (
                     <Pressable key={s.slug} onPress={() => setActive(s.slug)} style={[styles.pill, active === s.slug && styles.pillOn]}>
@@ -257,6 +299,16 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
                 </View>
               ) : null}
 
+              <View style={styles.tabBar}>
+                {(['edit', 'posts', 'sell', 'insights'] as const).map((t) => (
+                  <Pressable key={t} onPress={() => setTab(t)} style={[styles.tabItem, tab === t && styles.tabItemOn]}>
+                    <ThemedText type="code" style={tab === t ? styles.tabTextOn : styles.tabText}>{TAB_LABEL[t]}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+
+              {tab === 'edit' ? (
+                <>
               {/* Live site preview */}
               {siteUrl ? (
                 <>
@@ -281,8 +333,8 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
                 </View>
               ) : (
                 <>
-                  <ThemedText type="code" style={styles.sectionLabel}>IMPROVE YOUR SITE</ThemedText>
-                  <ThemedText type="small" style={styles.dim}>Describe a change in your own words — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; Venus builds it on a preview first; nothing goes live until you approve.</ThemedText>
+                  <ThemedText type="code" style={styles.sectionLabel}>ASK VENUS TO EDIT</ThemedText>
+                  <ThemedText type="small" style={styles.dim}>Tell Venus what to change in plain words — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; She builds it on a preview first; nothing goes live until you approve.</ThemedText>
                   <TextInput style={[styles.input, styles.change]} placeholder="What would you like to change?" placeholderTextColor={pal.dim} value={change} onChangeText={(t) => { setChange(t); setChangeState('idle'); }} multiline />
                   {changeState === 'queued' ? (
                     <ThemedText type="small" style={styles.green}>On it — Venus is building a preview. We&rsquo;ll notify you when it&rsquo;s ready to review below.</ThemedText>
@@ -324,9 +376,12 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
                   ))}
                 </>
               ) : null}
+                </>
+              ) : null}
 
-              {/* Video ads — turn a product photo into a feed-ready voiceover ad */}
-              {products.length ? (
+              {/* Sell — turn a product photo into a feed-ready voiceover ad */}
+              {tab === 'sell' ? (
+                products.length ? (
                 <>
                   <View style={[styles.sectionRow, { marginTop: Spacing.five }]}>
                     <ThemedText type="code" style={styles.sectionLabel}>VIDEO ADS</ThemedText>
@@ -366,10 +421,14 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
                     </View>
                   ))}
                 </>
+                ) : (
+                  <ThemedText type="small" style={styles.dim}>No products yet — create a drop in the Design tab to make video ads.</ThemedText>
+                )
               ) : null}
 
-              {/* Journal */}
-              <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.five }]}>JOURNAL</ThemedText>
+              {/* Posts — the brand journal */}
+              {tab === 'posts' ? (
+                <>
               <Pressable onPress={() => { setDraft({ ...EMPTY }); setNote(null); }} style={styles.primaryBtn}>
                 <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Write a post</ThemedText>
               </Pressable>
@@ -399,6 +458,64 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling }: { vis
                 </View>
               ))}
               {!posts.length ? <ThemedText type="small" style={styles.dim}>No posts yet.</ThemedText> : null}
+                </>
+              ) : null}
+
+              {/* Insights — this brand's analytics + earnings */}
+              {tab === 'insights' ? (
+                <>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metric}>
+                      <ThemedText type="code" style={styles.metricLabel}>REVENUE</ThemedText>
+                      <ThemedText type="subtitle" style={styles.metricBig}>${((insights?.revenueCents ?? 0) / 100).toFixed(2)}</ThemedText>
+                    </View>
+                    <View style={styles.metric}>
+                      <ThemedText type="code" style={styles.metricLabel}>ORDERS</ThemedText>
+                      <ThemedText type="subtitle" style={styles.metricBig}>{insights?.orders ?? 0}</ThemedText>
+                    </View>
+                  </View>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metric}>
+                      <ThemedText type="code" style={styles.metricLabel}>VIEWS · 30D</ThemedText>
+                      <ThemedText type="subtitle" style={styles.metricBig}>{(insights?.views30d ?? 0).toLocaleString()}</ThemedText>
+                    </View>
+                    <View style={styles.metric}>
+                      <ThemedText type="code" style={styles.metricLabel}>AVG MARGIN</ThemedText>
+                      <ThemedText type="subtitle" style={styles.metricBig}>{insights?.avgMarginPct != null ? `${insights.avgMarginPct}%` : '—'}</ThemedText>
+                    </View>
+                  </View>
+
+                  {insights?.margins.length ? (
+                    <>
+                      <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>PRODUCT MARGINS</ThemedText>
+                      {insights.margins.map((m) => (
+                        <View key={m.productId} style={styles.revRow}>
+                          <ThemedText type="small" style={[styles.white, { flex: 1 }]} numberOfLines={1}>{m.name}</ThemedText>
+                          {m.marginCents != null ? (
+                            <ThemedText type="small" style={styles.green}>${(m.marginCents / 100).toFixed(2)} · {m.marginPct}%</ThemedText>
+                          ) : (
+                            <ThemedText type="code" style={styles.dim}>cost n/a</ThemedText>
+                          )}
+                        </View>
+                      ))}
+                    </>
+                  ) : null}
+
+                  {orders.length ? (
+                    <>
+                      <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>RECENT ORDERS</ThemedText>
+                      {orders.map((o) => (
+                        <View key={o.id} style={styles.revRow}>
+                          <ThemedText type="small" style={[styles.white, { flex: 1 }]}>${(o.totalCents / 100).toFixed(2)}</ThemedText>
+                          <ThemedText type="code" style={styles.dim}>{o.status.replace(/_/g, ' ')}</ThemedText>
+                        </View>
+                      ))}
+                    </>
+                  ) : (
+                    <ThemedText type="small" style={[styles.dim, { marginTop: Spacing.three }]}>No orders yet — share your store to make the first sale.</ThemedText>
+                  )}
+                </>
+              ) : null}
             </ScrollView>
           )}
         </View>
@@ -415,6 +532,16 @@ function makeStyles(pal: StudioPalette) {
     sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: pal.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: pal.line, overflow: 'hidden' },
     headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },
     eyebrow: { color: pal.accent, letterSpacing: 2 },
+    consoleTitle: { color: pal.ink, fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }), maxWidth: 220 },
+    tabBar: { flexDirection: 'row', gap: Spacing.one, marginBottom: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
+    tabItem: { flex: 1, alignItems: 'center', paddingVertical: Spacing.two, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+    tabItemOn: { borderBottomColor: pal.accent },
+    tabText: { color: pal.dim, fontSize: 11, letterSpacing: 0.5 },
+    tabTextOn: { color: pal.accent, fontSize: 11, letterSpacing: 0.5 },
+    metricRow: { flexDirection: 'row', gap: Spacing.three },
+    metric: { flex: 1, backgroundColor: pal.card, borderWidth: 1, borderColor: pal.line, borderRadius: 14, padding: Spacing.four, gap: Spacing.one, marginBottom: Spacing.three },
+    metricLabel: { color: pal.dim, fontSize: 10, letterSpacing: 1.5 },
+    metricBig: { color: pal.ink, fontSize: 24 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.six },
     scroll: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
     pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.two },

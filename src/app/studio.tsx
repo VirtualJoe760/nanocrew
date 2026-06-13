@@ -658,6 +658,7 @@ export default function StudioScreen() {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [showCockpit, setShowCockpit] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
+  const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
   const [hasStore, setHasStore] = useState(false);
   const [paywall, setPaywall] = useState<'subscription_required' | 'brand_limit' | 'manage' | null>(null);
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
@@ -1153,7 +1154,7 @@ export default function StudioScreen() {
         {session ? (
           <>
             <EarningsCockpit visible={showCockpit} onClose={() => setShowCockpit(false)} token={session.access_token} />
-            <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} />
+            <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
             <Paywall visible={!!paywall} onClose={() => setPaywall(null)} token={session.access_token} reason={paywall} />
           </>
         ) : null}
@@ -1192,7 +1193,7 @@ export default function StudioScreen() {
         ) : mode === 'dashboard' ? (
           <StudioDashboard
             token={session.access_token}
-            onEditBrand={() => setShowComposer(true)}
+            onEditBrand={(slug, name) => { setConsoleBrand({ slug, name }); setShowComposer(true); }}
             onNewBrand={onNewBrand}
             onOpenBilling={() => setPaywall('manage')}
           />

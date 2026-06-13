@@ -98,7 +98,7 @@ export function StudioDashboard({
   onOpenBilling,
 }: {
   token: string;
-  onEditBrand: (slug: string) => void;
+  onEditBrand: (slug: string, name: string) => void;
   onNewBrand: () => void;
   onOpenBilling?: () => void;
 }) {
@@ -155,7 +155,7 @@ export function StudioDashboard({
       ) : (
         <>
           {stores.map((store) => (
-            <Pressable key={store.slug} onPress={() => onEditBrand(store.slug)} style={s.brandCard}>
+            <Pressable key={store.slug} onPress={() => onEditBrand(store.slug, store.name)} style={s.brandCard}>
               <View>
                 <BrandThumbnail name={store.name} ogImageUrl={store.ogImageUrl} productImages={store.productImages} p={p} />
                 <View style={s.editTag}>
