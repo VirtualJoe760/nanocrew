@@ -64,10 +64,16 @@ Cross-cutting guarantees:
 - ✅ **Shared deps** via pnpm content-addressed store: a 2nd identical store adds ~7 MB (vs ~534 MB
   with npm); ~100 stores ≈ 1.2 GB not ~53 GB. Build verified clean under pnpm.
 - ✅ **Per-store `flock` lock** in provision + revise (same-store safety).
-- ⏳ **Queue + single forge worker** (remaining): API route only enqueues (`status:'building'`); a
-  worker on the forge drains one job at a time with a **global concurrency cap**. Fixes
-  serverless-can't-run-30-min-jobs and multi-user RAM contention across *different* stores. The
-  per-store lock already covers same-store collisions. Parallelism beyond ~1–2 needs a bigger droplet.
+- ✅ **Global serialization**: the per-store lock is now a single global `~/stores/.forge.lock` in
+  provision + revise → never two forge jobs at once (RAM-safe).
+- ✅ **Queue + single forge worker**: `/api/creator/revise` only enqueues (`store_revisions`
+  `status:'building'`, annotations in the `screenshots` jsonb); a persistent **forge worker**
+  (`forge-worker/`, systemd `nanocrew-forge-worker` on the droplet) drains the queue one job at a time
+  and runs the pipeline **locally** (no SSH, serverless-safe). Verified end-to-end: enqueue → worker
+  picks up → local clone/pnpm/Claude/build/push → preview → `ready`. Provisioning still fires from the
+  app server but shares the global lock. Parallelism beyond 1 needs a bigger droplet.
+
+**Phase A is complete.** ✅
 
 ### Phase B — Lifecycle state machine (G2)
 - Define transitions: `building` (provisioning) → `ready` (preview deployed, creator reviewing) →
