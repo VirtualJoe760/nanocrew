@@ -151,14 +151,6 @@ for (const idea of ideas) {
     top: Math.round(Math.min(front.areaHeight * 0.08, front.areaHeight - h)),
   };
 
-  log(`  ${idea.name}: rendering Printful mockup…`);
-  await post('/api/mockup', {
-    compositionId: comp.composition.id,
-    templateKey: String(blank),
-    variantId: pa.variantId,
-    placements: [{ placement: front.placement, designId: gen.id, position }],
-  });
-
   const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
   const bySize = (a, b) => SIZE_ORDER.indexOf(a.size) - SIZE_ORDER.indexOf(b.size);
   let colorVars = [];
@@ -168,6 +160,16 @@ for (const idea of ideas) {
   }
   if (!colorVars.length)
     colorVars = vars.variants.filter((v) => v.color === vars.variants[0].color).sort(bySize).slice(0, 4);
+
+  // Render the mockup on the color shoppers will actually buy — Printful's
+  // default mockup garment is often a different colorway.
+  log(`  ${idea.name}: rendering Printful mockup (${colorVars[0]?.color})…`);
+  await post('/api/mockup', {
+    compositionId: comp.composition.id,
+    templateKey: String(blank),
+    variantId: colorVars[0]?.id ?? pa.variantId,
+    placements: [{ placement: front.placement, designId: gen.id, position }],
+  });
 
   log(`  ${idea.name}: publishing (${colorVars.length} ${colorVars[0]?.color} variants)…`);
   await post('/api/publish', {
