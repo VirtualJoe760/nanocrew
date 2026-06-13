@@ -229,6 +229,7 @@ export const products = pgTable(
     category: text('category'), // free text — full Printful catalog is broad
     imageUrl: text('image_url'),
     videoUrl: text('video_url'), // Veo-generated product video for the feed
+    modelShots: jsonb('model_shots').$type<string[]>().default([]), // Nano Banana on-model gallery
     isPublished: boolean('is_published').notNull().default(false),
     shareCount: integer('share_count').notNull().default(0), // social proof on the feed
     createdAt: timestamp('created_at').notNull().defaultNow(),

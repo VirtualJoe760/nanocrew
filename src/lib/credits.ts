@@ -11,6 +11,7 @@ export const CREDIT_COSTS = {
   design_generate: 5,
   logo_generate: 8,
   tryon: 6,
+  model_shots: 20, // ~3 on-model renders
   revision: 60,
 } as const;
 

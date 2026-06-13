@@ -24,7 +24,7 @@ function siteUrlFor(s: StoreRow | undefined): string | null {
 }
 type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; coverImageUrl?: string | null; isPublished: boolean };
 type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null };
-type Product = { id: string; name: string; imageUrl: string | null; videoUrl: string | null; isPublished: boolean };
+type Product = { id: string; name: string; imageUrl: string | null; videoUrl: string | null; modelShots?: string[] | null; isPublished: boolean };
 type Draft = { id?: string; title: string; excerpt: string; bodyMd: string; coverImageUrl?: string | null };
 const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '', coverImageUrl: null };
 
@@ -180,6 +180,31 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
       await Promise.all([loadProducts(), loadCredits()]);
     } catch {
       setNote('Could not create the video ad — your credits were not charged.');
+    } finally {
+      setGenId(null);
+    }
+  };
+
+  const makeModelShots = async (p: Product) => {
+    if (genId) return;
+    setGenId(p.id);
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl('/api/creator/model-shots'), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ productId: p.id }),
+      });
+      const d = (await res.json()) as { modelShots?: string[]; error?: string; needed?: number; balance?: number };
+      if (res.status === 402) {
+        setCredits(d.balance ?? credits);
+        setNote(`Not enough credits — on-model shots cost ${d.needed ?? 20}.`);
+        return;
+      }
+      if (!res.ok || !d.modelShots?.length) throw new Error(d.error ?? 'failed');
+      await Promise.all([loadProducts(), loadCredits()]);
+    } catch {
+      setNote('Could not make on-model shots — your credits were not charged.');
     } finally {
       setGenId(null);
     }
@@ -473,16 +498,21 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                       )}
                       <View style={{ flex: 1 }}>
                         <ThemedText type="small" style={styles.white} numberOfLines={1}>{p.name}</ThemedText>
-                        <ThemedText type="code" style={p.videoUrl ? styles.green : styles.dim}>
-                          {p.videoUrl ? 'has a video ad' : 'no video ad yet'}
+                        <ThemedText type="code" style={styles.dim}>
+                          {p.videoUrl ? 'video ad ✓' : 'no video'} · {p.modelShots?.length ? `${p.modelShots.length} model shots ✓` : 'no model shots'}
                         </ThemedText>
                       </View>
                       {genId === p.id ? (
                         <ActivityIndicator size="small" color={pal.accent} />
                       ) : (
-                        <Pressable onPress={() => makeVideoAd(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
-                          <ThemedText type="code" style={styles.adBtnText}>{p.videoUrl ? 'remake' : `create · ${voiceoverCost}`}</ThemedText>
-                        </Pressable>
+                        <View style={styles.adActions}>
+                          <Pressable onPress={() => makeModelShots(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
+                            <ThemedText type="code" style={styles.adBtnText}>{p.modelShots?.length ? 'model ↻' : 'model · 20'}</ThemedText>
+                          </Pressable>
+                          <Pressable onPress={() => makeVideoAd(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
+                            <ThemedText type="code" style={styles.adBtnText}>{p.videoUrl ? 'video ↻' : `video · ${voiceoverCost}`}</ThemedText>
+                          </Pressable>
+                        </View>
                       )}
                     </View>
                   ))}
@@ -635,6 +665,7 @@ function makeStyles(pal: StudioPalette) {
     adRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
     adThumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: pal.surface },
     adThumbEmpty: { borderWidth: 1, borderColor: pal.line },
+    adActions: { gap: Spacing.one, alignItems: 'flex-end' },
     adBtn: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 999, borderWidth: 1, borderColor: pal.line },
     adBtnText: { color: pal.accent, fontSize: 11, letterSpacing: 0.5 },
     previewFrame: { height: 200, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: pal.line, backgroundColor: pal.surface },
