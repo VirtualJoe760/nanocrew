@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -18,7 +19,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { BottomTabInset, Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiFetch, apiUrl } from '@/lib/api';
 import { signInWithProvider, type OAuthProvider } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
 
@@ -99,6 +100,31 @@ export default function AccountScreen() {
     }
   };
 
+  const deleteAccount = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await apiFetch('/api/me', { method: 'DELETE' });
+      if (!r.ok) throw new Error('Could not delete account');
+      await supabase.auth.signOut();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete account');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account, brands, designs, and data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void deleteAccount() },
+      ],
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.flex}>
@@ -158,6 +184,12 @@ export default function AccountScreen() {
                       Sign out
                     </ThemedText>
                   </View>
+                </Pressable>
+
+                <Pressable onPress={confirmDelete} disabled={busy}>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.deleteLink}>
+                    Delete account
+                  </ThemedText>
                 </Pressable>
               </>
             ) : (
@@ -252,6 +284,7 @@ const styles = StyleSheet.create({
   appleButton: { backgroundColor: '#000' },
   appleText: { color: '#fff' },
   signOut: { marginTop: Spacing.four },
+  deleteLink: { textAlign: 'center', marginTop: Spacing.three, textDecorationLine: 'underline' },
   divider: { textAlign: 'center', marginVertical: Spacing.one },
   section: { gap: Spacing.two, marginTop: Spacing.three },
   storeRow: { padding: Spacing.three, borderRadius: Spacing.two, gap: 2 },

@@ -51,7 +51,11 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
 - [ ] **Apple IAP** must sell in-app credits/subscriptions on iOS (Apple rejects Stripe for digital
   goods). Configure App Store Connect consumables + `APPLE_IAP_SHARED_SECRET`, enable `IAP_ENABLED`.
 - [ ] App icon, splash, App Store screenshots/metadata, privacy nutrition labels, age rating.
-- [ ] Legal: **Privacy Policy + Terms** URLs; account/data deletion path.
+- [x] **Account/data deletion path** ✅ Code done (2026-06-13) — "Delete account" in Account →
+  `DELETE /api/me` wipes the creator + all cascaded data; best-effort deletes the Supabase auth
+  identity when `SUPABASE_SERVICE_ROLE_KEY` is set (set it so the auth user is removed too).
+  *Note: live Printful products + active Stripe subs aren't auto-cancelled — handle out of band.*
+- [ ] Legal: **Privacy Policy + Terms** URLs (host them; link from the app/App Store/Meta).
 
 ## 🟠 Required infrastructure / env
 Set in `.env.local` (dev) **and** the Vercel projects (app server + `platform-api`). Provisioning
@@ -59,7 +63,7 @@ Set in `.env.local` (dev) **and** the Vercel projects (app server + `platform-ap
 
 | Group | Vars |
 |---|---|
-| Data/auth | `DATABASE_URL`, `SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` |
+| Data/auth | `DATABASE_URL`, `SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (auth-user deletion) |
 | AI | `GOOGLE_GENAI_API_KEY` (or `GEMINI_API_KEY`), `ELEVENLABS_API_KEY` |
 | Media | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` |
 | Commerce | `PRINTFUL_API_KEY`, `PRINTFUL_STORE_ID`, `PRINTFUL_CONFIRM_ORDERS=1`, `SHIPPING_FLAT_CENTS` |
