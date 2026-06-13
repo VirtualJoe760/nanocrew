@@ -226,6 +226,20 @@ export async function createCreditPackCheckout(creatorId: string, email: string,
   return session.url as string;
 }
 
+/** A Stripe Customer Portal URL where the creator can manage/cancel/update their plan +
+ *  card. Returns null if they have no Stripe customer yet (never subscribed/topped up). */
+export async function createBillingPortalSession(creatorId: string): Promise<string | null> {
+  const [sub] = await db
+    .select({ stripeCustomerId: schema.subscriptions.stripeCustomerId })
+    .from(schema.subscriptions)
+    .where(eq(schema.subscriptions.creatorId, creatorId))
+    .limit(1);
+  if (!sub?.stripeCustomerId) return null;
+  const { cancel } = urls();
+  const session = await stripePost('/billing_portal/sessions', { customer: sub.stripeCustomerId, return_url: cancel });
+  return (session.url as string) ?? null;
+}
+
 /** Stores referenced elsewhere — kept here so callers can show "2 of 3 brands". */
 export async function brandsOwnedIn(creatorIds: string[]): Promise<Record<string, number>> {
   if (!creatorIds.length) return {};

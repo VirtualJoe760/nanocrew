@@ -31,9 +31,9 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   data-deletion URL, category, review. (Task #18)
 
 ## 3. Web billing portal
-- 🟡 **`nanocrew.app/account`** — Account + Studio link to a web billing portal (`BILLING_URL`) that
-  isn't built yet. The Paywall's in-app Stripe Checkout covers subscribe/top-up; a Stripe **Customer
-  Portal** link (manage/cancel/update card) still needs wiring. (Task #14)
+- 🟢 **Billing management** — resolved: the Account "Subscription & billing" button now opens a
+  Stripe **Customer Portal** session (`/api/creator/billing/portal`) to manage/cancel/update card +
+  view invoices. The Paywall's in-app Checkout covers subscribe/top-up. (Task #14)
 
 ## 4. Unbuilt product features
 - ⚪ **Product-page model gallery** — on-model shots (Nano Banana) for product pages + richer feed.

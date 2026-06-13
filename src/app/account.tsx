@@ -23,9 +23,6 @@ import { apiFetch, apiUrl } from '@/lib/api';
 import { signInWithProvider, type OAuthProvider } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
 
-// Billing lives on the web portal (Stripe) — never in the app (Apple IAP avoidance).
-const BILLING_URL = 'https://nanocrew.app/account';
-
 type StoreRow = { id: string; name: string; slug: string; status: string };
 
 export default function AccountScreen() {
@@ -114,6 +111,21 @@ export default function AccountScreen() {
     }
   };
 
+  const openBilling = async () => {
+    setError(null);
+    try {
+      const r = await apiFetch('/api/creator/billing/portal', { method: 'POST' });
+      const d = (await r.json()) as { url?: string };
+      if (r.ok && d.url) {
+        Linking.openURL(d.url).catch(() => {});
+        return;
+      }
+    } catch {
+      /* fall through */
+    }
+    setError('No active billing yet — subscribe from Studio first.');
+  };
+
   const confirmDelete = () => {
     Alert.alert(
       'Delete account?',
@@ -169,11 +181,11 @@ export default function AccountScreen() {
                   )}
                 </View>
 
-                <Pressable onPress={() => Linking.openURL(BILLING_URL).catch(() => {})}>
+                <Pressable onPress={openBilling} disabled={busy}>
                   <ThemedView type="backgroundElement" style={styles.button}>
                     <ThemedText type="smallBold">Subscription & billing ↗</ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Managed on the web portal
+                      Manage your plan, card & invoices
                     </ThemedText>
                   </ThemedView>
                 </Pressable>
