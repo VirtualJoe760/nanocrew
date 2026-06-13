@@ -36,10 +36,12 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   view invoices. The Paywall's in-app Checkout covers subscribe/top-up. (Task #14)
 
 ## 4. Unbuilt product features
-- ⚪ **Product-page model gallery** — on-model shots (Nano Banana) for product pages + richer feed.
-  (Task #31)
+- 🟢 **Product-page model gallery** — done (Task #31): `products.model_shots` + `/api/creator/model-shots`
+  (Nano Banana, credit-gated) + Sell-tab trigger; surfaced on the storefront product page (all 4 templates)
+  via the public catalog. Generating spends real AI credits — validate on one product.
 - ⚪ **Veo model videos on websites** + a featured video gallery on the sites. (Task #33)
-- ⚪ **Template polish** — CSS animations / premium motion in the 4 storefront templates. (Task #32)
+- 🟢 **Template polish** — done (Task #32): dependency-free premium-motion layer (smooth scroll,
+  transitions, image hover-zoom, page-entrance fade) in all 4 templates' `globals.css`.
 - 🟢 **In-app platform admin** — done: Account → "Platform admin" (admin emails only) opens a
   metrics + all-stores overview. (Task #25)
 - 🟡 **Creator /admin on the brand websites** — the public creator endpoints + beacon exist; the
