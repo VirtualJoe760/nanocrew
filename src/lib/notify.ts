@@ -27,8 +27,11 @@ export async function notifyRevisionReady(input: { storeId: string; storeName: s
       .where(eq(schema.stores.id, input.storeId))
       .limit(1);
     if (!store) return;
-    // pushTokens column is added with device registration; tolerate its absence.
-    const tokens: string[] = [];
+    const rows = await db
+      .select({ token: schema.deviceTokens.token })
+      .from(schema.deviceTokens)
+      .where(eq(schema.deviceTokens.creatorId, store.creatorId));
+    const tokens = rows.map((r) => r.token);
     const title = `${input.storeName} — changes ready`;
     const body = 'Your update is on a preview. Open Studio to review and publish it.';
     if (tokens.length) await sendExpoPush(tokens, title, body, { kind: 'revision_ready', storeId: input.storeId });
