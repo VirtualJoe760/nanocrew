@@ -15,7 +15,6 @@
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from '../src/lib/db';
-import { reviseStorefront } from '../src/lib/revise';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -50,24 +49,30 @@ async function main() {
     .values({ storeId: store.id, requestMd, screenshots: [], status: 'building', branch })
     .returning({ id: schema.storeRevisions.id });
 
-  console.log(`revision ${rev.id} → branch ${branch}; running the forge (Claude on the VPS — a few minutes)…\n`);
-  await reviseStorefront({
-    revisionId: rev.id,
-    storeId: store.id,
-    slug: store.slug,
-    storeName: store.name,
-    branch,
-    requestMd,
-    screenshots: [],
-  });
+  console.log(`enqueued revision ${rev.id} → branch ${branch}; the forge worker will pick it up (a few minutes)…\n`);
 
-  const [done] = await db
-    .select({ status: schema.storeRevisions.status, previewUrl: schema.storeRevisions.previewUrl, errorMsg: schema.storeRevisions.errorMsg })
-    .from(schema.storeRevisions)
-    .where(eq(schema.storeRevisions.id, rev.id));
-  if (done?.status === 'ready') console.log(`\n✅ ready — review at: ${done.previewUrl ?? '(branch pushed; preview URL not resolved)'}`);
-  else if (done?.status === 'failed') console.log(`\n❌ failed — ${done.errorMsg ?? 'unknown error'}`);
-  else console.log(`\nstatus: ${done?.status ?? 'unknown'}`);
+  // Poll until the forge worker finishes the job.
+  const started = Date.now();
+  const MAX = 30 * 60 * 1000;
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 10_000));
+    const [s] = await db
+      .select({ status: schema.storeRevisions.status, previewUrl: schema.storeRevisions.previewUrl, errorMsg: schema.storeRevisions.errorMsg })
+      .from(schema.storeRevisions)
+      .where(eq(schema.storeRevisions.id, rev.id));
+    if (!s || s.status === 'building') {
+      process.stdout.write('.');
+      if (Date.now() - started > MAX) {
+        console.log('\n(timed out waiting on the worker)');
+        break;
+      }
+      continue;
+    }
+    if (s.status === 'ready') console.log(`\n✅ ready — review at: ${s.previewUrl ?? '(branch pushed; preview URL not resolved)'}`);
+    else if (s.status === 'failed') console.log(`\n❌ failed — ${s.errorMsg ?? 'unknown error'}`);
+    else console.log(`\nstatus: ${s.status}`);
+    break;
+  }
   process.exit(0);
 }
 
