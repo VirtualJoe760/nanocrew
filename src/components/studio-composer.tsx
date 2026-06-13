@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 
 import { SitePreview } from '@/components/site-preview';
@@ -14,7 +13,7 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 // words (→ forge revision) and write journal posts. Calls the same creator endpoints
 // the brand-site /admin uses. Opens from the Studio header. Theme-aware.
 
-type StoreRow = { slug: string; name: string; deploymentUrl?: string | null };
+type StoreRow = { slug: string; name: string; deploymentUrl?: string | null; ogImageUrl?: string | null };
 
 /** The public storefront URL — only when a real site is deployed. A brand can live on
  *  the Nanocrew shop with no website, so we never fabricate a URL that would 404. */
@@ -57,7 +56,9 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [note, setNote] = useState<string | null>(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const siteUrl = siteUrlFor(stores.find((s) => s.slug === active));
+  const activeStore = stores.find((s) => s.slug === active);
+  const siteUrl = siteUrlFor(activeStore);
+  const ogImageUrl = activeStore?.ogImageUrl ?? null;
 
   const loadStores = useCallback(async () => {
     setLoading(true);
@@ -314,7 +315,13 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                 <>
                   <ThemedText type="code" style={styles.sectionLabel}>YOUR SITE</ThemedText>
                   <Pressable onPress={() => setPreviewTarget(siteUrl)} style={styles.previewFrame}>
-                    <WebView source={{ uri: siteUrl }} style={styles.previewWeb} pointerEvents="none" scrollEnabled={false} />
+                    {ogImageUrl ? (
+                      <Image source={{ uri: ogImageUrl }} style={styles.previewImg} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.previewImg, styles.previewFallback]}>
+                        <ThemedText type="subtitle" style={styles.previewFallbackText} numberOfLines={2}>{brandName ?? activeStore?.name}</ThemedText>
+                      </View>
+                    )}
                     <View style={styles.previewTap}>
                       <ThemedText type="code" style={styles.previewTapText}>tap to explore your live site →</ThemedText>
                     </View>
@@ -562,8 +569,10 @@ function makeStyles(pal: StudioPalette) {
     adThumbEmpty: { borderWidth: 1, borderColor: pal.line },
     adBtn: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 999, borderWidth: 1, borderColor: pal.line },
     adBtnText: { color: pal.accent, fontSize: 11, letterSpacing: 0.5 },
-    previewFrame: { height: 240, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: pal.line, backgroundColor: '#fff' },
-    previewWeb: { flex: 1, opacity: 0.99 },
+    previewFrame: { height: 200, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: pal.line, backgroundColor: pal.surface },
+    previewImg: { flex: 1 },
+    previewFallback: { alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
+    previewFallbackText: { color: pal.ink, textAlign: 'center' },
     previewTap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: Spacing.two, alignItems: 'center', backgroundColor: 'rgba(6,11,22,0.82)' },
     previewTapText: { color: pal.accent, fontSize: 11, letterSpacing: 0.5 },
     revRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
