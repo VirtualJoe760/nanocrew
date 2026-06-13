@@ -1,28 +1,30 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, type SharedValue, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 // Venus's voice orb for the site-critique flow — a self-contained, audio-reactive bloom.
-// Calm when idle; breathes and swells with `level` (0..1, from the mic meter) while `active`.
-// Deliberately lighter than the Studio nucleus (no shared state). Tap to toggle listening.
+// Calm when idle; breathes and swells with the live audio `level` while `active` — her voice
+// while she speaks, yours while she listens. Deliberately lighter than the Studio nucleus.
+// `level` is a reanimated SharedValue (0..1) so it follows audio with no per-frame re-renders.
 
 const GOLD = '#c9a86a';
 
 export function VenusOrb({
   active,
-  level = 0,
+  level,
   size = 64,
   onPress,
 }: {
   active: boolean;
-  level?: number;
+  level?: SharedValue<number>;
   size?: number;
   onPress?: () => void;
 }) {
   const breathe = useSharedValue(0);
   const spin = useSharedValue(0);
-  const lvl = useSharedValue(0);
+  const fallback = useSharedValue(0);
+  const lvl = level ?? fallback;
 
   useEffect(() => {
     if (active) {
@@ -37,10 +39,6 @@ export function VenusOrb({
       cancelAnimation(spin);
     };
   }, [active, breathe, spin]);
-
-  useEffect(() => {
-    lvl.value = withTiming(Math.max(0, Math.min(1, level)), { duration: 120 });
-  }, [level, lvl]);
 
   const glowStyle = useAnimatedStyle(() => {
     const energy = active ? 0.4 + breathe.value * 0.3 + lvl.value : 0.15;

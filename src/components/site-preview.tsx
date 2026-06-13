@@ -3,7 +3,8 @@ import { ActivityIndicator, KeyboardAvoidingView, type LayoutChangeEvent, Linkin
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path, Polyline } from 'react-native-svg';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState, useAudioSampleListener } from 'expo-audio';
+import { useSharedValue, withTiming } from 'react-native-reanimated';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { ThemedText } from '@/components/themed-text';
@@ -120,11 +121,45 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   const cur = useRef<Pt[]>([]);
   const [, tick] = useState(0);
 
-  // Talk
+  // Talk + Venus's voice
   const recorder = useAudioRecorder(REC_OPTS);
   const recState = useAudioRecorderState(recorder, 100);
   const [recording, setRecording] = useState(false);
-  const level = recording && typeof recState.metering === 'number' ? Math.max(0, Math.min(1, (recState.metering + 50) / 50)) : 0;
+  const player = useAudioPlayer();
+  const playerStatus = useAudioPlayerStatus(player);
+  const [speaking, setSpeaking] = useState(false);
+  const playSeq = useRef(0);
+
+  // One shared audio level drives the orb: her voice (PCM RMS) while speaking, yours
+  // (dBFS metering) while listening, decaying to calm when idle.
+  const level = useSharedValue(0);
+  useAudioSampleListener(player, (sample) => {
+    const frames = sample.channels?.[0]?.frames;
+    if (!frames?.length) return;
+    const step = Math.max(1, Math.floor(frames.length / 64));
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < frames.length; i += step) {
+      sum += frames[i] * frames[i];
+      n++;
+    }
+    level.value = withTiming(Math.min(1, Math.sqrt(sum / n) * 4.5), { duration: 90 });
+  });
+  useEffect(() => {
+    if (!recording) return;
+    const db = recState.metering;
+    if (typeof db !== 'number') return;
+    level.value = withTiming(Math.min(1, Math.max(0, (db + 50) / 50)), { duration: 110 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recState.metering, recording]);
+  useEffect(() => {
+    if (!recording && !speaking) level.value = withTiming(0, { duration: 400 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recording, speaking]);
+  useEffect(() => {
+    if (speaking && playerStatus.didJustFinish) setSpeaking(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerStatus.didJustFinish]);
 
   // Type instead of talk
   const [typing, setTyping] = useState(false);
@@ -234,6 +269,38 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     }
   };
 
+  // Venus speaks: TTS the line (default consultant voice) and play it; the orb rides her voice.
+  const speak = async (line: string) => {
+    if (!critique) return;
+    setSubtitle(line);
+    try {
+      const r = await fetch(apiUrl('/api/voice'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${critique.token}` },
+        body: JSON.stringify({ say: line }),
+      });
+      const d = (await r.json()) as { speech?: string };
+      if (!d.speech) return;
+      const file = `${FileSystem.cacheDirectory}venus-${playSeq.current++}.mp3`;
+      await FileSystem.writeAsStringAsync(file, d.speech, { encoding: FileSystem.EncodingType.Base64 });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      player.replace({ uri: file });
+      setSpeaking(true);
+      player.play();
+    } catch {
+      /* speech is best-effort — the subtitle still shows the line */
+    }
+  };
+
+  // Venus greets + coaches the creator the first time the editor opens.
+  const greeted = useRef(false);
+  useEffect(() => {
+    if (!critique || greeted.current) return;
+    greeted.current = true;
+    void speak(COACHING);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [critique]);
+
   // Close the current turn into one itemised edit (note = what was said / typed).
   const commitEdit = (note: string) => {
     const text = note.trim();
@@ -247,7 +314,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     setEdits((e) => [...e, item]);
     setDraftStrokes([]);
     setDraftHits({});
-    setSubtitle('Got it — added. Circle your next change, or tap Submit when you’re done.');
+    void speak('Got it — added. Circle your next change, or tap submit when you’re done.');
   };
 
   const toggleTalk = async () => {
@@ -262,6 +329,14 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       const said = await transcribe();
       commitEdit(said);
     } else {
+      if (speaking) {
+        try {
+          player.pause();
+        } catch {
+          /* ignore */
+        }
+        setSpeaking(false);
+      }
       void startRec();
     }
   };
@@ -412,7 +487,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
                       <Line x1={14} y1={8} x2={17} y2={5} stroke={armed ? BG : GOLD} strokeWidth={1.7} strokeLinecap="round" />
                     </Svg>
                   </Pressable>
-                  <VenusOrb active={recording} level={level} size={86} onPress={toggleTalk} />
+                  <VenusOrb active={recording || speaking} level={level} size={86} onPress={toggleTalk} />
                   <Pressable onPress={() => setTyping(true)} hitSlop={12} style={styles.sideBtn}>
                     <Svg width={22} height={22}>
                       <Path d="M3 6 H19 a1 1 0 0 1 1 1 V15 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 V7 a1 1 0 0 1 1 -1 Z" fill="none" stroke={GOLD} strokeWidth={1.4} strokeLinejoin="round" />
