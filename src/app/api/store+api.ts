@@ -4,6 +4,9 @@ import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
 import { provisionStorefront } from '@/lib/provision';
+import { buildOgImageUrl } from '@/lib/og-image';
+import { canLaunchStore } from '@/lib/billing';
+import { autoFirstDropEnabled, generateFirstDrop } from '@/lib/first-drop';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // POST /api/store — persist a finished Studio interview as the creator's store:
@@ -68,6 +71,21 @@ export async function POST(req: Request) {
       .values({ id: user.id, email: user.email })
       .onConflictDoNothing();
 
+    // Launching a store requires an active paid plan with room under its brand cap. Free
+    // accounts can browse and shop, but not sell — the client shows the paywall on 402.
+    const gate = await canLaunchStore(user.id);
+    if (!gate.ok) {
+      return Response.json(
+        {
+          error: gate.reason,
+          plan: gate.entitlements.plan,
+          maxBrands: gate.entitlements.maxBrands,
+          brandCount: gate.brandCount,
+        },
+        { status: 402 },
+      );
+    }
+
     const base =
       brand.name
         .toLowerCase()
@@ -77,6 +95,14 @@ export async function POST(req: Request) {
 
     const { designSystem, ...profile } = brand;
     const logoUrl = await generateLogo(brand);
+    // The brand's OG / share card AND its avatar in-app — logo + tagline on the brand bg.
+    // Built whether or not a website ever ships, so a shop-only brand still has a clean visual.
+    const ogImageUrl = buildOgImageUrl({
+      logoUrl,
+      tagline: brand.tagline,
+      bgHex: designSystem.palette.find((p) => p.role.toLowerCase().includes('background'))?.hex,
+      textHex: designSystem.palette.find((p) => p.role.toLowerCase().includes('text'))?.hex,
+    });
 
     // Retry on slug collision with a numeric suffix.
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -95,6 +121,7 @@ export async function POST(req: Request) {
             brandProfile: { ...profile, transcript },
             designSystem,
             logoUrl,
+            ogImageUrl,
             status: 'building',
           })
           .returning({ id: schema.stores.id, slug: schema.stores.slug, logoUrl: schema.stores.logoUrl });
@@ -115,6 +142,11 @@ export async function POST(req: Request) {
           logoUrl,
           transcript,
         });
+        // Auto-generate a first product drop so the brand isn't empty — gated behind
+        // AUTO_FIRST_DROP because each run spends real Gemini + Printful credits.
+        if (autoFirstDropEnabled()) {
+          void generateFirstDrop({ storeId: store.id, baseUrl: new URL(req.url).origin });
+        }
         return Response.json({ store });
       } catch (e) {
         const msg = e instanceof Error ? e.message : '';
