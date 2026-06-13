@@ -318,6 +318,40 @@ export const pageViews = pgTable(
   (v) => ({ storeDayIdx: uniqueIndex('page_views_store_day_idx').on(v.storeId, v.day) }),
 );
 
+// ---------- Blog / journal (DB-backed, authored from site /admin AND Studio) ----------
+// Posts live here, not in the repo, so publishing is instant and free — no forge run,
+// no redeploy. Templates fetch via the public API and fall back to content/blog/*.md.
+
+export const storePosts = pgTable(
+  'store_posts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    storeId: uuid('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    slug: text('slug').notNull(),
+    title: text('title').notNull(),
+    excerpt: text('excerpt'),
+    bodyMd: text('body_md').notNull().default(''),
+    coverImageUrl: text('cover_image_url'),
+    isPublished: boolean('is_published').notNull().default(false),
+    publishedAt: timestamp('published_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (p) => ({
+    storeSlugIdx: uniqueIndex('store_posts_store_slug_idx').on(p.storeId, p.slug),
+    publishedIdx: index('store_posts_published_idx').on(p.storeId, p.isPublished),
+  }),
+);
+
+export const storePostsRelations = relations(storePosts, ({ one }) => ({
+  store: one(stores, { fields: [storePosts.storeId], references: [stores.id] }),
+}));
+
 // ---------- Creator billing (web portal) ----------
 
 export const subscriptions = pgTable('subscriptions', {
@@ -363,6 +397,7 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
   catalogues: many(catalogues),
   products: many(products),
   orders: many(orders),
+  posts: many(storePosts),
 }));
 
 export const cataloguesRelations = relations(catalogues, ({ one, many }) => ({
@@ -416,3 +451,4 @@ export type CanvasNodeRow = typeof canvasNodes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Variant = typeof variants.$inferSelect;
 export type Order = typeof orders.$inferSelect;
+export type StorePost = typeof storePosts.$inferSelect;
