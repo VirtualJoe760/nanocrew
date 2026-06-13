@@ -73,29 +73,43 @@ Cross-cutting guarantees:
 - Add `PATCH /api/creator/stores/:slug` for post-creation settings (name, domain, go-live).
 - Treat `store-<slug>.vercel.app` as the **preview**; "live" is the custom domain.
 
-### Phase C — Domains (G3)
-- Pick a path: **Vercel-managed domain purchase** (simplest — Vercel Domains API buys + auto-configures
-  on the project) vs an external registrar (Namecheap/Cloudflare) + transfer/DNS instructions.
-- Flow: creator searches/buys (or enters a domain to transfer) → charge via Stripe → call Vercel
-  Domains API to add+verify on the `store-<slug>` project → write `stores.customDomain` → status `live`.
+### Phase C — Domains (G3)  ·  **Vercel for everything** (decided)
+- Use the **Vercel Domains/Projects API** for the whole flow — buy a new domain *or* transfer an
+  existing one in (TXT-record ownership proof), add it to the `store-<slug>` project, verify.
+- Flow: creator searches/buys (or enters a domain to transfer) → charge via Stripe → Vercel API
+  add-domain + verify on the project → write `stores.customDomain` → **status `live`**.
+- **Go-live == domain attached** (decided). The site lives at `store-<slug>.vercel.app` as the
+  preview/working URL the whole time; pointing it at a domain is the official launch.
 - The public API keys off `slug` (in `brand.json`), so the site keeps working on the new origin with no
   template change beyond CORS allowance.
 
-### Phase D — Stripe Connect (G4)
-- **Onboarding**: create an Express/Standard connected account at (or shortly after) brand creation;
-  store `stripeAccountId` in `connected_accounts`; an account-link onboarding URL surfaced in the app.
+### Phase D — Stripe Connect (G4)  ·  **created at brand establishment** (decided)
+- **Born connecting**: when Venus establishes the brand (`/api/store`), create the brand's **Stripe
+  Connect account** via API and store `stripeAccountId` in `connected_accounts`; surface an
+  account-link onboarding URL in the app so the creator finishes verification.
 - **Routing**: storefront checkout creates the session **on the connected account** with
   `application_fee_amount` (platform cut). Refunds/disputes via Connect.
-- **Gate**: block "go live" until `charges_enabled` (the brand can actually take its own money).
+- **Gate**: block go-live until `charges_enabled` (a live store can take its own money).
+- Requires Stripe **Connect enabled** on the platform account.
 
-### Phase E — Per-brand Printful (G5, optional)
-- If required: populate `stores.printfulStoreId` and route publish + fulfillment per brand. Otherwise
-  record "shared Nanocrew Printful store" as the intentional v1 model.
+### Phase E — Printful per-brand  ·  **one account, separation in OUR DB** (decided)
+- Printful's API has **no store-creation endpoint** (verified — `GET /store` only; stores are
+  dashboard-only). So per-brand Printful *stores* can't be provisioned programmatically.
+- **Decision**: keep **one Printful account/store**. Per-brand **separation + earnings tracking live in
+  our DB** — every product/variant/order is `storeId`-scoped with `printfulCostCents`, so per-brand
+  revenue/cost/profit is exact (already powers in-app margins/insights). Tag Printful sync products per
+  brand (name prefix / `external_id`) for dashboard clarity. The brand's "collection" is the
+  `catalogues` row created at brand establishment. `stores.printfulStoreId` stays available only for the
+  rare manually-provisioned per-brand store.
 
-## Open decisions (need Joe)
-1. **Domain provider** — Vercel-managed purchase (fastest) vs external registrar + transfer support?
-2. **Stripe at launch** — Connect required for v1 (true per-brand payouts), or platform-settles +
-   manual payout for v1 with Connect right after? (PRODUCTION_CHECKLIST already flags this.)
-3. **Go-live gating** — is a live site allowed before Stripe Connect is complete (browse-only), or is
-   payment-ready a hard requirement to go live?
-4. **Printful** — shared store for v1 (recommended) or per-brand now?
+## Locked decisions (Joe, 2026-06-13)
+1. **Domains** — Vercel for everything (purchase **and** transfer); go-live = domain attached.
+2. **Stripe** — create the brand's Connect account at establishment; checkout routes through it.
+3. **Printful** — one account; per-brand separation + earnings in our DB (Printful can't create stores
+   via API); tag products per brand.
+4. **Go-live** — pointing the site at a domain is the official launch (`status: live`).
+
+## Still needs Joe's account config
+- **Stripe Connect** enabled on the platform Stripe account (for per-brand connected accounts).
+- **Vercel token** scope that permits domain purchase + project-domain management; a billing method on
+  Vercel for domain purchases.
