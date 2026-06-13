@@ -1,0 +1,16 @@
+{
+  "name": "nanocrew-stripe-connect-sample",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained Stripe Connect sample for Nanocrew: V2 connected accounts, onboarding, products, direct-charge storefront with an application fee, SaaS subscriptions, and webhooks. A reference + testbed — not production.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "stripe": "^22.2.1"
+  }
+}
