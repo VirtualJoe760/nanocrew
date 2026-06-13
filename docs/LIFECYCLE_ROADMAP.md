@@ -75,12 +75,15 @@ Cross-cutting guarantees:
 
 **Phase A is complete.** ✅
 
-### Phase B — Lifecycle state machine (G2)
-- Define transitions: `building` (provisioning) → `ready` (preview deployed, creator reviewing) →
-  `live` (domain attached + published). Wire them in provision/revise/go-live; `isPublic` gates the
-  in-app marketplace separately.
-- Add `PATCH /api/creator/stores/:slug` for post-creation settings (name, domain, go-live).
-- Treat `store-<slug>.vercel.app` as the **preview**; "live" is the custom domain.
+### Phase B — Lifecycle state machine (G2)  ·  ✅ done
+- ✅ `store_status` now `draft → building → ready → live → suspended` (added `ready`, migration 0014,
+  synced to the platform-api copy). `building` = provisioning, `ready` = on the `store-<slug>.vercel.app`
+  preview (reviewable/editable), `live` = custom domain attached (realized in Phase C). `isPublic` gates
+  the in-app marketplace separately.
+- ✅ Transitions wired: `provisionStorefront` sets `ready` on success (was stuck at `building`);
+  first-drop sets `ready` (not `live`). Existing stores normalized (domainless `live` → `ready`).
+- ✅ `GET/PATCH /api/creator/stores/:slug` for post-creation settings (name, tagline, descriptionMd,
+  isPublic). Slug stays immutable. **The `live` transition (domain attach + go-live) is Phase C.**
 
 ### Phase C — Domains (G3)  ·  **Vercel for everything** (decided)
 - Use the **Vercel Domains/Projects API** for the whole flow — buy a new domain *or* transfer an
