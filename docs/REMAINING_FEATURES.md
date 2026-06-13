@@ -13,10 +13,13 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 - 🔒 **Push notifications** — `device_tokens` table, registration endpoint, and `notify.ts` delivery
   are live (revision "ready to review" fires once a token exists). Needs: `expo-notifications` + dev
   build + mint the token (`src/lib/push.ts`, `PUSH_ENABLED`). (Task #35)
-- 🔒 **Critique screenshots** — drawing + voice critique works and posts to the revise flow today, but
-  Claude only gets the spoken critique + region labels, not the annotated image. Needs:
-  `react-native-view-shot` + dev build → capture the WebView+overlay → upload to Cloudinary → pass in
-  `revise`'s `screenshots[]` (the forge already reads `briefs/screenshots/`). (Task #34)
+- 🟡 **Critique screenshots** — drawing + voice critique works and posts to the revise flow. The
+  Venus voice **orb** rides the live mic level, and each circle is now resolved via a WebView DOM
+  hit-test (`elementFromPoint` → `data-block` / nearest heading / nearby text) so Claude is told
+  *what* was circled (e.g. `the "hero" section ("BOLD. AMERICAN.")`), not just a coarse position.
+  Still open for the full fidelity: the actual annotated **image** (`react-native-view-shot` + dev
+  build → capture the WebView+overlay → upload to Cloudinary → `revise`'s `screenshots[]`; the forge
+  already reads `briefs/screenshots/`). (Task #34)
 
 ## 2. Blocked on your account / config (no code)
 - ⚪ **Stripe go-live** — create 3 recurring Prices (`STRIPE_PRICE_{STARTER,PRO,ADVANCED}`); add the

@@ -1,12 +1,13 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, type LayoutChangeEvent, Linking, Modal, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path, Polyline } from 'react-native-svg';
-import { WebView } from 'react-native-webview';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { ThemedText } from '@/components/themed-text';
+import { VenusOrb } from '@/components/venus-orb';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
 
@@ -27,7 +28,7 @@ function host(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
-/** Rough human label for where a stroke sits, so Claude knows the area without a screenshot. */
+/** Rough human label for where a stroke sits — the fallback when the DOM hit-test can't resolve. */
 function regionLabel(stroke: Pt[], w: number, h: number): string {
   if (!stroke.length || !w || !h) return 'somewhere on the page';
   const xs = stroke.map((p) => p.x);
@@ -36,7 +37,35 @@ function regionLabel(stroke: Pt[], w: number, h: number): string {
   const cy = (Math.min(...ys) + Math.max(...ys)) / 2 / h;
   const v = cy < 0.34 ? 'top' : cy > 0.66 ? 'bottom' : 'middle';
   const hpos = cx < 0.34 ? 'left' : cx > 0.66 ? 'right' : 'centre';
-  return `${v}-${hpos}`;
+  return `the ${v}-${hpos} of the page`;
+}
+
+// Enable the mic meter so Venus's orb can ride the live audio level while she listens.
+const REC_OPTS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
+
+type Hit = { __nanoHit?: boolean; i?: number; block?: string; tag?: string; heading?: string; text?: string };
+
+/** A WebView hit-test: resolve a circled point to the page section it lands on — by block name,
+ *  nearest heading, or nearby text — so Venus can tell Claude WHAT was circled, not just where. */
+function hitScript(i: number, x: number, y: number): string {
+  return `(function(){function P(o){o.__nanoHit=true;o.i=${i};window.ReactNativeWebView.postMessage(JSON.stringify(o));}
+try{var el=document.elementFromPoint(${x},${y});if(!el){P({});return;}
+var n=el,blk=null,sec=null;
+while(n&&n!==document.body){if(n.getAttribute&&n.getAttribute('data-block')){blk=n;break;}
+var t=(n.tagName||'').toLowerCase();if(!sec&&['section','header','footer','nav','main','article','form'].indexOf(t)>=0)sec=n;n=n.parentElement;}
+var ctx=blk||sec||el;var h=ctx.querySelector?ctx.querySelector('h1,h2,h3'):null;
+P({block:blk?blk.getAttribute('data-block'):'',tag:(ctx.tagName||'').toLowerCase(),
+heading:h?(h.textContent||'').replace(/\\s+/g,' ').trim().slice(0,80):'',
+text:(el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,60)});
+}catch(e){P({});}})();true;`;
+}
+
+/** Turn a resolved hit into a phrase for the brief. null → fall back to a positional label. */
+function describeHit(d: Hit): string | null {
+  if (d.block) return `the "${d.block}" section${d.heading ? ` ("${d.heading}")` : ''}`;
+  if (d.heading) return `the ${d.tag || 'section'} headed "${d.heading}"`;
+  if (d.text) return `the ${d.tag || 'area'} near the text "${d.text}"`;
+  return null;
 }
 
 export function SitePreview({
@@ -75,9 +104,37 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recState = useAudioRecorderState(recorder, 300);
+  const recorder = useAudioRecorder(REC_OPTS);
+  const recState = useAudioRecorderState(recorder, 100);
   const [recording, setRecording] = useState(false);
+  // Resolved page sections for each circle, keyed by stroke index (null = unresolvable).
+  const [hits, setHits] = useState<Record<number, string | null>>({});
+  // Live mic level (0..1) → the orb's energy. metering is dBFS (~-60..0) while recording.
+  const level = recording && typeof recState.metering === 'number' ? Math.max(0, Math.min(1, (recState.metering + 50) / 50)) : 0;
+
+  const onWebMessage = (e: WebViewMessageEvent) => {
+    try {
+      const d = JSON.parse(e.nativeEvent.data) as Hit;
+      if (!d || d.__nanoHit !== true || typeof d.i !== 'number') return;
+      setHits((h) => ({ ...h, [d.i as number]: describeHit(d) }));
+    } catch {
+      /* not one of ours */
+    }
+  };
+
+  // Resolve each newly-drawn circle to the page section under its centre (best-effort).
+  useEffect(() => {
+    if (!critique || !strokes.length) return;
+    const i = strokes.length - 1;
+    if (i in hits) return;
+    const s = strokes[i];
+    const xs = s.map((p) => p.x);
+    const ys = s.map((p) => p.y);
+    const cx = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
+    const cy = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
+    ref.current?.injectJavaScript(hitScript(i, cx, cy));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strokes.length]);
 
   const setMode = (on: boolean) => {
     drawingRef.current = on;
@@ -152,10 +209,10 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       /* transcription best-effort */
     }
 
-    const regions = strokes.map((s) => regionLabel(s, size.w, size.h));
+    const regions = strokes.map((s, i) => hits[i] || regionLabel(s, size.w, size.h));
     const parts = [
       spoken,
-      regions.length ? `I marked these areas while talking: ${regions.join('; ')}.` : '',
+      regions.length ? `While talking, I circled: ${regions.join('; ')}.` : '',
       `(About the page: ${url})`,
     ].filter(Boolean);
     const md = parts.join('\n\n').trim();
@@ -173,6 +230,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       });
       if (!res.ok) throw new Error();
       setStrokes([]);
+      setHits({});
       setMode(false);
       critique.onSent?.();
       onClose();
@@ -235,6 +293,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}
           onNavigationStateChange={(s) => setCanGoBack(s.canGoBack)}
+          onMessage={onWebMessage}
           style={styles.web}
           pointerEvents={drawing ? 'none' : 'auto'}
         />
@@ -256,25 +315,34 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
         ) : null}
       </View>
 
-      {/* Critique toolbar */}
-      {critique && drawing ? (
+      {/* Critique toolbar — Venus listens; the orb rides your voice */}
+      {critique ? (
         <View style={[styles.tools, { paddingBottom: Math.max(insets.bottom, 10) }]}>
           {note ? <ThemedText type="code" style={styles.note}>{note}</ThemedText> : null}
-          <ThemedText type="code" style={styles.toolsHint}>
-            {recording ? `● recording your critique… ${Math.round((recState.durationMillis ?? 0) / 1000)}s` : 'Draw on the page and talk Venus through the changes.'}
-          </ThemedText>
           <View style={styles.toolsRow}>
-            <Pressable onPress={recording ? stopRec : startRec} style={[styles.recBtn, recording && styles.recBtnOn]}>
-              <ThemedText type="smallBold" style={{ color: recording ? BG : INK }}>{recording ? 'Stop' : '● Talk to Venus'}</ThemedText>
-            </Pressable>
+            <VenusOrb active={recording} level={level} size={60} onPress={recording ? stopRec : startRec} />
+            <View style={styles.toolsCopy}>
+              <ThemedText type="smallBold" style={styles.toolsTitle} numberOfLines={1}>
+                {recording
+                  ? `Listening… ${Math.round((recState.durationMillis ?? 0) / 1000)}s`
+                  : drawing
+                    ? 'Circle what to change, then tap Venus.'
+                    : 'Tap ✎ to circle, or tap Venus to talk.'}
+              </ThemedText>
+              <ThemedText type="code" style={styles.toolsHint} numberOfLines={1}>
+                {strokes.length ? `${strokes.length} area${strokes.length > 1 ? 's' : ''} circled` : 'Tap the orb to start talking'}
+              </ThemedText>
+            </View>
+          </View>
+          <View style={styles.toolsActions}>
             {strokes.length ? (
-              <Pressable onPress={() => setStrokes([])} hitSlop={8} style={styles.clearBtn}>
-                <ThemedText type="code" style={styles.dim}>clear</ThemedText>
+              <Pressable onPress={() => { setStrokes([]); setHits({}); }} hitSlop={8} style={styles.clearBtn}>
+                <ThemedText type="code" style={styles.dim}>clear marks</ThemedText>
               </Pressable>
             ) : null}
             <View style={{ flex: 1 }} />
             <Pressable onPress={send} disabled={sending} style={[styles.sendBtn, sending && { opacity: 0.5 }]}>
-              <ThemedText type="smallBold" style={{ color: BG }}>{sending ? 'Sending…' : 'Send →'}</ThemedText>
+              <ThemedText type="smallBold" style={{ color: BG }}>{sending ? 'Sending…' : 'Send to Venus →'}</ThemedText>
             </Pressable>
           </View>
         </View>
@@ -297,8 +365,9 @@ const styles = StyleSheet.create({
   toolsHint: { color: DIM, fontSize: 12 },
   note: { color: '#e0a07a', fontSize: 12 },
   toolsRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  recBtn: { borderWidth: 1, borderColor: GOLD, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
-  recBtnOn: { backgroundColor: GOLD, borderColor: GOLD },
+  toolsCopy: { flex: 1 },
+  toolsTitle: { color: INK },
+  toolsActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.one },
   clearBtn: { paddingVertical: Spacing.two },
   sendBtn: { backgroundColor: GOLD, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.three },
   dim: { color: DIM },
