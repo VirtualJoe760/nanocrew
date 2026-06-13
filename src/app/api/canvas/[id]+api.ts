@@ -1,13 +1,23 @@
 import { desc, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
+import { getUserFromRequest } from '@/lib/auth';
+import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 
-// GET  /api/canvas/:id  → { designs, nodes, compositions } for a catalogue
+// GET  /api/canvas/:id  → { designs, nodes, compositions } for a catalogue (id = catalogueId)
 // PUT  /api/canvas/:id  → replace-all canvas nodes for a catalogue (one transaction)
 
-export async function GET(_req: Request, { id }: Record<string, string>) {
+function fail(e: unknown) {
+  const status = e instanceof TenantError ? e.status : 500;
+  return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status });
+}
+
+export async function GET(req: Request, { id }: Record<string, string>) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   if (!id) return Response.json({ error: 'missing catalogue id' }, { status: 400 });
   try {
+    await assertCatalogueOwner(id, user.id);
     const [designs, nodes, compositions] = await Promise.all([
       db
         .select({
@@ -33,7 +43,7 @@ export async function GET(_req: Request, { id }: Record<string, string>) {
     ]);
     return Response.json({ designs, nodes, compositions });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });
+    return fail(e);
   }
 }
 
@@ -52,8 +62,11 @@ interface NodeInput {
 }
 
 export async function PUT(req: Request, { id }: Record<string, string>) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   if (!id) return Response.json({ error: 'missing catalogue id' }, { status: 400 });
   try {
+    await assertCatalogueOwner(id, user.id);
     const body = (await req.json().catch(() => null)) as { nodes?: NodeInput[] } | null;
     if (!body?.nodes) return Response.json({ error: 'nodes is required' }, { status: 400 });
 
@@ -78,6 +91,6 @@ export async function PUT(req: Request, { id }: Record<string, string>) {
     });
     return Response.json({ ok: true, count: rows.length });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });
+    return fail(e);
   }
 }

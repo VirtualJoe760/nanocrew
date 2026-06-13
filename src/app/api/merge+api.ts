@@ -2,8 +2,9 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
+import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
-import { getStoreIdForCatalogue } from '@/lib/tenant';
+import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 
 // POST /api/merge — the blend tool: feed Nano Banana BOTH design images plus the
 // collision prompt, key the result transparent, store it as a new design.
@@ -29,6 +30,8 @@ async function urlToInline(url: string): Promise<InlinePart> {
 }
 
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   try {
     const body = (await req.json().catch(() => null)) as {
       designAId?: string;
@@ -39,6 +42,7 @@ export async function POST(req: Request) {
     if (!body?.designAId || !body.designBId || !body.catalogueId) {
       return Response.json({ error: 'designAId, designBId, catalogueId required' }, { status: 400 });
     }
+    const storeId = await assertCatalogueOwner(body.catalogueId, user.id);
 
     const rows = await db
       .select({ id: schema.designs.id, url: schema.designs.url, prompt: schema.designs.prompt })
@@ -84,7 +88,6 @@ export async function POST(req: Request) {
             } catch {
               url = `data:image/png;base64,${buffer.toString('base64')}`;
             }
-            const storeId = await getStoreIdForCatalogue(body.catalogueId);
             const [row] = await db
               .insert(schema.designs)
               .values({
@@ -107,6 +110,7 @@ export async function POST(req: Request) {
     }
     return Response.json({ error: lastErr }, { status: 502 });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Merge failed' }, { status: 502 });
+    const status = e instanceof TenantError ? e.status : 502;
+    return Response.json({ error: e instanceof Error ? e.message : 'Merge failed' }, { status });
   }
 }

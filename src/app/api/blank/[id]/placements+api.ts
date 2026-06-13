@@ -1,7 +1,10 @@
+import { getUserFromRequest } from '@/lib/auth';
 import { getBlankPlacements } from '@/lib/printful';
 
 // GET /api/blank/:id/placements → { placements: [{ key, label, allOver }] }
-export async function GET(_req: Request, { id }: Record<string, string>) {
+export async function GET(req: Request, { id }: Record<string, string>) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
   try {
     const placements = await getBlankPlacements(id);

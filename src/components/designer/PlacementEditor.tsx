@@ -15,7 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 
 // WYSIWYG print size/placement editor. Positions are real Printful print-file pixels,
 // clamped to the print area; "Generate Printful mockup" renders the truth via Printful.
@@ -143,8 +143,8 @@ export function PlacementEditorBody({
   useEffect(() => {
     let alive = true;
     Promise.all([
-      fetch(apiUrl(`/api/blank/${templateKey}/printareas`)).then((r) => r.json()),
-      fetch(apiUrl(`/api/compositions/${compositionId}`)).then((r) => r.json()),
+      apiFetch(`/api/blank/${templateKey}/printareas`).then((r) => r.json()),
+      apiFetch(`/api/compositions/${compositionId}`).then((r) => r.json()),
     ])
       .then(
         ([pa, comp]: [
@@ -199,7 +199,7 @@ export function PlacementEditorBody({
   // Garment colourways (for the on-product colour preview).
   useEffect(() => {
     let alive = true;
-    fetch(apiUrl(`/api/blank/${templateKey}/variants`))
+    apiFetch(`/api/blank/${templateKey}/variants`)
       .then((r) => r.json())
       .then((d: { variants?: { color: string; colorCode: string; image: string }[] }) => {
         if (!alive || !d.variants?.length) return;
@@ -382,7 +382,7 @@ export function PlacementEditorBody({
         };
       }),
     };
-    fetch(apiUrl('/api/mockup'), {
+    apiFetch('/api/mockup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
-import { getStoreIdForCatalogue } from '@/lib/tenant';
+import { getUserFromRequest } from '@/lib/auth';
+import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 import { getProductMeta } from '@/lib/printful';
 
 // POST /api/compositions → create a composition row (status: generating) and return its
@@ -10,6 +11,8 @@ import { getProductMeta } from '@/lib/printful';
 // it as a new design, use it for the composition, and tell the client so it can inform
 // the user.
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   try {
     const body = (await req.json().catch(() => null)) as {
       catalogueId?: string;
@@ -20,7 +23,7 @@ export async function POST(req: Request) {
     if (!body?.catalogueId || !body.designId || !body.templateKey) {
       return Response.json({ error: 'catalogueId, designId, templateKey required' }, { status: 400 });
     }
-    const storeId = await getStoreIdForCatalogue(body.catalogueId);
+    const storeId = await assertCatalogueOwner(body.catalogueId, user.id);
 
     let designId = body.designId;
     let adaptedDesign: { id: string; url: string; prompt: string } | null = null;
@@ -67,6 +70,7 @@ export async function POST(req: Request) {
       ...(adaptedDesign ? { adaptedDesign, technique: meta?.technique } : {}),
     });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });
+    const status = e instanceof TenantError ? e.status : 500;
+    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status });
   }
 }

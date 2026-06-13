@@ -24,6 +24,10 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   swap test → live keys at launch. (See PRODUCTION_CHECKLIST.)
 - 🟡 **Auto first-drop** — `generateFirstDrop()` is wired into store creation but gated by
   `AUTO_FIRST_DROP=1` (real Gemini + Printful spend). Validate on one brand, then enable. (Task #26)
+  **Note:** now that the designer routes require auth, `first-drop.ts` and `scripts/first-drop.mjs`
+  (which call `/api/generate|compositions|mockup|publish` server-to-server with no token) will 401.
+  Before enabling, give them an internal-service auth path (e.g. an `INTERNAL_API_KEY` the routes
+  accept) or have first-drop call the lib logic directly instead of over HTTP.
 - ⚪ **Meta (Facebook) app** — required for the "Continue with Facebook" button: icon, privacy policy,
   data-deletion URL, category, review. (Task #18)
 

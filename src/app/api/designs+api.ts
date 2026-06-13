@@ -1,9 +1,12 @@
 import { db, schema } from '@/lib/db';
-import { getStoreIdForCatalogue } from '@/lib/tenant';
+import { getUserFromRequest } from '@/lib/auth';
+import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 import { uploadImage } from '@/lib/cloudinary';
 
 // POST /api/designs → store an uploaded image (data URL) as a design row.
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   try {
     const body = (await req.json().catch(() => null)) as {
       catalogueId?: string;
@@ -27,7 +30,7 @@ export async function POST(req: Request) {
       // Cloudinary down — keep the data URL so the upload still works (heavier row).
     }
 
-    const storeId = await getStoreIdForCatalogue(body.catalogueId);
+    const storeId = await assertCatalogueOwner(body.catalogueId, user.id);
     const [row] = await db
       .insert(schema.designs)
       .values({
@@ -39,6 +42,7 @@ export async function POST(req: Request) {
       .returning({ id: schema.designs.id, prompt: schema.designs.prompt, url: schema.designs.url });
     return Response.json({ design: row });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });
+    const status = e instanceof TenantError ? e.status : 500;
+    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status });
   }
 }

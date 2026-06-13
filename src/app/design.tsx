@@ -29,7 +29,6 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import Constants from 'expo-constants';
 
 import { DesignTile, tileColor } from '@/components/design-tile';
 import { DesignCanvas, NODE_H, NODE_W, type CanvasNode } from '@/components/designer/DesignCanvas';
@@ -43,6 +42,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
+import { apiFetch } from '@/lib/api';
 import type { CatalogBlank } from '@/lib/printful';
 import { EFFORT_LABELS, EFFORT_TIERS, type Effort } from '@/lib/effort';
 
@@ -55,13 +55,6 @@ type Design = {
 };
 
 const RATIOS = ['1:1', '4:5', '3:4', '16:9'];
-
-// On a device the API routes live on the Metro dev server, not the app origin.
-// hostUri ("192.168.x.x:8082") is set on a real device; on web it's undefined → relative.
-function apiUrl(path: string): string {
-  const host = Constants.expoConfig?.hostUri;
-  return host ? `http://${host}${path}` : path;
-}
 
 // Every node shares the same footprint, so overlap is a simple AABB test.
 const overlaps = (a: { x: number; y: number }, b: { x: number; y: number }) =>
@@ -197,7 +190,7 @@ export default function DesignScreen() {
     setPlacements([]);
     setChosenPlacement('front');
     setPlacementsLoading(true);
-    fetch(apiUrl(`/api/blank/${combineTarget.blankId}/placements`))
+    apiFetch(`/api/blank/${combineTarget.blankId}/placements`)
       .then((r) => r.json())
       .then((d: { placements?: { key: string; label: string; allOver: boolean }[] }) => {
         setPlacements(d.placements ?? []);
@@ -277,7 +270,7 @@ export default function DesignScreen() {
 
   useEffect(() => {
     let alive = true;
-    fetch(apiUrl('/api/blanks'))
+    apiFetch('/api/blanks')
       .then((r) => r.json())
       .then((d: { blanks?: CatalogBlank[] }) => {
         if (alive && d.blanks) setBlanks(d.blanks);
@@ -285,7 +278,7 @@ export default function DesignScreen() {
       .catch(() => {})
       .finally(() => alive && setBlanksLoading(false));
     // Load catalogues, then hydrate the first one's canvas.
-    fetch(apiUrl('/api/catalogues'))
+    apiFetch('/api/catalogues')
       .then((r) => r.json())
       .then((d: { catalogues?: { id: string; name: string }[] }) => {
         if (!alive || !d.catalogues?.length) return;
@@ -324,7 +317,7 @@ export default function DesignScreen() {
   };
 
   const loadCatalogue = (catId: string) => {
-    fetch(apiUrl(`/api/canvas/${catId}`))
+    apiFetch(`/api/canvas/${catId}`)
       .then((r) => r.json())
       .then(
         (d: {
@@ -408,7 +401,7 @@ export default function DesignScreen() {
             selectedColor: n.selectedColor ?? null,
           })),
       };
-      fetch(apiUrl(`/api/canvas/${cat.id}`), {
+      apiFetch(`/api/canvas/${cat.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -464,7 +457,7 @@ export default function DesignScreen() {
     );
     scheduleSave();
     if (id.includes('-')) {
-      fetch(apiUrl(`/api/designs/${id}`), { method: 'DELETE' }).catch(() => {});
+      apiFetch(`/api/designs/${id}`, { method: 'DELETE' }).catch(() => {});
     }
   };
 
@@ -523,7 +516,7 @@ export default function DesignScreen() {
       );
       scheduleSave();
       if (compositionId) {
-        fetch(apiUrl(`/api/compositions/${compositionId}`), {
+        apiFetch(`/api/compositions/${compositionId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(
@@ -536,7 +529,7 @@ export default function DesignScreen() {
       finish();
       return;
     }
-    fetch(apiUrl('/api/composite'), {
+    apiFetch('/api/composite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -656,7 +649,7 @@ export default function DesignScreen() {
       vp.ty.value = withTiming(height * 0.38 - groupCy * s, { duration: 420 });
     }
 
-    fetch(apiUrl('/api/compositions'), {
+    apiFetch('/api/compositions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -746,7 +739,7 @@ export default function DesignScreen() {
     setColorNodeId(id);
     setColors([]);
     setColorsLoading(true);
-    fetch(apiUrl(`/api/blank/${blankId}/colors`))
+    apiFetch(`/api/blank/${blankId}/colors`)
       .then((r) => r.json())
       .then((d: { colors?: Swatch[] }) => setColors(d.colors ?? []))
       .catch(() => setColors([]))
@@ -776,7 +769,7 @@ export default function DesignScreen() {
   const createCatalogue = (name: string, season?: string) => {
     const n = name.trim();
     if (!n) return;
-    fetch(apiUrl('/api/catalogues'), {
+    apiFetch('/api/catalogues', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: n, season }),
@@ -798,7 +791,7 @@ export default function DesignScreen() {
   const discardComposite = (id: string) => {
     const node = nodesRef.current.find((n) => n.id === id);
     if (node?.refId) {
-      fetch(apiUrl(`/api/compositions/${node.refId}`), { method: 'DELETE' }).catch(() => {});
+      apiFetch(`/api/compositions/${node.refId}`, { method: 'DELETE' }).catch(() => {});
     }
     setNodes((n) => n.filter((node) => node.id !== id));
     setReviewId(null);
@@ -822,7 +815,7 @@ export default function DesignScreen() {
         ...prev,
       ]);
       try {
-        const res = await fetch(apiUrl('/api/designs'), {
+        const res = await apiFetch('/api/designs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ catalogueId: catId, dataUrl: refImage }),
@@ -849,7 +842,7 @@ export default function DesignScreen() {
       ...prev,
     ]);
     try {
-      const res = await fetch(apiUrl('/api/generate'), {
+      const res = await apiFetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -888,7 +881,7 @@ export default function DesignScreen() {
       ...prev,
     ]);
     try {
-      const res = await fetch(apiUrl('/api/merge'), {
+      const res = await apiFetch('/api/merge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1483,7 +1476,7 @@ function GenerateModal({
     if (rolling) return;
     setRolling(true);
     try {
-      const res = await fetch(apiUrl(`/api/idea?effort=${effort}`));
+      const res = await apiFetch(`/api/idea?effort=${effort}`);
       const d = (await res.json()) as { idea?: string };
       if (d.idea) setPrompt(d.idea);
     } catch {
@@ -1500,7 +1493,7 @@ function GenerateModal({
     if (!text || enhancing) return;
     setEnhancing(true);
     try {
-      const res = await fetch(apiUrl('/api/enhance'), {
+      const res = await apiFetch('/api/enhance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text, effort }),

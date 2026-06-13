@@ -1,6 +1,8 @@
 import { eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
+import { getUserFromRequest } from '@/lib/auth';
+import { TenantError, assertCompositionOwner } from '@/lib/tenant';
 import { getProductMeta, renderMockups, type MockupFile } from '@/lib/printful';
 
 // POST /api/mockup — render real Printful mockups for a composition's placements and
@@ -37,6 +39,8 @@ function clamp(p: PositionInput): PositionInput {
 }
 
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   try {
     const body = (await req.json().catch(() => null)) as {
       compositionId?: string;
@@ -50,6 +54,7 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    await assertCompositionOwner(body.compositionId, user.id);
 
     const ids = [...new Set(body.placements.map((p) => p.designId))];
     const rows = await db
@@ -116,6 +121,7 @@ export async function POST(req: Request) {
 
     return Response.json({ mockups, previewUrl });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Mockup failed' }, { status: 502 });
+    const status = e instanceof TenantError ? e.status : 502;
+    return Response.json({ error: e instanceof Error ? e.message : 'Mockup failed' }, { status });
   }
 }

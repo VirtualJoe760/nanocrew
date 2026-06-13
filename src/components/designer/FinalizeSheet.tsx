@@ -16,7 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 
 // Finalize & publish (port of stephen-lawyer's FinalizeForm): pick colors, set one retail
 // price (default ≈ 2× base cost), name it → creates the live Printful sync product.
@@ -55,7 +55,7 @@ export function FinalizeSheet({
 
   useEffect(() => {
     let alive = true;
-    fetch(apiUrl(`/api/blank/${templateKey}/variants`))
+    apiFetch(`/api/blank/${templateKey}/variants`)
       .then((r) => r.json())
       .then((d: { variants?: Variant[] }) => {
         if (!alive || !d.variants?.length) return;
@@ -104,7 +104,7 @@ export function FinalizeSheet({
     setPublishing(true);
     setError(null);
     const chosen = variants.filter((v) => selectedColors.has(v.color));
-    fetch(apiUrl('/api/publish'), {
+    apiFetch('/api/publish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

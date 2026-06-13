@@ -1,5 +1,6 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 
+import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
 
 // Review-only composite: Nano Banana renders the design ON the garment photo.
@@ -24,6 +25,8 @@ async function fetchAsInlineData(url: string): Promise<InlinePart> {
 }
 
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   const body = (await req.json().catch(() => null)) as {
     designUrl?: string;
     garmentUrl?: string;

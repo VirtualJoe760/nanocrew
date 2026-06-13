@@ -1,7 +1,9 @@
 import { eq, inArray } from 'drizzle-orm';
 
+import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
 import { db, schema } from '@/lib/db';
+import { TenantError, assertCompositionOwner } from '@/lib/tenant';
 import { createSyncProduct, getCatalogVariants, upscaleForPrint, type MockupPosition } from '@/lib/printful';
 
 /** Printful mockup URLs are temporary S3 links (~72h) — persist to Cloudinary. */
@@ -39,6 +41,8 @@ function slugify(name: string): string {
 }
 
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   try {
     const body = (await req.json().catch(() => null)) as {
       compositionId?: string;
@@ -50,6 +54,7 @@ export async function POST(req: Request) {
     if (!body?.compositionId || !name || !body.variants?.length) {
       return Response.json({ error: 'compositionId, name, variants required' }, { status: 400 });
     }
+    await assertCompositionOwner(body.compositionId, user.id);
 
     const [comp] = await db
       .select()
@@ -161,6 +166,7 @@ export async function POST(req: Request) {
 
     return Response.json({ ok: true, printfulSyncProductId: syncProductId, product });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Publish failed' }, { status: 502 });
+    const status = e instanceof TenantError ? e.status : 502;
+    return Response.json({ error: e instanceof Error ? e.message : 'Publish failed' }, { status });
   }
 }

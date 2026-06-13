@@ -6,11 +6,11 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
 ## 🔴 Launch blockers
 
 ### Security
-- [ ] **[code] Authenticate the designer endpoints.** `/api/generate`, `/api/enhance`, `/api/designs`,
-  `/api/compositions`, `/api/composite`, `/api/mockup`, `/api/publish`, `/api/canvas`, `/api/catalogues`,
-  `/api/merge` currently run **unauthenticated** and resolve a default store. Any client could generate
-  on our spend and write to / publish on the default store. Add `getUserFromRequest` + scope every
-  query to the signed-in creator's store before launch.
+- [x] **[code] Authenticate the designer endpoints.** ✅ Done (2026-06-13). All designer routes now
+  require a Supabase bearer token and scope to the creator's store via `src/lib/tenant.ts`
+  (`getCreatorStore` / `assertCatalogueOwner` / `assertCompositionOwner` / `assertDesignOwner`); the
+  client sends the token through `apiFetch`. **Follow-up:** the server-to-server first-drop callers
+  now need an internal-service auth path before `AUTO_FIRST_DROP` can be enabled (see REMAINING_FEATURES).
 - [ ] **[code] Rate-limit / cost-guard AI endpoints** (`/api/generate`, `/api/tryon`, `/api/video`,
   `/api/voice`) — they hit paid APIs. Gate behind auth + credits or a per-IP/per-user limit.
 - [ ] Rotate any secrets that have been pasted in chat/commits; confirm `.env*` is git-ignored.

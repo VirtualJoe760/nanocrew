@@ -1,6 +1,8 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 
+import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
+import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 
 // Nano Banana — Gemini 2.5 Flash Image. Runs server-side only (the key never
 // reaches the app bundle). Returns the generated PNG as a base64 data URL.
@@ -38,6 +40,9 @@ interface GenResponse {
 }
 
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+
   const body = (await req.json().catch(() => null)) as {
     prompt?: string;
     image?: string;
@@ -53,6 +58,17 @@ export async function POST(req: Request) {
     typeof body?.image === 'string' && body.image.startsWith('data:') ? body.image : null;
   if (!prompt && !refImage) {
     return Response.json({ error: 'prompt or image is required' }, { status: 400 });
+  }
+
+  // If we'll persist to a catalogue, the creator must own it — check up front.
+  let ownedStoreId: string | null = null;
+  if (catalogueId) {
+    try {
+      ownedStoreId = await assertCatalogueOwner(catalogueId, user.id);
+    } catch (e) {
+      const status = e instanceof TenantError ? e.status : 500;
+      return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status });
+    }
   }
 
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
@@ -102,14 +118,12 @@ export async function POST(req: Request) {
             image = `data:image/png;base64,${buffer.toString('base64')}`;
           }
           let id: string | undefined;
-          if (catalogueId) {
+          if (catalogueId && ownedStoreId) {
             try {
               const { db, schema } = await import('@/lib/db');
-              const { getStoreIdForCatalogue } = await import('@/lib/tenant');
-              const storeId = await getStoreIdForCatalogue(catalogueId);
               const [row] = await db
                 .insert(schema.designs)
-                .values({ storeId, catalogueId, prompt: prompt || 'Generated design', url: image })
+                .values({ storeId: ownedStoreId, catalogueId, prompt: prompt || 'Generated design', url: image })
                 .returning({ id: schema.designs.id });
               id = row.id;
             } catch {
