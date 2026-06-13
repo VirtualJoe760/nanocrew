@@ -159,19 +159,27 @@ for (const idea of ideas) {
     placements: [{ placement: front.placement, designId: gen.id, position }],
   });
 
+  const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+  const bySize = (a, b) => SIZE_ORDER.indexOf(a.size) - SIZE_ORDER.indexOf(b.size);
   let colorVars = [];
   for (const c of preferredColors) {
-    colorVars = vars.variants.filter((v) => v.color === c).slice(0, 4);
+    colorVars = vars.variants.filter((v) => v.color === c).sort(bySize).slice(0, 4);
     if (colorVars.length) break;
   }
-  if (!colorVars.length) colorVars = vars.variants.filter((v) => v.color === vars.variants[0].color).slice(0, 4);
+  if (!colorVars.length)
+    colorVars = vars.variants.filter((v) => v.color === vars.variants[0].color).sort(bySize).slice(0, 4);
 
   log(`  ${idea.name}: publishing (${colorVars.length} ${colorVars[0]?.color} variants)…`);
   await post('/api/publish', {
     compositionId: comp.composition.id,
     name: idea.name,
     description: `${idea.name} — ${store.tagline}`,
-    variants: colorVars.map((v) => ({ printfulVariantId: v.id, retailPriceCents: PRICE[idea.garment] ?? PRICE.tee })),
+    variants: colorVars.map((v) => ({
+      printfulVariantId: v.id,
+      retailPriceCents: PRICE[idea.garment] ?? PRICE.tee,
+      size: v.size,
+      color: v.color,
+    })),
   });
   log(`  ✓ ${idea.name} live`);
 }
