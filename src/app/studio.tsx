@@ -41,6 +41,7 @@ import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-nativ
 
 import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { StudioComposer } from '@/components/studio-composer';
+import { StudioDashboard } from '@/components/studio-dashboard';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -495,6 +496,10 @@ export default function StudioScreen() {
   const [showCockpit, setShowCockpit] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [hasStore, setHasStore] = useState(false);
+  // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
+  // get started), returning creators see their dashboard, and the AI entity only
+  // runs in 'interview'. 'loading' until we know which.
+  const [mode, setMode] = useState<'loading' | 'cta' | 'interview' | 'dashboard'>('loading');
 
   useEffect(() => {
     if (!session) return;
@@ -656,10 +661,31 @@ export default function StudioScreen() {
   // The AI only speaks on its own stage: the conversation starts when the Studio tab is
   // actually focused AND an AI has been chosen; everything goes quiet on blur.
   const focusedRef = useRef(false);
+  // Decide the landing once auth + store status are known: returning creators get the
+  // dashboard, everyone else the CTA. Never override an interview the user started, and
+  // flip to the dashboard the moment a store appears.
+  useEffect(() => {
+    if (!voiceResolved) return;
+    setMode((m) => {
+      if (m === 'interview') return m;
+      if (hasStore) return 'dashboard';
+      if (m === 'loading') return 'cta';
+      return m;
+    });
+  }, [voiceResolved, hasStore]);
+
+  // The greeting only fires in interview mode (after Get started / Build a new brand).
+  useEffect(() => {
+    if (mode === 'interview' && session && voiceId && focusedRef.current && !started.current) {
+      started.current = true;
+      void turn({ init: true });
+    }
+  }, [mode, session, voiceId, turn]);
+
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
-      if (session && voiceId && !started.current) {
+      if (session && voiceId && mode === 'interview' && !started.current) {
         started.current = true;
         void turn({ init: true });
       }
@@ -672,14 +698,28 @@ export default function StudioScreen() {
         busyRef.current = false;
         setState('idle');
       };
-    }, [session, voiceId, turn, player, recorder]),
+    }, [session, voiceId, mode, turn, player, recorder]),
   );
 
   const chooseVoice = useCallback((v: AiVoice) => {
     AsyncStorage.setItem(VOICE_KEY, v.id).catch(() => {});
     setNeedsSelection(false);
-    setVoiceId(v.id); // the focus effect picks it up and the introduction begins
+    setVoiceId(v.id); // just the pick — the interview waits for "Get started"
   }, []);
+
+  // New creator pressed Get started — now (and only now) the AI wakes up.
+  const onGetStarted = useCallback(() => setMode('interview'), []);
+
+  // Returning creator wants another brand — reset the interview and start fresh.
+  const onNewBrand = useCallback(() => {
+    started.current = false;
+    messages.current = [];
+    setBrand(null);
+    setCreated(null);
+    setHeard('');
+    setLine('');
+    setMode(voiceId ? 'interview' : 'cta');
+  }, [voiceId]);
 
   const previewVoice = useCallback(
     async (v: AiVoice) => {
@@ -905,7 +945,9 @@ export default function StudioScreen() {
             ? '[ tap to wake ]'
             : '[ tap to enable the mic ]';
 
-  const bottomPad = BottomTabInset + insets.bottom + Spacing.three;
+  // Native tab bar sits above the home indicator; reserve its height + the inset + a
+  // comfortable gap so the karaoke captions never dip under it.
+  const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
 
   return (
     <View style={styles.container}>
@@ -931,9 +973,9 @@ export default function StudioScreen() {
             STUDIO // BRAND.SYS
           </ThemedText>
           <View style={styles.headerSpacer} />
-          {session && !brand ? (
+          {session && !brand && (mode === 'interview' || mode === 'dashboard') ? (
             <View style={styles.headerIcons}>
-              {hasStore ? (
+              {hasStore && mode === 'dashboard' ? (
                 <Pressable onPress={() => setShowComposer(true)} hitSlop={10}>
                   <ManageIcon />
                 </Pressable>
@@ -941,9 +983,11 @@ export default function StudioScreen() {
               <Pressable onPress={() => setShowCockpit(true)} hitSlop={10}>
                 <MetricsIcon />
               </Pressable>
-              <Pressable onPress={toggleKeyboard} hitSlop={10}>
-                <KeyboardIcon active={keyboardMode} />
-              </Pressable>
+              {mode === 'interview' ? (
+                <Pressable onPress={toggleKeyboard} hitSlop={10}>
+                  <KeyboardIcon active={keyboardMode} />
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -962,49 +1006,14 @@ export default function StudioScreen() {
               {'> sign in on the Account tab\n> the entity will wake up'}
             </ThemedText>
           </View>
-        ) : !voiceResolved ? (
+        ) : !voiceResolved || mode === 'loading' ? (
           <ActivityIndicator style={styles.center} color="#00ff7f" />
-        ) : needsSelection && !voiceId ? (
-          <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
-            <ThemedText type="code" style={styles.brandEyebrow}>
-              {'// CHOOSE YOUR AI'}
-            </ThemedText>
-            <ThemedText type="small" style={styles.dim}>
-              Your consultant guides the whole journey — hear them first.
-            </ThemedText>
-            {AI_VOICES.map((v) => (
-              <View key={v.id} style={styles.voiceCard}>
-                <View style={styles.voiceMeta}>
-                  <ThemedText type="subtitle" style={styles.white}>
-                    {v.name}
-                  </ThemedText>
-                  <ThemedText type="code" style={styles.voiceVibe}>
-                    {v.vibe}
-                  </ThemedText>
-                </View>
-                <View style={styles.voiceActions}>
-                  <Pressable onPress={() => previewVoice(v)} disabled={!!previewing} hitSlop={6}>
-                    <View style={styles.voiceBtn}>
-                      {previewing === v.id ? (
-                        <ActivityIndicator size="small" color="#00ff7f" />
-                      ) : (
-                        <ThemedText type="code" style={styles.green}>
-                          ▶ hear
-                        </ThemedText>
-                      )}
-                    </View>
-                  </Pressable>
-                  <Pressable onPress={() => chooseVoice(v)} hitSlop={6}>
-                    <View style={[styles.voiceBtn, styles.voiceSelect]}>
-                      <ThemedText type="code" style={{ color: BG }}>
-                        select →
-                      </ThemedText>
-                    </View>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
+        ) : mode === 'dashboard' ? (
+          <StudioDashboard
+            token={session.access_token}
+            onEditBrand={() => setShowComposer(true)}
+            onNewBrand={onNewBrand}
+          />
         ) : brand ? (
           <ScrollView
             style={styles.fill}
@@ -1065,6 +1074,54 @@ export default function StudioScreen() {
                 </View>
               </Pressable>
             )}
+          </ScrollView>
+        ) : mode === 'cta' ? (
+          <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
+            <ThemedText type="code" style={styles.brandEyebrow}>
+              {'// CHOOSE YOUR AI'}
+            </ThemedText>
+            <ThemedText type="small" style={styles.dim}>
+              Your consultant guides the whole journey — hear them first, then get started.
+            </ThemedText>
+            {AI_VOICES.map((v) => (
+              <View key={v.id} style={[styles.voiceCard, voiceId === v.id && styles.voiceCardOn]}>
+                <View style={styles.voiceMeta}>
+                  <ThemedText type="subtitle" style={styles.white}>
+                    {v.name}
+                  </ThemedText>
+                  <ThemedText type="code" style={styles.voiceVibe}>
+                    {v.vibe}
+                  </ThemedText>
+                </View>
+                <View style={styles.voiceActions}>
+                  <Pressable onPress={() => previewVoice(v)} disabled={!!previewing} hitSlop={6}>
+                    <View style={styles.voiceBtn}>
+                      {previewing === v.id ? (
+                        <ActivityIndicator size="small" color="#00ff7f" />
+                      ) : (
+                        <ThemedText type="code" style={styles.green}>
+                          ▶ hear
+                        </ThemedText>
+                      )}
+                    </View>
+                  </Pressable>
+                  <Pressable onPress={() => chooseVoice(v)} hitSlop={6}>
+                    <View style={[styles.voiceBtn, styles.voiceSelect]}>
+                      <ThemedText type="code" style={{ color: BG }}>
+                        {voiceId === v.id ? '✓ picked' : 'select →'}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+            <Pressable onPress={onGetStarted} disabled={!voiceId}>
+              <View style={[styles.getStarted, { opacity: voiceId ? 1 : 0.4 }]}>
+                <ThemedText type="smallBold" style={{ color: BG }}>
+                  Get started →
+                </ThemedText>
+              </View>
+            </Pressable>
           </ScrollView>
         ) : (
           <>
@@ -1174,7 +1231,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two + 2,
   },
 
-  captions: { gap: Spacing.two, paddingBottom: Spacing.three, minHeight: 96 },
+  captions: { gap: Spacing.two, paddingBottom: Spacing.four, minHeight: 96 },
   heard: { color: '#2c7a55', textAlign: 'center' },
   bigWord: {
     color: '#eafff3',
@@ -1209,6 +1266,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   voiceSelect: { backgroundColor: '#00ff7f', borderColor: '#00ff7f' },
+  voiceCardOn: { borderColor: '#00ff7f' },
+  getStarted: { backgroundColor: '#00ff7f', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
   logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#134d31' },
   brandEyebrow: { color: '#1f7a4d' },
   white: { color: '#eafff3' },
