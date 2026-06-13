@@ -7,24 +7,28 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+// Nano Crew brand palette — monochrome (warm paper / near-black) with a single champagne
+// gold accent (`tint`). Reserved serif is for the NC mark; everything else is clean sans.
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#16140f', // ink
+    background: '#f4f3f0', // warm paper
+    backgroundElement: '#ffffff', // cards lift off the paper
+    backgroundSelected: '#e7e4dd',
+    textSecondary: '#6b675e',
+    tint: '#a8884e', // champagne gold (darkened for contrast on paper)
     // The designer canvas reads as a recessed work surface, distinct from the app chrome.
     canvas: '#E9EAEF',
     canvasDot: '#B9BCC8',
     canvasEdge: '#D4D6DE',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#f3f1ec', // ink
+    background: '#0a0a0c', // near-black
+    backgroundElement: '#16161a',
+    backgroundSelected: '#1f1f24',
+    textSecondary: '#9a978f',
+    tint: '#c9a86a', // champagne gold
     canvas: '#121319',
     canvasDot: '#34374a',
     canvasEdge: '#23242e',

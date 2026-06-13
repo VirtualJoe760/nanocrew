@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
   linkPrimary: {
     lineHeight: 30,
     fontSize: 14,
-    color: '#3c87f7',
+    color: '#b8975a', // champagne gold (reads on paper + near-black)
   },
   code: {
     fontFamily: Fonts.mono,
