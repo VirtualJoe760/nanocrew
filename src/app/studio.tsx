@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -57,13 +58,35 @@ const VOICE_KEY = 'nanocrew.voiceId';
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
-const BG = '#01060e';
-// idle green → listening mint → thinking cyan → speaking lime
+// Dark ink used for text ON the cyan accent buttons — cyan is light, so dark text reads
+// in both light and dark mode. (The screen background comes from the palette below.)
+const BG = '#06121f';
+// idle → listening → thinking → speaking. Saturated cyan/violet that read on light + dark.
 const STATE_COLORS = ['#35d6ff', '#9be8ff', '#35d6ff', '#8b7bff'];
 const STATE_INDEX: Record<EntityState, number> = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
 
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+// Theme-aware palette — Venus is a holographic entity that works on light AND dark. The
+// accents (cyan/violet) hold on both; the surface, ink and white-hot core flip.
+type Palette = ReturnType<typeof makePalette>;
+function makePalette(dark: boolean) {
+  return {
+    dark,
+    bg: dark ? '#060b16' : '#eef3fa',
+    ink: dark ? '#eaf6ff' : '#0c1726',
+    dim: dark ? '#7db8e6' : '#586a82',
+    faint: dark ? '#5193c9' : '#93a2b6',
+    accent: '#35d6ff',
+    accent2: '#8b7bff',
+    line: dark ? 'rgba(53,214,255,0.10)' : 'rgba(31,112,153,0.14)',
+    coreInner: dark ? '#ffffff' : '#16b6e0',
+  };
+}
+function usePalette(): Palette {
+  return makePalette(useColorScheme() !== 'light');
+}
 
 // ---------- Network mesh ----------
 
@@ -89,6 +112,7 @@ function buildMesh(count: number, w: number, h: number, linkDist: number): { nod
 
 /** Faint network threading through the whole background, slowly breathing. */
 function NetworkField() {
+  const p = usePalette();
   const mesh = useMemo(() => buildMesh(26, SCREEN_W, SCREEN_H, 150), []);
   const breath = useSharedValue(0.5);
   useEffect(() => {
@@ -107,10 +131,10 @@ function NetworkField() {
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style]}>
       <Svg width={SCREEN_W} height={SCREEN_H}>
         {mesh.edges.map((e, i) => (
-          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="#35d6ff" strokeOpacity={0.09} strokeWidth={0.7} />
+          <Line key={`e${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke={p.accent} strokeOpacity={p.dark ? 0.09 : 0.16} strokeWidth={0.7} />
         ))}
         {mesh.nodes.map((n, i) => (
-          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill="#35d6ff" fillOpacity={0.22} />
+          <Circle key={`n${i}`} cx={n.x} cy={n.y} r={n.r} fill={p.accent} fillOpacity={p.dark ? 0.22 : 0.32} />
         ))}
       </Svg>
     </Animated.View>
@@ -428,7 +452,7 @@ function WaveBar({ index, level, color }: { index: number; level: SharedValue<nu
 }
 
 /** The blinding center: layered light with a white-hot heart, swelling with the audio. */
-function CoreLight({ level, color }: { level: SharedValue<number>; color: string }) {
+function CoreLight({ level, color, inner }: { level: SharedValue<number>; color: string; inner: string }) {
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: 1 + level.value * 0.45 }],
   }));
@@ -437,9 +461,10 @@ function CoreLight({ level, color }: { level: SharedValue<number>; color: string
       <Svg width={120} height={120}>
         <Defs>
           <RadialGradient id="bloom" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
-            <Stop offset="22%" stopColor="#eaf6ff" stopOpacity="0.95" />
-            <Stop offset="48%" stopColor={color} stopOpacity="0.55" />
+            {/* core is white-hot on dark, a saturated cyan on light (white vanishes on white) */}
+            <Stop offset="0%" stopColor={inner} stopOpacity="1" />
+            <Stop offset="28%" stopColor={inner} stopOpacity="0.9" />
+            <Stop offset="52%" stopColor={color} stopOpacity="0.55" />
             <Stop offset="100%" stopColor={color} stopOpacity="0" />
           </RadialGradient>
         </Defs>
@@ -463,6 +488,7 @@ function Nucleus({
   level: SharedValue<number>;
   onPress: () => void;
 }) {
+  const p = usePalette();
   const color = STATE_COLORS[STATE_INDEX[state]];
   const layers = useMemo(
     () => [
@@ -481,7 +507,7 @@ function Nucleus({
       {Array.from({ length: WAVE_BARS }, (_, i) => (
         <WaveBar key={i} index={i} level={level} color={color} />
       ))}
-      <CoreLight level={level} color={color} />
+      <CoreLight level={level} color={color} inner={p.coreInner} />
     </Pressable>
   );
 }
@@ -490,6 +516,7 @@ function Nucleus({
 
 export default function StudioScreen() {
   const insets = useSafeAreaInsets();
+  const p = usePalette();
   const { session, loading } = useAuth();
 
   const [state, setState] = useState<EntityState>('idle');
@@ -968,17 +995,17 @@ export default function StudioScreen() {
   const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: p.bg }]}>
       <NetworkField />
       {/* Spatial dust — three depths drifting at different rates */}
       <DustField count={34} rMax={0.9} driftX={-9} driftY={14} period={16000} />
       <DustField count={26} rMax={1.5} driftX={12} driftY={-10} period={22000} />
       <DustField count={16} rMax={2.2} driftX={-18} driftY={-22} period={29000} />
       {/* HUD corner brackets */}
-      <View pointerEvents="none" style={[styles.corner, styles.cornerTL, { top: insets.top + 8 }]} />
-      <View pointerEvents="none" style={[styles.corner, styles.cornerTR, { top: insets.top + 8 }]} />
-      <View pointerEvents="none" style={[styles.corner, styles.cornerBL, { bottom: bottomPad - 8 }]} />
-      <View pointerEvents="none" style={[styles.corner, styles.cornerBR, { bottom: bottomPad - 8 }]} />
+      <View pointerEvents="none" style={[styles.corner, styles.cornerTL, { top: insets.top + 8, borderColor: p.accent }]} />
+      <View pointerEvents="none" style={[styles.corner, styles.cornerTR, { top: insets.top + 8, borderColor: p.accent }]} />
+      <View pointerEvents="none" style={[styles.corner, styles.cornerBL, { bottom: bottomPad - 8, borderColor: p.accent }]} />
+      <View pointerEvents="none" style={[styles.corner, styles.cornerBR, { bottom: bottomPad - 8, borderColor: p.accent }]} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1021,10 +1048,10 @@ export default function StudioScreen() {
         ) : !session ? (
           <View style={styles.introWrap}>
             <IntroGlyph />
-            <ThemedText type="title" style={styles.introTitle}>
+            <ThemedText type="title" style={[styles.introTitle, { color: p.ink }]}>
               Meet Venus
             </ThemedText>
-            <ThemedText type="small" style={styles.introBody}>
+            <ThemedText type="small" style={[styles.introBody, { color: p.ink }]}>
               Your AI brand consultant. Talk it through, and Venus designs your clothing
               brand, builds the store, and launches your website.
             </ThemedText>
@@ -1034,11 +1061,11 @@ export default function StudioScreen() {
               </ThemedText>
             </Pressable>
             <Pressable onPress={() => router.navigate('/account')} hitSlop={8} style={styles.ctaSecondary}>
-              <ThemedText type="code" style={styles.ctaSecondaryText}>
+              <ThemedText type="code" style={[styles.ctaSecondaryText, { color: p.dim }]}>
                 I already have one — log in
               </ThemedText>
             </Pressable>
-            <ThemedText type="code" style={styles.introFoot}>
+            <ThemedText type="code" style={[styles.introFoot, { color: p.faint }]}>
               Free to explore. You only need a plan to launch a store.
             </ThemedText>
           </View>
@@ -1060,10 +1087,10 @@ export default function StudioScreen() {
               {'// BRAND COMPILED'}
             </ThemedText>
             {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="cover" /> : null}
-            <ThemedText type="subtitle" style={styles.white}>
+            <ThemedText type="subtitle" style={[styles.white, { color: p.ink }]}>
               {brand.name}
             </ThemedText>
-            <ThemedText type="small" style={styles.dim}>
+            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
               {brand.tagline}
             </ThemedText>
             <View style={styles.paletteRow}>
@@ -1085,7 +1112,7 @@ export default function StudioScreen() {
                 </View>
               ))}
             </View>
-            <ThemedText type="small" style={styles.dim}>
+            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
               {brand.story}
             </ThemedText>
             {created ? (
@@ -1093,7 +1120,7 @@ export default function StudioScreen() {
                 <ThemedText type="code" style={styles.green}>
                   {'> store online · @' + created}
                 </ThemedText>
-                <ThemedText type="small" style={styles.dim}>
+                <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
                   Head to Design to start your first drop.
                 </ThemedText>
               </View>
@@ -1116,13 +1143,13 @@ export default function StudioScreen() {
             <ThemedText type="code" style={styles.brandEyebrow}>
               {'// CHOOSE YOUR AI'}
             </ThemedText>
-            <ThemedText type="small" style={styles.dim}>
+            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
               Your consultant guides the whole journey — hear them first, then get started.
             </ThemedText>
             {AI_VOICES.map((v) => (
               <View key={v.id} style={[styles.voiceCard, voiceId === v.id && styles.voiceCardOn]}>
                 <View style={styles.voiceMeta}>
-                  <ThemedText type="subtitle" style={styles.white}>
+                  <ThemedText type="subtitle" style={[styles.white, { color: p.ink }]}>
                     {v.name}
                   </ThemedText>
                   <ThemedText type="code" style={styles.voiceVibe}>
@@ -1163,7 +1190,7 @@ export default function StudioScreen() {
           <>
             <View style={styles.entityArea}>
               <Nucleus state={state} level={level} onPress={onEntityPress} />
-              <ThemedText type="code" style={styles.hint}>
+              <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
                 {keyboardMode ? '[ keyboard mode — tap the orb for voice ]' : hint}
               </ThemedText>
             </View>
@@ -1189,16 +1216,16 @@ export default function StudioScreen() {
             ) : null}
             <View style={styles.captions}>
               {state === 'speaking' && words.length ? (
-                <ThemedText style={styles.bigWord}>{words[wordIdx]}</ThemedText>
+                <ThemedText style={[styles.bigWord, { color: p.ink }]}>{words[wordIdx]}</ThemedText>
               ) : (
                 <>
                   {heard ? (
-                    <ThemedText type="code" style={styles.heard} numberOfLines={2}>
+                    <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
                       {'you > ' + heard}
                     </ThemedText>
                   ) : null}
                   {line ? (
-                    <ThemedText style={styles.line} numberOfLines={3}>
+                    <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
                       {line}
                     </ThemedText>
                   ) : null}
