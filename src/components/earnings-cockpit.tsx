@@ -1,21 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
+import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // The creator's business cockpit — revenue, orders, traffic, recent activity.
 // Reads the same authed endpoints the brand-site /admin uses (/api/creator/*).
-// Venus can speak a summary; this is the visual surface.
-
-const BG = '#060b16';
-const GREEN = '#35d6ff';
-const DIM = 'rgba(214,234,255,0.55)';
+// Venus can speak a summary; this is the visual surface. Theme-aware.
 
 type StoreStat = { id: string; slug: string; name: string; orders: number; revenueCents: number; views30d: number };
 type OrderRow = { id: string; storeSlug?: string; status: string; totalCents: number; createdAt: string; trackingUrl: string | null };
+type MarginRow = { productId: string; name: string; storeName: string; retailCents: number | null; costCents: number | null; marginCents: number | null; marginPct: number | null };
 
 const money = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -31,10 +29,14 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function EarningsCockpit({ visible, onClose, token }: { visible: boolean; onClose: () => void; token: string }) {
+  const pal = useStudioPalette();
+  const styles = useMemo(() => makeStyles(pal), [pal]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stores, setStores] = useState<StoreStat[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [margins, setMargins] = useState<MarginRow[]>([]);
+  const [avgMarginPct, setAvgMarginPct] = useState<number | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -44,13 +46,16 @@ export function EarningsCockpit({ visible, onClose, token }: { visible: boolean;
     (async () => {
       try {
         const headers = { Authorization: `Bearer ${token}` };
-        const [s, o] = await Promise.all([
+        const [s, o, m] = await Promise.all([
           fetch(apiUrl('/api/creator/stats'), { headers }).then((r) => r.json()),
           fetch(apiUrl('/api/creator/orders'), { headers }).then((r) => r.json()),
+          fetch(apiUrl('/api/creator/margins'), { headers }).then((r) => r.json()),
         ]);
         if (!alive) return;
         setStores(s.stores ?? []);
         setOrders(o.orders ?? []);
+        setMargins(m.products ?? []);
+        setAvgMarginPct(typeof m.avgMarginPct === 'number' ? m.avgMarginPct : null);
       } catch {
         if (alive) setError('Could not load your numbers — try again.');
       } finally {
@@ -85,7 +90,7 @@ export function EarningsCockpit({ visible, onClose, token }: { visible: boolean;
           </View>
 
           {loading ? (
-            <ActivityIndicator style={styles.center} color={GREEN} />
+            <ActivityIndicator style={styles.center} color={pal.accent} />
           ) : error ? (
             <ThemedText style={[styles.center, styles.dim]}>{error}</ThemedText>
           ) : !stores.length ? (
@@ -185,6 +190,37 @@ export function EarningsCockpit({ visible, onClose, token }: { visible: boolean;
                   </ThemedText>
                 )}
               </View>
+
+              {/* Per-product margin — retail vs our Printful cost */}
+              {margins.length ? (
+                <View style={styles.section}>
+                  <View style={styles.marginHead}>
+                    <ThemedText type="code" style={styles.sectionLabel}>MARGINS</ThemedText>
+                    {avgMarginPct != null ? (
+                      <ThemedText type="code" style={styles.dim}>avg {avgMarginPct}%</ThemedText>
+                    ) : null}
+                  </View>
+                  {margins.map((m) => (
+                    <View key={m.productId} style={styles.marginRow}>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText type="small" style={styles.white} numberOfLines={1}>{m.name}</ThemedText>
+                        <ThemedText type="code" style={styles.orderMeta}>
+                          {m.retailCents != null ? money(m.retailCents) : '—'} retail
+                          {m.costCents != null ? ` · ${money(m.costCents)} cost` : ''}
+                        </ThemedText>
+                      </View>
+                      {m.marginCents != null ? (
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <ThemedText type="small" style={styles.profit}>{money(m.marginCents)}</ThemedText>
+                          {m.marginPct != null ? <ThemedText type="code" style={styles.orderMeta}>{m.marginPct}%</ThemedText> : null}
+                        </View>
+                      ) : (
+                        <ThemedText type="code" style={styles.dim}>cost n/a</ThemedText>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </ScrollView>
           )}
         </View>
@@ -193,27 +229,32 @@ export function EarningsCockpit({ visible, onClose, token }: { visible: boolean;
   );
 }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: BG, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: 'rgba(53,214,255,0.18)', overflow: 'hidden' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },
-  eyebrow: { color: GREEN, letterSpacing: 2 },
-  close: { color: DIM },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.six },
-  scroll: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
-  cardRow: { flexDirection: 'row', gap: Spacing.three },
-  card: { flex: 1, backgroundColor: 'rgba(53,214,255,0.05)', borderWidth: 1, borderColor: 'rgba(53,214,255,0.15)', borderRadius: 14, padding: Spacing.four, gap: Spacing.one },
-  cardLabel: { color: DIM, fontSize: 10, letterSpacing: 1.5 },
-  cardBig: { color: '#fff', fontSize: 26 },
-  alert: { color: '#ffcf3f' },
-  section: { gap: Spacing.two, marginTop: Spacing.two },
-  sectionLabel: { color: GREEN, letterSpacing: 1.5, fontSize: 11 },
-  storeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)' },
-  orderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)' },
-  orderMeta: { color: DIM, fontSize: 11 },
-  badge: { paddingHorizontal: Spacing.three, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)' },
-  badgeShip: { backgroundColor: 'rgba(53,214,255,0.18)' },
-  badgeText: { color: '#fff', fontSize: 10, letterSpacing: 0.5 },
-  white: { color: '#fff' },
-  dim: { color: DIM },
-});
+function makeStyles(pal: StudioPalette) {
+  return StyleSheet.create({
+    fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+    sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: pal.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: pal.line, overflow: 'hidden' },
+    headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },
+    eyebrow: { color: pal.accent, letterSpacing: 2 },
+    close: { color: pal.dim },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.six },
+    scroll: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
+    cardRow: { flexDirection: 'row', gap: Spacing.three },
+    card: { flex: 1, backgroundColor: pal.card, borderWidth: 1, borderColor: pal.line, borderRadius: 14, padding: Spacing.four, gap: Spacing.one },
+    cardLabel: { color: pal.dim, fontSize: 10, letterSpacing: 1.5 },
+    cardBig: { color: pal.ink, fontSize: 26 },
+    alert: { color: pal.dark ? '#ffcf3f' : '#b8860b' },
+    section: { gap: Spacing.two, marginTop: Spacing.two },
+    sectionLabel: { color: pal.accent, letterSpacing: 1.5, fontSize: 11 },
+    storeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
+    orderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
+    orderMeta: { color: pal.dim, fontSize: 11 },
+    marginHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    marginRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
+    profit: { color: pal.dark ? '#4ade80' : '#16a34a', fontWeight: '700' },
+    badge: { paddingHorizontal: Spacing.three, paddingVertical: 4, borderRadius: 999, backgroundColor: pal.card },
+    badgeShip: { backgroundColor: pal.dark ? 'rgba(53,214,255,0.18)' : 'rgba(14,159,206,0.16)' },
+    badgeText: { color: pal.ink, fontSize: 10, letterSpacing: 0.5 },
+    white: { color: pal.ink },
+    dim: { color: pal.dim },
+  });
+}

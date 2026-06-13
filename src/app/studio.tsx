@@ -43,6 +43,7 @@ import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-nativ
 import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
+import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -541,6 +542,7 @@ export default function StudioScreen() {
   const [showCockpit, setShowCockpit] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [hasStore, setHasStore] = useState(false);
+  const [paywall, setPaywall] = useState<'subscription_required' | 'brand_limit' | 'manage' | null>(null);
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
   // get started), returning creators see their dashboard, and the AI entity only
   // runs in 'interview'. 'loading' until we know which.
@@ -952,6 +954,12 @@ export default function StudioScreen() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ brand, transcript: messages.current }),
       });
+      // Launching a store needs an active plan with room under its brand cap — open the paywall.
+      if (r.status === 402) {
+        const g = (await r.json()) as { error?: string };
+        setPaywall(g.error === 'brand_limit' ? 'brand_limit' : 'subscription_required');
+        return;
+      }
       const d = (await r.json()) as {
         store?: { slug: string; logoUrl?: string | null };
         error?: string;
@@ -1039,7 +1047,8 @@ export default function StudioScreen() {
         {session ? (
           <>
             <EarningsCockpit visible={showCockpit} onClose={() => setShowCockpit(false)} token={session.access_token} />
-            <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} />
+            <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} />
+            <Paywall visible={!!paywall} onClose={() => setPaywall(null)} token={session.access_token} reason={paywall} />
           </>
         ) : null}
 
@@ -1076,6 +1085,7 @@ export default function StudioScreen() {
             token={session.access_token}
             onEditBrand={() => setShowComposer(true)}
             onNewBrand={onNewBrand}
+            onOpenBilling={() => setPaywall('manage')}
           />
         ) : brand ? (
           <ScrollView
