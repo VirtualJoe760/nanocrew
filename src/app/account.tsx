@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { PlatformAdmin } from '@/components/platform-admin';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { BottomTabInset, Spacing } from '@/constants/theme';
@@ -34,11 +35,14 @@ export default function AccountScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stores, setStores] = useState<StoreRow[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
-  // Ensure the creators row exists + load this creator's stores.
+  // Ensure the creators row exists + load this creator's stores; probe platform-admin access.
   useEffect(() => {
     if (!session) {
       setStores([]);
+      setIsAdmin(false);
       return;
     }
     fetch(apiUrl('/api/me'), {
@@ -47,6 +51,9 @@ export default function AccountScreen() {
       .then((r) => r.json())
       .then((d: { stores?: StoreRow[] }) => setStores(d.stores ?? []))
       .catch(() => {});
+    apiFetch('/api/platform/admin')
+      .then((r) => setIsAdmin(r.ok))
+      .catch(() => setIsAdmin(false));
   }, [session]);
 
   // Dev-only: deep-linking /account?auto=google|facebook starts the flow hands-free,
@@ -190,6 +197,14 @@ export default function AccountScreen() {
                   </ThemedView>
                 </Pressable>
 
+                {isAdmin ? (
+                  <Pressable onPress={() => setShowAdmin(true)}>
+                    <ThemedView type="backgroundElement" style={styles.button}>
+                      <ThemedText type="smallBold" themeColor="tint">Platform admin</ThemedText>
+                    </ThemedView>
+                  </Pressable>
+                ) : null}
+
                 <Pressable onPress={() => supabase.auth.signOut()}>
                   <View style={[styles.button, styles.signOut]}>
                     <ThemedText type="smallBold" style={{ color: '#e24b4a' }}>
@@ -276,6 +291,7 @@ export default function AccountScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      {isAdmin ? <PlatformAdmin visible={showAdmin} onClose={() => setShowAdmin(false)} /> : null}
     </ThemedView>
   );
 }
