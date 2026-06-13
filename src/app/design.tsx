@@ -36,9 +36,12 @@ import { DesignCanvas, NODE_H, NODE_W, type CanvasNode } from '@/components/desi
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
 import { DOCK_TAB_CLEARANCE, TemplatesDock } from '@/components/designer/TemplatesDock';
+import { router } from 'expo-router';
+
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import type { CatalogBlank } from '@/lib/printful';
 import { EFFORT_LABELS, EFFORT_TIERS, type Effort } from '@/lib/effort';
@@ -130,6 +133,7 @@ type Swatch = { color: string; colorCode: string; image: string };
 
 export default function DesignScreen() {
   const theme = useTheme();
+  const { session } = useAuth();
   const { width, height } = useWindowDimensions();
 
   const [designs, setDesigns] = useState<Design[]>([]);
@@ -911,6 +915,38 @@ export default function DesignScreen() {
     }
   };
 
+  if (!session) {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.gateWrap}>
+          <ThemedText style={[styles.gateSpark, { color: theme.text }]}>✦</ThemedText>
+          <ThemedText type="title" style={styles.gateTitle}>
+            Design your products
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.gateBody}>
+            Generate AI artwork, drop it onto real apparel, and build collections for your
+            store. Sign in to start designing.
+          </ThemedText>
+          <Pressable onPress={() => router.navigate('/account')}>
+            <View style={[styles.gateBtn, { backgroundColor: theme.text }]}>
+              <ThemedText type="smallBold" style={{ color: theme.background }}>
+                Create an account
+              </ThemedText>
+            </View>
+          </Pressable>
+          <Pressable onPress={() => router.navigate('/account')} hitSlop={8}>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.gateLogin}>
+              I already have one — log in
+            </ThemedText>
+          </Pressable>
+          <ThemedText type="code" themeColor="textSecondary" style={styles.gateFoot}>
+            Free to explore. You only need a plan to launch a store.
+          </ThemedText>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       {/* Top: designs history bar */}
@@ -1653,6 +1689,13 @@ function MergeModal({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  gateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, paddingHorizontal: Spacing.five },
+  gateSpark: { fontSize: 40, opacity: 0.8 },
+  gateTitle: { fontSize: 28, textAlign: 'center' },
+  gateBody: { textAlign: 'center', maxWidth: 320, lineHeight: 22 },
+  gateBtn: { borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.two },
+  gateLogin: { textDecorationLine: 'underline', paddingVertical: Spacing.two },
+  gateFoot: { fontSize: 12, marginTop: Spacing.two, textAlign: 'center', opacity: 0.8 },
   flex: { flex: 1 },
   topBar: {
     flexDirection: 'row',
