@@ -1425,7 +1425,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two + 2,
   },
 
-  captions: { gap: Spacing.two, paddingBottom: Spacing.four, minHeight: 96 },
+  captions: { gap: Spacing.two, paddingBottom: Spacing.four, marginBottom: Spacing.six, minHeight: 96 },
   heard: { color: '#56575e', textAlign: 'center' },
   bigWord: {
     color: '#f4f4f6',
