@@ -86,9 +86,12 @@ Cross-cutting guarantees:
   isPublic). Slug stays immutable. **The `live` transition (domain attach + go-live) is Phase C.**
 
 ### Phase C — Domains (G3)  ·  **Vercel for everything** (decided)  ·  ✅ done (code)
-- ✅ `src/lib/domains.ts`: `attachDomain` (idempotent; 409 → re-verify), `searchDomain` (availability +
-  price, read-only), `buyDomain` (Vercel `/v5/domains/buy`), `domainCredits(priceUsd)` (yearly price →
-  credits, 1.25× over cost), `normalizeDomain`.
+- ✅ `src/lib/domains.ts`: `attachDomain` (Projects API, idempotent; 409 → re-verify), `searchDomain`
+  + `buyDomain` on Vercel's **Domains Registrar API** (`/v1/registrar/...` — the old `/v4/domains/*`
+  + `/v5/domains/buy` were sunsetted Nov 2025; verified live), `domainCredits(priceUsd)` (yearly price →
+  credits, 1.25× over cost), `normalizeDomain`. Buy passes the platform registrant contact + an
+  expectedPrice that must match; the buy endpoint never refunds once the domain is bought (retries
+  attach, reports "registering" on lag).
 - ✅ **Own / transfer a domain**: `POST /api/creator/stores/:slug/go-live { domain }` attaches to the
   `store-<slug>` project; verified → writes `customDomain` + status `live`; pending → returns the DNS
   records to set, re-check by calling again.
@@ -99,9 +102,13 @@ Cross-cutting guarantees:
   search+buy with credits), opened from the Studio **Edit site** tab; live status shown inline.
 - **Go-live == domain attached** (decided). The site lives at `store-<slug>.vercel.app` as the
   preview/working URL the whole time; pointing it at a domain is the official launch.
-- ⏳ **Needs Joe's config to actually buy/attach**: a `VERCEL_TOKEN` scoped for domain purchase +
-  project-domain management, and a billing method on Vercel. Attach/transfer of an owned domain works
-  with a standard project-scoped token; buying needs billing.
+- ✅ **Verified live (2026-06-14)**: registrar availability + price return real data with the current
+  `VERCEL_TOKEN`; the Projects domains API (attach/verify) works. Attach/connect of an owned domain is
+  fully functional now.
+- ⏳ **Needs Joe's config to BUY**: set `DOMAIN_CONTACT_*` (registrant: FIRST_NAME, LAST_NAME, EMAIL,
+  PHONE [E.164], ADDRESS1, CITY, STATE, ZIP, COUNTRY [ISO-2]) — the registrar requires full contact on
+  every purchase — plus a billing method on Vercel. Without those, search + attach work; buy returns a
+  clear "registrant not configured" error.
 - Note: domain purchase charges the platform's Vercel account; we recoup via the creator's credits.
   (The roadmap originally said "charge via Stripe" — credits are the simpler v1 and already paid-for.)
 

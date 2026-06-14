@@ -146,14 +146,16 @@ export function GoLiveComposer({
         headers,
         body: JSON.stringify({ domain: offer.domain }),
       });
-      const d = (await res.json()) as { live?: boolean; error?: string; needed?: number; balance?: number };
+      const d = (await res.json()) as { live?: boolean; note?: string; error?: string; needed?: number; balance?: number };
       if (res.status === 402) {
         setCredits(d.balance ?? credits);
         setNote(`Not enough credits — that domain costs ${d.needed ?? offer.credits}.`);
         return;
       }
-      if (!res.ok || !d.live) throw new Error(d.error ?? 'failed');
+      if (!res.ok) throw new Error(d.error ?? 'failed'); // a true failure here means we refunded — not charged
+      // 200 = live, 202 = purchased but still registering (charged; finishes attaching shortly).
       setOffer(null);
+      setNote(d.note ?? null);
       await load();
       onLive?.();
     } catch (e) {

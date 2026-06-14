@@ -56,13 +56,28 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
     throw e;
   }
 
+  // Buy first. Only a FAILED purchase refunds — once the domain is bought (real money spent on
+  // Vercel) we never refund; if attaching lags behind registration we just retry / report pending.
   try {
     await buyDomain(domain, priceUsd);
-    await attachDomain(`store-${store.slug}`, domain); // freshly-bought domain verifies instantly on Vercel
-    await db.update(schema.stores).set({ customDomain: domain, status: 'live' }).where(eq(schema.stores.id, store.id));
-    return Response.json({ live: true, domain, url: `https://${domain}`, status: 'live', charged: cost });
   } catch (e) {
     await grant(user.id, cost, 'refund', store.id).catch(() => {});
     return Response.json({ error: e instanceof Error ? e.message : 'purchase failed — you were not charged' }, { status: 502 });
   }
+
+  // Domain is ours now. Record it, then attach to the store project (registration can take a few
+  // seconds, so retry). Going live == attached.
+  await db.update(schema.stores).set({ customDomain: domain }).where(eq(schema.stores.id, store.id));
+  const project = `store-${store.slug}`;
+  for (let i = 0; i < 5; i++) {
+    try {
+      await attachDomain(project, domain);
+      await db.update(schema.stores).set({ status: 'live' }).where(eq(schema.stores.id, store.id));
+      return Response.json({ live: true, domain, url: `https://${domain}`, status: 'live', charged: cost });
+    } catch {
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+  // Bought but not yet attachable — the creator re-opens go-live shortly to finish (no refund).
+  return Response.json({ live: false, domain, status: store.status, charged: cost, note: 'Domain purchased — finishing registration. Re-open Go live in a minute to point your site at it.' }, { status: 202 });
 }
