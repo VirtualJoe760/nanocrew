@@ -83,6 +83,11 @@ async function speak(text: string, voiceId: string): Promise<{ speech: string; w
   return { speech, words };
 }
 
+// Pure-TTS lines (voice previews, launch announcements) are STATIC — same text + voice
+// → same audio. Cache the rendered clip on the (persistent Railway) server so we never
+// re-hit ElevenLabs for a repeat. Keyed by voice + text; bounded so it can't grow forever.
+const ttsCache = new Map<string, { speech: string; words: TimedWord[] }>();
+
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -121,10 +126,16 @@ export async function POST(req: Request) {
   // Allowlisted roster only — unknown ids fall back to the default consultant.
   const voice = resolveVoice(voiceId);
 
-  // say mode: pure TTS — the app provides the line (e.g. announcing the store launch).
+  // say mode: pure TTS — the app provides the line (e.g. a voice preview, or announcing
+  // the store launch). Served from the server-side cache when we've rendered it before.
   if (say) {
+    const cacheKey = `${voice.id}:${say}`;
+    const hit = ttsCache.get(cacheKey);
+    if (hit) return Response.json({ line: say, speech: hit.speech, words: hit.words, cached: true });
     try {
       const tts = await speak(say, voice.id);
+      if (ttsCache.size > 64) ttsCache.clear(); // simple bound
+      ttsCache.set(cacheKey, tts);
       return Response.json({ line: say, speech: tts.speech, words: tts.words });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
