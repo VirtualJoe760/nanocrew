@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { PlatformAdmin } from '@/components/platform-admin';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
@@ -37,6 +38,7 @@ export default function AccountScreen() {
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showEarnings, setShowEarnings] = useState(false);
   const [payouts, setPayouts] = useState<{ connected: boolean; chargesEnabled: boolean } | null>(null);
 
   // Ensure the creators row exists + load this creator's stores; probe platform-admin access.
@@ -212,6 +214,17 @@ export default function AccountScreen() {
                   )}
                 </View>
 
+                {stores.length ? (
+                  <Pressable onPress={() => setShowEarnings(true)}>
+                    <ThemedView type="backgroundElement" style={styles.button}>
+                      <ThemedText type="smallBold">Earnings</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Revenue, orders & margins across your brands
+                      </ThemedText>
+                    </ThemedView>
+                  </Pressable>
+                ) : null}
+
                 <Pressable onPress={openBilling} disabled={busy}>
                   <ThemedView type="backgroundElement" style={styles.button}>
                     <ThemedText type="smallBold">Subscription & billing ↗</ThemedText>
@@ -327,6 +340,7 @@ export default function AccountScreen() {
         </KeyboardAvoidingView>
       </SafeAreaView>
       {isAdmin ? <PlatformAdmin visible={showAdmin} onClose={() => setShowAdmin(false)} /> : null}
+      {session ? <EarningsCockpit visible={showEarnings} onClose={() => setShowEarnings(false)} token={session.access_token} /> : null}
     </ThemedView>
   );
 }

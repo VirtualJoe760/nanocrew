@@ -40,7 +40,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 
-import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
@@ -340,20 +339,14 @@ function KeyboardIcon({ active }: { active: boolean }) {
   );
 }
 
-function MetricsIcon() {
+/** Hamburger → back to the list of brands. */
+function BrandsIcon() {
   const c = '#9a978f';
-  const bars: [number, number][] = [
-    [5, 14],
-    [11, 8],
-    [17, 17],
-    [23, 11],
-  ];
   return (
     <Svg width={28} height={26} opacity={0.5}>
-      {bars.map(([x, h]) => (
-        <Line key={x} x1={x} y1={21} x2={x} y2={21 - h} stroke={c} strokeWidth={2.4} strokeLinecap="round" />
+      {[9, 14, 19].map((y) => (
+        <Line key={y} x1={6} y1={y} x2={22} y2={y} stroke={c} strokeWidth={2.2} strokeLinecap="round" />
       ))}
-      <Line x1={2} y1={22.5} x2={26} y2={22.5} stroke={c} strokeWidth={1.3} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -656,7 +649,6 @@ export default function StudioScreen() {
   const [voiceResolved, setVoiceResolved] = useState(false);
   const [needsSelection, setNeedsSelection] = useState(false);
   const [previewing, setPreviewing] = useState<string | null>(null);
-  const [showCockpit, setShowCockpit] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
   const [hasStore, setHasStore] = useState(false);
@@ -1140,9 +1132,11 @@ export default function StudioScreen() {
                   <ManageIcon />
                 </Pressable>
               ) : null}
-              <Pressable onPress={() => setShowCockpit(true)} hitSlop={10}>
-                <MetricsIcon />
-              </Pressable>
+              {hasStore && mode === 'interview' ? (
+                <Pressable onPress={() => setMode('dashboard')} hitSlop={10}>
+                  <BrandsIcon />
+                </Pressable>
+              ) : null}
               {mode === 'interview' ? (
                 <Pressable onPress={toggleKeyboard} hitSlop={10}>
                   <KeyboardIcon active={keyboardMode} />
@@ -1153,7 +1147,6 @@ export default function StudioScreen() {
         </View>
         {session ? (
           <>
-            <EarningsCockpit visible={showCockpit} onClose={() => setShowCockpit(false)} token={session.access_token} />
             <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
             <Paywall visible={!!paywall} onClose={() => setPaywall(null)} token={session.access_token} reason={paywall} />
           </>
