@@ -25,16 +25,18 @@ async function cloudinaryUpload(
   const { createHash } = await import('node:crypto');
   const signature = createHash('sha1').update(toSign + API_SECRET).digest('hex');
 
-  const form = new FormData();
-  form.append('file', new Blob([new Uint8Array(buffer)]));
-  form.append('api_key', API_KEY);
-  form.append('timestamp', timestamp);
-  for (const [k, v] of Object.entries(extra)) form.append(k, v);
-  form.append('signature', signature);
+  // Send as application/x-www-form-urlencoded with the file as a base64 data URI — avoids
+  // FormData/Blob, which aren't reliably present in expo serve's request runtime.
+  const body = new URLSearchParams();
+  body.append('file', `data:application/octet-stream;base64,${buffer.toString('base64')}`);
+  body.append('api_key', API_KEY);
+  body.append('timestamp', timestamp);
+  for (const [k, v] of Object.entries(extra)) body.append(k, v);
+  body.append('signature', signature);
 
   const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/${resourceType}/upload`, {
     method: 'POST',
-    body: form,
+    body,
   });
   if (!res.ok) throw new Error(`Cloudinary ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return ((await res.json()) as { secure_url: string }).secure_url;
