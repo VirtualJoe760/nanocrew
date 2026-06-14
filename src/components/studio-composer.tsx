@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
+import { SceneShortComposer } from '@/components/scene-short-composer';
 import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -55,6 +56,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [voiceoverCost, setVoiceoverCost] = useState(25);
   const [veoCost, setVeoCost] = useState(400);
   const [genId, setGenId] = useState<string | null>(null); // product currently generating an ad
+  const [shortComposer, setShortComposer] = useState(false); // the "make a scene short" flow
   const [uploading, setUploading] = useState(false); // post cover image upload in flight
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -519,6 +521,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                     ) : null}
                   </View>
                   <ThemedText type="small" style={styles.dim}>Venus turns a product into a feed video ad ({voiceoverCost}), on-model shots (20), or an on-model film for your website ({veoCost}).</ThemedText>
+                  <Pressable onPress={() => setShortComposer(true)} style={styles.primaryBtn}>
+                    <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Make a scene short</ThemedText>
+                  </Pressable>
+                  <ThemedText type="code" style={styles.dim}>Put a model in a real scene — skateboarding, on a beach — and pick the quality: Wan, Seedance or Veo 3.</ThemedText>
                   {note && !draft ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
                   {note && !draft && onOpenBilling && credits !== null && credits < voiceoverCost ? (
                     <Pressable onPress={onOpenBilling} style={styles.primaryBtn}>
@@ -661,6 +667,15 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
           url={previewTarget}
           onClose={() => setPreviewTarget(null)}
           critique={critiquePreview && active ? { slug: active, token, onSent: () => { void loadRevisions(); } } : undefined}
+        />
+      ) : null}
+      {shortComposer && active ? (
+        <SceneShortComposer
+          visible={shortComposer}
+          onClose={() => setShortComposer(false)}
+          token={token}
+          slug={active}
+          onPublished={() => { void loadProducts(); void loadCredits(); }}
         />
       ) : null}
     </Modal>
