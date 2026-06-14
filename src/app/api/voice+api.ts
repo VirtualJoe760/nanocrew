@@ -84,14 +84,36 @@ async function speak(text: string, voiceId: string): Promise<{ speech: string; w
 }
 
 // Pure-TTS lines (voice previews, launch announcements) are STATIC — same text + voice
-// → same audio. Cache the rendered clip on the persistent Railway server so we never
-// re-hit ElevenLabs for a repeat. `expo serve` re-evaluates route modules per request,
-// so the cache lives on globalThis (shared across the whole Node process) rather than a
-// module-level const. Keyed by voice + text; bounded so it can't grow forever.
-const globalForTts = globalThis as unknown as {
-  __nanocrewTtsCache?: Map<string, { speech: string; words: TimedWord[] }>;
-};
-const ttsCache = (globalForTts.__nanocrewTtsCache ??= new Map());
+// → same audio. Cache the rendered clip on Railway's DISK so we never re-hit ElevenLabs
+// for a repeat. (`expo serve` runs each request in an isolated JS realm, so in-memory /
+// globalThis caches don't survive — but the container filesystem is shared across
+// requests.) The cache is wiped on each redeploy, which just re-renders once per clip.
+const TTS_CACHE_DIR = `${process.env.TMPDIR || '/tmp'}/nanocrew-tts`;
+
+async function ttsCacheRead(key: string): Promise<{ speech: string; words: TimedWord[] } | null> {
+  try {
+    const { createHash } = await import('node:crypto');
+    const { readFile } = await import('node:fs/promises');
+    const file = `${TTS_CACHE_DIR}/${createHash('sha1').update(key).digest('hex')}.json`;
+    return JSON.parse(await readFile(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function ttsCacheWrite(key: string, value: { speech: string; words: TimedWord[] }): void {
+  void (async () => {
+    try {
+      const { createHash } = await import('node:crypto');
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      await mkdir(TTS_CACHE_DIR, { recursive: true });
+      const file = `${TTS_CACHE_DIR}/${createHash('sha1').update(key).digest('hex')}.json`;
+      await writeFile(file, JSON.stringify(value));
+    } catch {
+      /* best-effort cache */
+    }
+  })();
+}
 
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
@@ -135,12 +157,11 @@ export async function POST(req: Request) {
   // the store launch). Served from the server-side cache when we've rendered it before.
   if (say) {
     const cacheKey = `${voice.id}:${say}`;
-    const hit = ttsCache.get(cacheKey);
+    const hit = await ttsCacheRead(cacheKey);
     if (hit) return Response.json({ line: say, speech: hit.speech, words: hit.words, cached: true });
     try {
       const tts = await speak(say, voice.id);
-      if (ttsCache.size > 64) ttsCache.clear(); // simple bound
-      ttsCache.set(cacheKey, tts);
+      ttsCacheWrite(cacheKey, tts);
       return Response.json({ line: say, speech: tts.speech, words: tts.words });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
