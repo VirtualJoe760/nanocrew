@@ -44,18 +44,25 @@ export async function generateSeedanceVideo(opts: {
   const { id } = (await create.json()) as { id?: string };
   if (!id) throw new Error('seedance returned no task id');
 
-  // 2) Poll GET /api/v1/video/task/{id} until succeeded. video_url expires in 24h → download now.
-  for (let i = 0; i < 50; i++) {
-    await new Promise((r) => setTimeout(r, 6000)); // ~5 min budget
+  // 2) Poll GET /api/v1/video/task/{id} until succeeded/failed. Docs: generation takes 1–10 min,
+  //    give up at 15. Polling a failed task is also what triggers the auto-refund, so we must poll.
+  //    video_url expires in 24h → download immediately.
+  await new Promise((r) => setTimeout(r, 10_000)); // docs: wait 10s before the first poll
+  for (let i = 0; i < 110; i++) {
     const st = await fetch(`${BASE}/api/v1/video/task/${id}`, { headers: auth });
-    if (!st.ok) continue;
-    const d = (await st.json()) as { status?: string; video_url?: string; error?: string };
-    if (d.status === 'succeeded' && d.video_url) {
-      const dl = await fetch(d.video_url);
-      if (!dl.ok) throw new Error(`seedance download failed: ${dl.status}`);
-      return Buffer.from(await dl.arrayBuffer());
+    if (st.ok) {
+      const d = (await st.json()) as { status?: string; video_url?: string; error?: { message?: string } | string };
+      if (d.status === 'succeeded' && d.video_url) {
+        const dl = await fetch(d.video_url);
+        if (!dl.ok) throw new Error(`seedance download failed: ${dl.status}`);
+        return Buffer.from(await dl.arrayBuffer());
+      }
+      if (d.status === 'failed') {
+        const msg = typeof d.error === 'object' ? d.error?.message : d.error;
+        throw new Error(`seedance task failed: ${msg ?? 'unknown'}`); // credits auto-refunded by this poll
+      }
     }
-    if (d.status === 'failed') throw new Error(`seedance task failed: ${d.error ?? 'unknown'}`);
+    await new Promise((r) => setTimeout(r, 8000)); // ~15 min total budget
   }
   throw new Error('seedance task timed out');
 }
