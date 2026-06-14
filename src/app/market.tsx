@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import { useLocalSearchParams } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 
 import { ThemedText } from '@/components/themed-text';
@@ -141,6 +142,12 @@ export default function MarketScreen() {
   const brands = data?.brands ?? [];
   const searching = query.trim().length > 0;
   const [storeSlug, setStoreSlug] = useState<string | null>(null);
+
+  // Deep-link from the feed's Buy tag: /market?store=<slug> opens that brand's store.
+  const { store } = useLocalSearchParams<{ store?: string }>();
+  useEffect(() => {
+    if (store) setStoreSlug(store);
+  }, [store]);
 
   return (
     <ThemedView style={styles.container}>

@@ -4,6 +4,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   View,
@@ -11,7 +12,9 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { openBrowserAsync } from 'expo-web-browser';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -64,6 +67,8 @@ function FeedCard({
   onTryOn,
   onLike,
   onShare,
+  onTitle,
+  onBuy,
 }: {
   item: FeedItem;
   height: number;
@@ -71,6 +76,8 @@ function FeedCard({
   onTryOn: (item: FeedItem) => void;
   onLike: (item: FeedItem) => void;
   onShare: (item: FeedItem) => void;
+  onTitle: (item: FeedItem) => void;
+  onBuy: (item: FeedItem) => void;
 }) {
   return (
     <View style={[styles.card, { height }]}>
@@ -88,13 +95,21 @@ function FeedCard({
         <ThemedText type="smallBold" style={styles.handle}>
           @{item.storeSlug}
         </ThemedText>
-        <ThemedText type="subtitle" style={styles.title} numberOfLines={2}>
-          {item.name}
-        </ThemedText>
-        <ThemedText type="small" style={styles.sub} numberOfLines={2}>
-          {item.storeName}
-          {item.priceCents != null ? ` · $${(item.priceCents / 100).toFixed(2)}` : ''}
-        </ThemedText>
+        {/* Tap the title for a quick look + the full product page */}
+        <Pressable onPress={() => onTitle(item)} hitSlop={6}>
+          <ThemedText type="subtitle" style={styles.title} numberOfLines={2}>
+            {item.name}
+          </ThemedText>
+        </Pressable>
+        <View style={styles.metaRow}>
+          <ThemedText type="small" style={styles.sub} numberOfLines={1}>
+            {item.storeName}
+            {item.priceCents != null ? ` · $${(item.priceCents / 100).toFixed(2)}` : ''}
+          </ThemedText>
+          <Pressable onPress={() => onBuy(item)} hitSlop={6} style={styles.buyTag}>
+            <ThemedText type="smallBold" style={styles.buyTagText}>Buy</ThemedText>
+          </Pressable>
+        </View>
       </View>
 
       {/* Right-side actions */}
@@ -126,11 +141,22 @@ function FeedCard({
 
 export default function FeedScreen() {
   const { session } = useAuth();
+  const router = useRouter();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pageHeight, setPageHeight] = useState(0);
   const [tryOn, setTryOn] = useState<{ item: FeedItem; busy: boolean; result?: string; error?: string } | null>(null);
+  const [detail, setDetail] = useState<FeedItem | null>(null);
+
+  // Buy → open the brand's in-app store on the Market tab.
+  const onBuy = useCallback(
+    (item: FeedItem) => {
+      setDetail(null);
+      router.push({ pathname: '/market', params: { store: item.storeSlug } });
+    },
+    [router],
+  );
 
   useEffect(() => {
     fetch(apiUrl('/api/feed'), session ? { headers: { Authorization: `Bearer ${session.access_token}` } } : undefined)
@@ -229,6 +255,8 @@ export default function FeedScreen() {
                 onTryOn={startTryOn}
                 onLike={onLike}
                 onShare={onShare}
+                onTitle={setDetail}
+                onBuy={onBuy}
               />
             )}
             pagingEnabled
@@ -241,6 +269,47 @@ export default function FeedScreen() {
           />
         ) : null}
       </View>
+
+      {/* Product quick-look — title tap opens this; routes to the full product page or the brand store */}
+      {detail ? (
+        <Modal visible transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+          <View style={styles.detailBackdrop}>
+            <ThemedView type="background" style={styles.detailCard}>
+              <View style={styles.detailHeader}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText type="smallBold" themeColor="textSecondary">@{detail.storeSlug}</ThemedText>
+                  <ThemedText type="subtitle">{detail.name}</ThemedText>
+                </View>
+                <Pressable onPress={() => setDetail(null)} hitSlop={10}>
+                  <ThemedText type="small" themeColor="textSecondary">Close</ThemedText>
+                </Pressable>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                {detail.storeName}
+                {detail.priceCents != null ? ` · $${(detail.priceCents / 100).toFixed(2)}` : ''}
+              </ThemedText>
+              {detail.descriptionMd ? (
+                <ScrollView style={styles.detailBody}>
+                  <ThemedText type="small">{detail.descriptionMd}</ThemedText>
+                </ScrollView>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary">No description yet.</ThemedText>
+              )}
+              <View style={styles.detailActions}>
+                <Pressable onPress={() => onBuy(detail)} style={styles.detailPrimary}>
+                  <ThemedText type="smallBold" style={{ color: '#0a0a0c' }}>Shop @{detail.storeSlug}</ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={() => openBrowserAsync(`${siteUrlFor(detail.storeSlug)}/product/${detail.slug}`)}
+                  hitSlop={8}
+                >
+                  <ThemedText type="small" themeColor="tint">View product ↗</ThemedText>
+                </Pressable>
+              </View>
+            </ThemedView>
+          </View>
+        </Modal>
+      ) : null}
 
       {/* Try-on result */}
       {tryOn ? (
@@ -300,7 +369,10 @@ const styles = StyleSheet.create({
   },
   handle: { color: '#fff', opacity: 0.9 },
   title: { color: '#fff' },
-  sub: { color: '#fff', opacity: 0.8 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  sub: { color: '#fff', opacity: 0.8, flexShrink: 1 },
+  buyTag: { backgroundColor: '#c9a86a', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 4 },
+  buyTagText: { color: '#0a0a0c' },
   actions: { position: 'absolute', right: Spacing.four, bottom: 140, alignItems: 'center', gap: Spacing.four },
   actionBtn: { alignItems: 'center', gap: 3, paddingVertical: Spacing.one, width: 52 },
   actionGlyph: { fontSize: 28, lineHeight: 36, color: '#fff', textAlign: 'center', includeFontPadding: false },
@@ -313,6 +385,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: Spacing.four,
   },
+  detailBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  detailCard: { borderTopLeftRadius: Spacing.five, borderTopRightRadius: Spacing.five, padding: Spacing.four, gap: Spacing.three, maxHeight: '70%' },
+  detailHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
+  detailBody: { maxHeight: 200 },
+  detailActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginTop: Spacing.one },
+  detailPrimary: { backgroundColor: '#c9a86a', borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.five, alignItems: 'center' },
   tryOnCard: { width: '100%', maxWidth: 420, borderRadius: Spacing.four, padding: Spacing.four, gap: Spacing.three },
   tryOnHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   tryOnBody: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.six },
