@@ -41,6 +41,10 @@ export const orderStatus = pgEnum('order_status', [
   'delivered',
   'cancelled',
   'refunded',
+  // Fulfillment lifecycle tracked from Printful webhooks:
+  'on_hold', // Printful paused the order (needs attention) — order_put_hold
+  'returned', // the package came back to sender — package_returned (creator may then refund)
+  'failed', // Printful could not fulfill — order_failed (distinct from a customer cancel)
 ]);
 
 // Free = browse + shop only. The three paid tiers gate launching a store (Joe, 2026-06-12):

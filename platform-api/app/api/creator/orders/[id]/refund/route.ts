@@ -10,7 +10,7 @@ export const OPTIONS = corsPreflight;
 // POST /api/creator/orders/:id/refund — refund one of the creator's own orders. For a Connect
 // (destination-charge) order this reverses the brand's transfer AND claws back the platform's
 // application fee proportionally, so both parties give back their share. Ownership-checked.
-const REFUNDABLE = ['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered'];
+const REFUNDABLE = ['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered', 'on_hold', 'returned'];
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!stripe) return corsJson({ error: 'payments not configured' }, { status: 503 });

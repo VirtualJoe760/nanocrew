@@ -145,6 +145,13 @@ Cross-cutting guarantees:
   brand (name prefix / `external_id`) for dashboard clarity. The brand's "collection" is the
   `catalogues` row created at brand establishment. `stores.printfulStoreId` stays available only for the
   rare manually-provisioned per-brand store.
+- ✅ **Fulfillment + returns tracking**: the Printful webhook maps the full lifecycle to `order_status`
+  — `package_shipped`→shipped, `package_returned`→returned, `order_put_hold`→on_hold,
+  `order_remove_hold`→in_production, `order_failed`→failed, `order_canceled`→cancelled. Printful's
+  `order_refunded` is merchant-side (refunds OUR fulfillment cost, not the shopper) so it's logged
+  only — the customer order status is unchanged; a shopper refund only ever comes from a Stripe refund.
+  Added `on_hold`/`returned`/`failed` to the enum (migration 0015). A `returned` or `on_hold` order is
+  still refundable from `/admin`.
 
 ## Locked decisions (Joe, 2026-06-13)
 1. **Domains** — Vercel for everything (purchase **and** transfer); go-live = domain attached.

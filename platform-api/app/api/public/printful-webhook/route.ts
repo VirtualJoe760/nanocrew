@@ -3,11 +3,15 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import { sendShippedEmail } from '@/lib/notify';
 
-// POST /api/public/printful-webhook — Printful order lifecycle events.
-// package_shipped → tracking + status shipped + customer email.
-// order_canceled / order_failed → status cancelled.
-// v1 webhooks are unsigned; we require the store id to match and resolve orders
-// only by our own printful_order_id reference.
+// POST /api/public/printful-webhook — Printful order lifecycle events, mapped to our order_status:
+//   package_shipped  → shipped (+ tracking + customer email)
+//   package_returned → returned (the package came back; the creator may then refund in Stripe)
+//   order_put_hold   → on_hold      ·  order_remove_hold → in_production (resumed)
+//   order_failed     → failed       ·  order_canceled    → cancelled
+//   order_refunded   → logged only — Printful refunds US (our fulfillment cost), it does NOT refund
+//                      the shopper, whose money is in Stripe; the customer order stays as-is.
+// v1 webhooks are unsigned; we require the store id to match and resolve orders only by our own
+// printful_order_id reference.
 
 type PrintfulEvent = {
   type?: string;
@@ -68,9 +72,28 @@ export async function POST(req: Request) {
         trackingNumber: ship.tracking_number,
         trackingUrl: ship.tracking_url,
       }).catch((e) => console.error('[printful-webhook] notify:', e));
-    } else if (event.type === 'order_canceled' || event.type === 'order_failed') {
+    } else if (event.type === 'package_returned') {
+      // The package came back to sender. Track it so the creator sees it and can issue a Stripe refund.
+      await db.update(schema.orders).set({ status: 'returned' }).where(eq(schema.orders.id, order.id));
+      console.warn(`[printful-webhook] ${order.id} returned: ${event.data.reason ?? ''}`);
+    } else if (event.type === 'order_put_hold') {
+      await db.update(schema.orders).set({ status: 'on_hold' }).where(eq(schema.orders.id, order.id));
+      console.warn(`[printful-webhook] ${order.id} on hold: ${event.data.reason ?? ''}`);
+    } else if (event.type === 'order_remove_hold') {
+      // Resumed — only lift the hold if we haven't already moved past it (shipped/returned/etc.).
+      if (order.status === 'on_hold') {
+        await db.update(schema.orders).set({ status: 'in_production' }).where(eq(schema.orders.id, order.id));
+      }
+    } else if (event.type === 'order_failed') {
+      await db.update(schema.orders).set({ status: 'failed' }).where(eq(schema.orders.id, order.id));
+      console.warn(`[printful-webhook] ${order.id} failed: ${event.data.reason ?? ''}`);
+    } else if (event.type === 'order_canceled') {
       await db.update(schema.orders).set({ status: 'cancelled' }).where(eq(schema.orders.id, order.id));
-      console.warn(`[printful-webhook] ${order.id} ${event.type}: ${event.data.reason ?? ''}`);
+      console.warn(`[printful-webhook] ${order.id} canceled: ${event.data.reason ?? ''}`);
+    } else if (event.type === 'order_refunded') {
+      // Printful refunded our fulfillment cost — does NOT refund the shopper (Stripe holds their
+      // money). Track for reconciliation only; the customer order status is unchanged.
+      console.warn(`[printful-webhook] ${order.id} printful-refunded (merchant-side): ${event.data.reason ?? ''}`);
     }
     return Response.json({ ok: true });
   } catch (e) {
