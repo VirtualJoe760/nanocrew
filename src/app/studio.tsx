@@ -60,10 +60,10 @@ type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 // Dark ink used for text ON the gold accent buttons — gold is light, so dark text reads in
 // both modes. (The screen background comes from the palette below.)
-const BG = '#0a0a0c';
+const BG = '#08080a';
 // idle → listening → thinking → speaking. Champagne gold resting, brightening to near-white
 // as Venus speaks — monochrome + gold, per the Nano Crew brand.
-const STATE_COLORS = ['#c9a86a', '#e3cd97', '#d8bd82', '#f3ede0'];
+const STATE_COLORS = ['#cdd1d9', '#e8eaee', '#dfe2e8', '#ffffff'];
 const STATE_INDEX: Record<EntityState, number> = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
 
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
@@ -76,18 +76,18 @@ type Palette = ReturnType<typeof makePalette>;
 function makePalette(dark: boolean) {
   return {
     dark,
-    bg: dark ? '#0a0a0c' : '#f4f3f0',
-    bgTop: dark ? '#141417' : '#fbfaf8', // top of the vertical wash
+    bg: dark ? '#08080a' : '#f5f5f6',
+    bgTop: dark ? '#141417' : '#fbfbfc', // top of the vertical wash
     wave: dark
       ? ['#101013', '#0d0d10', '#131318', '#0b0b0e'] // silk fold tones on black
-      : ['#eeeae4', '#e7e6e1', '#f0efeb', '#e3e2dc'],
-    ink: dark ? '#f3f1ec' : '#16140f',
-    dim: dark ? '#9a978f' : '#6b675e',
-    faint: dark ? '#56544e' : '#a6a299',
-    accent: dark ? '#c9a86a' : '#a8884e', // champagne gold (darker on light for contrast)
-    accent2: dark ? '#e3cd97' : '#8a6d3a',
-    line: dark ? 'rgba(201,168,106,0.16)' : 'rgba(168,136,78,0.20)',
-    coreInner: dark ? '#f5efe1' : '#caa860',
+      : ['#eeeef0', '#e9e9ec', '#f0f0f2', '#e3e3e6'],
+    ink: dark ? '#f4f4f6' : '#131316',
+    dim: dark ? '#9396a0' : '#6a6c73',
+    faint: dark ? '#56575e' : '#a3a4ab',
+    accent: dark ? '#cdd1d9' : '#44474e', // champagne gold (darker on light for contrast)
+    accent2: dark ? '#e8eaee' : '#2c2e34',
+    line: dark ? 'rgba(205,209,217,0.16)' : 'rgba(68,71,78,0.20)',
+    coreInner: dark ? '#f4f4f6' : '#8a8d94',
   };
 }
 function usePalette(): Palette {
@@ -316,7 +316,7 @@ function DustField({
 
 /** Minimal keyboard glyph: the type-instead-of-talk toggle. Translucent until active. */
 function KeyboardIcon({ active }: { active: boolean }) {
-  const c = active ? '#c9a86a' : '#9a978f';
+  const c = active ? '#cdd1d9' : '#9396a0';
   const o = active ? 0.95 : 0.4;
   const keyRows: [number, number[]][] = [
     [9.5, [6, 10, 14, 18, 22]],
@@ -341,7 +341,7 @@ function KeyboardIcon({ active }: { active: boolean }) {
 
 /** Hamburger → back to the list of brands. */
 function BrandsIcon() {
-  const c = '#9a978f';
+  const c = '#9396a0';
   return (
     <Svg width={28} height={26} opacity={0.5}>
       {[9, 14, 19].map((y) => (
@@ -352,7 +352,7 @@ function BrandsIcon() {
 }
 
 function ManageIcon() {
-  const c = '#9a978f';
+  const c = '#9396a0';
   return (
     <Svg width={28} height={26} opacity={0.5}>
       {/* pencil */}
@@ -368,13 +368,13 @@ function IntroGlyph() {
     <Svg width={96} height={96}>
       <Defs>
         <RadialGradient id="intro" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor="#eaf6ff" stopOpacity={1} />
-          <Stop offset="40%" stopColor="#c9a86a" stopOpacity={0.85} />
-          <Stop offset="100%" stopColor="#c9a86a" stopOpacity={0} />
+          <Stop offset="0%" stopColor="#f4f4f6" stopOpacity={1} />
+          <Stop offset="40%" stopColor="#cdd1d9" stopOpacity={0.85} />
+          <Stop offset="100%" stopColor="#cdd1d9" stopOpacity={0} />
         </RadialGradient>
       </Defs>
-      <Circle cx={48} cy={48} r={46} fill="none" stroke="#c9a86a" strokeWidth={0.6} opacity={0.25} />
-      <Circle cx={48} cy={48} r={34} fill="none" stroke="#e3cd97" strokeWidth={0.6} opacity={0.3} />
+      <Circle cx={48} cy={48} r={46} fill="none" stroke="#cdd1d9" strokeWidth={0.6} opacity={0.25} />
+      <Circle cx={48} cy={48} r={34} fill="none" stroke="#e8eaee" strokeWidth={0.6} opacity={0.3} />
       <Circle cx={48} cy={48} r={20} fill="url(#intro)" />
     </Svg>
   );
@@ -418,7 +418,7 @@ function NanocrewMark({ color }: { color: string }) {
 const WEB_SIZE = 320;
 const WEB_C = WEB_SIZE / 2;
 
-const TONES = ['#c9a86a', '#7de0ff', '#d6ecff', '#1f9fd6'];
+const TONES = ['#cdd1d9', '#e8eaee', '#dfe2e8', '#9396a0'];
 const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 
 function arcPath(r: number, a0: number, a1: number): string {
@@ -501,7 +501,7 @@ function OrbLayerSvg({ spec }: { spec: OrbSpec }) {
   return (
     <Svg width={WEB_SIZE} height={WEB_SIZE}>
       {spec.links.map((l, i) => (
-        <Line key={`l${i}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#c9a86a" strokeOpacity={l.o} strokeWidth={0.5} />
+        <Line key={`l${i}`} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#cdd1d9" strokeOpacity={l.o} strokeWidth={0.5} />
       ))}
       {spec.arcs.map((a, i) => (
         <Path key={`a${i}`} d={a.d} stroke={a.c} strokeOpacity={a.o} strokeWidth={a.w} fill="none" />
@@ -1153,7 +1153,7 @@ export default function StudioScreen() {
         ) : null}
 
         {loading ? (
-          <ActivityIndicator style={styles.center} color="#c9a86a" />
+          <ActivityIndicator style={styles.center} color="#cdd1d9" />
         ) : !session ? (
           <View style={styles.introWrap}>
             <NCNucleus size={132} p={p} />
@@ -1182,7 +1182,7 @@ export default function StudioScreen() {
             </ThemedText>
           </View>
         ) : !voiceResolved || mode === 'loading' ? (
-          <ActivityIndicator style={styles.center} color="#c9a86a" />
+          <ActivityIndicator style={styles.center} color="#cdd1d9" />
         ) : mode === 'dashboard' ? (
           <StudioDashboard
             token={session.access_token}
@@ -1273,7 +1273,7 @@ export default function StudioScreen() {
                   <Pressable onPress={() => previewVoice(v)} disabled={!!previewing} hitSlop={6}>
                     <View style={styles.voiceBtn}>
                       {previewing === v.id ? (
-                        <ActivityIndicator size="small" color="#c9a86a" />
+                        <ActivityIndicator size="small" color="#cdd1d9" />
                       ) : (
                         <ThemedText type="code" style={styles.green}>
                           ▶ hear
@@ -1313,7 +1313,7 @@ export default function StudioScreen() {
                   value={typed}
                   onChangeText={setTyped}
                   placeholder="type your answer…"
-                  placeholderTextColor="#56544e"
+                  placeholderTextColor="#56575e"
                   multiline
                   style={styles.typeInput}
                   onSubmitEditing={sendTyped}
@@ -1364,15 +1364,15 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { color: '#8a8780', letterSpacing: 1 },
-  signInNote: { color: '#9a978f', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
+  signInNote: { color: '#9396a0', textAlign: 'center', fontFamily: MONO, fontSize: 14, lineHeight: 22 },
   introWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, paddingHorizontal: Spacing.four },
   introTag: { letterSpacing: 3, fontSize: 10, marginTop: Spacing.two },
   introTitle: { fontSize: 30, fontFamily: SERIF, letterSpacing: 0.5 },
   introBody: { textAlign: 'center', maxWidth: 320, lineHeight: 22 },
-  ctaPrimary: { backgroundColor: '#c9a86a', borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.three },
+  ctaPrimary: { backgroundColor: '#cdd1d9', borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.three },
   ctaSecondary: { paddingVertical: Spacing.two },
-  ctaSecondaryText: { color: '#9a978f' },
-  introFoot: { color: '#9a978f', fontSize: 12, marginTop: Spacing.three, textAlign: 'center' },
+  ctaSecondaryText: { color: '#9396a0' },
+  introFoot: { color: '#9396a0', fontSize: 12, marginTop: Spacing.three, textAlign: 'center' },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   markBadge: { transform: [{ scale: 0.32 }], width: 28, height: 28, marginLeft: -28, marginRight: -22 },
@@ -1391,7 +1391,7 @@ const styles = StyleSheet.create({
   cornerTR: { right: 12, borderRightWidth: 1.5, borderTopWidth: 1.5 },
   cornerBL: { left: 12, borderLeftWidth: 1.5, borderBottomWidth: 1.5 },
   cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
-  hint: { color: '#9a978f', letterSpacing: 1 },
+  hint: { color: '#9396a0', letterSpacing: 1 },
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },
@@ -1404,28 +1404,28 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    color: '#d6ecff',
+    color: '#dfe2e8',
     fontFamily: MONO,
     fontSize: 14,
   },
   typeSend: {
-    backgroundColor: '#c9a86a',
+    backgroundColor: '#cdd1d9',
     borderRadius: 4,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two + 2,
   },
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.four, minHeight: 96 },
-  heard: { color: '#56544e', textAlign: 'center' },
+  heard: { color: '#56575e', textAlign: 'center' },
   bigWord: {
-    color: '#eaf6ff',
+    color: '#f4f4f6',
     textAlign: 'center',
     fontFamily: MONO,
     fontSize: 32,
     lineHeight: 40,
     fontWeight: '700',
   },
-  line: { color: '#d6ecff', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: MONO },
+  line: { color: '#dfe2e8', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: MONO },
   error: { color: '#ff5c5c', textAlign: 'center', paddingTop: Spacing.two },
 
   brandScroll: { gap: Spacing.three, paddingTop: Spacing.four },
@@ -1438,7 +1438,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   voiceMeta: { gap: 2 },
-  voiceVibe: { color: '#9a978f' },
+  voiceVibe: { color: '#9396a0' },
   voiceActions: { flexDirection: 'row', gap: Spacing.two },
   voiceBtn: {
     borderWidth: 1,
@@ -1449,18 +1449,18 @@ const styles = StyleSheet.create({
     minWidth: 96,
     alignItems: 'center',
   },
-  voiceSelect: { backgroundColor: '#c9a86a', borderColor: '#c9a86a' },
-  voiceCardOn: { borderColor: '#c9a86a' },
-  getStarted: { backgroundColor: '#c9a86a', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
+  voiceSelect: { backgroundColor: '#cdd1d9', borderColor: '#cdd1d9' },
+  voiceCardOn: { borderColor: '#cdd1d9' },
+  getStarted: { backgroundColor: '#cdd1d9', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
   logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#13294d' },
   brandEyebrow: { color: '#8a8780' },
-  white: { color: '#eaf6ff' },
-  dim: { color: '#9a978f' },
-  green: { color: '#c9a86a' },
+  white: { color: '#f4f4f6' },
+  dim: { color: '#9396a0' },
+  green: { color: '#cdd1d9' },
   paletteRow: { flexDirection: 'row', gap: Spacing.two },
   swatchCol: { alignItems: 'center', gap: Spacing.one, flex: 1 },
   swatch: { width: '100%', aspectRatio: 1, borderRadius: 3 },
-  swatchLabel: { fontSize: 10, color: '#9a978f' },
+  swatchLabel: { fontSize: 10, color: '#9396a0' },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   chip: {
     borderWidth: 1,
@@ -1469,14 +1469,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two + 2,
     paddingVertical: Spacing.one,
   },
-  chipText: { color: '#9a978f', fontSize: 11 },
+  chipText: { color: '#9396a0', fontSize: 11 },
   createBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.three,
     borderRadius: 4,
     minHeight: 48,
-    backgroundColor: '#c9a86a',
+    backgroundColor: '#cdd1d9',
     gap: 2,
     marginTop: Spacing.two,
   },

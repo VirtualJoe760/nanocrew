@@ -80,7 +80,7 @@ function VenusGlyph({ accent }: { accent: string }) {
     <Svg width={40} height={40}>
       <Defs>
         <RadialGradient id="vg" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor="#eaf6ff" stopOpacity={1} />
+          <Stop offset="0%" stopColor="#f4f4f6" stopOpacity={1} />
           <Stop offset="45%" stopColor={accent} stopOpacity={0.9} />
           <Stop offset="100%" stopColor={accent} stopOpacity={0} />
         </RadialGradient>

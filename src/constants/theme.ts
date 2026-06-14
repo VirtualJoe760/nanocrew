@@ -7,28 +7,29 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
-// Nano Crew brand palette — monochrome (warm paper / near-black) with a single champagne
-// gold accent (`tint`). Reserved serif is for the NC mark; everything else is clean sans.
+// Nano Crew brand palette — cool monochrome (paper / near-pure black) with a single platinum-silver
+// accent (`tint`). No warmth, no gold — "depth, dimension, sophistication." The metallic gradient
+// signature lives in lib/metallic.ts. Reserved serif is for the NC mark; everything else clean sans.
 export const Colors = {
   light: {
-    text: '#16140f', // ink
-    background: '#f4f3f0', // warm paper
+    text: '#131316', // neutral ink
+    background: '#f5f5f6', // cool paper
     backgroundElement: '#ffffff', // cards lift off the paper
-    backgroundSelected: '#e7e4dd',
-    textSecondary: '#6b675e',
-    tint: '#a8884e', // champagne gold (darkened for contrast on paper)
+    backgroundSelected: '#e9e9ec',
+    textSecondary: '#6a6c73',
+    tint: '#44474e', // graphite — the silver accent reads dark on a light ground
     // The designer canvas reads as a recessed work surface, distinct from the app chrome.
     canvas: '#E9EAEF',
     canvasDot: '#B9BCC8',
     canvasEdge: '#D4D6DE',
   },
   dark: {
-    text: '#f3f1ec', // ink
-    background: '#0a0a0c', // near-black
-    backgroundElement: '#16161a',
-    backgroundSelected: '#1f1f24',
-    textSecondary: '#9a978f',
-    tint: '#c9a86a', // champagne gold
+    text: '#f4f4f6', // ink
+    background: '#08080a', // near-pure black
+    backgroundElement: '#161619',
+    backgroundSelected: '#232327',
+    textSecondary: '#9396a0',
+    tint: '#cdd1d9', // platinum silver
     canvas: '#121319',
     canvasDot: '#34374a',
     canvasEdge: '#23242e',

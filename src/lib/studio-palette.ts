@@ -10,17 +10,17 @@ export type StudioPalette = ReturnType<typeof makeStudioPalette>;
 export function makeStudioPalette(dark: boolean) {
   return {
     dark,
-    bg: dark ? '#0a0a0c' : '#f4f3f0', // sheet background
-    surface: dark ? '#141417' : '#ffffff', // cards / thumbnails
-    card: dark ? 'rgba(201,168,106,0.06)' : 'rgba(168,136,78,0.06)', // tinted panels
-    ink: dark ? '#f3f1ec' : '#16140f', // primary text
-    dim: dark ? '#9a978f' : '#6b675e', // secondary text
-    accent: dark ? '#c9a86a' : '#a8884e', // champagne gold — darkened on light for contrast
-    accent2: dark ? '#e3cd97' : '#8a6d3a', // lighter gold
-    line: dark ? 'rgba(201,168,106,0.18)' : 'rgba(168,136,78,0.22)', // borders
-    field: dark ? 'rgba(201,168,106,0.06)' : 'rgba(168,136,78,0.06)', // input fills
-    onAccent: '#0a0a0c', // dark ink on gold buttons (reads in both modes)
-    warn: dark ? '#e0a07a' : '#b5551f',
+    bg: dark ? '#08080a' : '#f5f5f6', // sheet background
+    surface: dark ? '#161619' : '#ffffff', // cards / thumbnails
+    card: dark ? 'rgba(205,209,217,0.05)' : 'rgba(68,71,78,0.05)', // tinted panels (silver/graphite)
+    ink: dark ? '#f4f4f6' : '#131316', // primary text
+    dim: dark ? '#9396a0' : '#6a6c73', // secondary text
+    accent: dark ? '#cdd1d9' : '#44474e', // platinum silver / graphite on light
+    accent2: dark ? '#e8eaee' : '#2c2e34', // brighter silver / darker graphite
+    line: dark ? 'rgba(205,209,217,0.16)' : 'rgba(68,71,78,0.2)', // borders
+    field: dark ? 'rgba(205,209,217,0.05)' : 'rgba(68,71,78,0.05)', // input fills
+    onAccent: dark ? '#08080a' : '#f5f5f6', // dark ink on the silver button / light on graphite
+    warn: dark ? '#e0a07a' : '#b5551f', // kept warm — errors stay legible against the mono brand
   };
 }
 

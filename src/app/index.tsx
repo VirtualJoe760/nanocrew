@@ -297,7 +297,7 @@ export default function FeedScreen() {
               )}
               <View style={styles.detailActions}>
                 <Pressable onPress={() => onBuy(detail)} style={styles.detailPrimary}>
-                  <ThemedText type="smallBold" style={{ color: '#0a0a0c' }}>Shop @{detail.storeSlug}</ThemedText>
+                  <ThemedText type="smallBold" style={{ color: '#08080a' }}>Shop @{detail.storeSlug}</ThemedText>
                 </Pressable>
                 <Pressable
                   onPress={() => openBrowserAsync(`${siteUrlFor(detail.storeSlug)}/product/${detail.slug}`)}
@@ -371,12 +371,12 @@ const styles = StyleSheet.create({
   title: { color: '#fff' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   sub: { color: '#fff', opacity: 0.8, flexShrink: 1 },
-  buyTag: { backgroundColor: '#c9a86a', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 4 },
-  buyTagText: { color: '#0a0a0c' },
+  buyTag: { backgroundColor: '#cdd1d9', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 4 },
+  buyTagText: { color: '#08080a' },
   actions: { position: 'absolute', right: Spacing.four, bottom: 140, alignItems: 'center', gap: Spacing.four },
   actionBtn: { alignItems: 'center', gap: 3, paddingVertical: Spacing.one, width: 52 },
   actionGlyph: { fontSize: 28, lineHeight: 36, color: '#fff', textAlign: 'center', includeFontPadding: false },
-  liked: { color: '#c9a86a' },
+  liked: { color: '#cdd1d9' },
   actionLabel: { color: '#fff', opacity: 0.92, textAlign: 'center' },
   tryOnBackdrop: {
     flex: 1,
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   detailHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
   detailBody: { maxHeight: 200 },
   detailActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginTop: Spacing.one },
-  detailPrimary: { backgroundColor: '#c9a86a', borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.five, alignItems: 'center' },
+  detailPrimary: { backgroundColor: '#cdd1d9', borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.five, alignItems: 'center' },
   tryOnCard: { width: '100%', maxWidth: 420, borderRadius: Spacing.four, padding: Spacing.four, gap: Spacing.three },
   tryOnHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   tryOnBody: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.six },

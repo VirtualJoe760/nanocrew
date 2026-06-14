@@ -64,7 +64,7 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
   const brand = data?.brand;
   const bg = hex(brand?.bgHex, '#0b0b0f');
   const fg = hex(brand?.textHex, '#ffffff');
-  const accent = hex(brand?.accentHex, '#c9a86a');
+  const accent = hex(brand?.accentHex, '#cdd1d9');
   const dim = `${fg}99`;
   const card = `${fg}14`;
 

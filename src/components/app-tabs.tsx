@@ -3,7 +3,7 @@ import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 // Nano Crew tab bar: champagne-gold selected tint + thin, elegant outline glyphs (no heavy
 // `.fill` weights), so the chrome reads premium and on-brand. The nucleus motif marks the
 // feed. Icon and Label are separate children of each Trigger (SDK 54 native-tabs API).
-const GOLD = '#c9a86a';
+const GOLD = '#cdd1d9';
 
 export default function AppTabs() {
   return (

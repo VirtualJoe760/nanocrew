@@ -18,9 +18,9 @@ import { apiUrl } from '@/lib/api';
 // tap the orb to finish. Each turn becomes one itemised edit; Submit ships the batch (markdown +
 // circled regions) to Claude on the VPS, who applies it on a branch (preview → approve → main).
 
-const BG = '#0a0a0c';
-const GOLD = '#c9a86a';
-const INK = '#f3f1ec';
+const BG = '#08080a';
+const GOLD = '#cdd1d9';
+const INK = '#f4f4f6';
 const DIM = 'rgba(243,241,236,0.6)';
 const FAINT = 'rgba(243,241,236,0.28)';
 
@@ -555,29 +555,29 @@ const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: BG },
   bar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-  urlPill: { flex: 1, backgroundColor: 'rgba(201,168,106,0.07)', borderWidth: 1, borderColor: 'rgba(201,168,106,0.2)', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 6 },
+  urlPill: { flex: 1, backgroundColor: 'rgba(205,209,217,0.07)', borderWidth: 1, borderColor: 'rgba(205,209,217,0.2)', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 6 },
   urlText: { color: DIM, fontSize: 12 },
   webWrap: { flex: 1, backgroundColor: '#fff' },
   web: { flex: 1 },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: BG },
 
-  panel: { backgroundColor: BG, borderTopWidth: 1, borderTopColor: 'rgba(201,168,106,0.2)', paddingHorizontal: Spacing.four, paddingTop: Spacing.three, gap: Spacing.two, alignItems: 'center' },
-  submitBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', alignSelf: 'stretch', backgroundColor: 'rgba(201,168,106,0.1)', borderWidth: 1, borderColor: 'rgba(201,168,106,0.3)', borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
+  panel: { backgroundColor: BG, borderTopWidth: 1, borderTopColor: 'rgba(205,209,217,0.2)', paddingHorizontal: Spacing.four, paddingTop: Spacing.three, gap: Spacing.two, alignItems: 'center' },
+  submitBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', alignSelf: 'stretch', backgroundColor: 'rgba(205,209,217,0.1)', borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)', borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
   submitCount: { color: DIM },
   submitCta: { color: GOLD },
   controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.six },
-  sideBtn: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(201,168,106,0.3)' },
+  sideBtn: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)' },
   sideBtnOn: { backgroundColor: GOLD, borderColor: GOLD },
   subtitle: { color: INK, textAlign: 'center', minHeight: 18 },
   hint: { color: FAINT, fontSize: 11, textAlign: 'center' },
   noteText: { color: '#e0a07a', fontSize: 12, textAlign: 'center' },
 
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', alignSelf: 'stretch', gap: Spacing.two },
-  typeInput: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: 'rgba(201,168,106,0.3)', borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, color: INK, fontSize: 15, textAlignVertical: 'top' },
+  typeInput: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)', borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, color: INK, fontSize: 15, textAlignVertical: 'top' },
   addBtn: { backgroundColor: GOLD, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
 
   reviewWrap: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' },
-  reviewCard: { backgroundColor: BG, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: 'rgba(201,168,106,0.25)', padding: Spacing.four, gap: Spacing.three },
+  reviewCard: { backgroundColor: BG, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: 'rgba(205,209,217,0.25)', padding: Spacing.four, gap: Spacing.three },
   reviewHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   reviewList: { maxHeight: 280 },
   reviewItem: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three, paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(243,241,236,0.1)' },

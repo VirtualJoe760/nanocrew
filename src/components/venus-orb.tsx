@@ -8,7 +8,7 @@ import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 // while she speaks, yours while she listens. Deliberately lighter than the Studio nucleus.
 // `level` is a reanimated SharedValue (0..1) so it follows audio with no per-frame re-renders.
 
-const GOLD = '#c9a86a';
+const GOLD = '#cdd1d9';
 
 export function VenusOrb({
   active,
