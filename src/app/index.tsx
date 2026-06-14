@@ -88,7 +88,7 @@ function FeedCard({
         <ThemedText type="smallBold" style={styles.handle}>
           @{item.storeSlug}
         </ThemedText>
-        <ThemedText type="title" style={styles.title} numberOfLines={2}>
+        <ThemedText type="subtitle" style={styles.title} numberOfLines={2}>
           {item.name}
         </ThemedText>
         <ThemedText type="small" style={styles.sub} numberOfLines={2}>
