@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
 import { attachDomain, normalizeDomain } from '@/lib/domains';
+import { goLiveBlockReason } from '@/lib/connect';
 
 // POST /api/creator/stores/:slug/go-live { domain } — attach a custom domain to the store's
 // Vercel project and, once Vercel verifies it, flip the store to `live`. Idempotent: if the
@@ -19,6 +20,11 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
     .limit(1);
   if (!store) return Response.json({ error: 'not found' }, { status: 404 });
   if (store.status === 'building') return Response.json({ error: 'site is still building — try again once it is ready' }, { status: 409 });
+
+  // Connect gate (Phase D): a store can only take its own money once payments are set up. No-op
+  // until Connect is enabled, so the existing domain flow is unaffected.
+  const blocked = await goLiveBlockReason(user.id);
+  if (blocked) return Response.json({ error: blocked, reason: 'connect_required' }, { status: 409 });
 
   const body = (await req.json().catch(() => null)) as { domain?: string } | null;
   const domain = body?.domain ? normalizeDomain(body.domain) : '';

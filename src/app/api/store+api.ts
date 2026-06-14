@@ -6,6 +6,7 @@ import { uploadImage } from '@/lib/cloudinary';
 import { provisionStorefront } from '@/lib/provision';
 import { buildOgImageUrl } from '@/lib/og-image';
 import { canLaunchStore } from '@/lib/billing';
+import { ensureConnectedAccount } from '@/lib/connect';
 import { autoFirstDropEnabled, generateFirstDrop } from '@/lib/first-drop';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
@@ -142,6 +143,10 @@ export async function POST(req: Request) {
           logoUrl,
           transcript,
         });
+        // Born connecting (Phase D): start the creator's Stripe Connect account so their brand can
+        // take its own money. Best-effort — if Connect isn't enabled yet this no-ops and the
+        // creator finishes onboarding later from the app; store creation never fails on it.
+        void ensureConnectedAccount(user.id, user.email).catch(() => {});
         // Auto-generate a first product drop so the brand isn't empty — gated behind
         // AUTO_FIRST_DROP because each run spends real Gemini + Printful credits.
         if (autoFirstDropEnabled()) {

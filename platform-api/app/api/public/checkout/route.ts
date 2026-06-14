@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     if (!body?.storeSlug || !items.length) return corsJson({ error: 'storeSlug and items required' }, { status: 400 });
 
     const [store] = await db
-      .select({ id: schema.stores.id, slug: schema.stores.slug, name: schema.stores.name, deploymentUrl: schema.stores.deploymentUrl })
+      .select({ id: schema.stores.id, slug: schema.stores.slug, name: schema.stores.name, deploymentUrl: schema.stores.deploymentUrl, creatorId: schema.stores.creatorId })
       .from(schema.stores)
       .where(eq(schema.stores.slug, body.storeSlug))
       .limit(1);
@@ -33,6 +33,7 @@ export async function POST(req: Request) {
         color: schema.variants.color,
         size: schema.variants.size,
         retailPriceCents: schema.variants.retailPriceCents,
+        printfulCostCents: schema.variants.printfulCostCents,
         inStock: schema.variants.inStock,
         productName: schema.products.name,
         productImage: schema.products.imageUrl,
@@ -50,6 +51,38 @@ export async function POST(req: Request) {
       lineItems.push({ variant: v, quantity: Math.min(i.quantity, 20) });
     }
     const subtotalCents = lineItems.reduce((n, l) => n + l.variant.retailPriceCents * l.quantity, 0);
+    const shippingCents = Number(process.env.SHIPPING_FLAT_CENTS ?? 799);
+
+    // Stripe Connect (Phase D): if this brand's creator has a charges-enabled connected account,
+    // route the charge to it as a destination charge and keep the platform's application fee. The
+    // fee covers COGS (Printful) + shipping + a commission; the brand receives its profit. When no
+    // such account exists, checkout settles to the platform exactly as before (inert until set up).
+    const COMMISSION_PCT = Number(process.env.PLATFORM_COMMISSION_PCT ?? 0.1);
+    const COGS_FALLBACK_PCT = Number(process.env.DEFAULT_COGS_PCT ?? 0.5); // when a variant's Printful cost is unknown
+    const [connected] = await db
+      .select({ stripeAccountId: schema.connectedAccounts.stripeAccountId, chargesEnabled: schema.connectedAccounts.chargesEnabled })
+      .from(schema.connectedAccounts)
+      .where(eq(schema.connectedAccounts.creatorId, store.creatorId))
+      .limit(1);
+
+    let connectParams: { payment_intent_data?: { application_fee_amount: number; transfer_data: { destination: string } } } = {};
+    let applicationFeeCents = 0;
+    if (connected?.stripeAccountId && connected.chargesEnabled) {
+      const cogsCents = lineItems.reduce(
+        (n, l) => n + (l.variant.printfulCostCents ?? Math.round(l.variant.retailPriceCents * COGS_FALLBACK_PCT)) * l.quantity,
+        0,
+      );
+      const commissionCents = Math.round(subtotalCents * COMMISSION_PCT);
+      const totalCents = subtotalCents + shippingCents;
+      // Platform keeps COGS + shipping + commission; the brand gets the remainder (its profit).
+      applicationFeeCents = Math.min(totalCents, cogsCents + shippingCents + commissionCents);
+      connectParams = {
+        payment_intent_data: {
+          application_fee_amount: applicationFeeCents,
+          transfer_data: { destination: connected.stripeAccountId },
+        },
+      };
+    }
 
     // The brand site we send the shopper back to.
     const origin = req.headers.get('origin') ?? store.deploymentUrl ?? `https://store-${store.slug}.vercel.app`;
@@ -62,6 +95,7 @@ export async function POST(req: Request) {
         status: 'pending_payment',
         subtotalCents,
         totalCents: subtotalCents,
+        applicationFeeCents,
       })
       .returning({ id: schema.orders.id });
     await db.insert(schema.orderItems).values(
@@ -96,7 +130,7 @@ export async function POST(req: Request) {
           shipping_rate_data: {
             display_name: 'Standard shipping',
             type: 'fixed_amount',
-            fixed_amount: { amount: Number(process.env.SHIPPING_FLAT_CENTS ?? 799), currency: 'usd' },
+            fixed_amount: { amount: shippingCents, currency: 'usd' },
             delivery_estimate: {
               minimum: { unit: 'business_day', value: 5 },
               maximum: { unit: 'business_day', value: 10 },
@@ -105,6 +139,7 @@ export async function POST(req: Request) {
         },
       ],
       metadata: { orderId: order.id, storeSlug: store.slug, storeName: store.name },
+      ...connectParams,
       success_url: `${origin}/cart?checkout=success`,
       cancel_url: `${origin}/cart?checkout=cancelled`,
     });

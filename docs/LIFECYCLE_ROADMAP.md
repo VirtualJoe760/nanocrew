@@ -105,14 +105,27 @@ Cross-cutting guarantees:
 - Note: domain purchase charges the platform's Vercel account; we recoup via the creator's credits.
   (The roadmap originally said "charge via Stripe" — credits are the simpler v1 and already paid-for.)
 
-### Phase D — Stripe Connect (G4)  ·  **created at brand establishment** (decided)
-- **Born connecting**: when Venus establishes the brand (`/api/store`), create the brand's **Stripe
-  Connect account** via API and store `stripeAccountId` in `connected_accounts`; surface an
-  account-link onboarding URL in the app so the creator finishes verification.
-- **Routing**: storefront checkout creates the session **on the connected account** with
-  `application_fee_amount` (platform cut). Refunds/disputes via Connect.
-- **Gate**: block go-live until `charges_enabled` (a live store can take its own money).
-- Requires Stripe **Connect enabled** on the platform account.
+### Phase D — Stripe Connect (G4)  ·  **created at brand establishment** (decided)  ·  ✅ done (code, inert)
+- ✅ **Born connecting**: `/api/store` fires a best-effort `ensureConnectedAccount(creatorId, email)`
+  at establishment (Express account, `metadata.creatorId`, stored in `connected_accounts`). Never
+  blocks store creation — no-ops if Connect isn't enabled yet.
+- ✅ **`src/lib/connect.ts`** (REST, no SDK — mirrors billing.ts): `ensureConnectedAccount`,
+  `createOnboardingLink` (account_links), `refreshConnectedAccount` (GET account → sync flags),
+  `getConnectedAccount`, `goLiveBlockReason`, `connectEnabled()`.
+- ✅ **Onboarding UI**: `GET/POST /api/creator/connect` + a "Set up payouts / Finish setup / Payouts
+  active" button on the Account screen (opens the Stripe-hosted account link).
+- ✅ **Routing**: storefront checkout (`platform-api`) uses a **destination charge** — when the brand's
+  creator has a `charges_enabled` account it adds `payment_intent_data.transfer_data.destination` +
+  `application_fee_amount`, persists `applicationFeeCents`, and settles the brand's profit to them.
+  (Destination, not direct-on-account as the sample demoed, so the **existing platform webhook stays
+  intact**.) Fee = COGS (`printfulCostCents`, fallback `DEFAULT_COGS_PCT`) + shipping + commission
+  (`PLATFORM_COMMISSION_PCT`, default 10%); brand gets the remainder. No account → settles to platform
+  exactly as before.
+- ✅ **Webhook sync**: `account.updated` updates `connected_accounts` capability flags.
+- ✅ **Gate**: `goLiveBlockReason` blocks go-live + domain-buy until `charges_enabled` — **only when
+  `STRIPE_CONNECT_ENABLED` is set**, so the current domain flow is unaffected until Connect is on.
+- ⏳ **Needs Joe's config**: enable **Connect** on the platform Stripe account, then set
+  `STRIPE_CONNECT_ENABLED=1` (turns on the go-live gate). Optionally tune `PLATFORM_COMMISSION_PCT`.
 
 ### Phase E — Printful per-brand  ·  **one account, separation in OUR DB** (decided)
 - Printful's API has **no store-creation endpoint** (verified — `GET /store` only; stores are

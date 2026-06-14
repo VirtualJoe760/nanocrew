@@ -48,6 +48,18 @@ export async function POST(req: Request) {
         .update(schema.orders)
         .set({ status: 'cancelled' })
         .where(eq(schema.orders.stripeSessionId, s.id));
+    } else if (event.type === 'account.updated') {
+      // Connect (Phase D): a creator's Express account changed — sync its capability flags so the
+      // app's go-live gate and checkout routing see the live state.
+      const a = event.data.object as Stripe.Account;
+      await db
+        .update(schema.connectedAccounts)
+        .set({
+          chargesEnabled: !!a.charges_enabled,
+          payoutsEnabled: !!a.payouts_enabled,
+          detailsSubmitted: !!a.details_submitted,
+        })
+        .where(eq(schema.connectedAccounts.stripeAccountId, a.id));
     }
     return Response.json({ received: true });
   } catch (e) {

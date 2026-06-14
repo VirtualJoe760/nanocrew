@@ -37,6 +37,7 @@ export default function AccountScreen() {
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [payouts, setPayouts] = useState<{ connected: boolean; chargesEnabled: boolean } | null>(null);
 
   // Ensure the creators row exists + load this creator's stores; probe platform-admin access.
   useEffect(() => {
@@ -54,6 +55,12 @@ export default function AccountScreen() {
     apiFetch('/api/platform/admin')
       .then((r) => setIsAdmin(r.ok))
       .catch(() => setIsAdmin(false));
+    apiFetch('/api/creator/connect')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { connected?: boolean; chargesEnabled?: boolean } | null) =>
+        setPayouts(d ? { connected: !!d.connected, chargesEnabled: !!d.chargesEnabled } : null),
+      )
+      .catch(() => setPayouts(null));
   }, [session]);
 
   // Dev-only: deep-linking /account?auto=google|facebook starts the flow hands-free,
@@ -133,6 +140,23 @@ export default function AccountScreen() {
     setError('No active billing yet — subscribe from Studio first.');
   };
 
+  // Stripe Connect onboarding — opens the Stripe-hosted account link so the creator can finish
+  // payout setup. Their brands' storefront sales pay out to this account.
+  const openPayouts = async () => {
+    setError(null);
+    try {
+      const r = await apiFetch('/api/creator/connect', { method: 'POST' });
+      const d = (await r.json()) as { url?: string; error?: string };
+      if (r.ok && d.url) {
+        Linking.openURL(d.url).catch(() => {});
+        return;
+      }
+      setError(d.error ?? 'Payouts aren’t available yet.');
+    } catch {
+      setError('Could not start payout setup.');
+    }
+  };
+
   const confirmDelete = () => {
     Alert.alert(
       'Delete account?',
@@ -193,6 +217,17 @@ export default function AccountScreen() {
                     <ThemedText type="smallBold">Subscription & billing ↗</ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
                       Manage your plan, card & invoices
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+
+                <Pressable onPress={openPayouts} disabled={busy}>
+                  <ThemedView type="backgroundElement" style={styles.button}>
+                    <ThemedText type="smallBold" themeColor={payouts?.chargesEnabled ? 'tint' : undefined}>
+                      {payouts?.chargesEnabled ? 'Payouts active ✓' : payouts?.connected ? 'Finish payout setup ↗' : 'Set up payouts ↗'}
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {payouts?.chargesEnabled ? 'Your store sales pay out to your account' : 'Get paid when your brand sells'}
                     </ThemedText>
                   </ThemedView>
                 </Pressable>
