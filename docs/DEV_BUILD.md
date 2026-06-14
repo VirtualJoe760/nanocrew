@@ -64,5 +64,48 @@ npm start            # Metro serves JS into the dev client (not Expo Go)
 For TestFlight/App Store: `--profile production` then `npx eas submit -p ios`.
 
 ## App Store submission also needs
-App icon + screenshots + privacy nutrition labels + age rating; **Apple Sign In** provider in
-Supabase (button is built); Privacy Policy + Terms URLs; the account-deletion path (built).
+App icon (✅ done — `assets/images/icon.png`, NC mark) + screenshots + privacy nutrition labels + age
+rating; **Apple Sign In** provider in Supabase (button is built); Privacy Policy + Terms URLs (live at
+nanocrew.app/privacy + /terms); the account-deletion path (built); iOS usage strings (✅ added to
+app.json: mic + photo library).
+
+---
+
+# Production / TestFlight runbook
+
+Goal: a real iOS build testers install via TestFlight. **The app talks to its own `+api.ts` server
+routes**, so those must be DEPLOYED and the build pointed at them — otherwise the app has no backend.
+
+### 0. One-time prerequisites (Joe)
+- **Apple Developer Program** ($99/yr) + an App Store Connect app record for `com.nanocrew.app`.
+- `eas init` to link the repo to an Expo project (writes `extra.eas.projectId`). Not linked yet.
+- Apple Sign In enabled in Supabase Auth (the button exists).
+
+### 1. Deploy the app's server routes → get a production API URL
+The `src/app/**+api.ts` routes only run on Metro in dev. Deploy them to EAS Hosting:
+```bash
+npx eas deploy            # publishes the Expo Router server output → a https://…expo.app URL
+```
+Then set that URL as **`EXPO_PUBLIC_API_URL`** (an EAS env var / `.env`), so `apiUrl()` (src/lib/api.ts)
+targets it in the build instead of the Metro host. The server also needs all the runtime env the app
+uses (SUPABASE_*, STRIPE_*, PRINTFUL_*, GOOGLE_GENAI_API_KEY, FAL_KEY, VERCEL_TOKEN, DOMAIN_CONTACT_*,
+GITHUB_*, PLATFORM_API_BASE, INTERNAL_API_KEY) configured on EAS Hosting.
+
+### 2. Build
+```bash
+npx eas build --profile preview --platform ios     # internal-distribution .ipa (or --profile production)
+```
+
+### 3. Submit to App Store Connect
+```bash
+npx eas submit --platform ios --profile production  # uploads the build to App Store Connect
+```
+
+### 4. TestFlight
+- **Internal testing** (≤100 testers, no review, instant): add testers in App Store Connect →
+  TestFlight → Internal Group. Fastest for feedback.
+- **External testing** (≤10,000, needs a brief Beta App Review): add a public link or emails.
+- Testers install the **TestFlight** app + accept the invite.
+
+Notes: IAP / push / view-shot remain off (`IAP_ENABLED` / `PUSH_ENABLED`), so a build works for testing
+the core app without those native deps.

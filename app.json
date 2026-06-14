@@ -9,7 +9,12 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.nanocrew.app",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Nanocrew uses the microphone so you can talk to Venus, your AI brand consultant.",
+        "NSPhotoLibraryUsageDescription": "Nanocrew uses your photos for virtual try-on and to set your brand's post and product images.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.nanocrew.app",

@@ -2,9 +2,14 @@ import Constants from 'expo-constants';
 
 import { supabase } from '@/lib/supabase';
 
-// On a physical device, relative /api/* URLs don't resolve — point them at the Metro
-// dev server host. On web they pass through unchanged.
+// Resolve an /api/* path to a full URL:
+//  - production builds: EXPO_PUBLIC_API_URL (the deployed Expo Router server, set at build time)
+//  - dev on a device: the Metro dev-server host
+//  - web (same origin): the bare path
+// Without EXPO_PUBLIC_API_URL a release build has no backend, so it must be set before `eas build`.
 export function apiUrl(path: string): string {
+  const base = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
+  if (base) return `${base}${path}`;
   const host = Constants.expoConfig?.hostUri;
   return host ? `http://${host}${path}` : path;
 }
