@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
+import { uploadRaw } from '@/lib/cloudinary';
 import { interviewSystem, parseTurn, type ChatMessage, type TimedWord } from '@/lib/interview';
 import { guardRate } from '@/lib/rate-limit';
 import { resolveVoice } from '@/lib/voices';
@@ -122,10 +123,31 @@ export async function POST(req: Request) {
   const voice = resolveVoice(voiceId);
 
   // say mode: pure TTS — the app provides the line (e.g. a voice preview, or announcing
-  // the store launch). Served from the server-side cache when we've rendered it before.
+  // the store launch). These are STATIC (same text+voice → same audio), so cache the
+  // rendered clip through Cloudinary at a deterministic id. Cloudinary is external, so it
+  // survives expo serve's per-request isolation (in-process caches don't) — repeats never
+  // re-hit ElevenLabs.
   if (say) {
+    const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+    let publicId: string | null = null;
+    if (cloud) {
+      const { createHash } = await import('node:crypto');
+      publicId = `nanocrew/tts/${createHash('sha1').update(`${voice.id}:${say}`).digest('hex')}`;
+      try {
+        const cdn = await fetch(`https://res.cloudinary.com/${cloud}/raw/upload/${publicId}`);
+        if (cdn.ok) {
+          const c = (await cdn.json()) as { speech: string; words: TimedWord[] };
+          return Response.json({ line: say, speech: c.speech, words: c.words, cached: true });
+        }
+      } catch {
+        /* cache miss / fetch error → render below */
+      }
+    }
     try {
       const tts = await speak(say, voice.id);
+      if (publicId) {
+        await uploadRaw(Buffer.from(JSON.stringify(tts)), publicId).catch(() => {});
+      }
       return Response.json({ line: say, speech: tts.speech, words: tts.words });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });

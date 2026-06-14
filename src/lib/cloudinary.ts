@@ -23,6 +23,22 @@ export function uploadVideo(buffer: Buffer, opts?: { folder?: string }): Promise
   });
 }
 
+// Host an arbitrary blob (e.g. a cached TTS JSON) at a deterministic public id, so it
+// can be fetched back by URL on later requests. Used as a cross-request cache that
+// survives expo serve's per-request isolation.
+export function uploadRaw(buffer: Buffer, publicId: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { resource_type: 'raw', public_id: publicId, overwrite: true },
+      (err, res) => {
+        if (err || !res) return reject(err ?? new Error('Cloudinary raw upload failed'));
+        resolve(res.secure_url);
+      },
+    );
+    stream.end(buffer);
+  });
+}
+
 export function uploadImage(
   buffer: Buffer,
   opts: { folder: string; publicId?: string },
