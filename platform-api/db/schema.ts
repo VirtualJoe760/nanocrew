@@ -499,6 +499,24 @@ export const connectedAccounts = pgTable('connected_accounts', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// Extra creators who may admin + design for a store beyond its owner (stores.creatorId). Mirror of
+// src/db/schema.ts. Lets a client (e.g. Stephen Lawyer) and the agency share a store.
+export const storeCollaborators = pgTable(
+  'store_collaborators',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    storeId: uuid('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    creatorId: uuid('creator_id')
+      .notNull()
+      .references(() => creators.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('admin'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (c) => ({ memberIdx: uniqueIndex('store_collaborators_member_idx').on(c.storeId, c.creatorId) }),
+);
+
 // ---------- Relations ----------
 
 export const creatorsRelations = relations(creators, ({ many, one }) => ({
