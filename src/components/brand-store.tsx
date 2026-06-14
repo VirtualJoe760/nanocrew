@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { openBrowserAsync } from 'expo-web-browser';
 
@@ -34,6 +34,10 @@ const price = (c: number | null) => (c == null ? '' : `$${(c / 100).toFixed(2)}`
 
 export function BrandStore({ slug, visible, onClose }: { slug: string | null; visible: boolean; onClose: () => void }) {
   const { width } = useWindowDimensions();
+  // SafeAreaView's edges don't resolve inside a RN <Modal> (separate window → 0 inset), so the
+  // header tucked under the dynamic island. Read the inset from the hook (app provider) and pad
+  // the top bar explicitly.
+  const insets = useSafeAreaInsets();
   const [data, setData] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -71,9 +75,9 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.fill, { backgroundColor: bg }]}>
-        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-          <View style={styles.topBar}>
-            <Pressable onPress={onClose} hitSlop={12}>
+        <SafeAreaView style={styles.fill} edges={['bottom']}>
+          <View style={[styles.topBar, { paddingTop: Math.max(insets.top, Spacing.three) }]}>
+            <Pressable onPress={onClose} hitSlop={16}>
               <Text style={[styles.close, { color: dim }]}>✕ close</Text>
             </Pressable>
             {brand?.siteUrl ? (
