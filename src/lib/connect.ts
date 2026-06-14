@@ -130,6 +130,15 @@ export async function refreshConnectedAccount(creatorId: string): Promise<Connec
   return status;
 }
 
+/** Refund a payment over REST. For a Connect destination charge, reverse the brand's transfer and
+ *  claw back the platform's application fee proportionally, so both parties give back their share. */
+export async function refundPayment(paymentIntentId: string, opts: { reverseTransfer: boolean }): Promise<void> {
+  await stripePost('/refunds', {
+    payment_intent: paymentIntentId,
+    ...(opts.reverseTransfer ? { reverse_transfer: true, refund_application_fee: true } : {}),
+  });
+}
+
 /** Go-live gate. Returns a reason string when the creator may NOT go live, or null when they can.
  *  Only enforced when Connect is enabled — otherwise the storefront settles to the platform as before. */
 export async function goLiveBlockReason(creatorId: string): Promise<string | null> {

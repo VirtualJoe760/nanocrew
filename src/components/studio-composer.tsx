@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -33,6 +33,9 @@ const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '', coverImageUrl: null }
 type Insights = { revenueCents: number; orders: number; views30d: number; avgMarginPct: number | null; margins: MarginRow[] };
 type MarginRow = { productId: string; name: string; retailCents: number | null; costCents: number | null; marginCents: number | null; marginPct: number | null };
 type OrderRow = { id: string; status: string; totalCents: number; createdAt: string; storeSlug?: string };
+// Order statuses a creator can still refund (matches the server's REFUNDABLE list).
+const REFUNDABLE_STATUSES = new Set(['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered', 'on_hold', 'returned']);
+
 type ConsoleTab = 'edit' | 'posts' | 'sell' | 'insights';
 const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', sell: 'Sell', insights: 'Insights' };
 
@@ -57,6 +60,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [voiceoverCost, setVoiceoverCost] = useState(25);
   const [veoCost, setVeoCost] = useState(400);
   const [genId, setGenId] = useState<string | null>(null); // product currently generating an ad
+  const [refundingId, setRefundingId] = useState<string | null>(null); // order currently being refunded
   const [shortComposer, setShortComposer] = useState(false); // the "make a scene short" flow
   const [goLive, setGoLive] = useState(false); // the domain / go-live flow
   const [uploading, setUploading] = useState(false); // post cover image upload in flight
@@ -269,6 +273,27 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
       void loadInsights();
     }
   }, [visible, active, loadPosts, loadRevisions, loadProducts, loadInsights]);
+
+  const refundOrder = async (id: string) => {
+    setRefundingId(id);
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl(`/api/creator/orders/${id}/refund`), { method: 'POST', headers });
+      const d = (await res.json()) as { status?: string; error?: string };
+      if (!res.ok) { setNote(d.error ?? 'Refund failed.'); return; }
+      await loadInsights();
+    } catch {
+      setNote('Refund failed — try again.');
+    } finally {
+      setRefundingId(null);
+    }
+  };
+
+  const confirmRefund = (id: string) =>
+    Alert.alert('Refund order?', 'The customer is paid back in full and any transfer is reversed.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Refund', style: 'destructive', onPress: () => void refundOrder(id) },
+    ]);
 
   const buildSite = async () => {
     if (!active) return;
@@ -656,6 +681,15 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                         <View key={o.id} style={styles.revRow}>
                           <ThemedText type="small" style={[styles.white, { flex: 1 }]}>${(o.totalCents / 100).toFixed(2)}</ThemedText>
                           <ThemedText type="code" style={styles.dim}>{o.status.replace(/_/g, ' ')}</ThemedText>
+                          {REFUNDABLE_STATUSES.has(o.status) ? (
+                            refundingId === o.id ? (
+                              <ActivityIndicator size="small" color={pal.accent} />
+                            ) : (
+                              <Pressable onPress={() => confirmRefund(o.id)} hitSlop={6}>
+                                <ThemedText type="code" style={styles.warn}>refund</ThemedText>
+                              </Pressable>
+                            )
+                          ) : null}
                         </View>
                       ))}
                     </>
