@@ -12,6 +12,7 @@ export const CREDIT_COSTS = {
   logo_generate: 8,
   tryon: 6,
   model_shots: 20, // ~3 on-model renders
+  scene_video: 80, // Nano Banana on-model scene image → Seedance image-to-video (tune to Seedance's per-second price)
   revision: 60,
 } as const;
 
