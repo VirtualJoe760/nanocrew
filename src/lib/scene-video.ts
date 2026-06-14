@@ -1,11 +1,11 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 
 import { uploadImage, uploadVideo } from '@/lib/cloudinary';
-import { generateSeedanceVideo, type SceneAspect } from '@/lib/seedance';
+import { generateFalVideo, type SceneAspect } from '@/lib/fal-video';
 
 // The "cool short" pipeline: Nano Banana first renders a photoreal on-model image of someone
-// WEARING the exact garment in a scene, then Seedance animates that image into a video of the
-// model actually doing the thing. Two steps so the person + garment stay faithful before motion.
+// WEARING the exact garment in a scene, then a fal video model animates that image into a video
+// of the model actually doing the thing. Two steps so the person + garment stay faithful before motion.
 
 const NB_MODEL = 'gemini-2.5-flash-image';
 
@@ -57,7 +57,7 @@ async function sceneImage(productImageUrl: string, name: string, scene: string, 
   })) as GenResponse;
   for (const part of res.candidates?.[0]?.content?.parts ?? []) {
     if (part.inlineData?.data) {
-      // Host the still so Seedance (and a UI preview) can reference it by URL.
+      // Host the still so the video model (and a UI preview) can reference it by URL.
       return uploadImage(Buffer.from(part.inlineData.data, 'base64'), { folder: 'nanocrew/scene-stills' });
     }
   }
@@ -72,7 +72,7 @@ export async function generateProductSceneVideo(opts: {
   aspectRatio: SceneAspect;
 }): Promise<{ stillUrl: string; videoUrl: string }> {
   const stillUrl = await sceneImage(opts.imageUrl, opts.name, opts.scene, opts.aspectRatio);
-  const buffer = await generateSeedanceVideo({
+  const buffer = await generateFalVideo({
     imageUrl: stillUrl,
     prompt: `The person is ${opts.scene}. Natural, fluid movement; subtle camera motion; cinematic.`,
     aspectRatio: opts.aspectRatio,

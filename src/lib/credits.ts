@@ -12,7 +12,10 @@ export const CREDIT_COSTS = {
   logo_generate: 8,
   tryon: 6,
   model_shots: 20, // ~3 on-model renders
-  scene_video: 80, // Nano Banana on-model scene image → Seedance image-to-video (tune to Seedance's per-second price)
+  // Nano Banana on-model scene still → fal image-to-video. Default model Seedance 2.0 fast 720p/5s
+  // ≈ $1.21 real → 160cr ($1.60) ≈ 1.3× markup. If FAL_VIDEO_MODEL is flipped to Wan 2.5 (~$0.25/5s),
+  // this can drop to ~60. Keep aligned with the default model in src/lib/fal-video.ts.
+  scene_video: 160,
   revision: 60,
 } as const;
 

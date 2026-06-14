@@ -5,10 +5,10 @@ import { getUserFromRequest } from '@/lib/auth';
 import { guardRate } from '@/lib/rate-limit';
 import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
 import { generateProductSceneVideo } from '@/lib/scene-video';
-import type { SceneAspect } from '@/lib/seedance';
+import type { SceneAspect } from '@/lib/fal-video';
 
 // POST /api/creator/scene-video { productId, scene, aspectRatio, target } — the "cool short":
-// Nano Banana renders an on-model scene still, Seedance animates it. Publish to the storefront
+// Nano Banana renders an on-model scene still, a fal video model animates it. Publish to the storefront
 // (target 'website' → appends to products.model_videos, capped at 3) or the Nanocrew feed
 // (target 'feed' → products.video_url). Ownership-checked, rate-limited, credit-gated, refunds on fail.
 const MAX_WEBSITE_VIDEOS = 3;
