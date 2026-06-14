@@ -14,7 +14,7 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
   return (
     <Text
       style={[
-        { color: theme[themeColor ?? 'text'] },
+        { color: type === 'linkPrimary' ? theme.tint : theme[themeColor ?? 'text'] },
         type === 'default' && styles.default,
         type === 'title' && styles.title,
         type === 'small' && styles.small,
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
   linkPrimary: {
     lineHeight: 30,
     fontSize: 14,
-    color: '#b8975a', // champagne gold (reads on paper + near-black)
+    // color comes from the theme tint (platinum on dark / graphite on light) — set inline above
   },
   code: {
     fontFamily: Fonts.mono,
