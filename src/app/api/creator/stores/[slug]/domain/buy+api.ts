@@ -5,6 +5,7 @@ import { db, schema } from '@/lib/db';
 import { debitCredits, grant, InsufficientCreditsError } from '@/lib/credits';
 import { attachDomain, buyDomain, domainCredits, normalizeDomain, searchDomain } from '@/lib/domains';
 import { goLiveBlockReason } from '@/lib/connect';
+import { getEntitlements } from '@/lib/billing';
 
 // POST /api/creator/stores/:slug/domain/buy { domain } — buy a NEW domain and go live on it.
 // Re-prices at purchase time, charges the creator in credits, buys it on Vercel, attaches it to the
@@ -21,6 +22,10 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
     .limit(1);
   if (!store) return Response.json({ error: 'not found' }, { status: 404 });
   if (store.status === 'building') return Response.json({ error: 'site is still building — try again once it is ready' }, { status: 409 });
+
+  // A domain points at a website, which is a Pro+ feature.
+  const { website } = await getEntitlements(user.id);
+  if (!website) return Response.json({ error: 'upgrade_required', feature: 'website' }, { status: 402 });
 
   // Connect gate (Phase D) — buying a domain also goes live, so the same payment-setup rule applies.
   const blocked = await goLiveBlockReason(user.id);

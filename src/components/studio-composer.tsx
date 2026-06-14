@@ -301,6 +301,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
     setNote(null);
     try {
       const res = await fetch(apiUrl('/api/creator/build-site'), { method: 'POST', headers, body: JSON.stringify({ storeSlug: active }) });
+      if (res.status === 402) {
+        setSiteAction('idle');
+        setNote('A website is a Pro feature — upgrade your plan to add one.');
+        return;
+      }
       if (!res.ok) throw new Error();
       setNote('Building your site — Venus will have it ready shortly. Check back in a few minutes.');
     } catch {

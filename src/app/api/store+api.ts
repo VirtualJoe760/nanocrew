@@ -87,6 +87,10 @@ export async function POST(req: Request) {
       );
     }
 
+    // A website (Vercel storefront + domain) is a Pro+ feature. Starter brands sell in the app
+    // (feed / Market / in-app store) with no site, so we skip provisioning for them.
+    const website = gate.entitlements.website;
+
     const base =
       brand.name
         .toLowerCase()
@@ -123,7 +127,8 @@ export async function POST(req: Request) {
             designSystem,
             logoUrl,
             ogImageUrl,
-            status: 'building',
+            // Website plans build a site (building → ready); app-only brands are ready at once.
+            status: website ? 'building' : 'ready',
           })
           .returning({ id: schema.stores.id, slug: schema.stores.slug, logoUrl: schema.stores.logoUrl });
         // A fresh store needs a first catalogue so the Designer has somewhere to work —
@@ -136,13 +141,16 @@ export async function POST(req: Request) {
         });
         // Storefront engine: clone the template into a per-brand repo and let a Claude
         // session on the VPS apply the brand. Fire-and-forget — creation never waits.
-        void provisionStorefront({
-          storeId: store.id,
-          slug: store.slug,
-          brand,
-          logoUrl,
-          transcript,
-        });
+        // Pro+ only; a Starter brand sells in-app and can add a site later by upgrading.
+        if (website) {
+          void provisionStorefront({
+            storeId: store.id,
+            slug: store.slug,
+            brand,
+            logoUrl,
+            transcript,
+          });
+        }
         // Born connecting (Phase D): start the creator's Stripe Connect account so their brand can
         // take its own money. Best-effort — if Connect isn't enabled yet this no-ops and the
         // creator finishes onboarding later from the app; store creation never fails on it.

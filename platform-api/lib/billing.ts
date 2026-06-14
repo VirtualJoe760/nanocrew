@@ -11,7 +11,7 @@ type PaidPlan = 'starter' | 'pro' | 'advanced';
 const MONTHLY_CREDITS: Record<PaidPlan, number> = {
   starter: 500,
   pro: 3000,
-  advanced: 15000,
+  advanced: 12000,
 };
 
 export function monthlyCreditsFor(plan: string): number {

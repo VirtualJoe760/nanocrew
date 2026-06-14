@@ -16,38 +16,47 @@ export interface TierDef {
   priceCents: number; // monthly, web price (IAP is pricier — handled client-side)
   monthlyCredits: number; // granted on each successful invoice
   maxBrands: number; // how many stores this creator may launch
+  website: boolean; // gets a real storefront website (+ custom domain) — Pro and up
+  creditRateMultiplier: number; // discount applied to credit-pack prices (1 = list, 0.8 = 20% off)
   priceEnv: string; // env var holding the recurring Stripe Price id
   blurb: string;
 }
 
-// The credit allotments roughly track each tier's headroom over our real AI costs.
+// Plan ladder: Starter sells in-app; Pro adds a website + custom domain; Advanced adds the most
+// credits and the best top-up rate. Credit allotments track each tier's headroom over real AI cost.
 export const TIERS: Record<PaidPlan, TierDef> = {
   starter: {
     plan: 'starter',
     label: 'Starter',
-    priceCents: 1000,
+    priceCents: 1000, // $10/mo
     monthlyCredits: 500,
     maxBrands: 1,
+    website: false,
+    creditRateMultiplier: 1,
     priceEnv: 'STRIPE_PRICE_STARTER',
-    blurb: 'Launch one brand with a storefront, feed, and shop.',
+    blurb: 'Publish a brand store in the Nanocrew app and buy credits to create.',
   },
   pro: {
     plan: 'pro',
     label: 'Pro',
-    priceCents: 4900,
+    priceCents: 5000, // $50/mo
     monthlyCredits: 3000,
     maxBrands: 3,
+    website: true,
+    creditRateMultiplier: 1,
     priceEnv: 'STRIPE_PRICE_PRO',
-    blurb: 'Up to three brands and plenty of credits for video ads.',
+    blurb: 'Your own storefront website + a custom domain, plus more monthly credits.',
   },
   advanced: {
     plan: 'advanced',
     label: 'Advanced',
-    priceCents: 19900,
-    monthlyCredits: 15000,
+    priceCents: 14900, // $149/mo
+    monthlyCredits: 12000,
     maxBrands: 99,
+    website: true,
+    creditRateMultiplier: 0.8, // 20% better rate on credit top-ups
     priceEnv: 'STRIPE_PRICE_ADVANCED',
-    blurb: 'Unlimited brands and the largest monthly credit grant.',
+    blurb: 'The most credits and the best rate on top-ups, plus website + domain.',
   },
 };
 
@@ -67,6 +76,8 @@ export interface Entitlements {
   active: boolean; // an active/trialing PAID plan
   maxBrands: number;
   monthlyCredits: number;
+  website: boolean; // may provision a storefront website + attach a domain (Pro and up)
+  creditRateMultiplier: number; // discount on credit-pack purchases (1 = list price)
   currentPeriodEnd: Date | null;
 }
 
@@ -76,6 +87,8 @@ const FREE_ENTITLEMENTS: Entitlements = {
   active: false,
   maxBrands: 0,
   monthlyCredits: 0,
+  website: false,
+  creditRateMultiplier: 1,
   currentPeriodEnd: null,
 };
 
@@ -95,6 +108,8 @@ export async function getEntitlements(creatorId: string): Promise<Entitlements> 
     active,
     maxBrands: active ? tier.maxBrands : 0,
     monthlyCredits: tier.monthlyCredits,
+    website: active && tier.website,
+    creditRateMultiplier: active ? tier.creditRateMultiplier : 1,
     currentPeriodEnd: sub.currentPeriodEnd,
   };
 }
@@ -199,10 +214,13 @@ export async function createSubscriptionCheckout(creatorId: string, email: strin
   return session.url as string;
 }
 
-/** A Stripe Checkout Session URL for a one-time credit pack. */
+/** A Stripe Checkout Session URL for a one-time credit pack. Higher tiers get a better rate:
+ *  the buyer's plan `creditRateMultiplier` discounts the pack price (Advanced = 20% off). */
 export async function createCreditPackCheckout(creatorId: string, email: string, packId: string): Promise<string> {
   const pack = CREDIT_PACKS.find((p) => p.id === packId);
   if (!pack) throw new Error('unknown pack');
+  const { creditRateMultiplier } = await getEntitlements(creatorId);
+  const unitAmount = Math.round(pack.priceCents * creditRateMultiplier);
   const customer = await ensureCustomer(creatorId, email);
   const { success, cancel } = urls();
   const session = await stripePost('/checkout/sessions', {
@@ -213,7 +231,7 @@ export async function createCreditPackCheckout(creatorId: string, email: string,
         quantity: 1,
         price_data: {
           currency: 'usd',
-          unit_amount: pack.priceCents,
+          unit_amount: unitAmount,
           product_data: { name: `Nanocrew — ${pack.label}` },
         },
       },

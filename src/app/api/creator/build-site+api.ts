@@ -3,17 +3,22 @@ import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { provisionStorefront } from '@/lib/provision';
+import { getEntitlements } from '@/lib/billing';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // POST /api/creator/build-site { storeSlug } — provision a website for an existing brand
-// that doesn't have one yet (e.g. it launched shop-only). Rebuilds the BrandResult from the
-// stored profile + design system and fires the same forge pipeline store creation uses.
+// that doesn't have one yet (e.g. it launched shop-only on Starter). A website is a Pro+ feature.
+// Rebuilds the BrandResult from the stored profile + design system and fires the forge pipeline.
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as { storeSlug?: string } | null;
   if (!body?.storeSlug) return Response.json({ error: 'storeSlug required' }, { status: 400 });
+
+  // Website is Pro and up — Starter brands sell in the app only.
+  const { website } = await getEntitlements(user.id);
+  if (!website) return Response.json({ error: 'upgrade_required', feature: 'website' }, { status: 402 });
 
   try {
     const [store] = await db

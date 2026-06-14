@@ -13,10 +13,10 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 // Stripe (web pricing) — Apple IAP for in-app purchase is a later, pricier path.
 // Theme-aware via the shared Studio palette.
 
-type Tier = { plan: string; label: string; priceCents: number; monthlyCredits: number; maxBrands: number; blurb: string };
+type Tier = { plan: string; label: string; priceCents: number; monthlyCredits: number; maxBrands: number; website: boolean; creditRateMultiplier: number; blurb: string };
 type Pack = { id: string; credits: number; priceCents: number; label: string };
 type Data = {
-  entitlements: { plan: string; status: string; active: boolean };
+  entitlements: { plan: string; status: string; active: boolean; creditRateMultiplier?: number };
   brandCount: number;
   tiers: Tier[];
   creditPacks: Pack[];
@@ -93,7 +93,7 @@ export function Paywall({
     reason === 'brand_limit'
       ? 'Upgrade to add more brands. Your current brands stay live.'
       : reason === 'subscription_required'
-        ? 'A subscription unlocks your storefront, feed, and shop. Browsing and buying are always free.'
+        ? 'Starter sells in the Nanocrew app; Pro adds your own website + domain. Browsing and buying are always free.'
         : 'Manage your plan or top up credits.';
 
   return (
@@ -126,7 +126,12 @@ export function Paywall({
                     </View>
                     <ThemedText type="small" style={s.dim}>{t.blurb}</ThemedText>
                     <ThemedText type="code" style={s.feat}>
-                      {t.monthlyCredits.toLocaleString()} credits/mo · {t.maxBrands >= 99 ? 'unlimited brands' : `${t.maxBrands} brand${t.maxBrands > 1 ? 's' : ''}`}
+                      {[
+                        `${t.monthlyCredits.toLocaleString()} credits/mo`,
+                        t.maxBrands >= 99 ? 'unlimited brands' : `${t.maxBrands} brand${t.maxBrands > 1 ? 's' : ''}`,
+                        t.website ? 'website + custom domain' : 'in-app store',
+                        t.creditRateMultiplier < 1 ? `${Math.round((1 - t.creditRateMultiplier) * 100)}% off credit top-ups` : null,
+                      ].filter(Boolean).join(' · ')}
                     </ThemedText>
                     {current ? (
                       <View style={[s.btn, s.btnCurrent]}>
@@ -153,17 +158,23 @@ export function Paywall({
 
               <ThemedText type="code" style={[s.sectionLabel, { marginTop: Spacing.five }]}>CREDIT PACKS</ThemedText>
               <ThemedText type="small" style={s.dim}>Credits power video ads, designs, and revisions. Top up any time.</ThemedText>
-              {data?.creditPacks.map((pk) => (
+              {data?.creditPacks.map((pk) => {
+                const mult = data.entitlements.creditRateMultiplier ?? 1;
+                const yourPrice = Math.round(pk.priceCents * mult);
+                return (
                 <View key={pk.id} style={s.packRow}>
                   <View style={{ flex: 1 }}>
                     <ThemedText type="small" style={s.ink}>{pk.label}</ThemedText>
-                    <ThemedText type="code" style={s.dim}>{money(pk.priceCents)}</ThemedText>
+                    <ThemedText type="code" style={s.dim}>
+                      {money(yourPrice)}{mult < 1 ? ` · ${Math.round((1 - mult) * 100)}% off (your rate)` : ''}
+                    </ThemedText>
                   </View>
                   <Pressable onPress={() => checkout({ kind: 'credit_pack', packId: pk.id }, pk.id)} disabled={!!busy} style={s.packBtn}>
                     {busy === pk.id ? <ActivityIndicator size="small" color={p.accent} /> : <ThemedText type="code" style={s.accent}>buy</ThemedText>}
                   </Pressable>
                 </View>
-              ))}
+                );
+              })}
 
               <ThemedText type="code" style={s.fine}>
                 Subscriptions and credits purchased on the web. Manage or cancel any time.
