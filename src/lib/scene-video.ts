@@ -1,7 +1,7 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 
 import { uploadImage, uploadVideo } from '@/lib/cloudinary';
-import { generateFalVideo, type SceneAspect } from '@/lib/fal-video';
+import { generateFalVideo, type SceneAspect, type VideoModelKey } from '@/lib/fal-video';
 
 // The "cool short" pipeline: Nano Banana first renders a photoreal on-model image of someone
 // WEARING the exact garment in a scene, then a fal video model animates that image into a video
@@ -70,12 +70,14 @@ export async function generateProductSceneVideo(opts: {
   name: string;
   scene: string;
   aspectRatio: SceneAspect;
+  modelKey?: VideoModelKey;
 }): Promise<{ stillUrl: string; videoUrl: string }> {
   const stillUrl = await sceneImage(opts.imageUrl, opts.name, opts.scene, opts.aspectRatio);
   const buffer = await generateFalVideo({
     imageUrl: stillUrl,
     prompt: `The person is ${opts.scene}. Natural, fluid movement; subtle camera motion; cinematic.`,
     aspectRatio: opts.aspectRatio,
+    modelKey: opts.modelKey,
   });
   const videoUrl = await uploadVideo(buffer, { folder: 'nanocrew/scene-videos' });
   return { stillUrl, videoUrl };

@@ -12,14 +12,19 @@ export const CREDIT_COSTS = {
   logo_generate: 8,
   tryon: 6,
   model_shots: 20, // ~3 on-model renders
-  // Nano Banana on-model scene still → fal image-to-video. Default model Seedance 2.0 fast 720p/5s
-  // ≈ $1.21 real → 160cr ($1.60) ≈ 1.3× markup. If FAL_VIDEO_MODEL is flipped to Wan 2.5 (~$0.25/5s),
-  // this can drop to ~60. Keep aligned with the default model in src/lib/fal-video.ts.
-  scene_video: 160,
   revision: 60,
+  // NOTE: scene-video ("cool short") is variable-cost — the creator picks a model tier whose price
+  // lives in VIDEO_MODELS (src/lib/fal-video.ts). It charges via debitCredits() with reason
+  // 'scene_video', not a fixed entry here.
 } as const;
 
-export type CreditReason = keyof typeof CREDIT_COSTS | 'signup_bonus' | 'topup' | 'subscription_grant' | 'refund';
+export type CreditReason =
+  | keyof typeof CREDIT_COSTS
+  | 'scene_video'
+  | 'signup_bonus'
+  | 'topup'
+  | 'subscription_grant'
+  | 'refund';
 
 const SIGNUP_BONUS = 200; // enough to try things (~8 voiceover ads)
 
@@ -68,10 +73,14 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
+/** Debit an arbitrary amount (variable-cost ops, e.g. scene-video tiers). Throws if balance too low. */
+export async function debitCredits(creatorId: string, amount: number, reason: CreditReason, refId?: string): Promise<number> {
+  const balance = await ensureCreditAccount(creatorId);
+  if (balance < amount) throw new InsufficientCreditsError(amount, balance);
+  return move(creatorId, -amount, reason, refId);
+}
+
 /** Debit a fixed-cost operation. Throws InsufficientCreditsError if the balance is too low. */
 export async function debit(creatorId: string, op: keyof typeof CREDIT_COSTS, refId?: string): Promise<number> {
-  const cost = CREDIT_COSTS[op];
-  const balance = await ensureCreditAccount(creatorId);
-  if (balance < cost) throw new InsufficientCreditsError(cost, balance);
-  return move(creatorId, -cost, op, refId);
+  return debitCredits(creatorId, CREDIT_COSTS[op], op, refId);
 }

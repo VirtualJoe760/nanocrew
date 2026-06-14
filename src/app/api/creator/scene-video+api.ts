@@ -3,14 +3,15 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { guardRate } from '@/lib/rate-limit';
-import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
+import { debitCredits, grant, InsufficientCreditsError } from '@/lib/credits';
 import { generateProductSceneVideo } from '@/lib/scene-video';
-import type { SceneAspect } from '@/lib/fal-video';
+import { resolveVideoModel, type SceneAspect } from '@/lib/fal-video';
 
-// POST /api/creator/scene-video { productId, scene, aspectRatio, target } — the "cool short":
-// Nano Banana renders an on-model scene still, a fal video model animates it. Publish to the storefront
-// (target 'website' → appends to products.model_videos, capped at 3) or the Nanocrew feed
-// (target 'feed' → products.video_url). Ownership-checked, rate-limited, credit-gated, refunds on fail.
+// POST /api/creator/scene-video { productId, scene, aspectRatio, target, model } — the "cool short":
+// Nano Banana renders an on-model scene still, the chosen fal video model (wan | seedance | veo3)
+// animates it. Publish to the storefront (target 'website' → appends to products.model_videos,
+// capped at 3) or the Nanocrew feed (target 'feed' → products.video_url). Ownership-checked,
+// rate-limited, credit-gated (variable per model), refunds on fail.
 const MAX_WEBSITE_VIDEOS = 3;
 
 export async function POST(req: Request) {
@@ -22,11 +23,12 @@ export async function POST(req: Request) {
   if (limited) return limited;
 
   const body = (await req.json().catch(() => null)) as
-    | { productId?: string; scene?: string; aspectRatio?: SceneAspect; target?: 'website' | 'feed' }
+    | { productId?: string; scene?: string; aspectRatio?: SceneAspect; target?: 'website' | 'feed'; model?: string }
     | null;
   if (!body?.productId || !body.scene?.trim()) return Response.json({ error: 'productId and scene required' }, { status: 400 });
   const aspectRatio: SceneAspect = body.aspectRatio === '16:9' ? '16:9' : '9:16';
   const target = body.target === 'feed' ? 'feed' : 'website';
+  const videoModel = resolveVideoModel(body.model); // wan | seedance | veo3 (default seedance)
 
   const [product] = await db
     .select({ id: schema.products.id, name: schema.products.name, imageUrl: schema.products.imageUrl, storeId: schema.products.storeId, modelVideos: schema.products.modelVideos })
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
   if (!store || store.creatorId !== user.id) return Response.json({ error: 'not your product' }, { status: 403 });
 
   try {
-    await debit(user.id, 'scene_video', product.id);
+    await debitCredits(user.id, videoModel.credits, 'scene_video', product.id);
   } catch (e) {
     if (e instanceof InsufficientCreditsError) {
       return Response.json({ error: 'insufficient_credits', needed: e.needed, balance: e.balance }, { status: 402 });
@@ -58,6 +60,7 @@ export async function POST(req: Request) {
       name: product.name,
       scene: body.scene.trim().slice(0, 200),
       aspectRatio,
+      modelKey: videoModel.key,
     });
 
     if (target === 'feed') {
@@ -67,9 +70,9 @@ export async function POST(req: Request) {
       const modelVideos = existing.length >= MAX_WEBSITE_VIDEOS ? [videoUrl] : [...existing, videoUrl];
       await db.update(schema.products).set({ modelVideos }).where(eq(schema.products.id, product.id));
     }
-    return Response.json({ videoUrl, stillUrl, target, aspectRatio });
+    return Response.json({ videoUrl, stillUrl, target, aspectRatio, model: videoModel.key });
   } catch (e) {
-    await grant(user.id, CREDIT_COSTS.scene_video, 'refund', product.id).catch(() => {});
+    await grant(user.id, videoModel.credits, 'refund', product.id).catch(() => {});
     return Response.json({ error: e instanceof Error ? e.message : 'Scene video failed' }, { status: 502 });
   }
 }
