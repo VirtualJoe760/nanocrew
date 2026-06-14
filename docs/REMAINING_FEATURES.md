@@ -54,8 +54,13 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   transitions, image hover-zoom, page-entrance fade) in all 4 templates' `globals.css`.
 - 🟢 **In-app platform admin** — done: Account → "Platform admin" (admin emails only) opens a
   metrics + all-stores overview. (Task #25)
-- 🟡 **Creator /admin on the brand websites** — the public creator endpoints + beacon exist; the
-  website-side `/admin` surface is partial. (Tasks #23/#24)
+- 🟢 **Creator /admin on the brand websites** — done (Task #24): the brand-site `/admin` now has the
+  full surface — Nanocrew sign-in (magic-link/password), revenue/orders/views, recent orders +
+  tracking, the **Journal** composer, and a new **Edit your site** panel (`components/blocks/site-editor.tsx`,
+  synced to all 4 templates) that requests changes → reviews the preview → publishes, using new
+  CORS'd platform-api routes `POST /api/creator/revise`, `GET /api/creator/revisions`,
+  `POST /api/creator/revisions/:id/approve`. Approve merges the branch via **GitHub's merge API**
+  (serverless — no SSH), so platform-api needs `GITHUB_OWNER` + `GITHUB_TOKEN` set on its Vercel project.
 - 🟡 **Studio media uploads** — Cloudinary image upload from the composer (post cover images, etc.)
   is partial. (Task #23)
 
