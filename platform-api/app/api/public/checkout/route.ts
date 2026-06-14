@@ -48,6 +48,11 @@ export async function POST(req: Request) {
       const v = rows.find((r) => r.id === i.variantId);
       if (!v || v.productStoreId !== store.id) return corsJson({ error: 'unknown item in cart' }, { status: 400 });
       if (!v.inStock) return corsJson({ error: `${v.productName} (${v.size}) is out of stock` }, { status: 409 });
+      // Pricing integrity: never send an unpriced item to Stripe (it would either be free or rejected
+      // below Stripe's $0.50 minimum). Products are floored at publish, so this is a safety net.
+      if (!v.retailPriceCents || v.retailPriceCents < 50) {
+        return corsJson({ error: `${v.productName} isn’t available for purchase right now.` }, { status: 409 });
+      }
       lineItems.push({ variant: v, quantity: Math.min(i.quantity, 20) });
     }
     const subtotalCents = lineItems.reduce((n, l) => n + l.variant.retailPriceCents * l.quantity, 0);
