@@ -143,11 +143,21 @@ function FabricBackground({ p }: { p: Palette }) {
 
 // ---------- The NC monogram + circular nucleus ----------
 
-/** The Nano Crew "NC" serif monogram. */
-function NCMark({ size, color }: { size: number; color: string }) {
+/** The Nano Crew "NC" serif monogram — brushed-silver metallic on dark, solid ink on light. */
+function NCMark({ size, color, metallic }: { size: number; color: string; metallic?: boolean }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
-      <SvgText x="50" y="71" fill={color} fontFamily={SERIF} fontSize={62} fontWeight="500" textAnchor="middle" letterSpacing={-6}>
+      {metallic ? (
+        <Defs>
+          <LinearGradient id="nc-metal" x1="0.1" y1="0" x2="0.9" y2="1">
+            <Stop offset="0" stopColor="#ffffff" />
+            <Stop offset="0.45" stopColor="#d6d9df" />
+            <Stop offset="0.72" stopColor="#9aa0aa" />
+            <Stop offset="1" stopColor="#eef0f3" />
+          </LinearGradient>
+        </Defs>
+      ) : null}
+      <SvgText x="50" y="71" fill={metallic ? 'url(#nc-metal)' : color} fontFamily={SERIF} fontSize={62} fontWeight="500" textAnchor="middle" letterSpacing={-6}>
         NC
       </SvgText>
     </Svg>
@@ -193,7 +203,7 @@ function NCNucleus({
         <Circle cx={r} cy={r} r={r - 2} fill="none" stroke={ring} strokeWidth={1} strokeOpacity={0.7} />
         <Circle cx={r} cy={r} r={r - 8} fill="none" stroke={ring} strokeWidth={0.5} strokeOpacity={0.25} />
       </Svg>
-      <NCMark size={size * 0.58} color={p.ink} />
+      <NCMark size={size * 0.58} color={p.ink} metallic={p.dark} />
     </View>
   );
   return onPress ? (
@@ -1120,7 +1130,7 @@ export default function StudioScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <View style={styles.headerRow}>
-          <NCMark size={22} color={p.ink} />
+          <NCMark size={22} color={p.ink} metallic={p.dark} />
           <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>
             STUDIO
           </ThemedText>
