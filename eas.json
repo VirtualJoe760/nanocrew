@@ -21,6 +21,14 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascApiKeyPath": "/Users/macdaddyjoe/.app-store-connect-keys/AuthKey_SP238255VU.p8",
+        "ascApiKeyId": "SP238255VU",
+        "ascApiKeyIssuerId": "e444fb27-09cf-4fdd-a514-133c38dd696a",
+        "appleTeamId": "B9B54TAWG4",
+        "ascAppId": "6780275901"
+      }
+    }
   }
 }
