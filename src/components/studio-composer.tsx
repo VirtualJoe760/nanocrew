@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
+import { GoLiveComposer } from '@/components/go-live-composer';
 import { SceneShortComposer } from '@/components/scene-short-composer';
 import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
@@ -15,7 +16,7 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 // words (→ forge revision) and write journal posts. Calls the same creator endpoints
 // the brand-site /admin uses. Opens from the Studio header. Theme-aware.
 
-type StoreRow = { slug: string; name: string; deploymentUrl?: string | null; ogImageUrl?: string | null };
+type StoreRow = { slug: string; name: string; deploymentUrl?: string | null; ogImageUrl?: string | null; status?: string; customDomain?: string | null };
 
 /** The public storefront URL — only when a real site is deployed. A brand can live on
  *  the Nanocrew shop with no website, so we never fabricate a URL that would 404. */
@@ -57,6 +58,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [veoCost, setVeoCost] = useState(400);
   const [genId, setGenId] = useState<string | null>(null); // product currently generating an ad
   const [shortComposer, setShortComposer] = useState(false); // the "make a scene short" flow
+  const [goLive, setGoLive] = useState(false); // the domain / go-live flow
   const [uploading, setUploading] = useState(false); // post cover image upload in flight
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -438,6 +440,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                       <ThemedText type="code" style={styles.previewTapText}>tap to explore your live site →</ThemedText>
                     </View>
                   </Pressable>
+                  <Pressable onPress={() => setGoLive(true)} style={styles.goLiveRow}>
+                    <ThemedText type="code" style={styles.green}>
+                      {activeStore?.customDomain ? `● Live · ${activeStore.customDomain}` : '○ Go live with a custom domain →'}
+                    </ThemedText>
+                  </Pressable>
                 </>
               ) : null}
 
@@ -678,6 +685,15 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
           onPublished={() => { void loadProducts(); void loadCredits(); }}
         />
       ) : null}
+      {goLive && active ? (
+        <GoLiveComposer
+          visible={goLive}
+          onClose={() => setGoLive(false)}
+          token={token}
+          slug={active}
+          onLive={() => { void loadStores(); }}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -728,6 +744,7 @@ function makeStyles(pal: StudioPalette) {
     previewFallbackText: { color: pal.ink, textAlign: 'center' },
     previewTap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: Spacing.two, alignItems: 'center', backgroundColor: 'rgba(6,11,22,0.82)' },
     previewTapText: { color: pal.accent, fontSize: 11, letterSpacing: 0.5 },
+    goLiveRow: { paddingVertical: Spacing.two, alignItems: 'center' },
     revRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
     revStatus: { color: pal.dim, fontSize: 11, marginTop: 2 },
     revActions: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center' },

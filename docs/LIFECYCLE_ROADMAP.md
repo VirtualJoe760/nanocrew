@@ -85,15 +85,25 @@ Cross-cutting guarantees:
 - ✅ `GET/PATCH /api/creator/stores/:slug` for post-creation settings (name, tagline, descriptionMd,
   isPublic). Slug stays immutable. **The `live` transition (domain attach + go-live) is Phase C.**
 
-### Phase C — Domains (G3)  ·  **Vercel for everything** (decided)
-- Use the **Vercel Domains/Projects API** for the whole flow — buy a new domain *or* transfer an
-  existing one in (TXT-record ownership proof), add it to the `store-<slug>` project, verify.
-- Flow: creator searches/buys (or enters a domain to transfer) → charge via Stripe → Vercel API
-  add-domain + verify on the project → write `stores.customDomain` → **status `live`**.
+### Phase C — Domains (G3)  ·  **Vercel for everything** (decided)  ·  ✅ done (code)
+- ✅ `src/lib/domains.ts`: `attachDomain` (idempotent; 409 → re-verify), `searchDomain` (availability +
+  price, read-only), `buyDomain` (Vercel `/v5/domains/buy`), `domainCredits(priceUsd)` (yearly price →
+  credits, 1.25× over cost), `normalizeDomain`.
+- ✅ **Own / transfer a domain**: `POST /api/creator/stores/:slug/go-live { domain }` attaches to the
+  `store-<slug>` project; verified → writes `customDomain` + status `live`; pending → returns the DNS
+  records to set, re-check by calling again.
+- ✅ **Buy a new domain**: `GET …/domain/search?q=` (price + credit cost) and `POST …/domain/buy`
+  (re-prices server-side, charges **credits** — reusing the existing rail, no Stripe-live dependency —
+  buys on Vercel, attaches, flips to `live`, refunds credits on failure).
+- ✅ **In-app go-live UI**: `src/components/go-live-composer.tsx` (own/transfer with DNS records, or
+  search+buy with credits), opened from the Studio **Edit site** tab; live status shown inline.
 - **Go-live == domain attached** (decided). The site lives at `store-<slug>.vercel.app` as the
   preview/working URL the whole time; pointing it at a domain is the official launch.
-- The public API keys off `slug` (in `brand.json`), so the site keeps working on the new origin with no
-  template change beyond CORS allowance.
+- ⏳ **Needs Joe's config to actually buy/attach**: a `VERCEL_TOKEN` scoped for domain purchase +
+  project-domain management, and a billing method on Vercel. Attach/transfer of an owned domain works
+  with a standard project-scoped token; buying needs billing.
+- Note: domain purchase charges the platform's Vercel account; we recoup via the creator's credits.
+  (The roadmap originally said "charge via Stripe" — credits are the simpler v1 and already paid-for.)
 
 ### Phase D — Stripe Connect (G4)  ·  **created at brand establishment** (decided)
 - **Born connecting**: when Venus establishes the brand (`/api/store`), create the brand's **Stripe

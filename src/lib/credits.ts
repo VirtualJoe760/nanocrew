@@ -21,6 +21,7 @@ export const CREDIT_COSTS = {
 export type CreditReason =
   | keyof typeof CREDIT_COSTS
   | 'scene_video'
+  | 'domain' // variable: buying a custom domain (price → credits in src/lib/domains.ts)
   | 'signup_bonus'
   | 'topup'
   | 'subscription_grant'

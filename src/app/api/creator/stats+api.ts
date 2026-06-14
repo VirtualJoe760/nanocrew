@@ -16,6 +16,8 @@ export async function GET(req: Request) {
         name: schema.stores.name,
         deploymentUrl: schema.stores.deploymentUrl,
         ogImageUrl: schema.stores.ogImageUrl,
+        status: schema.stores.status,
+        customDomain: schema.stores.customDomain,
       })
       .from(schema.stores)
       .where(eq(schema.stores.creatorId, user.id));
