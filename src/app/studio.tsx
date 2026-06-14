@@ -1438,8 +1438,10 @@ const styles = StyleSheet.create({
   line: { color: '#dfe2e8', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: MONO },
   error: { color: '#ff5c5c', textAlign: 'center', paddingTop: Spacing.two },
 
-  brandScroll: { gap: Spacing.three, paddingTop: Spacing.four },
-  selectScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: Spacing.four },
+  // Scroll content must clear the native tab bar so the last action (Create my store /
+  // Get started) is fully tappable and not intercepted by the bar.
+  brandScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: BottomTabInset + Spacing.six },
+  selectScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: BottomTabInset + Spacing.six },
   voiceCard: {
     borderWidth: 1,
     borderColor: '#26282d',
