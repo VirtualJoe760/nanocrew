@@ -53,6 +53,17 @@ export async function POST(req: Request) {
     const subtotalCents = lineItems.reduce((n, l) => n + l.variant.retailPriceCents * l.quantity, 0);
     const shippingCents = Number(process.env.SHIPPING_FLAT_CENTS ?? 799);
 
+    // Processing fee passed to the customer (offsets our card-processing cost), WAIVED once they
+    // spend the threshold (default $200). Grossed up — the fee line is itself processed — so it
+    // self-covers: fee = (pct·base + flat) / (1 − pct). The platform keeps it (see app fee below).
+    const FEE_PCT = Number(process.env.PROCESSING_FEE_PCT ?? 0.029);
+    const FEE_FLAT_CENTS = Number(process.env.PROCESSING_FEE_FLAT_CENTS ?? 30);
+    const FEE_WAIVE_CENTS = Number(process.env.PROCESSING_FEE_WAIVE_CENTS ?? 20000); // $200
+    const processingFeeCents =
+      subtotalCents >= FEE_WAIVE_CENTS
+        ? 0
+        : Math.round((FEE_PCT * (subtotalCents + shippingCents) + FEE_FLAT_CENTS) / (1 - FEE_PCT));
+
     // Stripe Connect (Phase D): if this brand's creator has a charges-enabled connected account,
     // route the charge to it as a destination charge and keep the platform's application fee. The
     // fee covers COGS (Printful) + shipping + a commission; the brand receives its profit. When no
@@ -73,9 +84,10 @@ export async function POST(req: Request) {
         0,
       );
       const commissionCents = Math.round(subtotalCents * COMMISSION_PCT);
-      const totalCents = subtotalCents + shippingCents;
-      // Platform keeps COGS + shipping + commission; the brand gets the remainder (its profit).
-      applicationFeeCents = Math.min(totalCents, cogsCents + shippingCents + commissionCents);
+      const totalCents = subtotalCents + shippingCents + processingFeeCents;
+      // Platform keeps COGS + shipping + commission + the processing fee; the brand gets the
+      // remainder (its profit) — the processing fee never eats into the brand's cut.
+      applicationFeeCents = Math.min(totalCents, cogsCents + shippingCents + commissionCents + processingFeeCents);
       connectParams = {
         payment_intent_data: {
           application_fee_amount: applicationFeeCents,
@@ -111,17 +123,23 @@ export async function POST(req: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      line_items: lineItems.map((l) => ({
-        quantity: l.quantity,
-        price_data: {
-          currency: 'usd',
-          unit_amount: l.variant.retailPriceCents,
-          product_data: {
-            name: `${l.variant.productName}${l.variant.size ? ` — ${[l.variant.color, l.variant.size].filter(Boolean).join(' / ')}` : ''}`,
-            ...(l.variant.productImage ? { images: [l.variant.productImage] } : {}),
+      line_items: [
+        ...lineItems.map((l) => ({
+          quantity: l.quantity,
+          price_data: {
+            currency: 'usd' as const,
+            unit_amount: l.variant.retailPriceCents,
+            product_data: {
+              name: `${l.variant.productName}${l.variant.size ? ` — ${[l.variant.color, l.variant.size].filter(Boolean).join(' / ')}` : ''}`,
+              ...(l.variant.productImage ? { images: [l.variant.productImage] } : {}),
+            },
           },
-        },
-      })),
+        })),
+        // Processing fee (waived at the spend threshold) — a single flat line the customer sees.
+        ...(processingFeeCents > 0
+          ? [{ quantity: 1, price_data: { currency: 'usd' as const, unit_amount: processingFeeCents, product_data: { name: 'Processing fee' } } }]
+          : []),
+      ],
       shipping_address_collection: { allowed_countries: ['US', 'CA'] },
       // Flat-rate shipping so Printful's fulfillment shipping isn't eaten by margin.
       // SHIPPING_FLAT_CENTS env overrides; Printful US apparel runs ~$4.70-$8.50.
