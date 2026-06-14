@@ -84,9 +84,14 @@ async function speak(text: string, voiceId: string): Promise<{ speech: string; w
 }
 
 // Pure-TTS lines (voice previews, launch announcements) are STATIC — same text + voice
-// → same audio. Cache the rendered clip on the (persistent Railway) server so we never
-// re-hit ElevenLabs for a repeat. Keyed by voice + text; bounded so it can't grow forever.
-const ttsCache = new Map<string, { speech: string; words: TimedWord[] }>();
+// → same audio. Cache the rendered clip on the persistent Railway server so we never
+// re-hit ElevenLabs for a repeat. `expo serve` re-evaluates route modules per request,
+// so the cache lives on globalThis (shared across the whole Node process) rather than a
+// module-level const. Keyed by voice + text; bounded so it can't grow forever.
+const globalForTts = globalThis as unknown as {
+  __nanocrewTtsCache?: Map<string, { speech: string; words: TimedWord[] }>;
+};
+const ttsCache = (globalForTts.__nanocrewTtsCache ??= new Map());
 
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
