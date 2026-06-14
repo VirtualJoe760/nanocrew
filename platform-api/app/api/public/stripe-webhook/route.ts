@@ -48,6 +48,13 @@ export async function POST(req: Request) {
         .update(schema.orders)
         .set({ status: 'cancelled' })
         .where(eq(schema.orders.stripeSessionId, s.id));
+    } else if (event.type === 'charge.refunded') {
+      // A refund issued here or from the Stripe dashboard — mark the order refunded once fully back.
+      const c = event.data.object as Stripe.Charge;
+      const pi = typeof c.payment_intent === 'string' ? c.payment_intent : c.payment_intent?.id;
+      if (pi && c.amount_refunded >= c.amount) {
+        await db.update(schema.orders).set({ status: 'refunded' }).where(eq(schema.orders.stripePaymentIntentId, pi));
+      }
     } else if (event.type === 'account.updated') {
       // Connect (Phase D): a creator's Express account changed — sync its capability flags so the
       // app's go-live gate and checkout routing see the live state.

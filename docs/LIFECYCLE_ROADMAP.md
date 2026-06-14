@@ -121,13 +121,22 @@ Cross-cutting guarantees:
   intact**.) Fee = COGS (`printfulCostCents`, fallback `DEFAULT_COGS_PCT`) + shipping + commission
   (`PLATFORM_COMMISSION_PCT`, default 10%); brand gets the remainder. No account → settles to platform
   exactly as before.
-- ✅ **Webhook sync**: `account.updated` updates `connected_accounts` capability flags.
+- ✅ **Webhook sync**: `account.updated` updates `connected_accounts` capability flags;
+  `charge.refunded` marks the order `refunded` (covers dashboard-initiated refunds).
+- ✅ **Refunds (Connect-aware)**: `POST /api/creator/orders/:id/refund` (platform-api, CORS,
+  ownership-checked) refunds in full and — for a destination-charge order — sets `reverse_transfer` +
+  `refund_application_fee`, so the brand's transfer and the platform fee are both clawed back
+  proportionally. Surfaced as a **Refund** button on the brand-site `/admin` order list.
 - ✅ **Gate**: `goLiveBlockReason` blocks go-live + domain-buy until `charges_enabled` — **only when
   `STRIPE_CONNECT_ENABLED` is set**, so the current domain flow is unaffected until Connect is on.
-- ⏳ **Needs Joe's config**: enable **Connect** on the platform Stripe account, then set
-  `STRIPE_CONNECT_ENABLED=1` (turns on the go-live gate). Optionally tune `PLATFORM_COMMISSION_PCT`.
+- ✅ **Processing fee**: checkout adds a customer-paid "Processing fee" (grossed up, waived at
+  `PROCESSING_FEE_WAIVE_CENTS`, default $200), folded into the application fee so the platform keeps it;
+  the cart shows a "save ~X% over $Y" nudge from `brand.json` `commerce` (no fee wording pre-checkout).
+- ⏳ **Needs Joe's config**: enable **Connect** on the platform Stripe account, set
+  `STRIPE_CONNECT_ENABLED=1`, and add `account.updated` + `charge.refunded` (connected-account events)
+  to the platform-api webhook. Optionally tune `PLATFORM_COMMISSION_PCT` / `PROCESSING_FEE_*`.
 
-### Phase E — Printful per-brand  ·  **one account, separation in OUR DB** (decided)
+### Phase E — Printful per-brand  ·  **one account, separation in OUR DB** (decided)  ·  ✅ no code needed
 - Printful's API has **no store-creation endpoint** (verified — `GET /store` only; stores are
   dashboard-only). So per-brand Printful *stores* can't be provisioned programmatically.
 - **Decision**: keep **one Printful account/store**. Per-brand **separation + earnings tracking live in
