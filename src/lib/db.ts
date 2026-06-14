@@ -7,8 +7,12 @@ import * as schema from '@/db/schema';
 // statements must be disabled.
 const url = process.env.DATABASE_URL;
 
+// EAS Hosting runs these routes on Cloudflare Workers (many short-lived, globally
+// distributed isolates). Keep the per-isolate pool tiny so the fleet doesn't
+// exhaust the Supabase transaction pooler, and recycle idle sockets so stale
+// connections don't hang a later request. `prepare: false` is required by the pooler.
 const queryClient = url
-  ? postgres(url, { prepare: false, max: 5 })
+  ? postgres(url, { prepare: false, max: 1, idle_timeout: 20, connect_timeout: 15 })
   : (null as unknown as ReturnType<typeof postgres>);
 
 export const db = url

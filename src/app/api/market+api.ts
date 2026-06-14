@@ -76,6 +76,7 @@ export async function GET(req: Request) {
           .from(schema.products)
           .where(and(eq(schema.products.isPublished, true), inArray(schema.products.storeId, brandIds)))
           .orderBy(desc(schema.products.createdAt))
+          .limit(120)
       : [];
 
     const previewsByStore = new Map<string, string[]>();
