@@ -65,10 +65,10 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 - 🟢 **Brand-store accent fallback** — fixed: falls back to gold `#c9a86a` (was cyan).
 - ⚪ **Custom tab-bar glyphs** — tabs use SF Symbols + gold tint; true NC-monogram glyphs would need a
   custom JS tab bar.
-- ⚪ **Designer endpoints auth** — `/api/generate`, `/api/compositions`, `/api/publish`, etc. are
-  currently **unauthenticated** and resolve a default store. Before launch they must be authed +
-  store-scoped to the signed-in creator (otherwise any client can write to the default store).
-  **Security item — see PRODUCTION_CHECKLIST.**
+- 🟢 **Designer endpoints auth** — resolved (verified 2026-06-13): `/api/generate`, `/api/designs`,
+  `/api/compositions`, `/api/publish` (+ their `[id]` routes) all call `getUserFromRequest` (401 on no
+  user) and enforce per-creator ownership via `assertCatalogueOwner` / `assertCompositionOwner` /
+  `assertDesignOwner` (`src/lib/tenant.ts`). No default-store fallback remains.
 
 ## 6. Verification still owed (not code)
 - ⚪ **On-device test pass** of the recent designer + selection features. (Task #1)
