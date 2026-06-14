@@ -6,6 +6,7 @@ import { db, schema } from '@/lib/db';
 import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCompositionOwner } from '@/lib/tenant';
 import { createSyncProduct, getCatalogVariants, upscaleForPrint, type MockupPosition } from '@/lib/printful';
+import { minRetailCents } from '@/lib/pricing';
 
 /** Printful mockup URLs are temporary S3 links (~72h) — persist to Cloudinary. */
 async function persistMockup(url: string | null): Promise<string | null> {
@@ -112,6 +113,27 @@ export async function POST(req: Request) {
       return Response.json({ error: 'no usable print files (designs must be hosted)' }, { status: 400 });
     }
 
+    // Capture our Printful cost per variant up front — both to enforce the price floor (a product
+    // can't be sold below cost + margin) and to record real margin. Best effort: if the catalog
+    // lookup hiccups we fall back to the absolute floor rather than failing the publish.
+    const costByVariant = new Map<number, number>();
+    try {
+      const catalog = await getCatalogVariants(comp.templateKey);
+      for (const cv of catalog) costByVariant.set(cv.id, cv.priceCents);
+    } catch {
+      /* leave costs null → minRetailCents falls back to the absolute floor */
+    }
+
+    // Price floor: never below the variant's cost + margin (or the absolute floor when cost unknown).
+    const tooLow = body.variants.find((v) => v.retailPriceCents < minRetailCents(costByVariant.get(v.printfulVariantId) ?? null));
+    if (tooLow) {
+      const min = minRetailCents(costByVariant.get(tooLow.printfulVariantId) ?? null);
+      return Response.json(
+        { error: `Price too low for ${tooLow.size}/${tooLow.color}: minimum is $${(min / 100).toFixed(2)}.`, minRetailCents: min },
+        { status: 400 },
+      );
+    }
+
     const synced = await createSyncProduct(
       {
         sync_product: { name, thumbnail: comp.previewUrl ?? undefined },
@@ -145,16 +167,6 @@ export async function POST(req: Request) {
         isPublished: true,
       })
       .returning({ id: schema.products.id, slug: schema.products.slug });
-
-    // Capture our Printful cost per variant so the cockpit can show real margin. Best
-    // effort — a pricing hiccup must not fail the publish (cost stays null, margin hidden).
-    const costByVariant = new Map<number, number>();
-    try {
-      const catalog = await getCatalogVariants(comp.templateKey);
-      for (const cv of catalog) costByVariant.set(cv.id, cv.priceCents);
-    } catch {
-      /* leave costs null */
-    }
 
     await db.insert(schema.variants).values(
       body.variants.map((v) => ({

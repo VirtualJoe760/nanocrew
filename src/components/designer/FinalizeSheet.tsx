@@ -17,6 +17,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
 import { apiFetch } from '@/lib/api';
+import { minRetailCents } from '@/lib/pricing';
 
 // Finalize & publish (port of stephen-lawyer's FinalizeForm): pick colors, set one retail
 // price (default ≈ 2× base cost), name it → creates the live Printful sync product.
@@ -48,6 +49,7 @@ export function FinalizeSheet({
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState(defaultName);
   const [price, setPrice] = useState('');
+  const [maxBaseCents, setMaxBaseCents] = useState(0); // highest Printful base cost → sets the floor
   const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,10 +62,10 @@ export function FinalizeSheet({
       .then((d: { variants?: Variant[] }) => {
         if (!alive || !d.variants?.length) return;
         setVariants(d.variants);
-        // Pricing standard: $5 margin over the highest base cost (until we negotiate
-        // better fulfillment rates).
+        // Pricing standard: the floor is the highest base cost + margin; default to it.
         const maxBase = Math.max(...d.variants.map((v) => v.priceCents));
-        setPrice(((maxBase + 500) / 100).toFixed(2));
+        setMaxBaseCents(maxBase);
+        setPrice((minRetailCents(maxBase) / 100).toFixed(2));
         const first = d.variants[0]?.color;
         if (first) setSelectedColors(new Set([first]));
       })
@@ -97,7 +99,9 @@ export function FinalizeSheet({
     .filter((g) => selectedColors.has(g.color))
     .reduce((sum, g) => sum + g.vs.length, 0);
   const priceCents = Math.round(parseFloat(price || '0') * 100);
-  const canPublish = !!name.trim() && priceCents > 0 && selectedCount > 0 && !publishing;
+  const minPriceCents = minRetailCents(maxBaseCents);
+  const belowFloor = priceCents < minPriceCents;
+  const canPublish = !!name.trim() && priceCents > 0 && !belowFloor && selectedCount > 0 && !publishing;
 
   const publish = () => {
     if (!canPublish) return;
@@ -223,8 +227,8 @@ export function FinalizeSheet({
                   keyboardType="decimal-pad"
                   style={[styles.priceInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
                 />
-                <ThemedText type="small" themeColor="textSecondary">
-                  (base cost + $5)
+                <ThemedText type="small" themeColor={belowFloor ? undefined : 'textSecondary'} style={belowFloor ? { color: '#e24b4a' } : undefined}>
+                  min ${(minPriceCents / 100).toFixed(2)}
                 </ThemedText>
               </View>
 
