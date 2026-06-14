@@ -14,7 +14,8 @@
         "NSMicrophoneUsageDescription": "Nanocrew uses the microphone so you can talk to Venus, your AI brand consultant.",
         "NSPhotoLibraryUsageDescription": "Nanocrew uses your photos for virtual try-on and to set your brand's post and product images.",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.nanocrew.app",
@@ -26,6 +27,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
@@ -62,6 +65,12 @@
         "projectId": "2bf027c9-53e8-4125-8fc8-7679b44942bc"
       }
     },
-    "owner": "averagexjoe"
+    "owner": "averagexjoe",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2bf027c9-53e8-4125-8fc8-7679b44942bc"
+    }
   }
 }
