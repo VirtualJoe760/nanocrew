@@ -1,7 +1,8 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { storeForMember } from '@/lib/tenant';
 
 // GET /api/creator/products?storeSlug= — the creator's products for one of their stores,
 // with whether each already has a feed video. Backs the composer's "Video ads" section.
@@ -11,11 +12,7 @@ export async function GET(req: Request) {
   const slug = new URL(req.url).searchParams.get('storeSlug');
   if (!slug) return Response.json({ error: 'storeSlug required' }, { status: 400 });
   try {
-    const [store] = await db
-      .select({ id: schema.stores.id })
-      .from(schema.stores)
-      .where(and(eq(schema.stores.slug, slug), eq(schema.stores.creatorId, user.id)))
-      .limit(1);
+    const store = await storeForMember(slug, user.id);
     if (!store) return Response.json({ error: 'not found' }, { status: 404 });
 
     const products = await db

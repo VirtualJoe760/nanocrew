@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { isStoreMember } from '@/lib/tenant';
 import { guardRate } from '@/lib/rate-limit';
 import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
 import { generateModelVideo } from '@/lib/model-video';
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
     .from(schema.stores)
     .where(eq(schema.stores.id, product.storeId))
     .limit(1);
-  if (!store || store.creatorId !== user.id) return Response.json({ error: 'not your product' }, { status: 403 });
+  if (!store || !(await isStoreMember(product.storeId, user.id))) return Response.json({ error: 'not your product' }, { status: 403 });
 
   try {
     await debit(user.id, 'video_veo', product.id);

@@ -1,6 +1,7 @@
 import { and, eq, ne } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
+import { storeForMember } from '@/lib/tenant';
 
 export function slugify(s: string): string {
   return (
@@ -13,13 +14,9 @@ export function slugify(s: string): string {
   );
 }
 
-/** The store must belong to the creator. Returns the store id or null. */
+/** The creator must own or collaborate on the store. Returns the store id or null. */
 export async function ownedStoreId(creatorId: string, storeSlug: string): Promise<string | null> {
-  const [store] = await db
-    .select({ id: schema.stores.id })
-    .from(schema.stores)
-    .where(and(eq(schema.stores.slug, storeSlug), eq(schema.stores.creatorId, creatorId)))
-    .limit(1);
+  const store = await storeForMember(storeSlug, creatorId);
   return store?.id ?? null;
 }
 

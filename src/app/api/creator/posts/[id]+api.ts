@@ -1,7 +1,8 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
+import { isStoreMember } from '@/lib/tenant';
 import { uniquePostSlug } from '@/lib/posts';
 
 async function ownedPost(creatorId: string, postId: string) {
@@ -12,10 +13,11 @@ async function ownedPost(creatorId: string, postId: string) {
       publishedAt: schema.storePosts.publishedAt,
     })
     .from(schema.storePosts)
-    .innerJoin(schema.stores, eq(schema.stores.id, schema.storePosts.storeId))
-    .where(and(eq(schema.storePosts.id, postId), eq(schema.stores.creatorId, creatorId)))
+    .where(eq(schema.storePosts.id, postId))
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  if (!(await isStoreMember(row.storeId, creatorId))) return null;
+  return row;
 }
 
 // PATCH /api/creator/posts/:id — update title/excerpt/bodyMd/coverImageUrl/publish.

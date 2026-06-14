@@ -1,7 +1,6 @@
-import { and, eq } from 'drizzle-orm';
-
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
+import { storeForMember } from '@/lib/tenant';
 
 type Annotation = { url: string; width: number; strokes: { x: number; y: number }[][] };
 
@@ -16,11 +15,7 @@ export async function POST(req: Request) {
   try {
     const b = (await req.json()) as { storeSlug?: string; requestMd?: string; screenshots?: string[]; annotations?: Annotation[] };
     if (!b.storeSlug || !b.requestMd?.trim()) return Response.json({ error: 'storeSlug and requestMd required' }, { status: 400 });
-    const [store] = await db
-      .select({ id: schema.stores.id, slug: schema.stores.slug, name: schema.stores.name })
-      .from(schema.stores)
-      .where(and(eq(schema.stores.slug, b.storeSlug), eq(schema.stores.creatorId, user.id)))
-      .limit(1);
+    const store = await storeForMember(b.storeSlug, user.id);
     if (!store) return Response.json({ error: 'not found' }, { status: 404 });
 
     const annotations = (Array.isArray(b.annotations) ? b.annotations : [])

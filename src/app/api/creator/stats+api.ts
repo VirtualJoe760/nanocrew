@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { accessibleStoreIds } from '@/lib/tenant';
 
 // GET /api/creator/stats — overview numbers for every store the creator owns:
 // revenue + order count (paid and beyond) and 30-day pageviews.
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
         customDomain: schema.stores.customDomain,
       })
       .from(schema.stores)
-      .where(eq(schema.stores.creatorId, user.id));
+      .where(inArray(schema.stores.id, await accessibleStoreIds(user.id)));
     if (!stores.length) return Response.json({ stores: [] });
     const ids = stores.map((s) => s.id);
 

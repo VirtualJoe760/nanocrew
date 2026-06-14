@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { isStoreMember } from '@/lib/tenant';
 import { uploadVideo } from '@/lib/cloudinary';
 import { generateProductVideo } from '@/lib/veo';
 import { generateVoiceoverAd } from '@/lib/voiceover-ad';
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
     .from(schema.stores)
     .where(eq(schema.stores.id, product.storeId))
     .limit(1);
-  if (!store || store.creatorId !== user.id) return Response.json({ error: 'not your product' }, { status: 403 });
+  if (!store || !(await isStoreMember(product.storeId, user.id))) return Response.json({ error: 'not your product' }, { status: 403 });
 
   // Charge before generating; refund if generation/upload fails so a failed render is free.
   const op = body.mode === 'veo' ? 'video_veo' : 'video_voiceover';

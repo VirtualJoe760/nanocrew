@@ -2,8 +2,9 @@ import { desc, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { accessibleStoreIds } from '@/lib/tenant';
 
-// GET /api/creator/orders — recent orders across the creator's stores.
+// GET /api/creator/orders — recent orders across the creator's stores (owned + collaborated).
 export async function GET(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
     const stores = await db
       .select({ id: schema.stores.id, slug: schema.stores.slug })
       .from(schema.stores)
-      .where(eq(schema.stores.creatorId, user.id));
+      .where(inArray(schema.stores.id, await accessibleStoreIds(user.id)));
     if (!stores.length) return Response.json({ orders: [] });
     const orders = await db
       .select({

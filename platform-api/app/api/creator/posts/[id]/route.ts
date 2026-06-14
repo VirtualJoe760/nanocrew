@@ -1,13 +1,14 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { corsJson, corsPreflight } from '@/lib/cors';
 import { db, schema } from '@/lib/db';
 import { uniquePostSlug } from '@/lib/posts';
+import { isStoreMember } from '@/lib/tenant';
 
 export const OPTIONS = corsPreflight;
 
-// Resolve a post the caller owns (post → store → creator).
+// Resolve a post the caller owns or collaborates on (post → store → member).
 async function ownedPost(creatorId: string, postId: string) {
   const [row] = await db
     .select({
@@ -18,10 +19,11 @@ async function ownedPost(creatorId: string, postId: string) {
       publishedAt: schema.storePosts.publishedAt,
     })
     .from(schema.storePosts)
-    .innerJoin(schema.stores, eq(schema.stores.id, schema.storePosts.storeId))
-    .where(and(eq(schema.storePosts.id, postId), eq(schema.stores.creatorId, creatorId)))
+    .where(eq(schema.storePosts.id, postId))
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  if (!(await isStoreMember(row.storeId, creatorId))) return null;
+  return row;
 }
 
 // PATCH /api/creator/posts/:id — update any of title/excerpt/bodyMd/coverImageUrl/publish.

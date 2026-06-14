@@ -1,8 +1,7 @@
-import { and, eq } from 'drizzle-orm';
-
 import { getUserFromRequest } from '@/lib/auth';
 import { corsJson, corsPreflight } from '@/lib/cors';
 import { db, schema } from '@/lib/db';
+import { storeForMember } from '@/lib/tenant';
 
 export const OPTIONS = corsPreflight;
 
@@ -17,11 +16,7 @@ export async function POST(req: Request) {
   try {
     const b = (await req.json()) as { storeSlug?: string; requestMd?: string };
     if (!b.storeSlug || !b.requestMd?.trim()) return corsJson({ error: 'storeSlug and requestMd required' }, { status: 400 });
-    const [store] = await db
-      .select({ id: schema.stores.id })
-      .from(schema.stores)
-      .where(and(eq(schema.stores.slug, b.storeSlug), eq(schema.stores.creatorId, user.id)))
-      .limit(1);
+    const store = await storeForMember(b.storeSlug, user.id);
     if (!store) return corsJson({ error: 'not found' }, { status: 404 });
 
     const branch = `revision/${Date.now().toString(36)}`;

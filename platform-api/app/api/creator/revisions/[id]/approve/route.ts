@@ -1,8 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { corsJson, corsPreflight } from '@/lib/cors';
 import { db, schema } from '@/lib/db';
+import { isStoreMember } from '@/lib/tenant';
 import { mergeRevisionBranch } from '@/lib/github';
 
 export const OPTIONS = corsPreflight;
@@ -18,15 +19,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const [rev] = await db
     .select({
       id: schema.storeRevisions.id,
+      storeId: schema.storeRevisions.storeId,
       branch: schema.storeRevisions.branch,
       status: schema.storeRevisions.status,
       slug: schema.stores.slug,
     })
     .from(schema.storeRevisions)
     .innerJoin(schema.stores, eq(schema.stores.id, schema.storeRevisions.storeId))
-    .where(and(eq(schema.storeRevisions.id, id), eq(schema.stores.creatorId, user.id)))
+    .where(eq(schema.storeRevisions.id, id))
     .limit(1);
   if (!rev) return corsJson({ error: 'not found' }, { status: 404 });
+  if (!(await isStoreMember(rev.storeId, user.id))) return corsJson({ error: 'forbidden' }, { status: 403 });
   if (rev.status !== 'ready') return corsJson({ error: `cannot approve a ${rev.status} revision` }, { status: 409 });
 
   try {

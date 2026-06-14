@@ -1,7 +1,8 @@
-import { and, eq, min, sql } from 'drizzle-orm';
+import { and, eq, inArray, min, sql } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { accessibleStoreIds } from '@/lib/tenant';
 
 // GET /api/creator/margins — per-product unit economics across the creator's stores:
 // retail (cheapest variant), our Printful cost, and the margin between them. Products whose
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
       .from(schema.products)
       .innerJoin(schema.stores, eq(schema.products.storeId, schema.stores.id))
       .leftJoin(schema.variants, eq(schema.variants.productId, schema.products.id))
-      .where(and(eq(schema.stores.creatorId, user.id), eq(schema.products.isPublished, true)))
+      .where(and(inArray(schema.stores.id, await accessibleStoreIds(user.id)), eq(schema.products.isPublished, true)))
       .groupBy(schema.products.id, schema.stores.name)
       .orderBy(sql`min(${schema.variants.printfulCostCents}) is null, ${schema.products.name}`);
 
