@@ -1,61 +1,61 @@
-// Seedance 2 — image-to-video generation. Async: create a task, poll until it's done, return
-// the rendered clip bytes. We feed it a Nano Banana on-model scene image (see scene-video.ts) so
-// the person is actually wearing the garment, then Seedance brings the scene to life.
-//
-// ⚠️ The public Seedance page doesn't publish endpoint paths / field names. The request+response
-// shapes below follow the documented pattern (Bearer auth, task id + poll) but MUST be verified
-// against the real API reference in your Seedance dashboard — adjust the marked fields there.
+// Seedance 2 — image-to-video generation. We feed it a Nano Banana on-model scene still (a
+// public Cloudinary URL — Seedance requires an https URL on a public IP, no data URLs) and it
+// animates the person doing the thing, with an audio track. Async: submit → poll → download.
+// API reference: https://seedance2.so/docs/api/generate
 // Env: SEEDANCE_API_KEY (required) · SEEDANCE_API_BASE (optional override).
-const BASE = process.env.SEEDANCE_API_BASE || 'https://api.seedance2.so';
+const BASE = process.env.SEEDANCE_API_BASE || 'https://seedance2.so';
 
 export type SceneAspect = '9:16' | '16:9';
 
 export async function generateSeedanceVideo(opts: {
-  imageUrl?: string; // hosted scene image (preferred)
-  imageBase64?: string; // …or inline base64 (png)
+  imageUrl: string; // first frame — a public https URL (Cloudinary)
   prompt: string; // the motion/action to animate
   aspectRatio: SceneAspect;
-  durationSec?: number; // 4–10 per the docs
+  durationSec?: number; // 4–15, default 5
+  resolution?: '480p' | '720p'; // default 720p
+  model?: 'seedance-2.0' | 'seedance-2.0-fast'; // default fast (cheaper, good)
+  audio?: boolean; // default true
 }): Promise<Buffer> {
   const key = process.env.SEEDANCE_API_KEY;
-  if (!key) {
-    throw new Error('SEEDANCE_API_KEY not configured — add it to .env.local (Seedance dashboard → API key).');
-  }
+  if (!key) throw new Error('SEEDANCE_API_KEY not configured — add it to .env.local (Seedance dashboard → API Keys).');
   const auth = { Authorization: `Bearer ${key}` };
 
-  // 1) Create the image-to-video task. ── VERIFY fields against the Seedance API reference ──
-  const create = await fetch(`${BASE}/v1/tasks`, {
+  // 1) Submit the image-to-video task → 201 { id: "task_…", status, credits_charged }.
+  const create = await fetch(`${BASE}/api/v1/video/generate`, {
     method: 'POST',
     headers: { ...auth, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'seedance-2',
-      mode: 'image-to-video',
-      prompt: opts.prompt,
-      image: opts.imageUrl ?? (opts.imageBase64 ? `data:image/png;base64,${opts.imageBase64}` : undefined),
-      aspect_ratio: opts.aspectRatio,
+      model: opts.model ?? 'seedance-2.0-fast',
+      type: 'image-to-video',
+      prompt: opts.prompt.slice(0, 2000),
+      image_url: opts.imageUrl,
       duration: opts.durationSec ?? 5,
-      resolution: '1080p',
+      resolution: opts.resolution ?? '720p',
+      aspect_ratio: opts.aspectRatio,
+      enable_audio: opts.audio ?? true,
     }),
   });
-  if (!create.ok) throw new Error(`seedance create failed: ${create.status} ${(await create.text()).slice(0, 300)}`);
-  const created = (await create.json()) as { id?: string; task_id?: string };
-  const taskId = created.id ?? created.task_id;
-  if (!taskId) throw new Error('seedance returned no task id');
+  if (!create.ok) {
+    const txt = (await create.text()).slice(0, 300);
+    if (create.status === 402) throw new Error('Seedance: insufficient credits on the Seedance account.');
+    if (create.status === 401) throw new Error('Seedance: unauthorized — check SEEDANCE_API_KEY.');
+    throw new Error(`seedance generate failed: ${create.status} ${txt}`);
+  }
+  const { id } = (await create.json()) as { id?: string };
+  if (!id) throw new Error('seedance returned no task id');
 
-  // 2) Poll until the task succeeds (docs: ~under a minute for a 5s clip).
-  for (let i = 0; i < 60; i++) {
-    await new Promise((r) => setTimeout(r, 4000));
-    const st = await fetch(`${BASE}/v1/tasks/${taskId}`, { headers: auth });
+  // 2) Poll GET /api/v1/video/task/{id} until succeeded. video_url expires in 24h → download now.
+  for (let i = 0; i < 50; i++) {
+    await new Promise((r) => setTimeout(r, 6000)); // ~5 min budget
+    const st = await fetch(`${BASE}/api/v1/video/task/${id}`, { headers: auth });
     if (!st.ok) continue;
-    const d = (await st.json()) as { status?: string; video_url?: string; output?: { url?: string }; error?: string };
-    const status = (d.status ?? '').toLowerCase();
-    const url = d.video_url ?? d.output?.url;
-    if ((status === 'succeeded' || status === 'completed') && url) {
-      const dl = await fetch(url);
+    const d = (await st.json()) as { status?: string; video_url?: string; error?: string };
+    if (d.status === 'succeeded' && d.video_url) {
+      const dl = await fetch(d.video_url);
       if (!dl.ok) throw new Error(`seedance download failed: ${dl.status}`);
       return Buffer.from(await dl.arrayBuffer());
     }
-    if (status === 'failed' || status === 'error') throw new Error(`seedance task failed: ${d.error ?? 'unknown'}`);
+    if (d.status === 'failed') throw new Error(`seedance task failed: ${d.error ?? 'unknown'}`);
   }
   throw new Error('seedance task timed out');
 }
