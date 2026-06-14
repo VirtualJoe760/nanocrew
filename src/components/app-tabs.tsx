@@ -1,13 +1,25 @@
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useColorScheme } from 'react-native';
 
-// Nano Crew tab bar: champagne-gold selected tint + thin, elegant outline glyphs (no heavy
-// `.fill` weights), so the chrome reads premium and on-brand. The nucleus motif marks the
-// feed. Icon and Label are separate children of each Trigger (SDK 54 native-tabs API).
-const GOLD = '#cdd1d9';
+import { Colors } from '@/constants/theme';
+
+// Nano Crew tab bar: platinum-silver selected tint + thin, elegant outline glyphs (no heavy
+// `.fill` weights), so the chrome reads premium and on-brand. Background is OPAQUE (mode-aware) so
+// the menu stays legible over full-bleed feed media of any brightness — it never bleeds through.
+// Icon and Label are separate children of each Trigger (SDK 54 native-tabs API).
 
 export default function AppTabs() {
+  const dark = useColorScheme() !== 'light';
+  const c = dark ? Colors.dark : Colors.light;
   return (
-    <NativeTabs tintColor={GOLD} labelStyle={{ fontSize: 11 }}>
+    <NativeTabs
+      tintColor={c.tint}
+      backgroundColor={c.background}
+      // The full-screen feed is always at a "scroll edge", where iOS would make the bar transparent
+      // and the menu vanish over bright media — force the opaque appearance instead.
+      disableTransparentOnScrollEdge
+      labelStyle={{ fontSize: 11 }}
+    >
       <NativeTabs.Trigger name="index">
         <Icon sf="circle.hexagongrid" />
         <Label>Nanocrew</Label>
