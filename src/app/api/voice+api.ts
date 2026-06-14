@@ -101,18 +101,18 @@ async function ttsCacheRead(key: string): Promise<{ speech: string; words: Timed
   }
 }
 
-function ttsCacheWrite(key: string, value: { speech: string; words: TimedWord[] }): void {
-  void (async () => {
-    try {
-      const { createHash } = await import('node:crypto');
-      const { mkdir, writeFile } = await import('node:fs/promises');
-      await mkdir(TTS_CACHE_DIR, { recursive: true });
-      const file = `${TTS_CACHE_DIR}/${createHash('sha1').update(key).digest('hex')}.json`;
-      await writeFile(file, JSON.stringify(value));
-    } catch {
-      /* best-effort cache */
-    }
-  })();
+// Awaited (NOT fire-and-forget): expo serve tears the request realm down right after
+// the response, so a detached write would never land before the next request reads.
+async function ttsCacheWrite(key: string, value: { speech: string; words: TimedWord[] }): Promise<void> {
+  try {
+    const { createHash } = await import('node:crypto');
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(TTS_CACHE_DIR, { recursive: true });
+    const file = `${TTS_CACHE_DIR}/${createHash('sha1').update(key).digest('hex')}.json`;
+    await writeFile(file, JSON.stringify(value));
+  } catch {
+    /* best-effort cache */
+  }
 }
 
 export async function POST(req: Request) {
@@ -161,7 +161,7 @@ export async function POST(req: Request) {
     if (hit) return Response.json({ line: say, speech: hit.speech, words: hit.words, cached: true });
     try {
       const tts = await speak(say, voice.id);
-      ttsCacheWrite(cacheKey, tts);
+      await ttsCacheWrite(cacheKey, tts);
       return Response.json({ line: say, speech: tts.speech, words: tts.words });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
