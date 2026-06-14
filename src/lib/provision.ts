@@ -90,6 +90,12 @@ function buildBrandJson(input: ProvisionInput, cfg: NonNullable<ReturnType<typeo
     // templates fall back to placeholder products.
     apiBase: process.env.PLATFORM_API_BASE ?? '',
     platform: { supabaseUrl: cfg.SUPABASE_URL, supabaseAnonKey: cfg.SUPABASE_ANON_KEY },
+    // Single source of truth for the storefront's processing-fee terms — mirrors the values the
+    // checkout (platform-api) actually charges, so the cart's "save X% over $Y" nudge can't drift.
+    commerce: {
+      feeWaiveCents: Number(process.env.PROCESSING_FEE_WAIVE_CENTS ?? 20000),
+      feePct: Number(process.env.PROCESSING_FEE_PCT ?? 0.029),
+    },
   };
 }
 
