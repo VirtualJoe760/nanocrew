@@ -8,12 +8,18 @@ AI-native creator commerce (Expo / React Native, iOS + Android). A creator talks
 ads, and edit their site by chatting. Built on the proven `stephen-lawyer` create→design→Printful
 loop (sibling dir).
 
-## Read the docs first
-Full, current documentation lives in **`docs/`** — read these before working:
-- `docs/ARCHITECTURE.md` — the 4 deployable units, end-to-end flow, libs, data model
-- `docs/PAGES.md` — every screen/section · `docs/API.md` — endpoint reference
-- `docs/REMAINING_FEATURES.md` — what's open · `docs/PRODUCTION_CHECKLIST.md` — go-live
-- `docs/DEV_BUILD.md` — EAS dev-build runbook · `docs/DATABASE_PLAN.md`, `docs/STOREFRONT_ENGINE.md`
+## Read the docs first — and update them as you build
+Documentation is a first-class division in **`docs/`**. Start at **`docs/README.md`** (the map) and
+**`AGENTS.md` "Documentation discipline"**: **every code change updates the docs it affects, in the
+same change**, and storefront-facing features are wired at the *template* level so every generated
+brand site ships them.
+- **`docs/STOREFRONT_DATA_CONTRACT.md`** — ✅ THE doc for anything touching a brand website (app ↔
+  platform-api ↔ template data flow, exact API shapes, sync, the custom-site cutover). Read before
+  editing storefronts, the catalogue, or `platform-api/app/api/public/**`.
+- `docs/STOREFRONT_ENGINE.md` — how sites are generated (templates, forge, provisioning) ⚠️ refreshing
+- `docs/ARCHITECTURE.md` — the 4 deployable units · `docs/DATABASE_PLAN.md` — schema (both ⚠️ refreshing)
+- `docs/PAGES.md` · `docs/API.md` · `docs/REMAINING_FEATURES.md` · `docs/PRODUCTION_CHECKLIST.md` · `docs/DEV_BUILD.md`
+- Specs (designed at template level): `docs/FEATURED_PRODUCTS.md`, `docs/COLLECTIONS_LOOKBOOK.md`
 
 ## The four deployable units (one shared Supabase Postgres)
 1. **Mobile app** — this repo. `src/app/**+api.ts` server routes hold the authed creator logic. **The backend runs on Railway** (`backend-production-d7eb.up.railway.app`, persistent Node via `expo serve`) — NOT EAS Hosting (Cloudflare Workers broke postgres-js for authed routes; do not move it back). Deploy with the Railway GraphQL API + an explicit `commitSha` (no auto-deploy webhook yet). The iOS build's `EXPO_PUBLIC_API_URL` points here. See the `production-shipping` memory.
