@@ -91,6 +91,18 @@ platform-api using `brand.json.apiBase` + the store slug, with `next: { revalida
 The home, shop, product, and cart pages all read through this one data layer — so re-pointing the
 data layer re-points the whole site (this is what made the stephenlawyer.clothing cutover one file).
 
+**Brand sites are env-less — the connection config lives in `brand.json`, not Vercel env.** Template
+source has *zero* `process.env` reads; `apiBase`, the Supabase URL/anon key, and the fee terms are
+all baked into `brand.json` at provision and committed to the repo, so a new brand connects to the
+platform with no per-site env setup. Crucially, **no brand repo ever holds a Stripe or Printful
+secret** — checkout proxies to the central POS (`/api/public/checkout`). The values in `brand.json`
+are populated from the **app server's** env (`PLATFORM_API_BASE`, `EXPO_PUBLIC_SUPABASE_*`,
+`PROCESSING_FEE_*`) at provision time — so if those are missing on Railway, new brands ship with an
+empty `apiBase` and fall back to placeholder products. (Bespoke cutover sites like
+`stephenlawyer.clothing` are the exception: they read `process.env.NANOCREW_API` and so *do* need
+that one var set on their own Vercel project — see "Cutover" below.) The provisioning + config
+mechanics live in [STOREFRONT_ENGINE.md](./STOREFRONT_ENGINE.md) ("Brand sites are env-less").
+
 **Rule #2 — storefront features are wired at the TEMPLATE level.** Catalogue, featured products,
 collections/lookbook, cart, and checkout must be built into the templates so that *every brand site
 generated from them ships the feature correctly*. Never one-off a feature into a single brand's repo
