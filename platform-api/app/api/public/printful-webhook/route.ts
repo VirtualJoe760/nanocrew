@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
@@ -10,8 +12,10 @@ import { sendShippedEmail } from '@/lib/notify';
 //   order_failed     → failed       ·  order_canceled    → cancelled
 //   order_refunded   → logged only — Printful refunds US (our fulfillment cost), it does NOT refund
 //                      the shopper, whose money is in Stripe; the customer order stays as-is.
-// v1 webhooks are unsigned; we require the store id to match and resolve orders only by our own
-// printful_order_id reference.
+// v1 webhooks are unsigned, so we add our own shared-secret gate: set PRINTFUL_WEBHOOK_TOKEN and
+// register the webhook URL in Printful with a matching `?token=<value>` query string. When the env
+// is set the token is required (constant-time compared); when unset we fall back to the store-id
+// check only (backward-compatible). Orders are resolved solely by our own printful_order_id.
 
 type PrintfulEvent = {
   type?: string;
@@ -25,6 +29,18 @@ type PrintfulEvent = {
 
 export async function POST(req: Request) {
   try {
+    // Shared-secret gate (opt-in): if PRINTFUL_WEBHOOK_TOKEN is set, the caller must present a
+    // matching ?token=. Prevents forged status flips (a guessable store id was the only barrier).
+    const secret = process.env.PRINTFUL_WEBHOOK_TOKEN;
+    if (secret) {
+      const got = new URL(req.url).searchParams.get('token') ?? '';
+      const a = Buffer.from(got);
+      const b = Buffer.from(secret);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        return Response.json({ ok: false }, { status: 401 });
+      }
+    }
+
     const event = (await req.json().catch(() => null)) as PrintfulEvent | null;
     const expectedStore = process.env.PRINTFUL_STORE_ID;
     if (!event?.type || !event.data?.order?.id) return Response.json({ ok: false }, { status: 400 });
