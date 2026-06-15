@@ -345,6 +345,20 @@ export default function AccountScreen() {
                 </Pressable>
               </>
             )}
+
+            <View style={styles.legalRow}>
+              <Pressable onPress={() => Linking.openURL('https://nanocrew-api.vercel.app/privacy')}>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.legalLink}>
+                  Privacy
+                </ThemedText>
+              </Pressable>
+              <ThemedText type="small" themeColor="textSecondary">  ·  </ThemedText>
+              <Pressable onPress={() => Linking.openURL('https://nanocrew-api.vercel.app/terms')}>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.legalLink}>
+                  Terms
+                </ThemedText>
+              </Pressable>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -371,6 +385,14 @@ const styles = StyleSheet.create({
   appleButton: { backgroundColor: '#000' },
   appleText: { color: '#fff' },
   signOut: { marginTop: Spacing.four },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.six,
+    marginBottom: Spacing.four,
+  },
+  legalLink: { textDecorationLine: 'underline' },
   deleteLink: { textAlign: 'center', marginTop: Spacing.three, textDecorationLine: 'underline' },
   divider: { textAlign: 'center', marginVertical: Spacing.one },
   section: { gap: Spacing.two, marginTop: Spacing.three },
