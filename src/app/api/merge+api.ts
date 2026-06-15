@@ -1,11 +1,12 @@
 import { GoogleGenAI, Modality } from '@google/genai';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
 import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
+import { safeImageFetch } from '@/lib/safe-fetch';
 
 // POST /api/merge — the blend tool: feed Nano Banana BOTH design images plus the
 // collision prompt, key the result transparent, store it as a new design.
@@ -20,7 +21,7 @@ interface GenResponse {
 }
 
 async function urlToInline(url: string): Promise<InlinePart> {
-  const res = await fetch(url);
+  const res = await safeImageFetch(url);
   if (!res.ok) throw new Error(`Failed to fetch design (${res.status})`);
   return {
     inlineData: {
@@ -47,10 +48,16 @@ export async function POST(req: Request) {
     }
     const storeId = await assertCatalogueOwner(body.catalogueId, user.id);
 
+    // Scope to the caller's own store — never fuse another creator's (private) designs.
     const rows = await db
       .select({ id: schema.designs.id, url: schema.designs.url, prompt: schema.designs.prompt })
       .from(schema.designs)
-      .where(inArray(schema.designs.id, [body.designAId, body.designBId]));
+      .where(
+        and(
+          inArray(schema.designs.id, [body.designAId, body.designBId]),
+          eq(schema.designs.storeId, storeId),
+        ),
+      );
     const a = rows.find((r) => r.id === body.designAId);
     const b = rows.find((r) => r.id === body.designBId);
     if (!a || !b) return Response.json({ error: 'designs not found' }, { status: 404 });

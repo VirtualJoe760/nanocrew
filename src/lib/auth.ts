@@ -5,6 +5,8 @@
 // verifying the ES256 signature locally against the project's JWKS, authed routes make
 // no fetch before their DB query, so they behave like the (reliable) public routes.
 
+import { timingSafeEqual } from 'node:crypto';
+
 const SUPABASE_URL = (process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '');
 const ISSUER = SUPABASE_URL ? `${SUPABASE_URL}/auth/v1` : '';
 
@@ -18,6 +20,13 @@ export interface AuthedUser {
 // Trusted server-to-server calls (e.g. first-drop generation) carry a shared internal key
 // plus the creator they act on behalf of, so the normal auth + ownership checks all apply.
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY ?? '';
+
+/** Length-checked constant-time string compare (avoids leaking the key via timing). */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
 
 type Jwk = { kid: string; kty: string; crv: string; x: string; y: string };
 // Signing keys come from SUPABASE_JWKS (the project's JWKS json) so there's ZERO network
@@ -109,7 +118,7 @@ async function verifyToken(token: string): Promise<AuthedUser | null> {
 export async function getUserFromRequest(req: Request): Promise<AuthedUser | null> {
   // Internal service path: a valid key + creator id authenticates AS that creator.
   const internalKey = req.headers.get('x-internal-key');
-  if (internalKey && INTERNAL_API_KEY && internalKey === INTERNAL_API_KEY) {
+  if (internalKey && INTERNAL_API_KEY && safeEqual(internalKey, INTERNAL_API_KEY)) {
     const creatorId = req.headers.get('x-internal-creator');
     if (creatorId) return { id: creatorId, email: 'internal@nanocrew', name: 'internal' };
   }

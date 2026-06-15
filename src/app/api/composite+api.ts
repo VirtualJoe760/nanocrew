@@ -3,6 +3,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
 import { guardRate } from '@/lib/rate-limit';
+import { safeImageFetch } from '@/lib/safe-fetch';
 
 // Review-only composite: Nano Banana renders the design ON the garment photo.
 // NOT a print file — just for the operator's aesthetic judgment (mirrors
@@ -18,7 +19,7 @@ interface GenResponse {
 }
 
 async function fetchAsInlineData(url: string): Promise<InlinePart> {
-  const res = await fetch(url);
+  const res = await safeImageFetch(url);
   if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`);
   const mimeType = res.headers.get('content-type') ?? 'image/png';
   const buf = Buffer.from(await res.arrayBuffer());
