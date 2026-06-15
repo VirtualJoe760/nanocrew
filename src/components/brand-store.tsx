@@ -105,6 +105,14 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
                 <Text style={[styles.count, { color: accent }]}>
                   {data?.productCount} {data?.productCount === 1 ? 'piece' : 'pieces'}
                 </Text>
+                {brand.siteUrl ? (
+                  <Pressable
+                    onPress={() => brand.siteUrl && openBrowserAsync(brand.siteUrl)}
+                    style={[styles.shopBtn, { backgroundColor: accent }]}
+                  >
+                    <Text style={[styles.shopBtnText, { color: bg }]}>Shop the website ↗</Text>
+                  </Pressable>
+                ) : null}
               </View>
 
               {data?.collections.length ? (
@@ -164,6 +172,8 @@ const styles = StyleSheet.create({
   brandName: { fontSize: 26, fontWeight: '800', letterSpacing: 0.5, textAlign: 'center' },
   tagline: { fontSize: 14, textAlign: 'center', maxWidth: 320 },
   count: { fontSize: 11, letterSpacing: 1.5, marginTop: 2 },
+  shopBtn: { marginTop: Spacing.three, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.three },
+  shopBtnText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
   collection: { paddingHorizontal: Spacing.three, marginBottom: Spacing.five },
   collectionHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.three, paddingHorizontal: Spacing.one },
   collectionName: { fontSize: 18, fontWeight: '700' },

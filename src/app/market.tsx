@@ -44,71 +44,98 @@ type Brand = {
 
 type MarketData = { trending: TrendingItem[]; brands: Brand[] };
 
-function price(cents: number | null): string {
-  return cents != null ? `$${(cents / 100).toFixed(2)}` : '';
-}
+const price = (cents: number | null) => (cents != null ? `$${(cents / 100).toFixed(2)}` : '');
 
-/** Resolve the public URL for a storefront, preferring a custom domain. */
+/** Resolve the public website URL for a storefront, preferring a custom domain. */
 function storeUrl(brand: Brand): string | null {
   if (brand.customDomain) return `https://${brand.customDomain}`;
   return brand.deploymentUrl ?? null;
 }
 
-function TrendingCard({ item, onOpen }: { item: TrendingItem; onOpen: (slug: string) => void }) {
+/** A trending product — tapping opens its brand's in-app store page. */
+function TrendingCard({
+  item,
+  onOpen,
+  fallback,
+}: {
+  item: TrendingItem;
+  onOpen: (slug: string) => void;
+  fallback: string;
+}) {
   return (
     <Pressable style={styles.trendCard} onPress={() => onOpen(item.storeSlug)}>
       {item.imageUrl ? (
         <Image source={{ uri: item.imageUrl }} style={styles.trendImg} contentFit="cover" />
       ) : (
-        <View style={[styles.trendImg, styles.imgFallback]} />
+        <View style={[styles.trendImg, { backgroundColor: fallback }]} />
       )}
-      <ThemedText type="smallBold" numberOfLines={1}>
+      <ThemedText type="smallBold" numberOfLines={1} style={styles.trendName}>
         {item.name}
       </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-        @{item.storeSlug}
+      <ThemedText type="code" themeColor="textSecondary" numberOfLines={1} style={styles.trendMeta}>
+        {item.storeName}
         {item.priceCents != null ? ` · ${price(item.priceCents)}` : ''}
       </ThemedText>
     </Pressable>
   );
 }
 
-function BrandCard({ brand, onOpen }: { brand: Brand; onOpen: (slug: string) => void }) {
+/** A brand card — the whole card opens the in-app store page; a separate pill opens the website. */
+function BrandCard({
+  brand,
+  onOpen,
+  fallback,
+  line,
+}: {
+  brand: Brand;
+  onOpen: (slug: string) => void;
+  fallback: string;
+  line: string;
+}) {
   const url = storeUrl(brand);
   return (
     <Pressable onPress={() => onOpen(brand.slug)}>
-    <ThemedView type="backgroundElement" style={styles.brandCard}>
-      <View style={styles.brandHeader}>
-        {brand.logoUrl ? (
-          <Image source={{ uri: brand.logoUrl }} style={styles.logo} contentFit="cover" />
-        ) : (
-          <View style={[styles.logo, styles.imgFallback]} />
-        )}
-        <View style={styles.brandMeta}>
-          <ThemedText type="smallBold" numberOfLines={1}>
-            {brand.name}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-            {brand.tagline ?? `${brand.productCount} ${brand.productCount === 1 ? 'drop' : 'drops'}`}
-          </ThemedText>
-        </View>
-        {url ? (
-          <Pressable onPress={() => openBrowserAsync(url)} hitSlop={8} style={styles.visitBtn}>
-            <ThemedText type="small" themeColor="tint">
-              Visit →
+      <ThemedView type="backgroundElement" style={[styles.brandCard, { borderColor: line }]}>
+        <View style={styles.brandHeader}>
+          {brand.logoUrl ? (
+            <Image source={{ uri: brand.logoUrl }} style={styles.logo} contentFit="cover" />
+          ) : (
+            <View style={[styles.logo, { backgroundColor: fallback }]} />
+          )}
+          <View style={styles.brandMeta}>
+            <ThemedText type="smallBold" numberOfLines={1}>
+              {brand.name}
             </ThemedText>
-          </Pressable>
-        ) : null}
-      </View>
-
-      {brand.previews.length ? (
-        <View style={styles.previewRow}>
-          {brand.previews.map((src, i) => (
-            <Image key={`${brand.id}-${i}`} source={{ uri: src }} style={styles.previewThumb} contentFit="cover" />
-          ))}
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+              {brand.tagline ?? `${brand.productCount} ${brand.productCount === 1 ? 'drop' : 'drops'}`}
+            </ThemedText>
+          </View>
+          <ThemedText type="code" themeColor="textSecondary" style={styles.count}>
+            {brand.productCount}
+          </ThemedText>
         </View>
-      ) : null}
-    </ThemedView>
+
+        {brand.previews.length ? (
+          <View style={styles.previewRow}>
+            {brand.previews.slice(0, 4).map((src, i) => (
+              <Image key={`${brand.id}-${i}`} source={{ uri: src }} style={styles.previewThumb} contentFit="cover" />
+            ))}
+          </View>
+        ) : null}
+
+        <View style={[styles.brandFooter, { borderTopColor: line }]}>
+          <ThemedText type="code" themeColor="tint">
+            Open store →
+          </ThemedText>
+          {url ? (
+            <Pressable onPress={() => openBrowserAsync(url)} hitSlop={10} style={styles.visitPill}>
+              <ThemedText type="code" themeColor="textSecondary">
+                Website ↗
+              </ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
+      </ThemedView>
     </Pressable>
   );
 }
@@ -119,6 +146,10 @@ export default function MarketScreen() {
   const [data, setData] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // A subtle fill/border that reads on either mode (no hardcoded greys).
+  const fallback = theme.backgroundSelected;
+  const line = theme.backgroundSelected;
 
   // Debounced fetch: refetch as the brand search query changes.
   useEffect(() => {
@@ -170,11 +201,11 @@ export default function MarketScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
-            style={[styles.search, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.search, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: line }]}
           />
 
           {loading ? (
-            <ActivityIndicator style={styles.center} />
+            <ActivityIndicator style={styles.center} color={theme.tint} />
           ) : (
             <ScrollView
               showsVerticalScrollIndicator={false}
@@ -189,7 +220,7 @@ export default function MarketScreen() {
             >
               {!searching && trending.length ? (
                 <View style={styles.section}>
-                  <ThemedText type="smallBold" style={styles.sectionTitle}>
+                  <ThemedText type="code" themeColor="textSecondary" style={styles.sectionTitle}>
                     Trending
                   </ThemedText>
                   <ScrollView
@@ -198,18 +229,20 @@ export default function MarketScreen() {
                     contentContainerStyle={styles.trendRow}
                   >
                     {trending.map((item) => (
-                      <TrendingCard key={item.id} item={item} onOpen={setStoreSlug} />
+                      <TrendingCard key={item.id} item={item} onOpen={setStoreSlug} fallback={fallback} />
                     ))}
                   </ScrollView>
                 </View>
               ) : null}
 
               <View style={styles.section}>
-                <ThemedText type="smallBold" style={styles.sectionTitle}>
+                <ThemedText type="code" themeColor="textSecondary" style={styles.sectionTitle}>
                   {searching ? 'Brands' : 'All brands'}
                 </ThemedText>
                 {brands.length ? (
-                  brands.map((brand) => <BrandCard key={brand.id} brand={brand} onOpen={setStoreSlug} />)
+                  brands.map((brand) => (
+                    <BrandCard key={brand.id} brand={brand} onOpen={setStoreSlug} fallback={fallback} line={line} />
+                  ))
                 ) : (
                   <ThemedText type="small" themeColor="textSecondary">
                     {searching ? `No brands match "${query.trim()}".` : 'No live storefronts yet.'}
@@ -235,23 +268,33 @@ const styles = StyleSheet.create({
   title: {},
   search: {
     marginTop: Spacing.three,
-    height: 44,
+    height: 46,
     borderRadius: Spacing.three,
+    borderWidth: 1,
     paddingHorizontal: Spacing.three,
     fontSize: 16,
   },
-  scrollContent: { paddingTop: Spacing.four, paddingBottom: BottomTabInset + Spacing.four, gap: Spacing.five },
+  scrollContent: { paddingTop: Spacing.five, paddingBottom: BottomTabInset + Spacing.five, gap: Spacing.six },
   section: { gap: Spacing.three },
-  sectionTitle: { textTransform: 'uppercase', opacity: 0.7 },
+  sectionTitle: { textTransform: 'uppercase', letterSpacing: 1.5 },
   trendRow: { gap: Spacing.three, paddingRight: Spacing.four },
-  trendCard: { width: 140, gap: Spacing.one },
-  trendImg: { width: 140, height: 140, borderRadius: Spacing.three },
-  imgFallback: { backgroundColor: '#33343a' },
-  brandCard: { borderRadius: Spacing.four, padding: Spacing.three, gap: Spacing.three },
+  trendCard: { width: 150, gap: Spacing.one },
+  trendImg: { width: 150, height: 150, borderRadius: Spacing.three },
+  trendName: { marginTop: Spacing.one },
+  trendMeta: {},
+  brandCard: { borderRadius: Spacing.four, borderWidth: 1, padding: Spacing.three, gap: Spacing.three },
   brandHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  logo: { width: 44, height: 44, borderRadius: 22 },
+  logo: { width: 46, height: 46, borderRadius: 12 },
   brandMeta: { flex: 1, gap: 2 },
-  visitBtn: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
+  count: { fontSize: 12 },
   previewRow: { flexDirection: 'row', gap: Spacing.two },
   previewThumb: { flex: 1, aspectRatio: 1, borderRadius: Spacing.two },
+  brandFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: Spacing.three,
+  },
+  visitPill: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
 });

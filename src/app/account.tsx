@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { BrandStore } from '@/components/brand-store';
 import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { PlatformAdmin } from '@/components/platform-admin';
 import { useAuth } from '@/hooks/use-auth';
@@ -39,6 +40,7 @@ export default function AccountScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showEarnings, setShowEarnings] = useState(false);
+  const [storeSlug, setStoreSlug] = useState<string | null>(null);
   const [payouts, setPayouts] = useState<{ connected: boolean; chargesEnabled: boolean } | null>(null);
 
   // Ensure the creators row exists + load this creator's stores; probe platform-admin access.
@@ -200,12 +202,19 @@ export default function AccountScreen() {
                   <ThemedText type="smallBold">Your stores</ThemedText>
                   {stores.length ? (
                     stores.map((s) => (
-                      <ThemedView key={s.id} type="backgroundElement" style={styles.storeRow}>
-                        <ThemedText type="small">{s.name}</ThemedText>
-                        <ThemedText type="small" themeColor="textSecondary">
-                          {s.slug} · {s.status}
-                        </ThemedText>
-                      </ThemedView>
+                      <Pressable key={s.id} onPress={() => setStoreSlug(s.slug)}>
+                        <ThemedView type="backgroundElement" style={styles.storeRow}>
+                          <View style={styles.storeRowMeta}>
+                            <ThemedText type="small">{s.name}</ThemedText>
+                            <ThemedText type="code" themeColor="textSecondary">
+                              {s.slug} · {s.status}
+                            </ThemedText>
+                          </View>
+                          <ThemedText type="code" themeColor="tint">
+                            Open store →
+                          </ThemedText>
+                        </ThemedView>
+                      </Pressable>
                     ))
                   ) : (
                     <ThemedText type="small" themeColor="textSecondary">
@@ -341,6 +350,7 @@ export default function AccountScreen() {
       </SafeAreaView>
       {isAdmin ? <PlatformAdmin visible={showAdmin} onClose={() => setShowAdmin(false)} /> : null}
       {session ? <EarningsCockpit visible={showEarnings} onClose={() => setShowEarnings(false)} token={session.access_token} /> : null}
+      <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
     </ThemedView>
   );
 }
@@ -364,5 +374,13 @@ const styles = StyleSheet.create({
   deleteLink: { textAlign: 'center', marginTop: Spacing.three, textDecorationLine: 'underline' },
   divider: { textAlign: 'center', marginVertical: Spacing.one },
   section: { gap: Spacing.two, marginTop: Spacing.three },
-  storeRow: { padding: Spacing.three, borderRadius: Spacing.two, gap: 2 },
+  storeRow: {
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  storeRowMeta: { gap: 2, flex: 1 },
 });
