@@ -7,6 +7,7 @@ import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCompositionOwner } from '@/lib/tenant';
 import { createSyncProduct, getCatalogVariants, upscaleForPrint, type MockupPosition } from '@/lib/printful';
 import { minRetailCents } from '@/lib/pricing';
+import { revalidateStorefront } from '@/lib/storefront-revalidate';
 
 /** Printful mockup URLs are temporary S3 links (~72h) — persist to Cloudinary. */
 async function persistMockup(url: string | null): Promise<string | null> {
@@ -178,6 +179,14 @@ export async function POST(req: Request) {
         printfulCostCents: costByVariant.get(v.printfulVariantId) ?? null,
       })),
     );
+
+    // Refresh the brand's storefront so the newly-published product appears on the live site.
+    const [store] = await db
+      .select({ slug: schema.stores.slug })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, comp.storeId))
+      .limit(1);
+    void revalidateStorefront(store?.slug);
 
     return Response.json({ ok: true, printfulSyncProductId: syncProductId, product });
   } catch (e) {

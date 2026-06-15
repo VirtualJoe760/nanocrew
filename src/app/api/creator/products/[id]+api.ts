@@ -4,6 +4,7 @@ import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { TenantError, assertProductOwner } from '@/lib/tenant';
 import { deleteSyncProduct } from '@/lib/printful';
+import { revalidateStorefront } from '@/lib/storefront-revalidate';
 
 // DELETE /api/creator/products/:id — remove a product everywhere the creator owns it:
 //   1. Printful store (the sync product) — best-effort, so a Printful hiccup never strands the
@@ -15,7 +16,7 @@ export async function DELETE(req: Request, { id }: Record<string, string>) {
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
   try {
-    const { printfulSyncProductId } = await assertProductOwner(id, user.id);
+    const { slug, printfulSyncProductId } = await assertProductOwner(id, user.id);
     if (printfulSyncProductId) {
       try {
         await deleteSyncProduct(printfulSyncProductId);
@@ -25,6 +26,8 @@ export async function DELETE(req: Request, { id }: Record<string, string>) {
       }
     }
     await db.delete(schema.products).where(eq(schema.products.id, id));
+    // Refresh the brand's storefront so the live site matches the app catalogue (fire-and-forget).
+    void revalidateStorefront(slug);
     return Response.json({ ok: true });
   } catch (e) {
     const status = e instanceof TenantError ? e.status : 500;

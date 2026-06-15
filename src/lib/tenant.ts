@@ -112,14 +112,15 @@ export async function assertDesignOwner(designId: string, userId: string): Promi
   return row.storeId;
 }
 
-/** Resolve a product's store, asserting the creator owns it. Returns store id + its Printful sync id. */
+/** Resolve a product's store, asserting the creator owns it. Returns store id, slug + Printful sync id. */
 export async function assertProductOwner(
   productId: string,
   userId: string,
-): Promise<{ storeId: string; printfulSyncProductId: string | null }> {
+): Promise<{ storeId: string; slug: string; printfulSyncProductId: string | null }> {
   const [row] = await db
     .select({
       storeId: schema.products.storeId,
+      slug: schema.stores.slug,
       creatorId: schema.stores.creatorId,
       printfulSyncProductId: schema.products.printfulSyncProductId,
     })
@@ -129,5 +130,5 @@ export async function assertProductOwner(
     .limit(1);
   if (!row) throw new TenantError('product not found', 404);
   if (row.creatorId !== userId && !(await isCollaborator(row.storeId, userId))) throw new TenantError('forbidden', 403);
-  return { storeId: row.storeId, printfulSyncProductId: row.printfulSyncProductId };
+  return { storeId: row.storeId, slug: row.slug, printfulSyncProductId: row.printfulSyncProductId };
 }
