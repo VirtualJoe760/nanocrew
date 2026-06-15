@@ -14,12 +14,12 @@ in sync with the app's catalogue.
 
 | Doc | Covers | State |
 |---|---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | The four deployable units + end-to-end flow | ⚠️ refresh (Railway move, forge-worker queue) |
-| [DATABASE_PLAN.md](DATABASE_PLAN.md) | Multi-tenant schema (stores, catalogues, products, variants, credits, billing) | ⚠️ refresh |
-| [STOREFRONT_ENGINE.md](STOREFRONT_ENGINE.md) | How sites are generated: templates, brand.json, the forge, provisioning, revision | ⚠️ refresh (queue, not SSH) |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | The four deployable units + end-to-end flow | ✅ current (2026-06-15) |
+| [DATABASE_PLAN.md](DATABASE_PLAN.md) | Multi-tenant schema (stores, catalogues, products, variants, credits, billing) | ✅ current (2026-06-15) |
+| [STOREFRONT_ENGINE.md](STOREFRONT_ENGINE.md) | How sites are generated: templates, brand.json, the forge, provisioning, revision | ✅ current (2026-06-15) |
 | **[STOREFRONT_DATA_CONTRACT.md](STOREFRONT_DATA_CONTRACT.md)** | **App ↔ platform-api ↔ template data flow, exact API shapes, sync, cutover** | ✅ current (2026-06-15) |
-| [API.md](API.md) | Endpoint reference (app routes + platform-api) | ⚠️ refresh |
-| [PAGES.md](PAGES.md) | Every screen/section (5 tabs + Studio modals) | ⚠️ refresh (Account rework, in-app store) |
+| [API.md](API.md) | Endpoint reference (app routes + platform-api) | ✅ current (2026-06-15) |
+| [PAGES.md](PAGES.md) | Every screen/section (5 tabs + Studio modals) | ✅ current (2026-06-15) |
 
 ## 🧩 Feature specs (what to build, designed at the template level)
 
@@ -44,9 +44,9 @@ in sync with the app's catalogue.
 
 ---
 
-### ⚠️ "refresh" means the doc has drifted from the code
+### Keeping the index honest
 
-Those docs were accurate when written but predate recent changes (the backend moved to Railway;
-provisioning now enqueues to the forge-worker queue instead of SSHing; the Account page + in-app
-store were reworked; storefront auto-revalidation was added). Refresh them as you touch the
-corresponding systems — don't trust a ⚠️ doc's details without checking the code.
+All six core specs were refreshed against the code on 2026-06-15 (the Railway move, the
+forge-worker provisioning queue, the Account rework + in-app store, storefront auto-revalidation,
+the nested-variant catalogue contract). When you change a system and its doc no longer matches,
+flip that row to ⚠️ and note what drifted — a stale ✅ is worse than an honest ⚠️.

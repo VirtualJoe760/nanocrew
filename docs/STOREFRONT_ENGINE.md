@@ -1,8 +1,14 @@
 # Nanocrew Storefront Engine
 
 The system that turns a Studio interview into a live brand website — fast, cheap, and
-without writing new code per store. Decided 2026-06-12 with Joe; this document is the
-source of truth.
+without writing new code per store. This document is the source of truth for **how a site
+gets built and revised**. For **how a built site reads its catalogue** (product/checkout
+API shapes, ISR sync, custom-site cutover), see the companion doc:
+
+> **➜ [docs/STOREFRONT_DATA_CONTRACT.md](./STOREFRONT_DATA_CONTRACT.md)** — the nested-variant
+> product shape templates fetch from platform-api, the ISR + `revalidateStorefront()` sync
+> rule, and the custom-site cutover (`stephenlawyer.clothing`). Don't duplicate it here; this
+> doc stops at "the site is deployed", that doc owns "the site stays in sync".
 
 ## The core idea
 
@@ -12,55 +18,91 @@ collects in the interview. Setting up a brand site = pick a template, apply toke
 Claude's per-store work is configuration and copywriting — not architecture — which keeps
 token costs flat and quality guaranteed.
 
-After setup, **there is no need for new code**. Products, content, and blog posts all flow
-through pre-wired rails.
+After setup, **there is no need for new code**. Products and the catalogue flow through the
+platform API (the data contract); copy and blog posts flow through pre-wired content rails.
 
-## Architecture at a glance
+## Architecture at a glance — the queue-based pipeline
+
+> **KEY CORRECTION (2026-06-15):** provisioning no longer SSHes the forge from the app.
+> SSH-from-server broke on the managed/serverless host (the Railway backend can't hold a
+> 30-min SSH session, and the box's outbound SSH is unreliable). The app now only **enqueues
+> a job row**; a persistent **worker on the droplet drains the queue** and runs the heavy
+> pipeline locally. The `nanocrew-forge` SSH host still exists, but provisioning does not use it.
 
 ```
 Studio interview (Venus)
-  └─ brand profile + design system + transcript  →  stores row (Supabase)
-       └─ store created  →  provisioning pipeline (src/lib/provision.ts)
-            1. create empty private repo  store-<slug>  (GitHub API)
-            2. ssh nanocrew-forge (DO droplet 64.23.147.121)
-                 - clone nanocrew-templates monorepo (sparse)
-                 - copy templates/<designStyle>/ → the new repo
-                 - write brand.json + briefs/01-BRAND.md + briefs/02-TEST.md
-                 - headless `claude` applies the brand per the briefs
-                 - push
-            3. create Vercel project linked to the repo (Vercel API)
-                 → live at <slug>.vercel.app   (custom domains later)
-            4. stores.deployment_url ← live URL
-       └─ refinement loop: creator talks to Venus → constrained Claude edits on the forge
+  └─ brand profile + design system + transcript  →  stores row (Supabase, status='building')
+       └─ provisionStorefront()  (src/lib/provision.ts — runs on the APP SERVER / Railway)
+            1. create the per-brand GitHub repo  store-<slug>  (GitHub API, 422 = resumable)
+            2. build brand.json + briefs/01-BRAND.md + briefs/02-TEST.md from the interview
+            3. ENQUEUE a job: insert into store_revisions
+                 branch = '__provision__'   status = 'building'
+                 request_md = JSON { kind, slug, template, brandName, brandJson, brandBrief, testBrief }
+            (NO SSH — the app server's job ends here)
+                              │
+                              ▼  (shared queue: store_revisions table)
+       forge-worker  (forge-worker/worker.mjs — systemd `nanocrew-forge-worker` on the DO droplet)
+            polls store_revisions every 5s, ONE job at a time, under a global ~/stores/.forge.lock
+            for a '__provision__' job  →  buildProvisionScript():
+              - sparse-clone nanocrew-templates, copy templates/<template>/  →  store-<slug>/
+              - write brand.json + briefs/01-BRAND.md + briefs/02-TEST.md (from the payload)
+              - git init -b main; pnpm install
+              - headless `claude -p … --dangerously-skip-permissions` applies the brand per briefs
+              - gate: `pnpm run build`  (logs BUILD_OK / BUILD_FAILED)
+              - commit + push main; deployToVercel() creates the Vercel project + first deploy
+              - flip stores row → status='ready', deployment_url ← https://store-<slug>.vercel.app
+                (and store_revisions row → 'ready' with preview_url)
 ```
+
+If the app server fails before it can enqueue, it un-sticks the store (`status` back to
+`'ready'`, `deployment_url=null`) so a brand is never stranded in `'building'`.
+
+## The two processes (who runs what)
+
+| Concern | `src/lib/provision.ts` (app server, Railway) | `forge-worker/worker.mjs` (droplet, systemd) |
+|---|---|---|
+| Trigger | called fire-and-forget from the store-create route | polls `store_revisions` every 5s |
+| Does | repo create + brand.json/briefs + **enqueue** | clone/brand/build/push/**deploy** |
+| Talks to | GitHub API, Supabase (insert job) | git, pnpm, `claude` CLI, Vercel API, Supabase |
+| Concurrency | n/a | single worker + `~/stores/.forge.lock` → never two forge jobs at once (RAM-safe) |
+| Timeout | none (just an insert) | 45 min provision / 30 min revision |
+
+The worker is intentionally **dependency-light** (only `postgres` + Node built-ins) and its
+bash pipeline is a hand-kept **mirror of `src/lib/revise.ts`** — see the sync warning below.
 
 ## The template monorepo — `nanocrew-templates`
 
 One repo, four self-contained Next.js templates mapped 1:1 to the design-temperament
-question Venus already asks:
+question Venus already asks. The mapping lives in `TEMPLATE_BY_STYLE` in `src/lib/provision.ts`:
 
-| Template | designStyle | Character |
+| Template dir | designStyle | Character |
 |---|---|---|
-| `templates/minimal` | minimalist | whitespace, type-led, quiet product grid |
-| `templates/bold` | bold | full-bleed imagery, heavy display type, loud CTAs |
-| `templates/elegant` | elegant | serif-led, editorial layouts, generous spacing |
-| `templates/extravagant` | extravagant | motion, texture, maximal hero, statement layouts |
+| `templates/minimal` | `minimalist` | whitespace, type-led, quiet product grid |
+| `templates/bold` | `bold` | full-bleed imagery, heavy display type, loud CTAs |
+| `templates/elegant` | `elegant` | serif-led, editorial layouts, generous spacing |
+| `templates/extravagant` | `extravagant` | motion, texture, maximal hero, statement layouts |
 
-**stephenlawyer.clothing is the model** — same proven page inventory per template:
-home (hero + featured drops), shop (+ category), product detail, cart, checkout
-(via platform API), about, blog index + post, contact/FAQ/sizing/shipping/terms/privacy.
+Unknown styles fall back to `minimal`. Each template is **self-contained** (duplication over
+coupling — stability is the product) and uses placeholder images/copy until a brand lands.
 
-Each template is **self-contained** (duplication over coupling — stability is the product).
-Templates use placeholder images until a brand lands.
+Each template ships (verified in `templates/minimal/`):
+- `app/` — `page.tsx` (home) + `shop`, `product`, `cart`, `about`, `blog`, `contact`,
+  `policies`, and `/admin` (the creator dashboard) routes
+- `lib/` — `api.ts` (platform-api client — **the data contract**), `cart.tsx`,
+  `platform-auth.ts`, `brand.ts`, `content.ts`
+- `content/` — `copy.json`, `blog/*.md`, `policies/*.md` (Claude's editable copy surface)
+- `brand.json` — the token contract (placeholder values in the template)
+- `TEMPLATE.md` — hard rules; `VOCABULARY.md` — maps a creator's everyday words → blocks/files
 
 ### The token contract — `brand.json`
 
-The single file that makes a template become a brand. Written by the pipeline, refined by
-Claude. The template consumes it everywhere; this IS the API between interview and website:
+The single file that makes a template become a brand. Written **deterministically by
+`buildBrandJson()` in `provision.ts`** — Claude never invents tokens (the palette/typography
+the creator chose are hard constraints). Shape (from the live code):
 
 ```jsonc
 {
-  "storeId": "uuid",            // ← links the site to the Nanocrew platform API
+  "storeId": "uuid",            // ← links the site to platform-api
   "slug": "alpha-master",
   "name": "Alpha Master",
   "tagline": "…",
@@ -68,152 +110,128 @@ Claude. The template consumes it everywhere; this IS the API between interview a
   "palette": { "primary": "#…", "secondary": "#…", "accent": "#…", "background": "#…", "text": "#…" },
   "typography": { "display": "…", "body": "…" },
   "designStyle": "bold",
-  "voice": "…",                 // brand voice — guides all copy
-  "story": "…",
-  "vibeKeywords": ["…"],
-  "products": ["…"],
-  "social": {},                  // filled during refinement
-  "apiBase": "https://api.nanocrew.app"   // platform API root
+  "voice": "…",  "story": "…",  "vibeKeywords": ["…"],  "products": ["…"],
+  "social": {},
+  "apiBase": "https://nanocrew-api.vercel.app",   // PLATFORM_API_BASE — empty ⇒ placeholder products
+  "platform": { "supabaseUrl": "…", "supabaseAnonKey": "…" },  // so the site's /admin login works
+  "commerce": { "feeWaiveCents": 20000, "feePct": 0.029 }       // mirrors what checkout actually charges
 }
 ```
 
-Copy lives in `content/` as MDX (hero, about, blog posts) — written by Claude in the
-brand's voice, editable in refinement.
+`palette` is derived by matching `brand.designSystem.palette[].role` against keyword sets
+(primary/secondary/accent/background/text) with sensible fallbacks. `apiBase`,
+`platform.*`, and `commerce.*` come from env (`PLATFORM_API_BASE`,
+`EXPO_PUBLIC_SUPABASE_*`, `PROCESSING_FEE_*`). Copy lives in `content/` — written by Claude
+in the brand's voice, editable during revisions.
 
 ### What Claude may and may not touch
 
-Allowed edit surface (enforced by the briefs and reviewed by the test brief):
-- `brand.json`, `content/**` (copy + blog), `public/**` (brand assets), theme tokens
-  (tailwind config colors/fonts)
-- **Composing existing components**: adding a CTA band, an extra hero variant, an about
-  section — only from the template's component library, only on-brand
+Allowed edit surface (stated in `briefs/01-BRAND.md` + `02-TEST.md`, and re-stated per revision):
+- `brand.json` **tokens** (but never substitute the pipeline-written palette/typography),
+  `content/**` (copy + blog), `app/globals.css` fallback vars, page metadata, and
+  **composing existing blocks** inside `app/*/page.tsx` (per `VOCABULARY.md`).
 
-Discouraged/forbidden:
-- structural changes, new dependencies, new routes, touching commerce/checkout code,
-  rewriting components. These templates are proven; stability is the feature.
+Forbidden (enforced by `02-TEST.md` acceptance + the per-revision brief):
+- new dependencies, new routes, or touching `lib/api.ts`, `lib/cart.tsx`,
+  `lib/platform-auth.ts`, `components/blocks/beacon.tsx`, or the `/admin` pages — these are
+  the commerce/data rails. If a request maps to no existing block, Claude notes it instead
+  of inventing one.
 
 ## The brief protocol (what the forge's Claude receives)
 
-Markdown files in `briefs/`, written by the pipeline from the interview:
+Markdown in `briefs/`, generated by `provision.ts` from the interview and shipped in the queue payload:
 
-1. **`01-BRAND.md`** — identity + instructions: which template was chosen and why, the
-   exact palette (hard constraint — creator's words win), typography, voice, story,
-   products, logo URL, and the creator's own transcript excerpts to mine for copy.
-   Directives: apply tokens, write all copy in the brand voice, populate placeholders.
-2. **`02-TEST.md`** — acceptance: `npm run build` must pass; typecheck clean; every route
-   renders; only allowed paths changed (`git diff --stat` review); palette audit (no
-   colors outside brand.json); no new dependencies. Claude runs these before committing.
+1. **`01-BRAND.md`** (`buildBrandBrief`) — which template was chosen and why; identity
+   (name, tagline, mission, audience, voice, story, vibe, products, logo, texture/motion
+   cues); the creator's own site wishes (translated via `VOCABULARY.md`); and the last ~24
+   turns of the transcript to mine for copy. Directives: treat `brand.json` as hard
+   constraints, rewrite `content/copy.json` in the brand voice, write one launch blog post,
+   refresh policy tone, align `globals.css` fallbacks, set page metadata.
+2. **`02-TEST.md`** (`buildTestBrief`) — acceptance gate the session must satisfy before
+   finishing: `pnpm run build` clean; no new deps / no new routes; the commerce/data rails
+   untouched; `brand.json` still valid JSON with the exact pipeline palette/typography; no
+   placeholder text anywhere visible; every page reads like the brand wrote it.
 
-Refinement sessions append numbered briefs (`03-REVISION-….md`) generated from what the
-creator tells Venus — same constraints, plus "small edits only" framing.
+Revisions append numbered briefs (`briefs/03-REVISION-<n>.md`) generated from what the
+creator told Venus — same constraints, "apply ONLY the requested change" framing.
 
-## Commerce: sell through the platform
+## Revisions — the same queue, a working branch
 
-Brand sites are **headless storefronts on the Nanocrew API**. Money and fulfillment run
-through us (application fee per order — schema already supports `application_fee_cents`);
-Stripe Connect per-creator comes later.
+When a creator asks Venus to edit a live site, the change rides the **same `store_revisions`
+queue** (this is why the worker and `provision.ts` share it). The worker's revision path is a
+mirror of `src/lib/revise.ts`:
 
-Public API the templates consume (to build in the nanocrew app):
-- `GET /api/public/stores/<slug>` — brand profile (for SSR metadata)
-- `GET /api/public/stores/<slug>/products` (+ `/products/<productSlug>`) — published
-  products w/ variants, prices, images (from Printful publish pipeline)
-- `POST /api/public/checkout` — line items → Stripe Checkout session (platform account,
-  application fee), webhook → order row → Printful submission (pipeline already exists
-  for the house store; generalize per store)
+- A revision row carries `branch = 'revision/<id>'` (anything ≠ `'__provision__'`), the
+  `request_md` (creator's words), and optional circled `screenshots` (annotations rendered
+  into `briefs/screenshots/` on the forge via `~/critique-shot/render.mjs`).
+- The worker reuses the persistent per-store clone, cuts the `revision/<id>` branch, lets a
+  constrained `claude` session apply ONLY that change, gates on `pnpm run build`, and pushes
+  the **branch** (never `main`).
+- Vercel deploys the branch as a **preview**; `resolvePreviewUrl()` polls the Vercel API for
+  the READY deployment matching `githubCommitRef`; the row flips to `'ready'` with `preview_url`.
+- The creator reviews the preview and approves → `approveRevision()` (in `revise.ts`) merges
+  the branch into `main` (production deploy) and deletes the branch. Approve/merge still runs
+  from the app server.
+
+> ⚠️ **Sync warning:** the worker's `buildScript()` / `buildProvisionScript()` bash is a
+> hand-kept copy of `src/lib/revise.ts` (persistent-clone + pnpm + render + global-lock
+> recipe). Change one, change the other.
+
+## The forge env contract
+
+The worker (`nanocrew-forge-worker.service`, run as the `forge` user) needs:
+
+| Var | Used for |
+|---|---|
+| `DATABASE_URL` | poll `store_revisions`, write back store/revision status (postgres-js) |
+| `GITHUB_TOKEN` / `GITHUB_OWNER` | clone templates + brand repos, push `main`/branches |
+| `VERCEL_TOKEN` | create the Vercel project + trigger deploys + resolve preview URLs (skips deploy if absent) |
+| `TEMPLATES_REPO` | optional; default `<owner>/nanocrew-templates` |
+| `claude` CLI + `~/.claude-env` | auth for headless Claude (`ANTHROPIC_API_KEY` is explicitly *unset*; OAuth/key comes from `~/.claude-env`) |
+
+The app-server side (`provision.ts`) needs `GITHUB_TOKEN`/`GITHUB_OWNER` (required, else it
+silently skips), plus `PLATFORM_API_BASE`, `EXPO_PUBLIC_SUPABASE_URL`,
+`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `PROCESSING_FEE_*` baked into `brand.json`.
+(`provision.ts`'s `config()` also reads `VPS_HOST`/`VPS_USER` for legacy reasons, but the
+provision path no longer dials them — the worker owns all forge execution.)
+
+## Commerce & data — see the data contract
+
+Brand sites are **headless storefronts on the Nanocrew platform API**. Everything about how a
+deployed template reads its catalogue (the nested-variant product shape, collections,
+checkout with the platform application fee), how it stays in sync (ISR `revalidate: 300` +
+`revalidateStorefront(slug)` on-demand rebuild), and how a bespoke site like
+`stephenlawyer.clothing` was cut over to read the same contract lives in:
+
+> **➜ [docs/STOREFRONT_DATA_CONTRACT.md](./STOREFRONT_DATA_CONTRACT.md)** — read it before
+> touching any storefront's data layer.
+
+The engine in *this* doc stops at deploy; the contract doc owns the live data flow.
 
 ## Blog & media
 
-- Creator asks Venus for a blog post → revision brief → Claude writes `content/blog/*.mdx`
-  in the brand voice → push → Vercel deploys.
-- **Images/short video**: uploaded in the Studio → Cloudinary (existing plumbing) → URLs
-  referenced in the MDX.
-- **Long video**: creator pastes a YouTube link; templates ship a YouTube embed component.
-  (No YouTube upload OAuth — deliberately out of scope.)
-
-## Deployment
-
-- Each brand repo → a **Vercel project** created via API (`VERCEL_TOKEN` required),
-  linked to the GitHub repo, auto-deploys on push. Live at `<slug>.vercel.app`.
-- Custom domains + `*.nanocrew.app` wildcard: later, with the portal/billing phase.
+- **Blog posts** live in the platform DB (`store_posts`), served by the public API — so
+  authoring from Studio or the site's `/admin` is instant and free (no forge session, no
+  redeploy). Templates fetch posts dynamically and fall back to `content/blog/*.md` when
+  offline. (The launch post written during provisioning seeds `content/blog/`.)
+- **Images / short video**: uploaded in Studio → Cloudinary (existing plumbing) → URLs
+  referenced in copy/products. **Long video**: YouTube embed component (no upload OAuth).
 
 ## Cost & billing model
 
-- Initial generation: one bounded Claude session on the forge (template + tokens keeps it
-  small). Interview costs ≈ $0.15–0.20 (TTS-dominated).
-- Refinement: per-token billed Claude sessions — the metered product. Small-edit
-  constraints keep sessions short and margins healthy.
+- Initial generation: one bounded `claude` session on the forge (template + tokens keep it
+  small). Interview cost ≈ $0.15–0.20 (TTS-dominated).
+- Revisions: per-token-billed Claude sessions — the metered product; "small edits only"
+  constraints keep sessions short.
 
-## Game plan
-
-**Phase T — templates (the prerequisite for everything)**
-1. Create `nanocrew-templates` monorepo; port stephen-lawyer into `templates/minimal`
-   as the reference implementation: tokenized (brand.json), placeholder images, platform
-   API client instead of direct DB, content/ MDX layer, blog + YouTube embed.
-2. Derive `bold`, `elegant`, `extravagant` from it (restyle, not rearchitect).
-3. Each template: build passes + a `TEMPLATE.md` documenting its components (Claude's
-   composition menu during refinement).
-
-**Phase A — platform API**
-4. Public store/product/checkout endpoints in nanocrew (read model exists; generalize
-   checkout per store with application fee).
-
-**Phase F — forge integration v2**
-5. provision.ts v2: template choice from designStyle, sparse-clone + copy on the forge,
-   briefs 01/02 generation, push, Vercel project creation, deployment_url + status.
-6. Auth on the forge: ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN (pending from Joe),
-   plus GITHUB_TOKEN and VERCEL_TOKEN in .env.local (pending from Joe).
-7. Provision Alpha Master end-to-end as the pilot.
-
-**Phase R — refinement loop**
-8. Venus post-launch mode: revision requests → numbered briefs → constrained forge
-   sessions; blog creation flow; Studio media upload → Cloudinary.
-9. Token metering per revision session (billing hooks come with the portal).
-```
-
-## Dashboards (added 2026-06-12)
+## Dashboards
 
 **Creator dashboard — `/admin` on every brand site.** Same Supabase login as the app
-(magic-link via REST for Google-auth creators, password as alternative; a single
-`https://*.vercel.app/**` entry in the Supabase redirect allow-list covers all sites).
-The dashboard is thin: it calls platform `/api/creator/*` endpoints with the creator's
-token; the API verifies store ownership. V1 surface: revenue + order count + 30-day
-traffic (overview cards), order list with status. Traffic comes from a public beacon —
+(`platform.supabaseUrl`/`supabaseAnonKey` in `brand.json`). Thin: it calls platform
+`/api/creator/*` with the creator's token; the API verifies store ownership. Surface:
+revenue + order count + 30-day traffic, order list. Traffic comes from a public beacon —
 brand sites POST `/api/public/beacon` per pageview into a `page_views` daily counter.
 
-**Platform admin — inside the Nanocrew app.** Role-gated (platform admin emails) section
-on the Account tab backed by `/api/admin/platform`: all stores w/ status, platform-wide
-orders/revenue, and adjustment actions (suspend store, re-provision) as they're needed.
-
-## Post-launch creator controls (decided with Joe, 2026-06-12)
-
-Publishing is never final — everything stays editable:
-
-- **Products** remain fully editable after publish: the in-app designer owns
-  catalogues/designs/compositions, and republishing updates the live Printful product.
-  Auto-generated "first drop" products (see task #26) are ordinary rows — same editing.
-- **Rebrand**: creators can change their logo and even the brand's display name
-  post-launch, from Studio (Venus) or the site's /admin. Implementation: update the
-  store row + a revision brief updates brand.json. The slug — and therefore the site
-  URL and repo name — stays stable; only presentation changes.
-- **Blog**: journal posts are authored from BOTH the brand site's /admin dashboard and
-  Studio in the app. Posts live in the platform DB (`store_posts`) and are served by the
-  public API, so publishing is instant and free — no forge session, no redeploy.
-  Templates fetch posts dynamically and fall back to content/blog/*.md when offline.
-- **Studio as business cockpit**: earnings reports, order counts, traffic (beacon), and
-  top products surface as cards in the Studio tab; Venus can speak the summary
-  ("how did my store do this week?"). Data: /api/creator/stats + /api/creator/orders.
-
-## Public API status
-
-- `GET /api/public/stores/:slug/products` — LIVE in the codebase (published products +
-  variants, CORS open, 5-min cache; matches templates' lib/api.ts contract exactly).
-- `POST /api/public/beacon` — pageview tick (anonymous, daily counters).
-- **DEPLOYED: https://nanocrew-api.vercel.app** — Vercel project `nanocrew-api`,
-  rootDirectory `platform-api/` in the nanocrew repo, auto-deploys on push to main.
-  Routes live: stores/:slug (rebrand facts), stores/:slug/products, beacon (all
-  verified in production), creator/stats + creator/orders (Supabase bearer auth).
-  Env on Vercel: DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY.
-  CAUTION: platform-api/db/schema.ts is a COPY of src/db/schema.ts — sync it on
-  every migration. New stores get apiBase from PLATFORM_API_BASE in provisioning.
-- Pending: checkout (needs Stripe + application-fee model) and store_posts blog
-  endpoints (dynamic journal).
+**Platform admin — inside the Nanocrew app.** Role-gated section on Account backed by
+`/api/admin/platform`: all stores w/ status, platform-wide orders/revenue, and adjustment
+actions (suspend store, re-provision).
