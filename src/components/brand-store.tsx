@@ -6,6 +6,8 @@ import { openBrowserAsync } from 'expo-web-browser';
 
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
+import { SquareCarousel } from '@/components/square-carousel';
+import { ProductDetail } from '@/components/product-detail';
 
 // The in-app storefront for one brand: an immersive, brand-coloured sheet with products
 // grouped into collections/drops. Buying happens on the brand's website (Stripe checkout)
@@ -40,6 +42,7 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [productSlug, setProductSlug] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -72,6 +75,12 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
   const gutter = Spacing.three;
   const colW = (Math.min(width, 720) - gutter * 3) / 2;
 
+  // Hero carousel above the title (Instagram-style): OG art leads, then the newest product shots.
+  const heroImages = [
+    brand?.ogImageUrl ?? null,
+    ...(data?.collections.flatMap((c) => c.products.map((p) => p.imageUrl)) ?? []),
+  ].filter((u, i, a): u is string => !!u && a.indexOf(u) === i).slice(0, 8);
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.fill, { backgroundColor: bg }]}>
@@ -95,6 +104,13 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+              {/* Hero carousel above the title */}
+              {heroImages.length ? (
+                <View style={{ marginBottom: Spacing.three }}>
+                  <SquareCarousel images={heroImages} size={width} accent={accent} />
+                </View>
+              ) : null}
+
               {/* Brand header */}
               <View style={styles.header}>
                 {brand.logoUrl ? (
@@ -131,7 +147,7 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
                         <Pressable
                           key={p.id}
                           style={[styles.productCard, { width: colW, backgroundColor: card }]}
-                          onPress={() => brand.siteUrl && openBrowserAsync(brand.siteUrl)}
+                          onPress={() => setProductSlug(p.slug)}
                         >
                           {p.imageUrl ? (
                             <Image source={{ uri: p.imageUrl }} style={[styles.productImg, { width: colW, height: colW }]} contentFit="cover" />
@@ -154,6 +170,16 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
               )}
             </ScrollView>
           )}
+
+          {brand ? (
+            <ProductDetail
+              slug={brand.slug}
+              productSlug={productSlug}
+              colors={{ bg, fg, accent }}
+              visible={!!productSlug}
+              onClose={() => setProductSlug(null)}
+            />
+          ) : null}
         </SafeAreaView>
       </View>
     </Modal>
