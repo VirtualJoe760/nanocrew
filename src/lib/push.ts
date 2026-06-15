@@ -1,16 +1,13 @@
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
 import { apiUrl } from '@/lib/api';
 
-// Client push-registration seam. expo-notifications is NOT installed yet, and minting a
-// remote Expo push token requires a dev/production build (Expo Go can't as of SDK 53+) —
-// so registration is deferred, exactly like the IAP seam. The server side (the
-// device_tokens table, /api/creator/push-token, and notify.ts delivery) is already live.
-//
-// To turn this on:
-//   1. `npx expo install expo-notifications` (+ the config plugin) and make a dev build,
-//   2. flip PUSH_ENABLED and fill registerForPush() with the StoreKit-style permission +
-//      getExpoPushTokenAsync() calls — we deliberately don't `require('expo-notifications')`
-//      here so a missing module can't break Metro.
-const PUSH_ENABLED = false;
+// Client push-registration. expo-notifications is installed; minting a remote Expo push
+// token needs a dev/production build (not Expo Go) — fine, since we ship via EAS now. The
+// server side (device_tokens, /api/creator/push-token, notify.ts delivery) is live.
+// expo-notifications has a web shim, so it's web/server-export safe.
+const PUSH_ENABLED = true;
 
 /** Register an already-minted Expo push token with the backend. */
 export async function registerPushToken(token: string, authToken: string, platform?: string): Promise<boolean> {
@@ -26,14 +23,22 @@ export async function registerPushToken(token: string, authToken: string, platfo
   }
 }
 
-/** Ask for permission, mint a token, and register it. No-op until the dev build wiring. */
+/** Ask for permission, mint an Expo push token, and register it with the backend.
+ *  Best-effort: silently no-ops on web, in Expo Go, or if the user declines. */
 export async function registerForPush(authToken: string): Promise<void> {
-  if (!PUSH_ENABLED) return;
-  void authToken;
-  // TODO (needs expo-notifications + dev build):
-  //   const Notifications = require('expo-notifications');
-  //   const { status } = await Notifications.requestPermissionsAsync();
-  //   if (status !== 'granted') return;
-  //   const { data: token } = await Notifications.getExpoPushTokenAsync();
-  //   await registerPushToken(token, authToken, Platform.OS);
+  if (!PUSH_ENABLED || Platform.OS === 'web') return;
+  try {
+    const Notifications = await import('expo-notifications');
+    const existing = await Notifications.getPermissionsAsync();
+    const status =
+      existing.status === 'granted' ? 'granted' : (await Notifications.requestPermissionsAsync()).status;
+    if (status !== 'granted') return;
+    const projectId =
+      (Constants.expoConfig?.extra?.eas as { projectId?: string } | undefined)?.projectId ??
+      (Constants as unknown as { easConfig?: { projectId?: string } }).easConfig?.projectId;
+    const { data: token } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+    if (token) await registerPushToken(token, authToken, Platform.OS);
+  } catch {
+    /* push is best-effort — never block the app on it */
+  }
 }
