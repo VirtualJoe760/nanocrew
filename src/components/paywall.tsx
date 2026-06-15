@@ -92,6 +92,27 @@ export function Paywall({
     }
   };
 
+  // Stripe billing portal — manage card, invoices, or cancel. Only meaningful once they have a
+  // real Stripe customer (i.e. an active paid subscription bought through checkout).
+  const openPortal = async () => {
+    setBusy('portal');
+    setNote(null);
+    try {
+      const r = await fetch(apiUrl('/api/creator/billing/portal'), { method: 'POST', headers });
+      const d = (await r.json()) as { url?: string; error?: string };
+      if (r.ok && d.url) {
+        await WebBrowser.openBrowserAsync(d.url);
+        await load();
+        return;
+      }
+      setNote(d.error === 'no_billing_account' ? 'No billing account yet — subscribe first.' : 'Could not open billing.');
+    } catch {
+      setNote('Could not open billing.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const title =
     reason === 'brand_limit'
       ? 'You’ve reached your brand limit'
@@ -185,6 +206,16 @@ export function Paywall({
                 );
               })}
 
+              {data?.entitlements.active ? (
+                <Pressable onPress={openPortal} disabled={!!busy} style={s.manageBtn}>
+                  {busy === 'portal' ? (
+                    <ActivityIndicator size="small" color={p.accent} />
+                  ) : (
+                    <ThemedText type="smallBold" style={s.accent}>Manage billing in Stripe ↗</ThemedText>
+                  )}
+                </Pressable>
+              ) : null}
+
               <ThemedText type="code" style={s.fine}>
                 Subscriptions and credits purchased on the web. Manage or cancel any time.
               </ThemedText>
@@ -219,6 +250,7 @@ function makeStyles(p: StudioPalette) {
     sectionLabel: { color: p.accent, letterSpacing: 1.5, fontSize: 11 },
     packRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: p.line },
     packBtn: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.two, borderRadius: 999, borderWidth: 1, borderColor: p.line },
+    manageBtn: { marginTop: Spacing.four, alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.three, borderRadius: 999, borderWidth: 1, borderColor: p.line, minHeight: 44 },
     accent: { color: p.accent },
     dim: { color: p.dim },
     warn: { color: p.warn },

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
@@ -12,12 +12,14 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BrandStore } from '@/components/brand-store';
 import { EarningsCockpit } from '@/components/earnings-cockpit';
+import { Paywall } from '@/components/paywall';
 import { PlatformAdmin } from '@/components/platform-admin';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
@@ -27,6 +29,73 @@ import { signInWithProvider, type OAuthProvider } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
 
 type StoreRow = { id: string; name: string; slug: string; status: string };
+
+const DANGER = '#e24b4a';
+const PLAN_LABEL: Record<string, string> = { free: 'Free', starter: 'Starter', pro: 'Pro', advanced: 'Advanced' };
+
+// ---- Small layout primitives for a clean grouped (iOS-settings-style) list ----
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <ThemedText type="code" themeColor="textSecondary" style={styles.sectionLabel}>
+      {children}
+    </ThemedText>
+  );
+}
+
+function Card({ children }: { children: ReactNode }) {
+  return (
+    <ThemedView type="backgroundElement" style={styles.card}>
+      {children}
+    </ThemedView>
+  );
+}
+
+function Row({
+  title,
+  subtitle,
+  trailing,
+  onPress,
+  danger,
+  tint,
+  first,
+}: {
+  title: string;
+  subtitle?: string;
+  trailing?: string;
+  onPress?: () => void;
+  danger?: boolean;
+  tint?: boolean;
+  first?: boolean;
+}) {
+  const theme = useTheme();
+  const body = (
+    <View style={[styles.row, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: `${theme.textSecondary}22` }]}>
+      <View style={styles.rowMeta}>
+        <ThemedText type="smallBold" themeColor={tint ? 'tint' : undefined} style={danger ? { color: DANGER } : undefined}>
+          {title}
+        </ThemedText>
+        {subtitle ? (
+          <ThemedText type="code" themeColor="textSecondary" style={styles.rowSub}>
+            {subtitle}
+          </ThemedText>
+        ) : null}
+      </View>
+      {trailing ? (
+        <ThemedText type="code" themeColor={tint ? 'tint' : 'textSecondary'} style={styles.rowTrailing}>
+          {trailing}
+        </ThemedText>
+      ) : null}
+    </View>
+  );
+  return onPress ? (
+    <Pressable onPress={onPress} style={({ pressed }) => (pressed ? styles.rowPressed : undefined)}>
+      {body}
+    </Pressable>
+  ) : (
+    body
+  );
+}
 
 export default function AccountScreen() {
   const theme = useTheme();
@@ -42,12 +111,16 @@ export default function AccountScreen() {
   const [showEarnings, setShowEarnings] = useState(false);
   const [storeSlug, setStoreSlug] = useState<string | null>(null);
   const [payouts, setPayouts] = useState<{ connected: boolean; chargesEnabled: boolean } | null>(null);
+  const [plan, setPlan] = useState<string | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
 
-  // Ensure the creators row exists + load this creator's stores; probe platform-admin access.
+  // Ensure the creators row exists + load this creator's stores; probe platform-admin access + plan.
   useEffect(() => {
     if (!session) {
       setStores([]);
       setIsAdmin(false);
+      setPlan(null);
+      setPayouts(null);
       return;
     }
     fetch(apiUrl('/api/me'), {
@@ -65,6 +138,10 @@ export default function AccountScreen() {
         setPayouts(d ? { connected: !!d.connected, chargesEnabled: !!d.chargesEnabled } : null),
       )
       .catch(() => setPayouts(null));
+    apiFetch('/api/creator/subscription')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { entitlements?: { plan?: string } } | null) => setPlan(d?.entitlements?.plan ?? 'free'))
+      .catch(() => setPlan(null));
   }, [session]);
 
   // Dev-only: deep-linking /account?auto=google|facebook starts the flow hands-free,
@@ -129,21 +206,6 @@ export default function AccountScreen() {
     }
   };
 
-  const openBilling = async () => {
-    setError(null);
-    try {
-      const r = await apiFetch('/api/creator/billing/portal', { method: 'POST' });
-      const d = (await r.json()) as { url?: string };
-      if (r.ok && d.url) {
-        Linking.openURL(d.url).catch(() => {});
-        return;
-      }
-    } catch {
-      /* fall through */
-    }
-    setError('No active billing yet — subscribe from Studio first.');
-  };
-
   // Stripe Connect onboarding — opens the Stripe-hosted account link so the creator can finish
   // payout setup. Their brands' storefront sales pay out to this account.
   const openPayouts = async () => {
@@ -172,116 +234,129 @@ export default function AccountScreen() {
     );
   };
 
+  const user = session?.user;
+  const avatarUrl = (user?.user_metadata?.avatar_url as string | undefined) ?? (user?.user_metadata?.picture as string | undefined) ?? null;
+  const emailAddr = user?.email ?? '';
+  const initial = (emailAddr[0] ?? '?').toUpperCase();
+  const planLabel = plan ? (PLAN_LABEL[plan] ?? plan) : null;
+  const payoutTitle = payouts?.chargesEnabled ? 'Payouts active' : payouts?.connected ? 'Finish payout setup' : 'Set up payouts';
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.flex}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.flex}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
           <ScrollView
             style={styles.flex}
             contentContainerStyle={[styles.content, { paddingBottom: BottomTabInset + insets.bottom + Spacing.four }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
-            <ThemedText type="code" themeColor="tint" style={{ letterSpacing: 2, textTransform: 'uppercase' }}>
-              Account
-            </ThemedText>
-
             {loading ? (
               <ActivityIndicator style={{ marginTop: Spacing.six }} />
             ) : session ? (
               <>
-                <ThemedText type="subtitle" numberOfLines={1}>
-                  {session.user.email}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Signed in · creator {session.user.id.slice(0, 8)}
-                </ThemedText>
-
-                <View style={styles.section}>
-                  <ThemedText type="smallBold">Your stores</ThemedText>
-                  {stores.length ? (
-                    stores.map((s) => (
-                      <Pressable key={s.id} onPress={() => setStoreSlug(s.slug)}>
-                        <ThemedView type="backgroundElement" style={styles.storeRow}>
-                          <View style={styles.storeRowMeta}>
-                            <ThemedText type="small">{s.name}</ThemedText>
-                            <ThemedText type="code" themeColor="textSecondary">
-                              {s.slug} · {s.status}
-                            </ThemedText>
-                          </View>
-                          <ThemedText type="code" themeColor="tint">
-                            Open store →
-                          </ThemedText>
-                        </ThemedView>
-                      </Pressable>
-                    ))
+                {/* Profile header */}
+                <View style={styles.profile}>
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" />
                   ) : (
-                    <ThemedText type="small" themeColor="textSecondary">
-                      No stores yet — build one in Studio.
-                    </ThemedText>
+                    <View style={[styles.avatar, styles.avatarFallback, { borderColor: theme.tint, backgroundColor: theme.backgroundElement }]}>
+                      <ThemedText type="subtitle" themeColor="tint">{initial}</ThemedText>
+                    </View>
                   )}
+                  <View style={styles.profileMeta}>
+                    <ThemedText type="default" numberOfLines={1}>{emailAddr}</ThemedText>
+                    <View style={styles.planRow}>
+                      {planLabel ? (
+                        <View style={[styles.planBadge, { borderColor: `${theme.tint}66` }]}>
+                          <ThemedText type="code" themeColor="tint" style={styles.planBadgeText}>{planLabel.toUpperCase()}</ThemedText>
+                        </View>
+                      ) : null}
+                      <ThemedText type="code" themeColor="textSecondary">creator {user?.id.slice(0, 8)}</ThemedText>
+                    </View>
+                  </View>
                 </View>
 
-                {stores.length ? (
-                  <Pressable onPress={() => setShowEarnings(true)}>
-                    <ThemedView type="backgroundElement" style={styles.button}>
-                      <ThemedText type="smallBold">Earnings</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        Revenue, orders & margins across your brands
-                      </ThemedText>
-                    </ThemedView>
-                  </Pressable>
-                ) : null}
+                <SectionLabel>Your brands</SectionLabel>
+                <Card>
+                  {stores.length ? (
+                    stores.map((s, i) => (
+                      <Row
+                        key={s.id}
+                        first={i === 0}
+                        title={s.name}
+                        subtitle={`${s.slug} · ${s.status}`}
+                        trailing="›"
+                        onPress={() => setStoreSlug(s.slug)}
+                      />
+                    ))
+                  ) : (
+                    <Row first title="No brands yet" subtitle="Create one in the Studio tab" />
+                  )}
+                </Card>
 
-                <Pressable onPress={openBilling} disabled={busy}>
-                  <ThemedView type="backgroundElement" style={styles.button}>
-                    <ThemedText type="smallBold">Subscription & billing ↗</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      Manage your plan, card & invoices
-                    </ThemedText>
-                  </ThemedView>
-                </Pressable>
-
-                <Pressable onPress={openPayouts} disabled={busy}>
-                  <ThemedView type="backgroundElement" style={styles.button}>
-                    <ThemedText type="smallBold" themeColor={payouts?.chargesEnabled ? 'tint' : undefined}>
-                      {payouts?.chargesEnabled ? 'Payouts active ✓' : payouts?.connected ? 'Finish payout setup ↗' : 'Set up payouts ↗'}
-                    </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {payouts?.chargesEnabled ? 'Your store sales pay out to your account' : 'Get paid when your brand sells'}
-                    </ThemedText>
-                  </ThemedView>
-                </Pressable>
+                <SectionLabel>Commerce</SectionLabel>
+                <Card>
+                  {stores.length ? (
+                    <Row
+                      first
+                      title="Earnings"
+                      subtitle="Revenue, orders & margins across your brands"
+                      trailing="›"
+                      onPress={() => setShowEarnings(true)}
+                    />
+                  ) : null}
+                  <Row
+                    first={!stores.length}
+                    title="Subscription & billing"
+                    subtitle={planLabel && plan !== 'free' ? `${planLabel} plan · view plans & top up credits` : 'Choose a plan & top up credits'}
+                    trailing="›"
+                    onPress={() => setShowPaywall(true)}
+                  />
+                  <Row
+                    title={payoutTitle}
+                    subtitle={payouts?.chargesEnabled ? 'Your store sales pay out to your account' : 'Get paid when your brand sells'}
+                    trailing={payouts?.chargesEnabled ? '✓' : '↗'}
+                    tint={payouts?.chargesEnabled}
+                    onPress={openPayouts}
+                  />
+                </Card>
 
                 {isAdmin ? (
-                  <Pressable onPress={() => setShowAdmin(true)}>
-                    <ThemedView type="backgroundElement" style={styles.button}>
-                      <ThemedText type="smallBold" themeColor="tint">Platform admin</ThemedText>
-                    </ThemedView>
-                  </Pressable>
+                  <>
+                    <SectionLabel>Platform</SectionLabel>
+                    <Card>
+                      <Row first title="Platform admin" trailing="›" tint onPress={() => setShowAdmin(true)} />
+                    </Card>
+                  </>
                 ) : null}
 
-                <Pressable onPress={() => supabase.auth.signOut()}>
-                  <View style={[styles.button, styles.signOut]}>
-                    <ThemedText type="smallBold" style={{ color: '#e24b4a' }}>
-                      Sign out
-                    </ThemedText>
-                  </View>
-                </Pressable>
-
-                <Pressable onPress={confirmDelete} disabled={busy}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.deleteLink}>
-                    Delete account
+                {error ? (
+                  <ThemedText type="small" style={{ color: DANGER, textAlign: 'center' }}>
+                    {error}
                   </ThemedText>
-                </Pressable>
+                ) : null}
+
+                <View style={styles.dangerZone}>
+                  <Pressable onPress={() => supabase.auth.signOut()}>
+                    <View style={[styles.signOutBtn, { borderColor: `${DANGER}55` }]}>
+                      <ThemedText type="smallBold" style={{ color: DANGER }}>Sign out</ThemedText>
+                    </View>
+                  </Pressable>
+                  <Pressable onPress={confirmDelete} disabled={busy}>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.deleteLink}>
+                      Delete account
+                    </ThemedText>
+                  </Pressable>
+                </View>
               </>
             ) : (
-              <>
+              <View style={styles.authWrap}>
+                <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>ACCOUNT</ThemedText>
                 <ThemedText type="title">Join the crew</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
+                <ThemedText type="small" themeColor="textSecondary" style={styles.authSub}>
                   Sign in to sync your designs, stores and sales.
                 </ThemedText>
+
                 {/* Apple requires Sign in with Apple first on iOS when other social logins exist. */}
                 {Platform.OS === 'ios' ? (
                   <Pressable onPress={() => social('apple')} disabled={busy}>
@@ -295,6 +370,7 @@ export default function AccountScreen() {
                     <ThemedText type="smallBold">Continue with Google</ThemedText>
                   </ThemedView>
                 </Pressable>
+
                 <ThemedText type="small" themeColor="textSecondary" style={styles.divider}>
                   or with email
                 </ThemedText>
@@ -318,7 +394,7 @@ export default function AccountScreen() {
                   style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
                 />
                 {error ? (
-                  <ThemedText type="small" style={{ color: '#e24b4a' }}>
+                  <ThemedText type="small" style={{ color: DANGER }}>
                     {error}
                   </ThemedText>
                 ) : null}
@@ -334,11 +410,11 @@ export default function AccountScreen() {
                   </View>
                 </Pressable>
                 <Pressable onPress={() => submit('up')} disabled={busy}>
-                  <ThemedView type="backgroundElement" style={styles.button}>
-                    <ThemedText type="smallBold">Create account</ThemedText>
-                  </ThemedView>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.createLink}>
+                    New here? Create an account
+                  </ThemedText>
                 </Pressable>
-              </>
+              </View>
             )}
 
             <View style={styles.legalRow}>
@@ -359,6 +435,7 @@ export default function AccountScreen() {
       </SafeAreaView>
       {isAdmin ? <PlatformAdmin visible={showAdmin} onClose={() => setShowAdmin(false)} /> : null}
       {session ? <EarningsCockpit visible={showEarnings} onClose={() => setShowEarnings(false)} token={session.access_token} /> : null}
+      {session ? <Paywall visible={showPaywall} onClose={() => setShowPaywall(false)} token={session.access_token} reason="manage" /> : null}
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
     </ThemedView>
   );
@@ -368,36 +445,42 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: Spacing.four, gap: Spacing.three, maxWidth: 520, width: '100%', alignSelf: 'center' },
+
+  // Profile header
+  profile: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.two },
+  avatar: { width: 56, height: 56, borderRadius: 28 },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  profileMeta: { flex: 1, gap: 4 },
+  planRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  planBadge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.two, paddingVertical: 1 },
+  planBadgeText: { fontSize: 10, letterSpacing: 1 },
+
+  // Grouped list
+  sectionLabel: { letterSpacing: 1.5, textTransform: 'uppercase', marginTop: Spacing.three, marginBottom: -Spacing.one, marginLeft: Spacing.one, fontSize: 11 },
+  card: { borderRadius: Spacing.three, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, minHeight: 56 },
+  rowPressed: { opacity: 0.55 },
+  rowMeta: { flex: 1, gap: 2 },
+  rowSub: { fontSize: 11 },
+  rowTrailing: { fontSize: 16 },
+
+  // Danger / session
+  dangerZone: { marginTop: Spacing.five, gap: Spacing.two },
+  signOutBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.three, borderRadius: Spacing.three, borderWidth: 1, minHeight: 48 },
+  deleteLink: { textAlign: 'center', marginTop: Spacing.two, textDecorationLine: 'underline' },
+
+  // Auth (logged-out)
+  authWrap: { gap: Spacing.three },
+  eyebrow: { letterSpacing: 2, marginBottom: Spacing.one },
+  authSub: { marginBottom: Spacing.two },
   input: { borderRadius: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, fontSize: 15 },
-  button: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: 2,
-    minHeight: 48,
-  },
+  button: { alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.three, borderRadius: Spacing.three, minHeight: 48 },
   appleButton: { backgroundColor: '#000' },
   appleText: { color: '#fff' },
-  signOut: { marginTop: Spacing.four },
-  legalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.six,
-    marginBottom: Spacing.four,
-  },
-  legalLink: { textDecorationLine: 'underline' },
-  deleteLink: { textAlign: 'center', marginTop: Spacing.three, textDecorationLine: 'underline' },
   divider: { textAlign: 'center', marginVertical: Spacing.one },
-  section: { gap: Spacing.two, marginTop: Spacing.three },
-  storeRow: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.three,
-  },
-  storeRowMeta: { gap: 2, flex: 1 },
+  createLink: { textAlign: 'center', marginTop: Spacing.two, textDecorationLine: 'underline' },
+
+  // Legal
+  legalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Spacing.six, marginBottom: Spacing.four },
+  legalLink: { textDecorationLine: 'underline' },
 });
