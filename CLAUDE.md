@@ -16,7 +16,7 @@ Full, current documentation lives in **`docs/`** — read these before working:
 - `docs/DEV_BUILD.md` — EAS dev-build runbook · `docs/DATABASE_PLAN.md`, `docs/STOREFRONT_ENGINE.md`
 
 ## The four deployable units (one shared Supabase Postgres)
-1. **Mobile app** — this repo. `src/app/**+api.ts` server routes hold the authed creator logic.
+1. **Mobile app** — this repo. `src/app/**+api.ts` server routes hold the authed creator logic. **The backend runs on Railway** (`backend-production-d7eb.up.railway.app`, persistent Node via `expo serve`) — NOT EAS Hosting (Cloudflare Workers broke postgres-js for authed routes; do not move it back). Deploy with the Railway GraphQL API + an explicit `commitSha` (no auto-deploy webhook yet). The iOS build's `EXPO_PUBLIC_API_URL` points here. See the `production-shipping` memory.
 2. **platform-api** — `platform-api/` (Next.js, Vercel `nanocrew-api.vercel.app`). Public storefront API + webhooks. **`platform-api/db/schema.ts` is a COPY of `src/db/schema.ts` — re-sync it on EVERY migration.**
 3. **nanocrew-templates** (sibling repo) — 4 Next.js storefront templates; `brand.json` token contract.
 4. **forge** — DO droplet (`ssh nanocrew-forge`) running headless Claude; provisions + revises brand sites on working branches.
@@ -42,12 +42,17 @@ Full, current documentation lives in **`docs/`** — read these before working:
 - Nano Banana can't emit alpha → magenta chroma-key (`src/lib/transparency.ts`).
 - `AUTO_FIRST_DROP=1` enables server-side first-drop generation (real spend) — uses `INTERNAL_API_KEY` to call the now-authed designer routes.
 
-## Status (2026-06-13)
-All **code-side launch blockers are done** (designer auth, rate limiting, Apple Sign In, account
-deletion, billing portal). Remaining go-live work is mostly Joe's config (Stripe live keys + webhooks,
-Printful confirm + resale cert, Supabase Site URL revert, Meta app, the EAS build, legal). Open code:
-**#24** (creator `/admin` on brand sites). See `docs/REMAINING_FEATURES.md` +
-`docs/PRODUCTION_CHECKLIST.md` for the live list.
+## Status (2026-06-14)
+**LIVE on TestFlight** (builds #5–#7 shipping; internal testing). Backend **migrated to Railway**
+(was EAS Hosting — Cloudflare Workers couldn't keep postgres-js alive for authed routes). This
+session also: auth verifies Supabase ES256 tokens locally (no per-request fetch), Cloudinary uses
+signed REST (the SDK fails under `expo serve`) — which fixed image-gen hosting + Studio media uploads
++ enabled a Cloudinary-backed voice-preview cache; Market/Account redesign + per-brand store pages +
+real storefront links; **push notifications wired** (expo-notifications); **provisioning fixed** —
+now enqueues through the forge worker queue (no SSH from the server). Earnings cockpit de-golded.
+Remaining is mostly Joe's config — see the prioritized **task list** + `docs/PRODUCTION_CHECKLIST.md`.
+Top open code: **Apple IAP** (App-Store blocker; needs ASC products to wire+test). Provisioning is
+deployed but unverified end-to-end (needs one real test brand). See the `production-shipping` memory.
 
 ## Run
 `npm run ios` · `npm run android` · `npm run web`
