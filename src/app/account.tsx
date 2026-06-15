@@ -295,11 +295,6 @@ export default function AccountScreen() {
                     <ThemedText type="smallBold">Continue with Google</ThemedText>
                   </ThemedView>
                 </Pressable>
-                <Pressable onPress={() => social('facebook')} disabled={busy}>
-                  <ThemedView type="backgroundElement" style={[styles.button, { opacity: busy ? 0.5 : 1 }]}>
-                    <ThemedText type="smallBold">Continue with Facebook</ThemedText>
-                  </ThemedView>
-                </Pressable>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.divider}>
                   or with email
                 </ThemedText>
