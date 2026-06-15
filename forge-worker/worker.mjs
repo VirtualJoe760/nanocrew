@@ -22,6 +22,8 @@ if (!DATABASE_URL || !GITHUB_TOKEN || !GITHUB_OWNER) {
 }
 const sql = postgres(DATABASE_URL, { prepare: false, max: 2 });
 const POLL_MS = 5000;
+const PROVISION_BRANCH = '__provision__';
+const TEMPLATES_REPO = process.env.TEMPLATES_REPO ?? `${GITHUB_OWNER}/nanocrew-templates`;
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 function run(cmd, args, opts = {}) {
@@ -121,6 +123,110 @@ echo REVISE_DONE
 `;
 }
 
+/** The local forge pipeline for first-time provisioning (mirror of src/lib/provision.ts):
+ *  sparse-clone the chosen template, write brand.json + briefs, let Claude brand it, gate on
+ *  the build, push to main. brand.json/briefs come pre-built from the app via the queue. */
+function buildProvisionScript({ repo, fullRepo, template, brandJson, brandBrief, testBrief }) {
+  return `set -e
+export PATH="$HOME/.local/bin:$PATH"
+[ -f ~/.claude-env ] && source ~/.claude-env
+unset ANTHROPIC_API_KEY
+mkdir -p ~/stores && cd ~/stores
+exec 9>".forge.lock"
+flock -w 1800 9 || { echo LOCK_TIMEOUT; exit 1; }
+rm -rf ${repo} ${repo}-src
+git clone --depth 1 --filter=blob:none --sparse https://x-access-token:${GITHUB_TOKEN}@github.com/${TEMPLATES_REPO}.git ${repo}-src
+git -C ${repo}-src sparse-checkout set templates/${template}
+mkdir ${repo}
+cp -R ${repo}-src/templates/${template}/. ${repo}/
+rm -rf ${repo}-src ${repo}/node_modules
+cd ${repo}
+mkdir -p briefs
+cat > brand.json <<'NANOCREW_BRAND_JSON'
+${brandJson}
+NANOCREW_BRAND_JSON
+cat > briefs/01-BRAND.md <<'NANOCREW_BRIEF_01'
+${brandBrief}
+NANOCREW_BRIEF_01
+cat > briefs/02-TEST.md <<'NANOCREW_BRIEF_02'
+${testBrief}
+NANOCREW_BRIEF_02
+git init -b main -q
+git remote add origin https://x-access-token:${GITHUB_TOKEN}@github.com/${fullRepo}.git
+pnpm install --silent 2>&1 | tail -2
+claude -p "Read briefs/01-BRAND.md and apply it to this storefront. Then verify every item in briefs/02-TEST.md and fix anything that fails." --dangerously-skip-permissions --max-turns 80 < /dev/null > /tmp/${repo}-claude.log 2>&1 || true
+tail -1 /tmp/${repo}-claude.log
+pnpm run build > /tmp/${repo}-build.log 2>&1 && echo "BUILD_OK" || echo "BUILD_FAILED"
+git add -A
+git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "Apply brand via Nanocrew studio"
+git push -q -u origin main
+echo "FORGE_DONE"
+`;
+}
+
+/** Create the Vercel project (idempotent) and kick the first production deploy. */
+async function deployToVercel(fullRepo, repo) {
+  if (!VERCEL_TOKEN) return null;
+  const headers = { Authorization: `Bearer ${VERCEL_TOKEN}`, 'Content-Type': 'application/json' };
+  const proj = await fetch('https://api.vercel.com/v11/projects', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: repo, framework: 'nextjs', gitRepository: { type: 'github', repo: fullRepo } }),
+  });
+  if (!proj.ok && proj.status !== 409) {
+    throw new Error(`vercel project create failed: ${proj.status} ${(await proj.text()).slice(0, 300)}`);
+  }
+  const repoRes = await fetch(`https://api.github.com/repos/${fullRepo}`, {
+    headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+  });
+  if (!repoRes.ok) throw new Error(`github repo lookup failed: ${repoRes.status}`);
+  const repoId = (await repoRes.json()).id;
+  const dep = await fetch('https://api.vercel.com/v13/deployments', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: repo, project: repo, target: 'production', gitSource: { type: 'github', repoId, ref: 'main' } }),
+  });
+  if (!dep.ok) throw new Error(`vercel deploy failed: ${dep.status} ${(await dep.text()).slice(0, 300)}`);
+  return `https://${repo}.vercel.app`;
+}
+
+/** Run one first-time provision job, then flip the store to 'ready' with its deploy URL. */
+async function processProvision(row) {
+  let payload;
+  try {
+    payload = JSON.parse(row.requestMd);
+  } catch {
+    await sql`update store_revisions set status = 'failed', error_msg = 'bad provision payload' where id = ${row.id}`;
+    await sql`update stores set status = 'ready' where id = ${row.storeId}`.catch(() => {});
+    return;
+  }
+  const repo = `store-${payload.slug}`;
+  const fullRepo = `${GITHUB_OWNER}/${repo}`;
+  log(`▶ provision ${row.id} (${payload.slug}) template ${payload.template}`);
+  try {
+    const script = buildProvisionScript({
+      repo,
+      fullRepo,
+      template: payload.template,
+      brandJson: payload.brandJson,
+      brandBrief: payload.brandBrief,
+      testBrief: payload.testBrief,
+    });
+    const out = await run('bash', ['-s'], { input: script, timeoutMs: 45 * 60 * 1000 });
+    if (!out.includes('FORGE_DONE')) throw new Error('forge provision did not complete');
+    if (out.includes('BUILD_FAILED')) log(`  build failing for ${repo}`);
+    const url = await deployToVercel(fullRepo, repo);
+    await sql`update stores set deployment_url = ${url ?? `https://github.com/${fullRepo}`}, status = 'ready' where id = ${row.storeId}`;
+    await sql`update store_revisions set status = 'ready', preview_url = ${url} where id = ${row.id}`;
+    log(`✓ provision ${row.id} ready — ${url ?? 'no url'}`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'provision failed';
+    log(`✗ provision ${row.id} failed — ${msg}`);
+    await sql`update stores set status = 'ready' where id = ${row.storeId}`.catch(() => {});
+    await sql`update store_revisions set status = 'failed', error_msg = ${msg.slice(0, 500)} where id = ${row.id}`;
+  }
+}
+
 async function processOne() {
   // Oldest queued revision (single worker → no row lock needed). Join the store for slug/name.
   const [row] = await sql`
@@ -131,6 +237,12 @@ async function processOne() {
     order by r.created_at asc
     limit 1`;
   if (!row) return false;
+
+  // Provision jobs reuse this queue but run a different (first-time) pipeline.
+  if (row.branch === PROVISION_BRANCH) {
+    await processProvision(row);
+    return true;
+  }
 
   const repo = `store-${row.slug}`;
   const fullRepo = `${GITHUB_OWNER}/${repo}`;

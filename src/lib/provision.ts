@@ -35,6 +35,10 @@ const TEMPLATE_BY_STYLE: Record<BrandResult['designStyle'], string> = {
   extravagant: 'extravagant',
 };
 
+// Provision jobs ride the same queue as revisions, marked with this reserved branch so the
+// forge worker runs the clone+brand+build+push+deploy pipeline instead of a revision.
+const PROVISION_BRANCH = '__provision__';
+
 function config() {
   const {
     GITHUB_TOKEN,
@@ -174,22 +178,6 @@ Before you finish, ALL of these must hold:
 `;
 }
 
-async function run(cmd: string, args: string[], opts?: { input?: string; timeoutMs?: number }) {
-  const { execFile } = await import('node:child_process');
-  return new Promise<string>((resolve, reject) => {
-    const child = execFile(
-      cmd,
-      args,
-      { timeout: opts?.timeoutMs ?? 120000, maxBuffer: 8 * 1024 * 1024 },
-      (err, stdout, stderr) => (err ? reject(new Error(`${cmd} failed: ${stderr || err.message}`)) : resolve(stdout)),
-    );
-    if (opts?.input) {
-      child.stdin?.write(opts.input);
-      child.stdin?.end();
-    }
-  });
-}
-
 async function gh(cfg: { GITHUB_TOKEN: string }, path: string, init?: RequestInit) {
   const res = await fetch(`https://api.github.com${path}`, {
     ...init,
@@ -202,50 +190,13 @@ async function gh(cfg: { GITHUB_TOKEN: string }, path: string, init?: RequestIni
   return res;
 }
 
-/** Create the Vercel project (idempotent) and kick the first git deploy. */
-async function deployToVercel(
-  cfg: NonNullable<ReturnType<typeof config>>,
-  fullRepo: string,
-  repo: string,
-): Promise<string | null> {
-  if (!cfg.VERCEL_TOKEN) return null;
-  const headers = { Authorization: `Bearer ${cfg.VERCEL_TOKEN}`, 'Content-Type': 'application/json' };
-
-  const proj = await fetch('https://api.vercel.com/v11/projects', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      name: repo,
-      framework: 'nextjs',
-      gitRepository: { type: 'github', repo: fullRepo },
-    }),
-  });
-  if (!proj.ok && proj.status !== 409) {
-    // 409 = project already exists; anything else is a real failure
-    throw new Error(`vercel project create failed: ${proj.status} ${(await proj.text()).slice(0, 300)}`);
-  }
-
-  const repoRes = await gh(cfg, `/repos/${fullRepo}`);
-  if (!repoRes.ok) throw new Error(`github repo lookup failed: ${repoRes.status}`);
-  const repoId = (await repoRes.json()).id as number;
-
-  const dep = await fetch('https://api.vercel.com/v13/deployments', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      name: repo,
-      project: repo,
-      target: 'production',
-      gitSource: { type: 'github', repoId, ref: 'main' },
-    }),
-  });
-  if (!dep.ok) throw new Error(`vercel deploy failed: ${dep.status} ${(await dep.text()).slice(0, 300)}`);
-  return `https://${repo}.vercel.app`;
-}
-
 /**
- * Fire-and-forget from the store route. Progress lands on the store row
- * (deployment_url on success). Errors are logged, never thrown to the caller.
+ * Fire-and-forget from the store route. Creates the brand's GitHub repo and brand content
+ * HERE (the app server can do GitHub API + build briefs), then ENQUEUES a provision job on
+ * the shared store_revisions queue (branch '__provision__'). The forge worker — already on
+ * the droplet — drains it and runs the heavy clone+brand+build+push+Vercel pipeline LOCALLY
+ * (no SSH from this server, which doesn't work on a serverless/managed host). The store row
+ * flips to 'ready' (with deployment_url) when the worker finishes. Errors are only logged.
  */
 export async function provisionStorefront(input: ProvisionInput): Promise<void> {
   const cfg = config();
@@ -271,72 +222,31 @@ export async function provisionStorefront(input: ProvisionInput): Promise<void> 
       throw new Error(`repo create failed: ${created.status} ${(await created.text()).slice(0, 200)}`);
     }
 
-    // 2. Forge: sparse-clone the chosen template out of the monorepo, write
-    //    brand.json + briefs, let Claude apply the brand, gate on the build, push.
-    //    All dynamic content rides single-quoted heredocs so nothing expands.
-    const brandJson = JSON.stringify(buildBrandJson(input, cfg), null, 2);
-    const brandBrief = buildBrandBrief(input, template);
-    const testBrief = buildTestBrief(input.brand.name);
-    const script = `set -e
-export PATH="$HOME/.local/bin:$PATH"
-[ -f ~/.claude-env ] && source ~/.claude-env
-unset ANTHROPIC_API_KEY
-mkdir -p ~/stores && cd ~/stores
-exec 9>".forge.lock"
-flock -w 1800 9 || { echo LOCK_TIMEOUT; exit 1; }
-rm -rf ${repo} ${repo}-src
-git clone --depth 1 --filter=blob:none --sparse https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${cfg.TEMPLATES_REPO}.git ${repo}-src
-git -C ${repo}-src sparse-checkout set templates/${template}
-mkdir ${repo}
-cp -R ${repo}-src/templates/${template}/. ${repo}/
-rm -rf ${repo}-src ${repo}/node_modules
-cd ${repo}
-mkdir -p briefs
-cat > brand.json <<'NANOCREW_BRAND_JSON'
-${brandJson}
-NANOCREW_BRAND_JSON
-cat > briefs/01-BRAND.md <<'NANOCREW_BRIEF_01'
-${brandBrief}
-NANOCREW_BRIEF_01
-cat > briefs/02-TEST.md <<'NANOCREW_BRIEF_02'
-${testBrief}
-NANOCREW_BRIEF_02
-git init -b main -q
-git remote add origin https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git
-pnpm install --silent 2>&1 | tail -2
-claude -p "Read briefs/01-BRAND.md and apply it to this storefront. Then verify every item in briefs/02-TEST.md and fix anything that fails." --dangerously-skip-permissions --max-turns 80 < /dev/null > /tmp/${repo}-claude.log 2>&1 || true
-tail -1 /tmp/${repo}-claude.log
-pnpm run build > /tmp/${repo}-build.log 2>&1 && echo "BUILD_OK" || echo "BUILD_FAILED"
-git add -A
-git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "Apply ${input.brand.name.replace(/"/g, '')} brand via Nanocrew studio"
-git push -q -u origin main
-echo "FORGE_DONE"
-`;
-    const { homedir } = await import('node:os');
-    const sshKey = process.env.VPS_SSH_KEY ?? `${homedir()}/.ssh/nanocrew`;
-    const out = await run(
-      'ssh',
-      ['-i', sshKey, '-o', 'StrictHostKeyChecking=accept-new', `${cfg.VPS_USER}@${cfg.VPS_HOST}`, 'bash -s'],
-      { input: script, timeoutMs: 40 * 60 * 1000 },
-    );
-    if (!out.includes('FORGE_DONE')) throw new Error('forge script did not complete');
-    if (out.includes('BUILD_FAILED')) console.warn(`[provision] ${repo}: build failing at push time — check /tmp/${repo}-build.log on the forge`);
-
-    // 3. Vercel project + first deploy (skipped without VERCEL_TOKEN).
-    const url = await deployToVercel(cfg, fullRepo, repo);
-    // Provisioned + deployed to the preview URL → 'ready' (reviewable/editable). It becomes
-    // 'live' only when a custom domain is attached (Phase C go-live).
-    await db
-      .update(schema.stores)
-      .set({ deploymentUrl: url ?? `https://github.com/${fullRepo}`, status: 'ready' })
-      .where(eq(schema.stores.id, input.storeId));
-    console.log(`[provision] ${fullRepo} branded, pushed${url ? `, deploying at ${url}` : ' (no Vercel token — repo only)'}`);
+    // 2. Build the brand content here, then enqueue. The forge worker writes brand.json +
+    //    briefs, runs Claude, gates on the build, pushes to main, and deploys to Vercel.
+    const payload = JSON.stringify({
+      kind: 'provision',
+      slug: input.slug,
+      template,
+      brandName: input.brand.name,
+      brandJson: JSON.stringify(buildBrandJson(input, cfg), null, 2),
+      brandBrief: buildBrandBrief(input, template),
+      testBrief: buildTestBrief(input.brand.name),
+    });
+    await db.insert(schema.storeRevisions).values({
+      storeId: input.storeId,
+      requestMd: payload,
+      branch: PROVISION_BRANCH,
+      status: 'building',
+    });
+    console.log(`[provision] ${fullRepo} repo ready, provision job enqueued for the forge worker`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'provision failed';
     console.error(`[provision] ${repo}: ${msg}`);
+    // Don't leave the store stuck 'building' if we never managed to enqueue.
     await db
       .update(schema.stores)
-      .set({ deploymentUrl: null })
+      .set({ deploymentUrl: null, status: 'ready' })
       .where(eq(schema.stores.id, input.storeId))
       .catch(() => {});
   }
