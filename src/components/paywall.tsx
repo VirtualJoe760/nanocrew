@@ -48,9 +48,18 @@ export function Paywall({
     setLoading(true);
     try {
       const r = await fetch(apiUrl('/api/creator/subscription'), { headers: { Authorization: `Bearer ${token}` } });
-      setData((await r.json()) as Data);
+      const d = (await r.json().catch(() => null)) as (Data & { error?: string }) | null;
+      // Only accept a well-formed payload — never let an error object reach the render
+      // (it has no `tiers`/`creditPacks` arrays, which used to crash the screen).
+      if (!r.ok || !d || !Array.isArray(d.tiers)) {
+        setData(null);
+        setNote('Could not load plans. Please try again.');
+      } else {
+        setData(d);
+      }
     } catch {
-      setNote('Could not load plans.');
+      setData(null);
+      setNote('Could not load plans. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -116,7 +125,7 @@ export function Paywall({
               <ThemedText type="small" style={s.dim}>{sub}</ThemedText>
               {note ? <ThemedText type="small" style={s.warn}>{note}</ThemedText> : null}
 
-              {data?.tiers.map((t) => {
+              {data?.tiers?.map((t) => {
                 const current = data.entitlements.active && data.entitlements.plan === t.plan;
                 return (
                   <View key={t.plan} style={[s.card, current && s.cardCurrent]}>
@@ -158,7 +167,7 @@ export function Paywall({
 
               <ThemedText type="code" style={[s.sectionLabel, { marginTop: Spacing.five }]}>CREDIT PACKS</ThemedText>
               <ThemedText type="small" style={s.dim}>Credits power video ads, designs, and revisions. Top up any time.</ThemedText>
-              {data?.creditPacks.map((pk) => {
+              {data?.creditPacks?.map((pk) => {
                 const mult = data.entitlements.creditRateMultiplier ?? 1;
                 const yourPrice = Math.round(pk.priceCents * mult);
                 return (
