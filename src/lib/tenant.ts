@@ -111,3 +111,23 @@ export async function assertDesignOwner(designId: string, userId: string): Promi
   if (row.creatorId !== userId && !(await isCollaborator(row.storeId, userId))) throw new TenantError('forbidden', 403);
   return row.storeId;
 }
+
+/** Resolve a product's store, asserting the creator owns it. Returns store id + its Printful sync id. */
+export async function assertProductOwner(
+  productId: string,
+  userId: string,
+): Promise<{ storeId: string; printfulSyncProductId: string | null }> {
+  const [row] = await db
+    .select({
+      storeId: schema.products.storeId,
+      creatorId: schema.stores.creatorId,
+      printfulSyncProductId: schema.products.printfulSyncProductId,
+    })
+    .from(schema.products)
+    .innerJoin(schema.stores, eq(schema.products.storeId, schema.stores.id))
+    .where(eq(schema.products.id, productId))
+    .limit(1);
+  if (!row) throw new TenantError('product not found', 404);
+  if (row.creatorId !== userId && !(await isCollaborator(row.storeId, userId))) throw new TenantError('forbidden', 403);
+  return { storeId: row.storeId, printfulSyncProductId: row.printfulSyncProductId };
+}

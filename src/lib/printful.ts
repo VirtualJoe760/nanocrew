@@ -276,6 +276,19 @@ export async function createSyncProduct(
   return json.result;
 }
 
+/** Delete a sync product from the Printful store. Best-effort: a 404 (already gone) is not an error. */
+export async function deleteSyncProduct(syncProductId: number | string): Promise<void> {
+  const apiKey = process.env.PRINTFUL_API_KEY;
+  if (!apiKey) throw new Error('PRINTFUL_API_KEY not configured');
+  const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
+  const storeId = process.env.PRINTFUL_STORE_ID;
+  if (storeId) headers['X-PF-Store-Id'] = storeId;
+  const res = await fetch(`${API_BASE}/store/products/${syncProductId}`, { method: 'DELETE', headers });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Printful ${res.status}: ${await res.text().catch(() => '')}`);
+  }
+}
+
 // Print files must be high-res — rescale Cloudinary-hosted designs to ~4500px wide.
 export function upscaleForPrint(url: string): string {
   if (!url.includes('res.cloudinary.com') || !url.includes('/upload/')) return url;

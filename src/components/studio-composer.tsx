@@ -254,6 +254,37 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
     }
   };
 
+  // Delete a product everywhere: our catalog, the storefront website (it refreshes within
+  // ~5 min via ISR), and the Printful store. Cannot be undone.
+  const deleteProduct = (p: Product) => {
+    Alert.alert(
+      'Delete product?',
+      `"${p.name}" will be removed from your store, your storefront website, and Printful. This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const r = await fetch(apiUrl(`/api/creator/products/${p.id}`), {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (!r.ok) {
+                const e = (await r.json().catch(() => ({}))) as { error?: string };
+                throw new Error(e.error ?? 'Failed to delete');
+              }
+              setProducts((prev) => prev.filter((x) => x.id !== p.id));
+            } catch (e) {
+              Alert.alert('Could not delete', e instanceof Error ? e.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   useEffect(() => {
     if (slug) setActive(slug);
   }, [slug]);
@@ -594,6 +625,9 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                           <Pressable onPress={() => makeVideoAd(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
                             <ThemedText type="code" style={styles.adBtnText}>{p.videoUrl ? 'video ↻' : `video · ${voiceoverCost}`}</ThemedText>
                           </Pressable>
+                          <Pressable onPress={() => deleteProduct(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
+                            <ThemedText type="code" style={styles.adBtnDanger}>delete</ThemedText>
+                          </Pressable>
                         </View>
                       )}
                     </View>
@@ -777,6 +811,7 @@ function makeStyles(pal: StudioPalette) {
     adActions: { gap: Spacing.one, alignItems: 'flex-end' },
     adBtn: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 999, borderWidth: 1, borderColor: pal.line },
     adBtnText: { color: pal.accent, fontSize: 11, letterSpacing: 0.5 },
+    adBtnDanger: { color: '#e24b4a', fontSize: 11, letterSpacing: 0.5 },
     previewFrame: { height: 200, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: pal.line, backgroundColor: pal.surface },
     previewImg: { flex: 1 },
     previewFallback: { alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
