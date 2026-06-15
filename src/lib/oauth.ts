@@ -5,10 +5,14 @@ import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
 
-// Social sign-in (Apple/Google/Facebook) through Supabase OAuth. On native we run the flow
-// in an auth session browser and hand the callback tokens to supabase-js ourselves; on web
-// Supabase's normal full-page redirect does the work. (Apple uses the same web OAuth flow;
-// the native "Sign in with Apple" button is a dev-build upgrade via expo-apple-authentication.)
+// Social sign-in (Apple/Google/Facebook) through Supabase. Google/Facebook run the web OAuth
+// flow in an auth-session browser and hand the callback tokens to supabase-js ourselves; on web
+// Supabase's normal full-page redirect does the work. APPLE on iOS uses the NATIVE
+// "Sign in with Apple" sheet (expo-apple-authentication) and verifies the identity token via
+// signInWithIdToken — no client secret to configure or expire. The Supabase Apple provider only
+// needs the bundle id (com.nanocrew.app) in its Client IDs. expo-apple-authentication is a
+// dev-build-only native module, so we lazy-require it (exactly like the IAP/push seams): until
+// the dev build bundles it, native Apple throws a clear message and the other providers work.
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -37,6 +41,34 @@ async function createSessionFromUrl(url: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Native Sign in with Apple (iOS). Presents Apple's system sheet and exchanges the returned
+ * identity token for a Supabase session. expo-apple-authentication is a dev-build-only native
+ * module — we lazy-require it so a missing module can't break Metro/Expo Go; until the dev
+ * build bundles it, this throws a friendly message and the user can fall back to email/Google.
+ */
+async function signInWithAppleNative(): Promise<void> {
+  let AppleAuthentication: any;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    AppleAuthentication = require('expo-apple-authentication');
+  } catch {
+    throw new Error('Apple sign-in needs the latest app update. Use email or Google for now.');
+  }
+  const credential = await AppleAuthentication.signInAsync({
+    requestedScopes: [
+      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+      AppleAuthentication.AppleAuthenticationScope.EMAIL,
+    ],
+  });
+  if (!credential.identityToken) throw new Error('No identity token returned from Apple');
+  const { error } = await supabase.auth.signInWithIdToken({
+    provider: 'apple',
+    token: credential.identityToken,
+  });
+  if (error) throw error;
+}
+
 /** Run the OAuth flow. Resolves once signed in; throws on failure or user cancel. */
 export async function signInWithProvider(provider: OAuthProvider): Promise<void> {
   if (Platform.OS === 'web') {
@@ -46,6 +78,11 @@ export async function signInWithProvider(provider: OAuthProvider): Promise<void>
     });
     if (error) throw error;
     return; // the page redirects away
+  }
+
+  // iOS Apple → native sheet (no client secret, best UX, App Store 4.8 compliant).
+  if (provider === 'apple' && Platform.OS === 'ios') {
+    return signInWithAppleNative();
   }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
