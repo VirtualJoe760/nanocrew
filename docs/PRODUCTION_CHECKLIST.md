@@ -38,13 +38,13 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
 - [ ] Verify the `printful-webhook` is registered and tracking flows back to orders.
 
 ### Auth / config
-- [ ] **Revert the dev Supabase Site URL hack** (see the `supabase-auth-config-state` notes) to the
-  production URL; verify OAuth redirect URLs for Google + Facebook.
-- [ ] **Meta app** approved for "Continue with Facebook" (icon, privacy policy, data-deletion URL,
-  category) — or hide the FB button for v1.
-- [x] **Apple Sign In** ✅ Code done (2026-06-13) — "Continue with Apple" button (iOS-first) via
-  Supabase OAuth. **You still must:** enable the Apple provider in Supabase, configure the Apple
-  Services ID + key, and allow-list the redirect URLs. (Native button is a dev-build upgrade.)
+- [x] **Supabase Site URL + redirects** ✅ (2026-06-15) Site URL → the Railway production URL;
+  redirect allow-list includes `nanocrew://auth`, `nanocrew://**`, the Railway URL, `exp://**`.
+- [x] **Facebook hidden for v1** ✅ (2026-06-15) — button removed + Supabase Facebook provider disabled
+  (credentials retained). Re-enable later only with a Live, reviewed Meta app.
+- [x] **Apple Sign In** ✅ (2026-06-15) — switched to NATIVE (`expo-apple-authentication` →
+  `signInWithIdToken`, no client secret to expire). Supabase Apple provider enabled with bundle id
+  `com.nanocrew.app`; App ID has the Sign-in-with-Apple capability. Works once build #12 lands.
 
 ### App store
 - [ ] **EAS dev/production build** (unblocks IAP, push, critique screenshots — all three). Scaffolding

@@ -37,22 +37,27 @@ Full, current documentation lives in **`docs/`** — read these before working:
 - `account.tsx` — **Account** (auth, billing portal, account deletion, platform admin)
 
 ## Constraints / gotchas
-- **Expo Go vs dev build**: IAP (`react-native-iap`), push remote tokens (`expo-notifications`), and critique screenshots (`react-native-view-shot`) need an EAS dev build — their server sides are done; client seams are off (`IAP_ENABLED`/`PUSH_ENABLED`). DON'T install those native deps until switching to dev builds (breaks Expo Go). See `docs/DEV_BUILD.md`.
+- **Dev build only (Expo Go retired as of build #12)**: `expo-notifications` (push, `PUSH_ENABLED=true`) + `expo-apple-authentication` (native Sign in with Apple, `src/lib/oauth.ts`) are now installed, so the project requires an EAS dev/standalone build — Expo Go can't load it. Still NOT installed (server sides done, seams off): IAP (`react-native-iap`, `IAP_ENABLED`), critique screenshots (`react-native-view-shot`). See `docs/DEV_BUILD.md`.
 - **Expo Go stale bundle**: only `xcrun simctl terminate booted host.exp.Exponent` + relaunch forces a fresh rebundle.
 - Nano Banana can't emit alpha → magenta chroma-key (`src/lib/transparency.ts`).
 - `AUTO_FIRST_DROP=1` enables server-side first-drop generation (real spend) — uses `INTERNAL_API_KEY` to call the now-authed designer routes.
 
-## Status (2026-06-14)
-**LIVE on TestFlight** (builds #5–#7 shipping; internal testing). Backend **migrated to Railway**
-(was EAS Hosting — Cloudflare Workers couldn't keep postgres-js alive for authed routes). This
-session also: auth verifies Supabase ES256 tokens locally (no per-request fetch), Cloudinary uses
-signed REST (the SDK fails under `expo serve`) — which fixed image-gen hosting + Studio media uploads
-+ enabled a Cloudinary-backed voice-preview cache; Market/Account redesign + per-brand store pages +
-real storefront links; **push notifications wired** (expo-notifications); **provisioning fixed** —
-now enqueues through the forge worker queue (no SSH from the server). Earnings cockpit de-golded.
-Remaining is mostly Joe's config — see the prioritized **task list** + `docs/PRODUCTION_CHECKLIST.md`.
-Top open code: **Apple IAP** (App-Store blocker; needs ASC products to wire+test). Provisioning is
-deployed but unverified end-to-end (needs one real test brand). See the `production-shipping` memory.
+## Status (2026-06-15)
+**LIVE on TestFlight**; backend on **Railway** (was EAS Hosting — Workers couldn't keep postgres-js
+alive). **Build #12 building/submitting** with **native Sign in with Apple** (`expo-apple-authentication`
+→ `signInWithIdToken`, no client secret) + **push** (`expo-notifications`, `PUSH_ENABLED=true`). The
+Apple App ID now carries all 3 capabilities (IAP, Push, Apple) and the old provisioning profile was
+invalidated → EAS regenerates clean (clears the cache that blocked builds #7–9). **Railway GitHub
+auto-deploy is LIVE** (push to `main` → auto-deploy; the GitHub App had lost repo access — re-granted).
+**Supabase auth** prod-ready (Site URL + redirects fixed, Apple provider enabled native-only,
+**Facebook hidden for v1** — button removed + provider off). **Legal live**: Privacy + Terms at
+`nanocrew-api.vercel.app/privacy` + `/terms`, linked in Account. **Security pass done** (no criticals;
+shipped SSRF guard `src/lib/safe-fetch.ts`, merge IDOR fix, constant-time internal-key, opt-in
+Printful-webhook token). Remaining is mostly Joe's config — see the **task list** +
+`docs/PRODUCTION_CHECKLIST.md`. Top open: **Stripe go-live** (deferred to last), **Railway billing**
+(trial expiring → backend offline), **Apple IAP** (next build; react-native-iap v15 StoreKit-2 vs the
+server's legacy verifyReceipt — pick a path), and provisioning end-to-end verify (needs one Pro test
+brand). See the `production-shipping` memory.
 
 ## Run
 `npm run ios` · `npm run android` · `npm run web`
