@@ -145,20 +145,10 @@ export async function POST(req: Request) {
     }
     try {
       const tts = await speak(say, voice.id);
-      let uploadErr: string | undefined;
-      let uploaded: string | undefined;
       if (publicId) {
-        uploaded = await uploadRaw(Buffer.from(JSON.stringify(tts)), publicId).catch((e) => {
-          uploadErr = e instanceof Error ? e.message : String(e);
-          return undefined;
-        });
+        await uploadRaw(Buffer.from(JSON.stringify(tts)), publicId).catch(() => {});
       }
-      return Response.json({
-        line: say,
-        speech: tts.speech,
-        words: tts.words,
-        debug: { cloud: !!process.env.CLOUDINARY_CLOUD_NAME, pid: publicId, uploaded, uploadErr },
-      });
+      return Response.json({ line: say, speech: tts.speech, words: tts.words });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
     }
