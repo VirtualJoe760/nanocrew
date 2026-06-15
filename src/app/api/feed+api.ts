@@ -21,6 +21,8 @@ export async function GET(req: Request) {
         storeName: schema.stores.name,
         storeSlug: schema.stores.slug,
         storeTagline: schema.stores.tagline,
+        deploymentUrl: schema.stores.deploymentUrl,
+        customDomain: schema.stores.customDomain,
         priceCents: min(schema.variants.retailPriceCents),
         likeCount: sql<number>`count(distinct ${schema.productLikes.id})`.mapWith(Number),
       })
@@ -51,7 +53,15 @@ export async function GET(req: Request) {
         );
       likedSet = new Set(liked.filter((l) => l.productId).map((l) => l.productId));
     }
-    return Response.json({ items: rows.map((r) => ({ ...r, likedByMe: likedSet.has(r.id) })) });
+    // Resolve each store's public website (custom domain wins), so the feed's "Shop"
+    // link points at the real storefront — not a guessed vercel subdomain.
+    return Response.json({
+      items: rows.map(({ deploymentUrl, customDomain, ...r }) => ({
+        ...r,
+        siteUrl: customDomain ? `https://${customDomain}` : (deploymentUrl ?? null),
+        likedByMe: likedSet.has(r.id),
+      })),
+    });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });
   }

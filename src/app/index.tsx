@@ -34,14 +34,17 @@ type FeedItem = {
   descriptionMd: string | null;
   storeName: string;
   storeSlug: string;
+  siteUrl: string | null;
   priceCents: number | null;
   likeCount: number;
   shareCount: number;
   likedByMe: boolean;
 };
 
-function siteUrlFor(slug: string): string {
-  return `https://store-${slug}.vercel.app`;
+/** The product's page on the brand's real storefront (custom domain or deployment URL),
+ *  or null when the brand has no live website yet. */
+function productUrl(item: FeedItem): string | null {
+  return item.siteUrl ? `${item.siteUrl}/product/${item.slug}` : null;
 }
 
 function fmtCount(n: number): string {
@@ -196,9 +199,13 @@ export default function FeedScreen() {
   );
 
   const onShare = useCallback(async (item: FeedItem) => {
-    const url = `${siteUrlFor(item.storeSlug)}/product/${item.slug}`;
+    const url = productUrl(item);
     try {
-      const res = await Share.share({ message: `${item.name} by ${item.storeName} — ${url}`, url });
+      const res = await Share.share(
+        url
+          ? { message: `${item.name} by ${item.storeName} — ${url}`, url }
+          : { message: `${item.name} by ${item.storeName}` },
+      );
       if (res.action === Share.sharedAction) {
         setItems((prev) => prev.map((p) => (p.id === item.id ? { ...p, shareCount: p.shareCount + 1 } : p)));
         fetch(apiUrl(`/api/feed/${item.id}/share`), { method: 'POST' }).catch(() => {});
@@ -299,12 +306,11 @@ export default function FeedScreen() {
                 <Pressable onPress={() => onBuy(detail)} style={styles.detailPrimary}>
                   <ThemedText type="smallBold" style={{ color: '#08080a' }}>Shop @{detail.storeSlug}</ThemedText>
                 </Pressable>
-                <Pressable
-                  onPress={() => openBrowserAsync(`${siteUrlFor(detail.storeSlug)}/product/${detail.slug}`)}
-                  hitSlop={8}
-                >
-                  <ThemedText type="small" themeColor="tint">View product ↗</ThemedText>
-                </Pressable>
+                {productUrl(detail) ? (
+                  <Pressable onPress={() => openBrowserAsync(productUrl(detail)!)} hitSlop={8}>
+                    <ThemedText type="small" themeColor="tint">View product ↗</ThemedText>
+                  </Pressable>
+                ) : null}
               </View>
             </ThemedView>
           </View>
