@@ -30,39 +30,50 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
   );
 }
 
+// General Sans (the brand sans) ships as named static weights — RN custom fonts don't derive
+// weight from `fontWeight`, so each visual weight maps to its own family. (Loaded in _layout.tsx.)
+const GS = {
+  regular: 'GeneralSans-Regular',
+  medium: 'GeneralSans-Medium',
+  semibold: 'GeneralSans-Semibold',
+  bold: 'GeneralSans-Bold',
+} as const;
+
 const styles = StyleSheet.create({
   small: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 500,
+    fontFamily: GS.medium,
   },
   smallBold: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 700,
+    fontFamily: GS.bold,
   },
   default: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: 500,
+    fontFamily: GS.medium,
   },
   title: {
     fontSize: 48,
-    fontWeight: 600,
+    fontFamily: GS.semibold,
     lineHeight: 52,
   },
   subtitle: {
     fontSize: 32,
     lineHeight: 44,
-    fontWeight: 600,
+    fontFamily: GS.semibold,
   },
   link: {
     lineHeight: 30,
     fontSize: 14,
+    fontFamily: GS.regular,
   },
   linkPrimary: {
     lineHeight: 30,
     fontSize: 14,
+    fontFamily: GS.regular,
     // color comes from the theme tint (platinum on dark / graphite on light) — set inline above
   },
   code: {
