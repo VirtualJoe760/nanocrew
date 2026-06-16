@@ -52,6 +52,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [draft, setDraft] = useState<Draft | null>(null);
   const [change, setChange] = useState('');
   const [changeState, setChangeState] = useState<'idle' | 'sending' | 'queued'>('idle');
+  const [hiddenRevIds, setHiddenRevIds] = useState<Set<string>>(new Set()); // "reset chat" hides past revisions
   const [previewTarget, setPreviewTarget] = useState<string | null>(null);
   const [critiquePreview, setCritiquePreview] = useState(false);
   const [siteAction, setSiteAction] = useState<'idle' | 'building'>('idle');
@@ -562,37 +563,48 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                   </Pressable>
                   <ThemedText type="code" style={styles.dim}>Exact edits, applied instantly. For a bigger redesign, ask Venus below.</ThemedText>
 
-                  <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.three }]}>CHAT WITH VENUS</ThemedText>
-                  <View style={styles.venusBubble}>
-                    <ThemedText type="small" style={styles.bubbleVenusText}>Tell me what to change about your site — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; I build it on a preview first; nothing goes live until you approve.</ThemedText>
+                  <View style={[styles.sectionRow, { marginTop: Spacing.three }]}>
+                    <ThemedText type="code" style={styles.sectionLabel}>CHAT WITH VENUS</ThemedText>
+                    {revisions.some((r) => !hiddenRevIds.has(r.id) && !r.requestMd.includes('"kind":"provision"')) ? (
+                      <Pressable onPress={() => { setHiddenRevIds(new Set(revisions.map((r) => r.id))); setChange(''); setChangeState('idle'); }} hitSlop={6}>
+                        <ThemedText type="code" style={styles.dim}>reset</ThemedText>
+                      </Pressable>
+                    ) : null}
                   </View>
 
-                  {revisions.slice(0, 8).reverse().map((rev) => (
-                    <View key={rev.id}>
-                      <View style={styles.youBubble}>
-                        <ThemedText type="small" style={styles.bubbleYouText} numberOfLines={4}>{rev.requestMd}</ThemedText>
-                      </View>
-                      <View style={styles.venusBubble}>
-                        <ThemedText type="small" style={styles.bubbleVenusText}>
-                          {rev.status === 'building' ? 'On it — building a preview…' : rev.status === 'ready' ? 'Ready to review.' : rev.status === 'approved' ? 'Published — it’s live.' : 'That one didn’t take — try rewording it.'}
-                        </ThemedText>
-                        {rev.status === 'ready' ? (
-                          <View style={styles.revActions}>
-                            {rev.previewUrl ? (
-                              <Pressable onPress={() => { setPreviewTarget(rev.previewUrl); setCritiquePreview(false); }} hitSlop={6}>
-                                <ThemedText type="code" style={styles.dim}>review</ThemedText>
-                              </Pressable>
-                            ) : null}
-                            <Pressable onPress={() => approve(rev)} hitSlop={6}>
-                              <ThemedText type="code" style={styles.green}>publish →</ThemedText>
-                            </Pressable>
-                          </View>
-                        ) : rev.status === 'building' ? (
-                          <ActivityIndicator size="small" color={pal.accent} style={{ alignSelf: 'flex-start', marginTop: 4 }} />
-                        ) : null}
-                      </View>
+                  {/* The conversation scrolls INSIDE this box — independent of the console's scroll. */}
+                  <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatScrollContent} nestedScrollEnabled showsVerticalScrollIndicator>
+                    <View style={styles.venusBubble}>
+                      <ThemedText type="small" style={styles.bubbleVenusText}>Tell me what to change about your site — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; I build it on a preview first; nothing goes live until you approve.</ThemedText>
                     </View>
-                  ))}
+
+                    {revisions.filter((r) => !hiddenRevIds.has(r.id) && !r.requestMd.includes('"kind":"provision"')).slice(0, 8).reverse().map((rev) => (
+                      <View key={rev.id}>
+                        <View style={styles.youBubble}>
+                          <ThemedText type="small" style={styles.bubbleYouText} numberOfLines={4}>{rev.requestMd}</ThemedText>
+                        </View>
+                        <View style={styles.venusBubble}>
+                          <ThemedText type="small" style={styles.bubbleVenusText}>
+                            {rev.status === 'building' ? 'On it — building a preview…' : rev.status === 'ready' ? 'Ready to review.' : rev.status === 'approved' ? 'Published — it’s live.' : 'That one didn’t take — try rewording it.'}
+                          </ThemedText>
+                          {rev.status === 'ready' ? (
+                            <View style={styles.revActions}>
+                              {rev.previewUrl ? (
+                                <Pressable onPress={() => { setPreviewTarget(rev.previewUrl); setCritiquePreview(false); }} hitSlop={6}>
+                                  <ThemedText type="code" style={styles.dim}>review</ThemedText>
+                                </Pressable>
+                              ) : null}
+                              <Pressable onPress={() => approve(rev)} hitSlop={6}>
+                                <ThemedText type="code" style={styles.green}>publish →</ThemedText>
+                              </Pressable>
+                            </View>
+                          ) : rev.status === 'building' ? (
+                            <ActivityIndicator size="small" color={pal.accent} style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+                          ) : null}
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
 
                   <View style={styles.composerRow}>
                     <TextInput style={styles.composerInput} placeholder="Message Venus…" placeholderTextColor={pal.dim} value={change} onChangeText={(t) => { setChange(t); setChangeState('idle'); }} multiline />
@@ -858,6 +870,8 @@ function makeStyles(pal: StudioPalette) {
     youBubble: { alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: pal.accent, borderRadius: 14, borderTopRightRadius: 4, padding: Spacing.three, marginTop: Spacing.two },
     bubbleVenusText: { color: pal.ink },
     bubbleYouText: { color: pal.onAccent },
+    chatScroll: { maxHeight: 300, borderWidth: 1, borderColor: pal.line, borderRadius: 14, backgroundColor: pal.surface, marginTop: Spacing.one },
+    chatScrollContent: { padding: Spacing.three, paddingTop: Spacing.one },
     composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, marginTop: Spacing.three },
     composerInput: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: pal.line, backgroundColor: pal.field, borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, color: pal.ink, fontSize: 15, textAlignVertical: 'top' },
     composerSend: { backgroundColor: pal.accent, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, alignItems: 'center', justifyContent: 'center' },
