@@ -78,9 +78,15 @@ export function SiteEditor({
       const r = await fetch(apiUrl(`/api/creator/site-config?store=${encodeURIComponent(slug)}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const d = (await r.json()) as { config?: SiteConfig };
-      setCopy(d.config?.copy ?? {});
-      setColors(d.config?.colors ?? {});
+      const d = (await r.json()) as {
+        config?: SiteConfig;
+        defaults?: { colors?: Record<string, string>; copy?: Record<string, string> };
+      };
+      // Open pre-filled with the brand's CURRENT values: baked defaults first, any saved override
+      // on top. So the creator edits from what's live, not a blank form. (Fonts are override-only —
+      // the baked font lives in the template, so a blank picker = "the site default".)
+      setCopy({ ...(d.defaults?.copy ?? {}), ...(d.config?.copy ?? {}) });
+      setColors({ ...(d.defaults?.colors ?? {}), ...(d.config?.colors ?? {}) });
       setFonts(d.config?.fonts ?? {});
     } catch {
       setNote('Could not load your current settings.');
@@ -159,8 +165,8 @@ export function SiteEditor({
           ) : (
             <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
               <ThemedText type="small" style={styles.dim}>
-                Exact edits, applied instantly — no rebuild. Leave a field blank to keep what&apos;s there.
-                For a bigger redesign, chat with Venus in the console.
+                Your site&apos;s current text, colors &amp; fonts — edit any of them. Changes apply
+                instantly, no rebuild. For a bigger redesign, chat with Venus in the console.
               </ThemedText>
 
               {/* TEXT */}

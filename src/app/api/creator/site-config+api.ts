@@ -40,11 +40,33 @@ export async function GET(req: Request) {
     const store = await storeForMember(slug, user.id);
     if (!store) return Response.json({ error: 'store not found' }, { status: 404 });
     const [row] = await db
-      .select({ siteConfig: schema.stores.siteConfig })
+      .select({
+        siteConfig: schema.stores.siteConfig,
+        designSystem: schema.stores.designSystem,
+        tagline: schema.stores.tagline,
+        brandProfile: schema.stores.brandProfile,
+      })
       .from(schema.stores)
       .where(eq(schema.stores.id, store.id))
       .limit(1);
-    return Response.json({ config: (row?.siteConfig ?? {}) as SiteConfig });
+
+    // The brand's CURRENT baked values, so the editor opens pre-filled (not blank). Colors come
+    // from the generated design system's palette ({hex, role}); tagline/story from the store. Hero
+    // copy + fonts live in the template repo, so those stay override-only (the editor shows them
+    // empty with a placeholder). Bespoke brands (no design system) simply have no defaults.
+    const ds = (row?.designSystem ?? {}) as { palette?: { hex: string; role: string }[] };
+    const byRole = Object.fromEntries((ds.palette ?? []).map((p) => [p.role, p.hex]));
+    const bp = (row?.brandProfile ?? {}) as { story?: string };
+    const defaults = {
+      colors: {
+        background: byRole.background ?? '',
+        text: byRole.text ?? '',
+        primary: byRole.primary ?? '',
+        accent: byRole.accent ?? '',
+      },
+      copy: { tagline: row?.tagline ?? '', story: bp.story ?? '' },
+    };
+    return Response.json({ config: (row?.siteConfig ?? {}) as SiteConfig, defaults });
   } catch (e) {
     const status = e instanceof TenantError ? e.status : 500;
     return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status });
