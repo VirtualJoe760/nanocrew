@@ -22,6 +22,27 @@ type SiteConfig = {
 
 const SECTIONS = ['copy', 'colors', 'fonts'] as const;
 
+const GITHUB_OWNER = process.env.GITHUB_OWNER;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
+// Read a JSON file from a brand's storefront repo (the SOURCE OF TRUTH for the site's current copy +
+// palette — they live in the repo, not our DB). Used to seed the Customize editor with what's live.
+// Returns null on any miss so the editor falls back to DB-derived defaults.
+async function fetchRepoJson(repo: string, path: string): Promise<Record<string, unknown> | null> {
+  if (!GITHUB_OWNER || !GITHUB_TOKEN) return null;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contents/${path}`, {
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.raw' },
+      // cache a little — the repo copy changes rarely; keeps Customize snappy.
+      next: { revalidate: 120 },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 // Drop empty strings so "clear a field" falls back to the baked default rather than rendering blank.
 function clean(obj: Record<string, unknown> | undefined): Record<string, string> {
   const out: Record<string, string> = {};
@@ -45,26 +66,44 @@ export async function GET(req: Request) {
         designSystem: schema.stores.designSystem,
         tagline: schema.stores.tagline,
         brandProfile: schema.stores.brandProfile,
+        repo: schema.stores.repo,
       })
       .from(schema.stores)
       .where(eq(schema.stores.id, store.id))
       .limit(1);
 
-    // The brand's CURRENT baked values, so the editor opens pre-filled (not blank). Colors come
-    // from the generated design system's palette ({hex, role}); tagline/story from the store. Hero
-    // copy + fonts live in the template repo, so those stay override-only (the editor shows them
-    // empty with a placeholder). Bespoke brands (no design system) simply have no defaults.
+    // The brand's CURRENT values, so the editor opens pre-filled (not blank) — "this is what's live;
+    // change what you want." The site's real copy + palette live in its REPO (content/copy.json +
+    // brand.json), so read those first; fall back to the DB design system / store fields if the repo
+    // read misses (bespoke brand at a non-standard path, no GitHub token, etc.).
+    const repo = row?.repo || `store-${slug}`;
+    const [copyJson, brandJson] = await Promise.all([
+      fetchRepoJson(repo, 'content/copy.json'),
+      (async () => (await fetchRepoJson(repo, 'brand.json')) ?? (await fetchRepoJson(repo, 'src/brand.json')))(),
+    ]);
+    const palette = (brandJson?.palette ?? {}) as Record<string, string>;
+    const hero = (copyJson?.hero ?? {}) as Record<string, string>;
+    const storyC = (copyJson?.story ?? {}) as Record<string, string>;
+
     const ds = (row?.designSystem ?? {}) as { palette?: { hex: string; role: string }[] };
     const byRole = Object.fromEntries((ds.palette ?? []).map((p) => [p.role, p.hex]));
     const bp = (row?.brandProfile ?? {}) as { story?: string };
+
     const defaults = {
       colors: {
-        background: byRole.background ?? '',
-        text: byRole.text ?? '',
-        primary: byRole.primary ?? '',
-        accent: byRole.accent ?? '',
+        background: palette.background ?? byRole.background ?? '',
+        text: palette.text ?? byRole.text ?? '',
+        primary: palette.primary ?? byRole.primary ?? '',
+        accent: palette.accent ?? byRole.accent ?? '',
       },
-      copy: { tagline: row?.tagline ?? '', story: bp.story ?? '' },
+      copy: {
+        heroHeadline: hero.headline ?? '',
+        heroSubline: hero.subline ?? '',
+        heroCta: hero.cta ?? '',
+        storyKicker: storyC.kicker ?? '',
+        story: (brandJson?.story as string) ?? bp.story ?? '',
+        tagline: (brandJson?.tagline as string) ?? row?.tagline ?? '',
+      },
     };
     return Response.json({ config: (row?.siteConfig ?? {}) as SiteConfig, defaults });
   } catch (e) {
