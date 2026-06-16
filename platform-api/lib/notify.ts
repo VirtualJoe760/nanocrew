@@ -10,7 +10,7 @@ export async function sendShippedEmail(opts: {
   trackingUrl?: string | null;
 }): Promise<void> {
   const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM; // e.g. "Nanocrew <orders@nanocrew.app>"
+  const from = process.env.EMAIL_FROM; // e.g. "Nano Crew <orders@nanocrew.app>"
   if (!key || !from) {
     console.log(`[notify] email unconfigured — would tell ${opts.to}: ${opts.brandName} order shipped (${opts.trackingNumber ?? 'no tracking #'})`);
     return;
@@ -31,7 +31,7 @@ export async function sendShippedEmail(opts: {
 <h2>Your order shipped.</h2>
 <p>${opts.items.join(', ')} — made to order by ${opts.brandName}, now headed your way.</p>
 ${tracking}
-<p style="color:#777">Sent by Nanocrew on behalf of ${opts.brandName}.</p>
+<p style="color:#777">Sent by Nano Crew on behalf of ${opts.brandName}.</p>
 </div>`,
     }),
   });

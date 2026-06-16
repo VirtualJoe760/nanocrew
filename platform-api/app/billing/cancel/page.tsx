@@ -1,6 +1,6 @@
 // Stripe redirects here when a checkout is cancelled (cancel_url = {base}/billing/cancel).
 
-export const metadata = { title: 'Checkout cancelled — Nanocrew' };
+export const metadata = { title: 'Checkout cancelled — Nano Crew' };
 
 export default function BillingCancel() {
   return (
@@ -8,7 +8,7 @@ export default function BillingCancel() {
       <div style={styles.card}>
         <h1 style={styles.h1}>Checkout cancelled</h1>
         <p style={styles.p}>No charge was made. You can pick a plan again any time from the app.</p>
-        <a href="nanocrew://account" style={styles.btn}>Return to Nanocrew</a>
+        <a href="nanocrew://account" style={styles.btn}>Return to Nano Crew</a>
         <p style={styles.fine}>You can also just close this window to go back.</p>
       </div>
     </main>

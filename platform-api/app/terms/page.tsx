@@ -3,12 +3,12 @@
 // Solid app-specific draft, not legal advice — have counsel review before launch.
 
 export const metadata = {
-  title: 'Terms of Service — Nanocrew',
-  description: 'The terms that govern your use of Nanocrew.',
+  title: 'Terms of Service — Nano Crew',
+  description: 'The terms that govern your use of Nano Crew.',
 };
 
 const EFFECTIVE = 'June 14, 2026';
-const ENTITY = 'Nanocrew'; // {LEGAL_ENTITY}
+const ENTITY = 'Nano Crew'; // {LEGAL_ENTITY}
 const JURISDICTION = 'the State of California, USA'; // {JURISDICTION}
 const CONTACT = 'support@nanocrew.app';
 
@@ -16,13 +16,13 @@ export default function Terms() {
   return (
     <main style={styles.page}>
       <div style={styles.wrap}>
-        <a href="/" style={styles.back}>← Nanocrew</a>
+        <a href="/" style={styles.back}>← Nano Crew</a>
         <h1 style={styles.h1}>Terms of Service</h1>
         <p style={styles.meta}>Effective {EFFECTIVE}</p>
 
         <p style={styles.p}>
-          These Terms govern your use of the Nanocrew app, the storefronts it generates, and related
-          services (the &ldquo;Service&rdquo;), operated by {ENTITY} (&ldquo;Nanocrew,&rdquo;
+          These Terms govern your use of the Nano Crew app, the storefronts it generates, and related
+          services (the &ldquo;Service&rdquo;), operated by {ENTITY} (&ldquo;Nano Crew,&rdquo;
           &ldquo;we,&rdquo; &ldquo;us&rdquo;). By creating an account or using the Service you agree to
           these Terms. If you do not agree, do not use the Service.
         </p>
@@ -30,13 +30,13 @@ export default function Terms() {
         <h2 style={styles.h2}>1. Eligibility &amp; accounts</h2>
         <p style={styles.p}>
           You must be at least 18 years old (or the age of majority where you live) to sell on
-          Nanocrew. You are responsible for your account, for keeping your credentials secure, and for
+          Nano Crew. You are responsible for your account, for keeping your credentials secure, and for
           all activity under your account. Provide accurate information and keep it current.
         </p>
 
         <h2 style={styles.h2}>2. The Service</h2>
         <p style={styles.p}>
-          Nanocrew lets you define a clothing brand with our AI consultant, auto-generates a
+          Nano Crew lets you define a clothing brand with our AI consultant, auto-generates a
           print-on-demand shop and a storefront website, and lets you design products, publish content,
           and sell. We may add, change, or remove features at any time. Some features depend on
           third-party providers (including Stripe, Printful, Apple, and AI model providers) and are
@@ -46,10 +46,10 @@ export default function Terms() {
         <h2 style={styles.h2}>3. Your content &amp; ownership</h2>
         <p style={styles.p}>
           You retain ownership of the brand assets, designs, text, and media you create or upload
-          (&ldquo;Your Content&rdquo;). You grant Nanocrew a worldwide, non-exclusive license to host,
+          (&ldquo;Your Content&rdquo;). You grant Nano Crew a worldwide, non-exclusive license to host,
           reproduce, display, and distribute Your Content as needed to operate the Service — for
           example, to render your storefront, generate products, fulfill orders, and promote your shop
-          within Nanocrew. You represent that you have all rights necessary to Your Content and that it
+          within Nano Crew. You represent that you have all rights necessary to Your Content and that it
           does not infringe anyone&rsquo;s rights or violate any law.
         </p>
 

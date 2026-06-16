@@ -1,0 +1,406 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  View,
+  type ViewToken,
+} from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { openBrowserAsync } from 'expo-web-browser';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
+import { apiFetch, apiUrl } from '@/lib/api';
+
+// The Nano Crew tab: a TikTok-style full-screen vertical feed of published products
+// across all stores — Veo product videos where available, mockups otherwise.
+
+type FeedItem = {
+  id: string;
+  name: string;
+  slug: string;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  descriptionMd: string | null;
+  storeName: string;
+  storeSlug: string;
+  siteUrl: string | null;
+  priceCents: number | null;
+  likeCount: number;
+  shareCount: number;
+  likedByMe: boolean;
+};
+
+/** The product's page on the brand's real storefront (custom domain or deployment URL),
+ *  or null when the brand has no live website yet. */
+function productUrl(item: FeedItem): string | null {
+  return item.siteUrl ? `${item.siteUrl}/product/${item.slug}` : null;
+}
+
+function fmtCount(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`;
+}
+
+function VideoCard({ url, active }: { url: string; active: boolean }) {
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = true;
+    p.muted = true;
+  });
+  useEffect(() => {
+    if (active) player.play();
+    else player.pause();
+  }, [active, player]);
+  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />;
+}
+
+function FeedCard({
+  item,
+  height,
+  active,
+  onTryOn,
+  onLike,
+  onShare,
+  onTitle,
+  onBuy,
+}: {
+  item: FeedItem;
+  height: number;
+  active: boolean;
+  onTryOn: (item: FeedItem) => void;
+  onLike: (item: FeedItem) => void;
+  onShare: (item: FeedItem) => void;
+  onTitle: (item: FeedItem) => void;
+  onBuy: (item: FeedItem) => void;
+}) {
+  return (
+    <View style={[styles.card, { height }]}>
+      {item.videoUrl && active ? (
+        <VideoCard url={item.videoUrl} active={active} />
+      ) : item.imageUrl ? (
+        <Image source={{ uri: item.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.fallback]} />
+      )}
+
+      {/* Bottom scrim + product info */}
+      <View style={styles.scrim} pointerEvents="none" />
+      <View style={styles.info}>
+        <ThemedText type="smallBold" style={styles.handle}>
+          @{item.storeSlug}
+        </ThemedText>
+        {/* Tap the title for a quick look + the full product page */}
+        <Pressable onPress={() => onTitle(item)} hitSlop={6}>
+          <ThemedText type="subtitle" style={styles.title} numberOfLines={2}>
+            {item.name}
+          </ThemedText>
+        </Pressable>
+        <View style={styles.metaRow}>
+          <ThemedText type="small" style={styles.sub} numberOfLines={1}>
+            {item.storeName}
+            {item.priceCents != null ? ` · $${(item.priceCents / 100).toFixed(2)}` : ''}
+          </ThemedText>
+          <Pressable onPress={() => onBuy(item)} hitSlop={6} style={styles.buyTag}>
+            <ThemedText type="smallBold" style={styles.buyTagText}>Buy</ThemedText>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Right-side actions */}
+      <View style={styles.actions}>
+        <Pressable onPress={() => onLike(item)} style={styles.actionBtn} hitSlop={6}>
+          <ThemedText style={[styles.actionGlyph, item.likedByMe && styles.liked]}>
+            {item.likedByMe ? '♥' : '♡'}
+          </ThemedText>
+          <ThemedText type="small" style={styles.actionLabel}>
+            {item.likeCount > 0 ? fmtCount(item.likeCount) : 'Like'}
+          </ThemedText>
+        </Pressable>
+        <Pressable onPress={() => onShare(item)} style={styles.actionBtn} hitSlop={6}>
+          <ThemedText style={styles.actionGlyph}>↗</ThemedText>
+          <ThemedText type="small" style={styles.actionLabel}>
+            {item.shareCount > 0 ? fmtCount(item.shareCount) : 'Share'}
+          </ThemedText>
+        </Pressable>
+        <Pressable onPress={() => onTryOn(item)} style={styles.actionBtn} hitSlop={6}>
+          <ThemedText style={styles.actionGlyph}>🤳</ThemedText>
+          <ThemedText type="small" style={styles.actionLabel}>
+            Try on
+          </ThemedText>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+export default function FeedScreen() {
+  const { session } = useAuth();
+  const router = useRouter();
+  const [items, setItems] = useState<FeedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [pageHeight, setPageHeight] = useState(0);
+  const [tryOn, setTryOn] = useState<{ item: FeedItem; busy: boolean; result?: string; error?: string } | null>(null);
+  const [detail, setDetail] = useState<FeedItem | null>(null);
+
+  // Buy → open the brand's in-app store on the Market tab.
+  const onBuy = useCallback(
+    (item: FeedItem) => {
+      setDetail(null);
+      router.push({ pathname: '/market', params: { store: item.storeSlug } });
+    },
+    [router],
+  );
+
+  useEffect(() => {
+    fetch(apiUrl('/api/feed'), session ? { headers: { Authorization: `Bearer ${session.access_token}` } } : undefined)
+      .then((r) => r.json())
+      .then((d: { items?: FeedItem[] }) => setItems(d.items ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [session]);
+
+  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const first = viewableItems.find((v) => v.isViewable);
+    if (first?.index != null) setActiveIndex(first.index);
+  }).current;
+
+  // Optimistic like toggle — a free account is enough; signed-out taps no-op gracefully.
+  const onLike = useCallback(
+    async (item: FeedItem) => {
+      if (!session) return;
+      const liked = !item.likedByMe;
+      setItems((prev) =>
+        prev.map((p) => (p.id === item.id ? { ...p, likedByMe: liked, likeCount: p.likeCount + (liked ? 1 : -1) } : p)),
+      );
+      try {
+        const r = await fetch(apiUrl(`/api/feed/${item.id}/like`), {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const d = (await r.json()) as { liked?: boolean; likeCount?: number };
+        if (typeof d.likeCount === 'number') {
+          setItems((prev) => prev.map((p) => (p.id === item.id ? { ...p, likedByMe: !!d.liked, likeCount: d.likeCount! } : p)));
+        }
+      } catch {
+        /* leave optimistic state */
+      }
+    },
+    [session],
+  );
+
+  const onShare = useCallback(async (item: FeedItem) => {
+    const url = productUrl(item);
+    try {
+      const res = await Share.share(
+        url
+          ? { message: `${item.name} by ${item.storeName} — ${url}`, url }
+          : { message: `${item.name} by ${item.storeName}` },
+      );
+      if (res.action === Share.sharedAction) {
+        setItems((prev) => prev.map((p) => (p.id === item.id ? { ...p, shareCount: p.shareCount + 1 } : p)));
+        fetch(apiUrl(`/api/feed/${item.id}/share`), { method: 'POST' }).catch(() => {});
+      }
+    } catch {
+      /* share cancelled */
+    }
+  }, []);
+
+  const startTryOn = useCallback(async (item: FeedItem) => {
+    if (!session) {
+      setTryOn({ item, busy: false, error: 'Sign in to try things on.' });
+      return;
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') return;
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.85 });
+    const a = res.assets?.[0];
+    if (res.canceled || !a?.base64) return;
+    const selfie = `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`;
+    setTryOn({ item, busy: true });
+    try {
+      const r = await apiFetch('/api/tryon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selfie, productId: item.id }),
+      });
+      const d = (await r.json()) as { image?: string; error?: string };
+      if (!d.image) throw new Error(d.error || 'Try-on failed');
+      setTryOn({ item, busy: false, result: d.image });
+    } catch (e) {
+      setTryOn({ item, busy: false, error: e instanceof Error ? e.message : 'Try-on failed' });
+    }
+  }, [session]);
+
+  return (
+    <ThemedView style={styles.container}>
+      <View style={styles.fill} onLayout={(e) => setPageHeight(e.nativeEvent.layout.height)}>
+        {loading ? (
+          <ActivityIndicator style={styles.center} />
+        ) : !items.length ? (
+          <View style={styles.center}>
+            <ThemedText themeColor="textSecondary">No drops yet — publish one in Design.</ThemedText>
+          </View>
+        ) : pageHeight > 0 ? (
+          <FlatList
+            data={items}
+            keyExtractor={(i) => i.id}
+            renderItem={({ item, index }) => (
+              <FeedCard
+                item={item}
+                height={pageHeight}
+                active={index === activeIndex}
+                onTryOn={startTryOn}
+                onLike={onLike}
+                onShare={onShare}
+                onTitle={setDetail}
+                onBuy={onBuy}
+              />
+            )}
+            pagingEnabled
+            showsVerticalScrollIndicator={false}
+            snapToInterval={pageHeight}
+            decelerationRate="fast"
+            onViewableItemsChanged={onViewable}
+            viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+            getItemLayout={(_d, index) => ({ length: pageHeight, offset: pageHeight * index, index })}
+          />
+        ) : null}
+      </View>
+
+      {/* Product quick-look — title tap opens this; routes to the full product page or the brand store */}
+      {detail ? (
+        <Modal visible transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+          <View style={styles.detailBackdrop}>
+            <ThemedView type="background" style={styles.detailCard}>
+              <View style={styles.detailHeader}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText type="smallBold" themeColor="textSecondary">@{detail.storeSlug}</ThemedText>
+                  <ThemedText type="subtitle">{detail.name}</ThemedText>
+                </View>
+                <Pressable onPress={() => setDetail(null)} hitSlop={10}>
+                  <ThemedText type="small" themeColor="textSecondary">Close</ThemedText>
+                </Pressable>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                {detail.storeName}
+                {detail.priceCents != null ? ` · $${(detail.priceCents / 100).toFixed(2)}` : ''}
+              </ThemedText>
+              {detail.descriptionMd ? (
+                <ScrollView style={styles.detailBody}>
+                  <ThemedText type="small">{detail.descriptionMd}</ThemedText>
+                </ScrollView>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary">No description yet.</ThemedText>
+              )}
+              <View style={styles.detailActions}>
+                <Pressable onPress={() => onBuy(detail)} style={styles.detailPrimary}>
+                  <ThemedText type="smallBold" style={{ color: '#08080a' }}>Shop @{detail.storeSlug}</ThemedText>
+                </Pressable>
+                {productUrl(detail) ? (
+                  <Pressable onPress={() => openBrowserAsync(productUrl(detail)!)} hitSlop={8}>
+                    <ThemedText type="small" themeColor="tint">View product ↗</ThemedText>
+                  </Pressable>
+                ) : null}
+              </View>
+            </ThemedView>
+          </View>
+        </Modal>
+      ) : null}
+
+      {/* Try-on result */}
+      {tryOn ? (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setTryOn(null)}>
+          <View style={styles.tryOnBackdrop}>
+            <ThemedView type="background" style={styles.tryOnCard}>
+              <View style={styles.tryOnHeader}>
+                <ThemedText type="smallBold">Try on · {tryOn.item.name}</ThemedText>
+                <Pressable onPress={() => setTryOn(null)} hitSlop={10}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Close
+                  </ThemedText>
+                </Pressable>
+              </View>
+              {tryOn.busy ? (
+                <View style={styles.tryOnBody}>
+                  <ActivityIndicator />
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Fitting it on you…
+                  </ThemedText>
+                </View>
+              ) : tryOn.result ? (
+                <Image source={{ uri: tryOn.result }} style={styles.tryOnImg} contentFit="cover" />
+              ) : (
+                <ThemedText type="small" style={{ color: '#e24b4a' }}>
+                  {tryOn.error}
+                </ThemedText>
+              )}
+            </ThemedView>
+          </View>
+        </Modal>
+      ) : null}
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  fill: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  card: { width: '100%', overflow: 'hidden', backgroundColor: '#000' },
+  fallback: { backgroundColor: '#1a1a1a' },
+  scrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 300,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  info: {
+    position: 'absolute',
+    left: Spacing.four,
+    right: 90,
+    bottom: 110,
+    gap: Spacing.one,
+  },
+  // Text sits over arbitrary product media (light or dark), so every overlay label carries a soft
+  // shadow — it stays legible against a bright camo or a dark tee alike.
+  handle: { color: '#fff', opacity: 0.92, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  title: { color: '#fff', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  sub: { color: '#fff', opacity: 0.92, flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  buyTag: { backgroundColor: '#f4f4f6', borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  buyTagText: { color: '#08080a' },
+  actions: { position: 'absolute', right: Spacing.four, bottom: 140, alignItems: 'center', gap: Spacing.four },
+  actionBtn: { alignItems: 'center', gap: 3, paddingVertical: Spacing.one, width: 52 },
+  actionGlyph: { fontSize: 28, lineHeight: 36, color: '#fff', textAlign: 'center', includeFontPadding: false, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5 },
+  liked: { color: '#e8eaee' },
+  actionLabel: { color: '#fff', opacity: 0.95, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  tryOnBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  detailBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  detailCard: { borderTopLeftRadius: Spacing.five, borderTopRightRadius: Spacing.five, padding: Spacing.four, gap: Spacing.three, maxHeight: '70%' },
+  detailHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
+  detailBody: { maxHeight: 200 },
+  detailActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginTop: Spacing.one },
+  detailPrimary: { backgroundColor: '#cdd1d9', borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.five, alignItems: 'center' },
+  tryOnCard: { width: '100%', maxWidth: 420, borderRadius: Spacing.four, padding: Spacing.four, gap: Spacing.three },
+  tryOnHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tryOnBody: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.six },
+  tryOnImg: { width: '100%', aspectRatio: 1, borderRadius: Spacing.three },
+});

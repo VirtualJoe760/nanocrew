@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Nanocrew",
+    "name": "Nano Crew",
     "slug": "nanocrew",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,8 +11,8 @@
       "bundleIdentifier": "com.nanocrew.app",
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Nanocrew uses the microphone so you can talk to Venus, your AI brand consultant.",
-        "NSPhotoLibraryUsageDescription": "Nanocrew uses your photos for virtual try-on and to set your brand's post and product images.",
+        "NSMicrophoneUsageDescription": "Nano Crew uses the microphone so you can talk to Venus, your AI brand consultant.",
+        "NSPhotoLibraryUsageDescription": "Nano Crew uses your photos for virtual try-on and to set your brand's post and product images.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "buildNumber": "12"

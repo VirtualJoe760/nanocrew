@@ -4,7 +4,7 @@ import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
 
 // GET /api/feed — published products across all public stores, newest first.
-// The Nanocrew tab's vertical feed consumes this. Video-first (videoUrl) with a photo
+// The Nano Crew tab's vertical feed consumes this. Video-first (videoUrl) with a photo
 // fallback; carries like/share counts and, when signed in, whether you liked each.
 export async function GET(req: Request) {
   try {

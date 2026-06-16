@@ -123,7 +123,7 @@ function buildBrandBriefFallback(input: ProvisionInput, template: string): strin
   return `# 01-BRAND — ${brand.name}
 
 You are branding a storefront for the clothing brand "${brand.name}". This repo is the
-"${template}" Nanocrew template; it was chosen because the creator's style is
+"${template}" Nano Crew template; it was chosen because the creator's style is
 ${brand.designStyle}. Read TEMPLATE.md first — its hard rules bind every edit you make, and
 its block inventory (with keyword hints) is what you compose from.
 
@@ -179,7 +179,7 @@ ${convo}
 const BRIEF_AUTHOR_MODEL = 'gemini-2.5-pro';
 
 function briefAuthorSystem(): string {
-  return `You are VENUS, Nanocrew's brand consultant — a lead creative director AND senior Next.js
+  return `You are VENUS, Nano Crew's brand consultant — a lead creative director AND senior Next.js
 engineer. You just interviewed the creator. Now write the build brief (briefs/01-BRAND.md) that the
 forge (a headless Claude session) will follow to turn a storefront TEMPLATE into this brand's
 website — wired to the platform's DB, store, and Printful fulfilment.
@@ -411,7 +411,7 @@ export async function provisionStorefront(input: ProvisionInput): Promise<void> 
       method: 'POST',
       body: JSON.stringify({
         name: repo,
-        description: `${input.brand.name} — Nanocrew storefront`,
+        description: `${input.brand.name} — Nano Crew storefront`,
         private: true,
         auto_init: false,
       }),

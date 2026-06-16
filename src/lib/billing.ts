@@ -34,7 +34,7 @@ export const TIERS: Record<PaidPlan, TierDef> = {
     website: false,
     creditRateMultiplier: 1,
     priceEnv: 'STRIPE_PRICE_STARTER',
-    blurb: 'Publish a brand store in the Nanocrew app and buy credits to create.',
+    blurb: 'Publish a brand store in the Nano Crew app and buy credits to create.',
   },
   pro: {
     plan: 'pro',
@@ -232,7 +232,7 @@ export async function createCreditPackCheckout(creatorId: string, email: string,
         price_data: {
           currency: 'usd',
           unit_amount: unitAmount,
-          product_data: { name: `Nanocrew — ${pack.label}` },
+          product_data: { name: `Nano Crew — ${pack.label}` },
         },
       },
     },

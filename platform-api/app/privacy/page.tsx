@@ -1,31 +1,31 @@
 // Privacy Policy — served at /privacy (https://nanocrew-api.vercel.app/privacy).
-// Grounded in Nanocrew's real data flows. PLACEHOLDERS to confirm before launch:
-//   {LEGAL_ENTITY}  = the legal business name (e.g. "Nanocrew, Inc." or sole-proprietor name)
+// Grounded in Nano Crew's real data flows. PLACEHOLDERS to confirm before launch:
+//   {LEGAL_ENTITY}  = the legal business name (e.g. "Nano Crew, Inc." or sole-proprietor name)
 //   {JURISDICTION}  = governing-law state/country
 //   contact email is set to support@ — change if you use a different address.
 // This is a solid, app-specific draft, not legal advice — have counsel review before launch.
 
 export const metadata = {
-  title: 'Privacy Policy — Nanocrew',
-  description: 'How Nanocrew collects, uses, and protects your information.',
+  title: 'Privacy Policy — Nano Crew',
+  description: 'How Nano Crew collects, uses, and protects your information.',
 };
 
 const EFFECTIVE = 'June 14, 2026';
-const ENTITY = 'Nanocrew'; // {LEGAL_ENTITY}
+const ENTITY = 'Nano Crew'; // {LEGAL_ENTITY}
 const CONTACT = 'support@nanocrew.app';
 
 export default function PrivacyPolicy() {
   return (
     <main style={styles.page}>
       <div style={styles.wrap}>
-        <a href="/" style={styles.back}>← Nanocrew</a>
+        <a href="/" style={styles.back}>← Nano Crew</a>
         <h1 style={styles.h1}>Privacy Policy</h1>
         <p style={styles.meta}>Effective {EFFECTIVE}</p>
 
         <p style={styles.p}>
-          {ENTITY} (&ldquo;Nanocrew,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) operates the Nanocrew mobile
+          {ENTITY} (&ldquo;Nano Crew,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) operates the Nano Crew mobile
           app and the storefront websites it generates for creators. This policy explains what we
-          collect, why, who we share it with, and the choices you have. By using Nanocrew you agree
+          collect, why, who we share it with, and the choices you have. By using Nano Crew you agree
           to this policy.
         </p>
 
@@ -71,13 +71,13 @@ export default function PrivacyPolicy() {
           <li style={styles.li}>To provide the service: create your shop and storefront, generate designs and media, process sales, and pay out earnings.</li>
           <li style={styles.li}>To process payments, fulfill orders, and prevent fraud and abuse.</li>
           <li style={styles.li}>To send you transactional and, if enabled, push notifications.</li>
-          <li style={styles.li}>To secure, debug, analyze, and improve Nanocrew.</li>
+          <li style={styles.li}>To secure, debug, analyze, and improve Nano Crew.</li>
           <li style={styles.li}>To comply with legal obligations and enforce our terms.</li>
         </ul>
 
         <h2 style={styles.h2}>3. Service providers we share with</h2>
         <p style={styles.p}>
-          We share data only as needed to run Nanocrew, with providers acting on our behalf:
+          We share data only as needed to run Nano Crew, with providers acting on our behalf:
         </p>
         <ul style={styles.ul}>
           <li style={styles.li}><b>Supabase</b> — authentication and database hosting.</li>
@@ -113,7 +113,7 @@ export default function PrivacyPolicy() {
 
         <h2 style={styles.h2}>6. Children</h2>
         <p style={styles.p}>
-          Nanocrew is not directed to children under 13 (or the minimum age in your country), and we
+          Nano Crew is not directed to children under 13 (or the minimum age in your country), and we
           do not knowingly collect their personal information. If you believe a child has provided us
           information, contact us and we will delete it.
         </p>
@@ -121,7 +121,7 @@ export default function PrivacyPolicy() {
         <h2 style={styles.h2}>7. International users</h2>
         <p style={styles.p}>
           We operate in the United States and our providers may process data there and elsewhere. By
-          using Nanocrew you understand your information may be transferred to and processed in
+          using Nano Crew you understand your information may be transferred to and processed in
           countries with different data-protection laws than your own.
         </p>
 

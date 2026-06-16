@@ -123,7 +123,7 @@ export function Paywall({
     reason === 'brand_limit'
       ? 'Upgrade to add more brands. Your current brands stay live.'
       : reason === 'subscription_required'
-        ? 'Starter sells in the Nanocrew app; Pro adds your own website + domain. Browsing and buying are always free.'
+        ? 'Starter sells in the Nano Crew app; Pro adds your own website + domain. Browsing and buying are always free.'
         : 'Manage your plan or top up credits.';
 
   return (

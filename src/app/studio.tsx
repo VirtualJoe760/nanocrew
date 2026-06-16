@@ -390,7 +390,7 @@ function IntroGlyph() {
   );
 }
 
-// ---------- Nanocrew mark: the crewcut ----------
+// ---------- Nano Crew mark: the crewcut ----------
 
 const MARK = 88;
 // Buzz crown: vertical bristles rising off the head's top arc. The center five end on a
@@ -404,7 +404,7 @@ const BRISTLES = [-16, -11, -6, -1, 5, 10, 15].map((dx, i, arr) => {
   return { x: HEAD_CX + dx, y1: onArc, y2: isFade ? 19 : 13 };
 });
 
-/** The Nanocrew crewcut: a minimal head with a flat-top buzz crown and a nucleus within. */
+/** The Nano Crew crewcut: a minimal head with a flat-top buzz crown and a nucleus within. */
 function NanocrewMark({ color }: { color: string }) {
   return (
     <Svg width={MARK} height={MARK}>

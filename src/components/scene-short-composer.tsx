@@ -11,7 +11,7 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // The "cool short" composer: pick a product → a scene → format → a quality tier (Wan / Seedance /
 // Veo) → generate. Nano Banana renders an on-model still, the chosen fal model animates it, and the
-// short publishes straight to the brand site or the Nanocrew feed. Mirrors the post-composer shape.
+// short publishes straight to the brand site or the Nano Crew feed. Mirrors the post-composer shape.
 
 type Product = { id: string; name: string; imageUrl: string | null };
 type VideoModel = { key: string; label: string; blurb: string; credits: number; durationSec: number };
@@ -73,7 +73,7 @@ export function SceneShortComposer({
   const [scene, setScene] = useState('');
   const [aspect, setAspect] = useState<'9:16' | '16:9'>('9:16');
   const [modelKey, setModelKey] = useState('seedance');
-  const [target, setTarget] = useState<'website' | 'feed'>('website');
+  const [target] = useState<'website' | 'feed'>('website'); // feed target hidden for v1 (see POST TO)
 
   const [phase, setPhase] = useState<Phase>('config');
   const [result, setResult] = useState<{ videoUrl: string; aspect: '9:16' | '16:9' } | null>(null);
@@ -182,7 +182,7 @@ export function SceneShortComposer({
             <ScrollView contentContainerStyle={styles.scroll}>
               <VideoPreview url={result.videoUrl} aspect={result.aspect} />
               <ThemedText type="smallBold" style={styles.green}>
-                Published to {target === 'feed' ? 'the Nanocrew feed' : 'your website'} ✓
+                Published to {target === 'feed' ? 'the Nano Crew feed' : 'your website'} ✓
               </ThemedText>
               <ThemedText type="small" style={styles.dim}>
                 {target === 'feed' ? 'It’s live on your product in the feed.' : 'It’s on your product’s on-model gallery (newest 3 kept).'}
@@ -247,15 +247,8 @@ export function SceneShortComposer({
               </View>
               {model ? <ThemedText type="small" style={styles.dim}>{model.blurb}</ThemedText> : null}
 
-              {/* Target */}
-              <ThemedText type="code" style={styles.sectionLabel}>POST TO</ThemedText>
-              <View style={styles.toggleRow}>
-                {([['website', 'My website'], ['feed', 'Nanocrew feed']] as const).map(([t, label]) => (
-                  <Pressable key={t} onPress={() => setTarget(t)} style={[styles.toggle, target === t && styles.toggleOn]}>
-                    <ThemedText type="code" style={target === t ? styles.chipTextOn : styles.chipText}>{label}</ThemedText>
-                  </Pressable>
-                ))}
-              </View>
+              {/* Target — the social feed is hidden for v1, so scene shorts post to the website
+                  (the on-model gallery). The feed target returns in v2. `target` stays 'website'. */}
 
               {note ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
 

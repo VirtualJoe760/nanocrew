@@ -20,16 +20,8 @@ export default function AppTabs() {
       disableTransparentOnScrollEdge
       labelStyle={{ fontSize: 11 }}
     >
-      <NativeTabs.Trigger name="index">
-        <Icon sf="circle.hexagongrid" />
-        <Label>Nanocrew</Label>
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="market">
-        <Icon sf="bag" />
-        <Label>Market</Label>
-      </NativeTabs.Trigger>
-
+      {/* The social feed (route /feed) is HIDDEN for v1; it returns as a tab in v2. Studio leads
+          (the app's home — build your brand site), then Design, then Market. */}
       <NativeTabs.Trigger name="studio">
         <Icon sf="wand.and.stars" />
         <Label>Studio</Label>
@@ -38,6 +30,11 @@ export default function AppTabs() {
       <NativeTabs.Trigger name="design">
         <Icon sf="paintbrush.pointed" />
         <Label>Design</Label>
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="market">
+        <Icon sf="bag" />
+        <Label>Market</Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="account">

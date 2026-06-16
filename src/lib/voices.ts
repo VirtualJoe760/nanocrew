@@ -3,7 +3,7 @@
 
 export type AiVoice = {
   id: string; // ElevenLabs voice id
-  name: string; // the AI's Nanocrew identity
+  name: string; // the AI's Nano Crew identity
   vibe: string; // one-line character for the selection card
 };
 

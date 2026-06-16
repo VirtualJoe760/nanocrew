@@ -1275,7 +1275,7 @@ export default function DesignScreen() {
                           setFinalizeComp({
                             id: node.refId,
                             templateKey: node.blankRef!,
-                            defaultName: d?.prompt ?? 'Nanocrew design',
+                            defaultName: d?.prompt ?? 'Nano Crew design',
                           });
                         }}>
                         <View style={[styles.generate, { backgroundColor: theme.text }]}>

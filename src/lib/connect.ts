@@ -89,7 +89,7 @@ export async function ensureConnectedAccount(creatorId: string, email: string): 
     type: 'express',
     email,
     capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
-    business_profile: { product_description: 'Creator clothing brand on Nanocrew' },
+    business_profile: { product_description: 'Creator clothing brand on Nano Crew' },
     metadata: { creatorId },
   });
   const stripeAccountId = account.id as string;

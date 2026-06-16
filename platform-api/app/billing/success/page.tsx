@@ -2,7 +2,7 @@
 // (success_url = {BILLING_RETURN_URL|API}/billing/success?plan=… or ?credits=…).
 // A branded confirmation that deep-links back into the app.
 
-export const metadata = { title: 'Payment complete — Nanocrew' };
+export const metadata = { title: 'Payment complete — Nano Crew' };
 
 export default async function BillingSuccess({
   searchParams,
@@ -27,7 +27,7 @@ export default async function BillingSuccess({
         <div style={styles.check}>✓</div>
         <h1 style={styles.h1}>{headline}</h1>
         <p style={styles.p}>{sub}</p>
-        <a href="nanocrew://account?billing=success" style={styles.btn}>Return to Nanocrew</a>
+        <a href="nanocrew://account?billing=success" style={styles.btn}>Return to Nano Crew</a>
         <p style={styles.fine}>You can also just close this window to go back.</p>
       </div>
     </main>

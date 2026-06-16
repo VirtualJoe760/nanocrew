@@ -20,7 +20,7 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 type StoreRow = { slug: string; name: string; deploymentUrl?: string | null; ogImageUrl?: string | null; status?: string; customDomain?: string | null };
 
 /** The public storefront URL — only when a real site is deployed. A brand can live on
- *  the Nanocrew shop with no website, so we never fabricate a URL that would 404. */
+ *  the Nano Crew shop with no website, so we never fabricate a URL that would 404. */
 function siteUrlFor(s: StoreRow | undefined): string | null {
   if (!s?.deploymentUrl || s.deploymentUrl.includes('github.com')) return null;
   return s.deploymentUrl;
@@ -522,7 +522,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                   ) : (
                     <>
                       <ThemedText type="code" style={styles.sectionLabel}>NO WEBSITE YET</ThemedText>
-                      <ThemedText type="small" style={styles.dim}>This brand sells on the Nanocrew shop. Give it a storefront:</ThemedText>
+                      <ThemedText type="small" style={styles.dim}>This brand sells on the Nano Crew shop. Give it a storefront:</ThemedText>
                       <Pressable onPress={buildSite} style={styles.primaryBtn}>
                         <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Build site</ThemedText>
                       </Pressable>

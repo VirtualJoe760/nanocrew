@@ -19,17 +19,15 @@ export default function AppTabs() {
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <CustomTabList>
-          <TabTrigger name="index" href="/" asChild>
-            <TabButton>Nanocrew</TabButton>
-          </TabTrigger>
-          <TabTrigger name="market" href="/market" asChild>
-            <TabButton>Market</TabButton>
-          </TabTrigger>
+          {/* The social feed (/feed) is hidden for v1 — returns as a tab in v2. Studio leads. */}
           <TabTrigger name="studio" href="/studio" asChild>
             <TabButton>Studio</TabButton>
           </TabTrigger>
           <TabTrigger name="design" href="/design" asChild>
             <TabButton>Design</TabButton>
+          </TabTrigger>
+          <TabTrigger name="market" href="/market" asChild>
+            <TabButton>Market</TabButton>
           </TabTrigger>
           <TabTrigger name="account" href="/account" asChild>
             <TabButton>Account</TabButton>

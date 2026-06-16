@@ -11,7 +11,7 @@ import { resolveVideoModel, type SceneAspect } from '@/lib/fal-video';
 // POST /api/creator/scene-video { productId, scene, aspectRatio, target, model } — the "cool short":
 // Nano Banana renders an on-model scene still, the chosen fal video model (wan | seedance | veo3)
 // animates it. Publish to the storefront (target 'website' → appends to products.model_videos,
-// capped at 3) or the Nanocrew feed (target 'feed' → products.video_url). Ownership-checked,
+// capped at 3) or the Nano Crew feed (target 'feed' → products.video_url). Ownership-checked,
 // rate-limited, credit-gated (variable per model), refunds on fail.
 const MAX_WEBSITE_VIDEOS = 3;
 

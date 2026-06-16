@@ -1,4 +1,4 @@
-export const metadata = { title: 'Nanocrew Platform API' };
+export const metadata = { title: 'Nano Crew Platform API' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

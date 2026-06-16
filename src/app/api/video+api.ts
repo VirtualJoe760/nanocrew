@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     } else {
       buffer = await generateVoiceoverAd({
         name: product.name,
-        storeName: store?.name ?? 'Nanocrew',
+        storeName: store?.name ?? 'Nano Crew',
         tagline: store?.tagline ?? null,
         imageUrl: product.imageUrl,
       });
