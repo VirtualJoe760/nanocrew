@@ -48,7 +48,7 @@ export const orderStatus = pgEnum('order_status', [
 ]);
 
 // Free = browse + shop only. The three paid tiers gate launching a store (Joe, 2026-06-12):
-// starter $10 · pro $49 · advanced $199. Each carries a monthly credit allotment + brand cap.
+// starter $10 · pro $50 · advanced $149 (source of truth: TIERS in src/lib/billing.ts). Each carries a monthly credit allotment + brand cap.
 export const subscriptionPlan = pgEnum('subscription_plan', ['free', 'starter', 'pro', 'advanced']);
 
 export const subscriptionStatus = pgEnum('subscription_status', [
