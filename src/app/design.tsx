@@ -37,8 +37,8 @@ import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
 import { DOCK_TAB_CLEARANCE, TemplatesDock } from '@/components/designer/TemplatesDock';
 import { ContentDock } from '@/components/designer/ContentDock';
-import { WebAssetsDock, type WebSlot } from '@/components/designer/WebAssetsDock';
-import { router } from 'expo-router';
+import { WebAssetsDock } from '@/components/designer/WebAssetsDock';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -230,6 +230,14 @@ export default function DesignScreen() {
   const [dockCollapsed, setDockCollapsed] = useState(false);
   // Which target panel the dock shows: apparel to print on, the site's slots, or video.
   const [dockPanel, setDockPanel] = useState<'products' | 'web' | 'content'>('products');
+  // Deep-link from a Studio bounty (?panel=web) opens that panel with the dock expanded.
+  const { panel: panelParam } = useLocalSearchParams<{ panel?: string }>();
+  useEffect(() => {
+    if (panelParam === 'products' || panelParam === 'web' || panelParam === 'content') {
+      setDockPanel(panelParam);
+      setDockCollapsed(false);
+    }
+  }, [panelParam]);
 
   // A product on the canvas with no design yet → the next step is Generate: collapse the
   // dock and pulse the Generate button red. Everything grouped → dock open for browsing.
@@ -608,8 +616,18 @@ export default function DesignScreen() {
     let next = prev.map((n) => (n.id === id ? movedNew : n));
 
     if (moved.kind === 'design') {
+      // Dropped on a website-slot target → assign this design to that site asset (hero/logo/cover).
+      const slotNode = next.find((n) => n.kind === 'webslot' && overlaps(movedNew, n));
       const tpl = next.find((n) => n.kind === 'template' && overlaps(movedNew, n));
-      if (tpl) {
+      if (slotNode) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        const img = designs.find((d) => d.id === moved.refId)?.image;
+        if (img && img.startsWith('http')) {
+          // Show the design on the slot node (confirmation) and write it to the site.
+          next = next.map((n) => (n.id === slotNode.id ? { ...n, previewUrl: img } : n));
+          void assignToSite(img, slotNode.refId as 'hero' | 'cover' | 'logo');
+        }
+      } else if (tpl) {
         // The "click": haptic + the Combine sheet asks which placement to print. The
         // design stays exactly where it was dropped until the user confirms — the
         // organized row layout happens in doCombine.
@@ -1101,7 +1119,12 @@ export default function DesignScreen() {
                 onAdd={(b) => addNode('template', String(b.id))}
               />
             ) : dockPanel === 'web' ? (
-              <WebAssetsDock designs={designs} onAssign={(url, slot: WebSlot) => void assignToSite(url, slot)} />
+              <WebAssetsDock
+                onAddSlot={(slot) => {
+                  addNode('webslot', slot);
+                  setDockCollapsed(true);
+                }}
+              />
             ) : (
               <ContentDock />
             )}

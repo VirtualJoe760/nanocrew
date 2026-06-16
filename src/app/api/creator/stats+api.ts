@@ -17,6 +17,8 @@ export async function GET(req: Request) {
         name: schema.stores.name,
         deploymentUrl: schema.stores.deploymentUrl,
         ogImageUrl: schema.stores.ogImageUrl,
+        logoUrl: schema.stores.logoUrl,
+        siteAssets: schema.stores.siteAssets,
         status: schema.stores.status,
         customDomain: schema.stores.customDomain,
       })
@@ -24,6 +26,18 @@ export async function GET(req: Request) {
       .where(inArray(schema.stores.id, await accessibleStoreIds(user.id)));
     if (!stores.length) return Response.json({ stores: [] });
     const ids = stores.map((s) => s.id);
+
+    // Bounty signals — does the brand have any published product, and any collection with a cover?
+    const productCountAgg = await db
+      .select({ storeId: schema.products.storeId, n: sql<number>`count(*)`.mapWith(Number) })
+      .from(schema.products)
+      .where(and(inArray(schema.products.storeId, ids), eq(schema.products.isPublished, true)))
+      .groupBy(schema.products.storeId);
+    const coverAgg = await db
+      .select({ storeId: schema.catalogues.storeId, n: sql<number>`count(*)`.mapWith(Number) })
+      .from(schema.catalogues)
+      .where(and(inArray(schema.catalogues.storeId, ids), isNotNull(schema.catalogues.coverImageUrl)))
+      .groupBy(schema.catalogues.storeId);
 
     const orderAgg = await db
       .select({
@@ -53,16 +67,27 @@ export async function GET(req: Request) {
       .groupBy(schema.pageViews.storeId);
 
     return Response.json({
-      stores: stores.map((s) => ({
-        ...s,
-        orders: orderAgg.find((o) => o.storeId === s.id)?.orders ?? 0,
-        revenueCents: orderAgg.find((o) => o.storeId === s.id)?.revenueCents ?? 0,
-        views30d: viewAgg.find((v) => v.storeId === s.id)?.views ?? 0,
-        productImages: productImgs
-          .filter((p) => p.storeId === s.id && p.imageUrl)
-          .map((p) => p.imageUrl as string)
-          .slice(0, 6),
-      })),
+      stores: stores.map((s) => {
+        const { siteAssets, logoUrl, ...rest } = s;
+        const hero = (siteAssets as { hero?: { imageUrl?: string | null } } | null)?.hero?.imageUrl;
+        return {
+          ...rest,
+          orders: orderAgg.find((o) => o.storeId === s.id)?.orders ?? 0,
+          revenueCents: orderAgg.find((o) => o.storeId === s.id)?.revenueCents ?? 0,
+          views30d: viewAgg.find((v) => v.storeId === s.id)?.views ?? 0,
+          productImages: productImgs
+            .filter((p) => p.storeId === s.id && p.imageUrl)
+            .map((p) => p.imageUrl as string)
+            .slice(0, 6),
+          // Setup bounties — true means "done". Drives the Studio "finish your site" checklist.
+          bounties: {
+            product: (productCountAgg.find((p) => p.storeId === s.id)?.n ?? 0) > 0,
+            hero: Boolean(hero),
+            logo: Boolean(logoUrl),
+            cover: (coverAgg.find((c) => c.storeId === s.id)?.n ?? 0) > 0,
+          },
+        };
+      }),
     });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });

@@ -18,9 +18,17 @@ import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
 
+// Website-slot target nodes (drop a design on one to set it as that site asset).
+export const WEB_SLOT_LABELS: Record<string, string> = {
+  hero: 'Website hero',
+  logo: 'Logo',
+  cover: 'Collection cover',
+};
+
 export type CanvasNode = {
   id: string;
-  kind: 'design' | 'template' | 'composition' | 'group';
+  // 'webslot' = a website asset target (refId is the slot key, e.g. 'hero'); connect a design to assign it.
+  kind: 'design' | 'template' | 'composition' | 'group' | 'webslot';
   refId: string;
   x: number;
   y: number;
@@ -220,6 +228,19 @@ function NodeView({
             </View>
             <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
               {node.status === 'generating' ? 'RENDERING…' : 'DRAFT · TAP TO OPEN'}
+            </ThemedText>
+          </>
+        ) : node.kind === 'webslot' ? (
+          <>
+            <View style={[styles.thumb, { backgroundColor: theme.backgroundElement }]}>
+              {node.previewUrl ? (
+                <Image source={{ uri: node.previewUrl }} style={styles.thumbFill} contentFit="cover" />
+              ) : (
+                <Text style={styles.glyph}>🌐</Text>
+              )}
+            </View>
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+              {(WEB_SLOT_LABELS[node.refId] ?? 'Web slot') + (node.previewUrl ? '' : ' · drop a design')}
             </ThemedText>
           </>
         ) : (

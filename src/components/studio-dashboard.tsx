@@ -13,9 +13,18 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 // OG card (logo + tagline) leading. No website required, so no 404s. Tap → edit mode.
 // Theme-aware: matches the Studio screen behind it in light and dark.
 
-type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; ogImageUrl?: string | null; productImages?: string[] };
+type Bounties = { product: boolean; hero: boolean; logo: boolean; cover: boolean };
+type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; ogImageUrl?: string | null; productImages?: string[]; bounties?: Bounties };
 
 const THUMB_H = 200;
+
+// "Finish your site" setup tasks. Each deep-links into the Design tab on the right panel/slot.
+const BOUNTY_STEPS: { key: keyof Bounties; label: string; panel: 'products' | 'web'; slot?: 'hero' | 'cover' | 'logo' }[] = [
+  { key: 'product', label: 'Add your first product', panel: 'products' },
+  { key: 'hero', label: 'Design your website hero', panel: 'web', slot: 'hero' },
+  { key: 'logo', label: 'Add your logo', panel: 'web', slot: 'logo' },
+  { key: 'cover', label: 'Add a collection cover', panel: 'web', slot: 'cover' },
+];
 
 /** The brand card's thumbnail: a paged, auto-advancing carousel of [OG card, …products].
  *  Falls back to a single image, then to the brand name on the surface colour. */
@@ -96,11 +105,14 @@ export function StudioDashboard({
   onEditBrand,
   onNewBrand,
   onOpenBilling,
+  onBounty,
 }: {
   token: string;
   onEditBrand: (slug: string, name: string) => void;
   onNewBrand: () => void;
   onOpenBilling?: () => void;
+  // Tap a setup task → jump into the Design tab on the right panel + slot.
+  onBounty?: (panel: 'products' | 'web', slot?: 'hero' | 'cover' | 'logo') => void;
 }) {
   const p = useStudioPalette();
   const s = useMemo(() => makeStyles(p), [p]);
@@ -154,22 +166,39 @@ export function StudioDashboard({
         <ActivityIndicator style={{ marginTop: Spacing.six }} color={p.accent} />
       ) : (
         <>
-          {stores.map((store) => (
-            <Pressable key={store.slug} onPress={() => onEditBrand(store.slug, store.name)} style={s.brandCard}>
-              <View>
-                <BrandThumbnail name={store.name} ogImageUrl={store.ogImageUrl} productImages={store.productImages} p={p} />
-                <View style={s.editTag}>
-                  <ThemedText type="code" style={s.editTagText}>edit →</ThemedText>
-                </View>
+          {stores.map((store) => {
+            const todo = store.bounties ? BOUNTY_STEPS.filter((b) => !store.bounties![b.key]) : [];
+            return (
+              <View key={store.slug} style={styles.brandGroup}>
+                <Pressable onPress={() => onEditBrand(store.slug, store.name)} style={s.brandCard}>
+                  <View>
+                    <BrandThumbnail name={store.name} ogImageUrl={store.ogImageUrl} productImages={store.productImages} p={p} />
+                    <View style={s.editTag}>
+                      <ThemedText type="code" style={s.editTagText}>edit →</ThemedText>
+                    </View>
+                  </View>
+                  <View style={styles.brandMeta}>
+                    <ThemedText type="subtitle" style={s.ink}>{store.name}</ThemedText>
+                    <ThemedText type="code" style={s.dim}>
+                      ${(store.revenueCents / 100).toFixed(2)} · {store.orders} {store.orders === 1 ? 'order' : 'orders'}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+
+                {todo.length && onBounty ? (
+                  <View style={s.bountyBox}>
+                    <ThemedText type="code" style={s.eyebrow}>FINISH YOUR SITE</ThemedText>
+                    {todo.map((b) => (
+                      <Pressable key={b.key} style={s.bountyRow} onPress={() => onBounty(b.panel, b.slot)}>
+                        <ThemedText type="small" style={s.ink}>○  {b.label}</ThemedText>
+                        <ThemedText type="small" style={s.accent}>→</ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
               </View>
-              <View style={styles.brandMeta}>
-                <ThemedText type="subtitle" style={s.ink}>{store.name}</ThemedText>
-                <ThemedText type="code" style={s.dim}>
-                  ${(store.revenueCents / 100).toFixed(2)} · {store.orders} {store.orders === 1 ? 'order' : 'orders'}
-                </ThemedText>
-              </View>
-            </Pressable>
-          ))}
+            );
+          })}
 
           <Pressable onPress={onNewBrand} style={s.newBrand}>
             <ThemedText type="code" style={s.plus}>+</ThemedText>
@@ -194,6 +223,7 @@ const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.55)' },
   dotOn: { backgroundColor: '#fff', width: 7, height: 7, borderRadius: 4 },
   brandMeta: { padding: Spacing.three, gap: 2 },
+  brandGroup: { gap: Spacing.two },
 });
 
 function makeStyles(p: StudioPalette) {
@@ -211,5 +241,7 @@ function makeStyles(p: StudioPalette) {
     editTagText: { color: p.onAccent, fontSize: 11, letterSpacing: 0.5 },
     newBrand: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: p.line, padding: Spacing.four },
     plus: { color: p.accent, fontSize: 28, width: 30, textAlign: 'center' },
+    bountyBox: { borderRadius: 14, borderWidth: 1, borderColor: p.line, backgroundColor: p.card, padding: Spacing.three, gap: Spacing.two },
+    bountyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Spacing.one },
   });
 }
