@@ -55,6 +55,18 @@ type Design = {
 };
 
 const RATIOS = ['1:1', '4:5', '3:4', '16:9'];
+// Web graphics want wide/site shapes (hero, banner) rather than print-on-garment ratios.
+const WEB_RATIOS = ['16:9', '4:3', '1:1', '9:16'];
+
+// The Generate sheet's three modes — each picks the model + the options shown. (Video is wired
+// in a later phase; Graphics generates web-shaped images.) Adding more image models / ComfyUI
+// workflows later is just extending the per-mode model list.
+type Modality = 'design' | 'graphics' | 'video';
+const MODALITIES: { key: Modality; label: string }[] = [
+  { key: 'design', label: 'Design' },
+  { key: 'graphics', label: 'Graphics' },
+  { key: 'video', label: 'Video' },
+];
 
 // Every node shares the same footprint, so overlap is a simple AABB test.
 const overlaps = (a: { x: number; y: number }, b: { x: number; y: number }) =>
@@ -798,76 +810,36 @@ export default function DesignScreen() {
     scheduleSave();
   };
 
-  const generate = async (
-    prompt: string,
-    refImage?: string,
-    opts?: { background?: 'transparent' | 'filled'; aspectRatio?: string },
-  ) => {
-    const text = prompt.trim();
-    if (!text && !refImage) return;
+  // Land an APPROVED graphic (from GenerateModal's staged review) onto the canvas history and
+  // persist it to the active catalogue. Generation + staging now happen inside the sheet; this
+  // just commits the result. An already-hosted https url is stored as-is; an uploaded data: URL
+  // gets uploaded by /api/designs.
+  const commitDesign = async (staged: { url: string; prompt: string }) => {
     const catId = catalogueRef.current?.id;
-
-    // Use-as-design: an uploaded image with no prompt is stored as a design row.
-    if (!text && refImage) {
-      const tempId = `d${++designCounter}`;
-      setDesigns((prev) => [
-        { id: tempId, prompt: 'Uploaded image', color: tileColor(tempId), image: refImage, status: 'ready' },
-        ...prev,
-      ]);
-      try {
-        const res = await apiFetch('/api/designs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ catalogueId: catId, dataUrl: refImage }),
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          design?: { id: string; url: string };
-        };
-        if (data.design) {
-          const row = data.design;
-          // Adopt the DB id + hosted URL so nodes reference persistent data.
-          setDesigns((prev) =>
-            prev.map((d) => (d.id === tempId ? { ...d, id: row.id, image: row.url } : d)),
-          );
-        }
-      } catch {
-        // Upload persistence failed — design stays usable in-session.
-      }
-      return;
-    }
-
     const tempId = `d${++designCounter}`;
     setDesigns((prev) => [
-      { id: tempId, prompt: text, color: tileColor(text), status: 'generating' },
+      { id: tempId, prompt: staged.prompt, color: tileColor(staged.prompt || tempId), image: staged.url, status: 'ready' },
       ...prev,
     ]);
+    if (!catId) return;
     try {
-      const res = await apiFetch('/api/generate', {
+      const isData = staged.url.startsWith('data:');
+      const res = await apiFetch('/api/designs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: text,
-          image: refImage,
-          background: opts?.background ?? 'transparent',
-          aspectRatio: opts?.aspectRatio ?? '1:1',
-          catalogueId: catId,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        image?: string;
-        id?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.image) throw new Error(data.error || 'Generation failed');
-      setDesigns((prev) =>
-        prev.map((d) =>
-          d.id === tempId
-            ? { ...d, id: data.id ?? tempId, image: data.image, status: 'ready' }
-            : d,
+        body: JSON.stringify(
+          isData
+            ? { catalogueId: catId, dataUrl: staged.url, name: staged.prompt }
+            : { catalogueId: catId, url: staged.url, name: staged.prompt },
         ),
-      );
+      });
+      const data = (await res.json().catch(() => ({}))) as { design?: { id: string; url: string } };
+      if (data.design) {
+        const row = data.design;
+        setDesigns((prev) => prev.map((d) => (d.id === tempId ? { ...d, id: row.id, image: row.url } : d)));
+      }
     } catch {
-      setDesigns((prev) => prev.map((d) => (d.id === tempId ? { ...d, status: 'ready' } : d)));
+      // Persistence failed — design stays usable in-session.
     }
   };
 
@@ -1081,8 +1053,8 @@ export default function DesignScreen() {
       <GenerateModal
         open={generateOpen}
         onClose={() => setGenerateOpen(false)}
-        onGenerate={(p, img, background, aspectRatio) => {
-          generate(p, img, { background, aspectRatio });
+        onCommit={(staged) => {
+          void commitDesign(staged);
           setGenerateOpen(false);
         }}
       />
@@ -1449,27 +1421,44 @@ function EffortSlider({ value, onChange }: { value: Effort; onChange: (e: Effort
 function GenerateModal({
   open,
   onClose,
-  onGenerate,
+  onCommit,
 }: {
   open: boolean;
   onClose: () => void;
-  onGenerate: (
-    prompt: string,
-    image?: string,
-    background?: 'transparent' | 'filled',
-    aspectRatio?: string,
-  ) => void;
+  // Called when the creator APPROVES a staged graphic — the parent lands it on the canvas + persists.
+  onCommit: (staged: { url: string; prompt: string }) => void;
 }) {
   const theme = useTheme();
+  const [modality, setModality] = useState<Modality>('design');
   const [prompt, setPrompt] = useState('');
   const [background, setBackground] = useState<'transparent' | 'filled'>('transparent');
   const [ratio, setRatio] = useState('1:1');
+  const [webRatio, setWebRatio] = useState('16:9');
   const [refImage, setRefImage] = useState<string | null>(null);
   const [isText, setIsText] = useState(false);
   const [rolling, setRolling] = useState(false);
   // How hard the AI works on the 🎲 Random concept and ✨ Enhance expansion (prompt richness).
   const [effort, setEffort] = useState<Effort>(3);
+  const [enhancing, setEnhancing] = useState(false);
+  // Staged review: a generated/uploaded preview held for approval BEFORE it lands on the canvas.
+  const [staged, setStaged] = useState<{ url: string; prompt: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [editText, setEditText] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const canGo = prompt.trim().length > 0 || !!refImage;
+
+  const reset = () => {
+    setPrompt('');
+    setRefImage(null);
+    setIsText(false);
+    setStaged(null);
+    setEditText('');
+    setError(null);
+  };
+  const close = () => {
+    reset();
+    onClose();
+  };
 
   // 🎲 Random: AI invents a design concept and drops it into the prompt.
   const rollIdea = async () => {
@@ -1487,7 +1476,6 @@ function GenerateModal({
   };
 
   // ✨ Enhance: expand a lazy prompt ("panda") into a rich, vivid one.
-  const [enhancing, setEnhancing] = useState(false);
   const enhancePrompt = async () => {
     const text = prompt.trim();
     if (!text || enhancing) return;
@@ -1512,129 +1500,288 @@ function GenerateModal({
     if (uri) setRefImage(uri);
   };
 
+  // Generate a PREVIEW (no persistence) and stage it for review. overridePrompt/overrideRef drive
+  // the "change it / add text" re-roll from the staged image (a hosted url → used as a reference).
+  const runGenerate = async (overridePrompt?: string, overrideRef?: string) => {
+    if (busy) return;
+    const isGraphics = modality === 'graphics';
+    const base =
+      overridePrompt ??
+      (isText && prompt.trim()
+        ? `The words "${prompt.trim()}" as a bold, high-contrast lettering graphic with clean typography`
+        : prompt);
+    const text = base.trim();
+    const ref = overrideRef ?? refImage ?? undefined;
+    if (!text && !ref) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const bg = isGraphics ? 'filled' : isText ? 'transparent' : background;
+      const aspectRatio = isGraphics ? webRatio : ratio;
+      const res = await apiFetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text, image: ref, background: bg, aspectRatio }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { image?: string; error?: string };
+      if (!res.ok || !data.image) throw new Error(data.error || 'Generation failed');
+      setStaged({ url: data.image, prompt: text || 'Uploaded image' });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Generation failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onGeneratePress = () => {
+    // An uploaded image with no prompt is staged as-is (no generation needed).
+    if (refImage && !prompt.trim() && !isText) {
+      setStaged({ url: refImage, prompt: 'Uploaded image' });
+      return;
+    }
+    void runGenerate();
+  };
+
+  // "Change it / add text": re-generate using the staged image as a visual reference.
+  const applyChange = () => {
+    const instr = editText.trim();
+    if (!instr || !staged || busy) return;
+    setEditText('');
+    void runGenerate(`${instr}. Keep the overall composition and subject of the reference image.`, staged.url);
+  };
+
+  const approve = () => {
+    if (!staged) return;
+    onCommit(staged);
+    reset();
+  };
+
   return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={open} animationType="slide" transparent onRequestClose={close}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalBackdrop}>
         <ThemedView type="background" style={styles.sheet}>
           <View style={styles.sheetHeader}>
             <ThemedText type="code" themeColor="textSecondary">
-              Generate a design
+              {staged
+                ? 'Review'
+                : modality === 'graphics'
+                  ? 'Generate a web graphic'
+                  : modality === 'video'
+                    ? 'Generate a video'
+                    : 'Generate a design'}
             </ThemedText>
-            <Pressable onPress={onClose}>
+            <Pressable onPress={close}>
               <ThemedText type="small" themeColor="textSecondary">
                 Close
               </ThemedText>
             </Pressable>
           </View>
 
-          <TextInput
-            autoFocus
-            value={prompt}
-            onChangeText={setPrompt}
-            placeholder="Describe a design — or upload a reference image below"
-            placeholderTextColor={theme.textSecondary}
-            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-            multiline
-          />
-
-          {refImage ? (
-            <View style={styles.refRow}>
-              <Image source={{ uri: refImage }} style={styles.refThumb} contentFit="cover" />
-              <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-                {prompt.trim() ? 'Used as a reference for your prompt.' : 'Will be added as a design.'}
-              </ThemedText>
-              <Pressable onPress={() => setRefImage(null)}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Remove
-                </ThemedText>
-              </Pressable>
-            </View>
-          ) : null}
-
-          <View style={styles.optionRow}>
-            <Pressable onPress={pick}>
-              <ThemedView type="backgroundElement" style={styles.chip}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  ↑ Upload image
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-            {(['transparent', 'filled'] as const).map((b) => (
-              <Pressable key={b} onPress={() => setBackground(b)}>
+          <View style={styles.tabsRow}>
+            {MODALITIES.map((m) => (
+              <Pressable
+                key={m.key}
+                style={styles.flex}
+                onPress={() => {
+                  setModality(m.key);
+                  setStaged(null);
+                  setError(null);
+                }}>
                 <ThemedView
-                  type={background === b ? 'backgroundSelected' : 'backgroundElement'}
-                  style={styles.chip}>
-                  <ThemedText type="small" themeColor={background === b ? 'text' : 'textSecondary'}>
-                    {b === 'transparent' ? 'Transparent' : 'Filled'}
+                  type={modality === m.key ? 'backgroundSelected' : 'backgroundElement'}
+                  style={styles.tab}>
+                  <ThemedText type="small" themeColor={modality === m.key ? 'text' : 'textSecondary'}>
+                    {m.label}
                   </ThemedText>
                 </ThemedView>
               </Pressable>
             ))}
-            <Pressable onPress={() => setIsText((t) => !t)}>
-              <ThemedView
-                type={isText ? 'backgroundSelected' : 'backgroundElement'}
-                style={styles.chip}>
-                <ThemedText type="small" themeColor={isText ? 'text' : 'textSecondary'}>
-                  Aa Text
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-            <Pressable onPress={rollIdea} disabled={rolling}>
-              <ThemedView type="backgroundElement" style={[styles.chip, { opacity: rolling ? 0.5 : 1 }]}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {rolling ? '🎲 …' : '🎲 Random'}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-            <Pressable onPress={enhancePrompt} disabled={enhancing || !prompt.trim()}>
-              <ThemedView
-                type="backgroundElement"
-                style={[styles.chip, { opacity: enhancing || !prompt.trim() ? 0.5 : 1 }]}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {enhancing ? '✨ …' : '✨ Enhance'}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
           </View>
 
-          <EffortSlider value={effort} onChange={setEffort} />
+          {error ? (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.genError}>
+              {error}
+            </ThemedText>
+          ) : null}
 
-          {background === 'filled' && !isText ? (
-            <View style={styles.optionRow}>
-              {RATIOS.map((r) => (
-                <Pressable key={r} onPress={() => setRatio(r)}>
+          {staged ? (
+            <>
+              <Image source={{ uri: staged.url }} style={styles.stagedImg} contentFit="contain" />
+              <TextInput
+                value={editText}
+                onChangeText={setEditText}
+                placeholder="Change it — e.g. add the text “SALE”, make it darker"
+                placeholderTextColor={theme.textSecondary}
+                style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+              />
+              <View style={styles.optionRow}>
+                <Pressable onPress={applyChange} disabled={!editText.trim() || busy}>
                   <ThemedView
-                    type={ratio === r ? 'backgroundSelected' : 'backgroundElement'}
-                    style={styles.chip}>
-                    <ThemedText type="small" themeColor={ratio === r ? 'text' : 'textSecondary'}>
-                      {r}
+                    type="backgroundElement"
+                    style={[styles.chip, { opacity: !editText.trim() || busy ? 0.5 : 1 }]}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {busy ? '… working' : 'Apply change'}
                     </ThemedText>
                   </ThemedView>
                 </Pressable>
-              ))}
-            </View>
-          ) : null}
-
-          <Pressable
-            onPress={() => {
-              const finalPrompt =
-                isText && prompt.trim()
-                  ? `The words "${prompt.trim()}" as a bold, high-contrast lettering graphic with clean typography`
-                  : prompt;
-              onGenerate(finalPrompt, refImage ?? undefined, isText ? 'transparent' : background, ratio);
-              setPrompt('');
-              setRefImage(null);
-              setIsText(false);
-            }}
-            disabled={!canGo}>
-            <View style={[styles.generate, { backgroundColor: theme.text, opacity: canGo ? 1 : 0.4 }]}>
-              <ThemedText type="smallBold" style={{ color: theme.background }}>
-                Generate
+                <Pressable onPress={() => void runGenerate()} disabled={busy}>
+                  <ThemedView type="backgroundElement" style={[styles.chip, { opacity: busy ? 0.5 : 1 }]}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      ↻ Regenerate
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setStaged(null);
+                    setError(null);
+                  }}
+                  disabled={busy}>
+                  <ThemedView type="backgroundElement" style={styles.chip}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Discard
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              </View>
+              <Pressable onPress={approve} disabled={busy}>
+                <View style={[styles.generate, { backgroundColor: theme.text, opacity: busy ? 0.4 : 1 }]}>
+                  <ThemedText type="smallBold" style={{ color: theme.background }}>
+                    Use this
+                  </ThemedText>
+                </View>
+              </Pressable>
+            </>
+          ) : modality === 'video' ? (
+            <View style={styles.comingSoon}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Video generation lands here soon — scene videos for products and a motion hero for
+                your site.
               </ThemedText>
             </View>
-          </Pressable>
+          ) : (
+            <>
+              <TextInput
+                autoFocus
+                value={prompt}
+                onChangeText={setPrompt}
+                placeholder={
+                  modality === 'graphics'
+                    ? 'Describe a web graphic — a hero image, a banner…'
+                    : 'Describe a design — or upload a reference image below'
+                }
+                placeholderTextColor={theme.textSecondary}
+                style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                multiline
+              />
+
+              {refImage ? (
+                <View style={styles.refRow}>
+                  <Image source={{ uri: refImage }} style={styles.refThumb} contentFit="cover" />
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
+                    {prompt.trim() ? 'Used as a reference for your prompt.' : 'Will be added as-is.'}
+                  </ThemedText>
+                  <Pressable onPress={() => setRefImage(null)}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Remove
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              <View style={styles.optionRow}>
+                <Pressable onPress={pick}>
+                  <ThemedView type="backgroundElement" style={styles.chip}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      ↑ Upload image
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+                {modality === 'design' ? (
+                  <>
+                    {(['transparent', 'filled'] as const).map((b) => (
+                      <Pressable key={b} onPress={() => setBackground(b)}>
+                        <ThemedView
+                          type={background === b ? 'backgroundSelected' : 'backgroundElement'}
+                          style={styles.chip}>
+                          <ThemedText type="small" themeColor={background === b ? 'text' : 'textSecondary'}>
+                            {b === 'transparent' ? 'Transparent' : 'Filled'}
+                          </ThemedText>
+                        </ThemedView>
+                      </Pressable>
+                    ))}
+                    <Pressable onPress={() => setIsText((t) => !t)}>
+                      <ThemedView
+                        type={isText ? 'backgroundSelected' : 'backgroundElement'}
+                        style={styles.chip}>
+                        <ThemedText type="small" themeColor={isText ? 'text' : 'textSecondary'}>
+                          Aa Text
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
+                  </>
+                ) : null}
+                <Pressable onPress={rollIdea} disabled={rolling}>
+                  <ThemedView type="backgroundElement" style={[styles.chip, { opacity: rolling ? 0.5 : 1 }]}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {rolling ? '🎲 …' : '🎲 Random'}
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+                <Pressable onPress={enhancePrompt} disabled={enhancing || !prompt.trim()}>
+                  <ThemedView
+                    type="backgroundElement"
+                    style={[styles.chip, { opacity: enhancing || !prompt.trim() ? 0.5 : 1 }]}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {enhancing ? '✨ …' : '✨ Enhance'}
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              </View>
+
+              <EffortSlider value={effort} onChange={setEffort} />
+
+              {modality === 'graphics' ? (
+                <View style={styles.optionRow}>
+                  {WEB_RATIOS.map((r) => (
+                    <Pressable key={r} onPress={() => setWebRatio(r)}>
+                      <ThemedView
+                        type={webRatio === r ? 'backgroundSelected' : 'backgroundElement'}
+                        style={styles.chip}>
+                        <ThemedText type="small" themeColor={webRatio === r ? 'text' : 'textSecondary'}>
+                          {r}
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : background === 'filled' && !isText ? (
+                <View style={styles.optionRow}>
+                  {RATIOS.map((r) => (
+                    <Pressable key={r} onPress={() => setRatio(r)}>
+                      <ThemedView
+                        type={ratio === r ? 'backgroundSelected' : 'backgroundElement'}
+                        style={styles.chip}>
+                        <ThemedText type="small" themeColor={ratio === r ? 'text' : 'textSecondary'}>
+                          {r}
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+
+              <Pressable onPress={onGeneratePress} disabled={!canGo || busy}>
+                <View style={[styles.generate, { backgroundColor: theme.text, opacity: !canGo || busy ? 0.4 : 1 }]}>
+                  <ThemedText type="smallBold" style={{ color: theme.background }}>
+                    {busy ? 'Generating…' : 'Generate'}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            </>
+          )}
         </ThemedView>
       </KeyboardAvoidingView>
     </Modal>
@@ -1816,6 +1963,11 @@ const styles = StyleSheet.create({
   refThumb: { width: 56, height: 56, borderRadius: Spacing.two },
   optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   chip: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
+  tabsRow: { flexDirection: 'row', gap: Spacing.one, marginBottom: Spacing.two },
+  tab: { alignItems: 'center', paddingVertical: Spacing.two, borderRadius: 999 },
+  stagedImg: { width: '100%', height: 240, borderRadius: 12, marginVertical: Spacing.two, backgroundColor: 'rgba(0,0,0,0.18)' },
+  genError: { marginTop: Spacing.one },
+  comingSoon: { paddingVertical: Spacing.four, alignItems: 'center' },
   effortBlock: { gap: Spacing.one, marginTop: Spacing.one },
   effortHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   effortTrackRow: { flexDirection: 'row', alignItems: 'center', height: 24 },

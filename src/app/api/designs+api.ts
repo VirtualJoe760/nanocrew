@@ -11,23 +11,30 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as {
       catalogueId?: string;
       dataUrl?: string;
+      url?: string;
       name?: string;
     } | null;
     const dataUrl = body?.dataUrl;
-    if (!body?.catalogueId || !dataUrl?.startsWith('data:')) {
-      return Response.json({ error: 'catalogueId and dataUrl required' }, { status: 400 });
-    }
-    const comma = dataUrl.indexOf(',');
-    const buffer = Buffer.from(dataUrl.slice(comma + 1), 'base64');
-    if (buffer.length > 10 * 1024 * 1024) {
-      return Response.json({ error: 'image too large (max 10MB)' }, { status: 400 });
+    // Two ways to register a design: an uploaded data URL (we upload it), or an
+    // already-hosted https URL (e.g. an approved staged generation — store as-is, no re-upload).
+    const hostedUrl =
+      typeof body?.url === 'string' && /^https:\/\//.test(body.url) ? body.url : null;
+    if (!body?.catalogueId || (!dataUrl?.startsWith('data:') && !hostedUrl)) {
+      return Response.json({ error: 'catalogueId and dataUrl or url required' }, { status: 400 });
     }
 
-    let url = dataUrl;
-    try {
-      url = await uploadImage(buffer, { folder: 'nanocrew/designs' });
-    } catch {
-      // Cloudinary down — keep the data URL so the upload still works (heavier row).
+    let url = hostedUrl ?? dataUrl!;
+    if (!hostedUrl) {
+      const comma = dataUrl!.indexOf(',');
+      const buffer = Buffer.from(dataUrl!.slice(comma + 1), 'base64');
+      if (buffer.length > 10 * 1024 * 1024) {
+        return Response.json({ error: 'image too large (max 10MB)' }, { status: 400 });
+      }
+      try {
+        url = await uploadImage(buffer, { folder: 'nanocrew/designs' });
+      } catch {
+        // Cloudinary down — keep the data URL so the upload still works (heavier row).
+      }
     }
 
     const storeId = await assertCatalogueOwner(body.catalogueId, user.id);

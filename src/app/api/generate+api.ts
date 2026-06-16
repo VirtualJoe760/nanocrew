@@ -3,6 +3,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
 import { guardRate } from '@/lib/rate-limit';
+import { safeImageFetch } from '@/lib/safe-fetch';
 import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 
 // Nano Banana — Gemini 2.5 Flash Image. Runs server-side only (the key never
@@ -40,6 +41,32 @@ interface GenResponse {
   candidates?: Array<{ content?: { parts?: InlinePart[] } }>;
 }
 
+/**
+ * Resolve a reference image to inline base64. Accepts a `data:` URL (used directly) or an
+ * already-hosted `https:` URL (fetched SSRF-safely → base64) — the latter lets the canvas/staged
+ * graphics, which are hosted Cloudinary URLs, be used as references for "change / add text".
+ */
+async function resolveRef(image: unknown): Promise<{ mimeType: string; data: string } | null> {
+  if (typeof image !== 'string') return null;
+  if (image.startsWith('data:')) {
+    const comma = image.indexOf(',');
+    if (comma < 0) return null;
+    return { mimeType: image.slice(5, comma).split(';')[0] || 'image/png', data: image.slice(comma + 1) };
+  }
+  if (/^https?:\/\//.test(image)) {
+    try {
+      const res = await safeImageFetch(image);
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > 10 * 1024 * 1024) return null;
+      return { mimeType: res.headers.get('content-type')?.split(';')[0] || 'image/png', data: buf.toString('base64') };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -57,8 +84,7 @@ export async function POST(req: Request) {
   const catalogueId = body?.catalogueId;
   const background = body?.background === 'filled' ? 'filled' : 'transparent';
   const aspectRatio = body?.aspectRatio || '1:1';
-  const refImage =
-    typeof body?.image === 'string' && body.image.startsWith('data:') ? body.image : null;
+  const refImage = await resolveRef(body?.image);
   if (!prompt && !refImage) {
     return Response.json({ error: 'prompt or image is required' }, { status: 400 });
   }
@@ -86,9 +112,7 @@ export async function POST(req: Request) {
     : `Design: ${prompt}\n\n${constraints}`;
   const parts: InlinePart[] = [{ text: instruction }];
   if (refImage) {
-    const comma = refImage.indexOf(',');
-    const mimeType = refImage.slice(5, comma).split(';')[0] || 'image/png';
-    parts.push({ inlineData: { mimeType, data: refImage.slice(comma + 1) } });
+    parts.push({ inlineData: { mimeType: refImage.mimeType, data: refImage.data } });
   }
 
   // Nano Banana occasionally returns text/safety with no image — retry a couple times.
