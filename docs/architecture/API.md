@@ -46,7 +46,7 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | GET/PATCH/DELETE | `/api/compositions/:id` | bearer | Read / update / delete a composition. |
 | GET | `/api/creator/margins` | bearer | Per-product retail / Printful cost / margin% + average. |
 | GET | `/api/blanks`, `/api/blank/:id/{variants,colors,placements,printareas}` | bearer | Printful catalogue data. |
-| GET/PATCH | `/api/creator/stores/:slug` | bearer | Read / edit store settings. |
+| GET/PATCH/DELETE | `/api/creator/stores/:slug` | bearer | Read / edit / **delete** a brand. DELETE is owner-only and cascades the store → catalogues/designs/products/variants/orders/posts/revisions (external Printful/GitHub/Vercel cleaned out of band). |
 | GET | `/api/creator/stats` | bearer | Per-store revenue, orders, 30-day views, OG + product images. |
 | GET | `/api/creator/orders` | bearer | Recent orders across the creator's stores. |
 | POST | `/api/creator/orders/:id/refund` | bearer | Refund an order. |

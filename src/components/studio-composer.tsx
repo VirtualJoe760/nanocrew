@@ -37,10 +37,10 @@ type OrderRow = { id: string; status: string; totalCents: number; createdAt: str
 // Order statuses a creator can still refund (matches the server's REFUNDABLE list).
 const REFUNDABLE_STATUSES = new Set(['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered', 'on_hold', 'returned']);
 
-type ConsoleTab = 'edit' | 'posts' | 'sell' | 'insights';
-const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', sell: 'Sell', insights: 'Insights' };
+type ConsoleTab = 'edit' | 'posts' | 'sell' | 'settings';
+const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', sell: 'Sell', settings: 'Settings' };
 
-export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, brandName }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; slug?: string; brandName?: string }) {
+export function StudioComposer({ visible, onClose, token, onOpenBilling, onDeleted, slug, brandName }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; onDeleted?: () => void; slug?: string; brandName?: string }) {
   const pal = useStudioPalette();
   const styles = useMemo(() => makeStyles(pal), [pal]);
   const [tab, setTab] = useState<ConsoleTab>('edit');
@@ -65,6 +65,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [shortComposer, setShortComposer] = useState(false); // the "make a scene short" flow
   const [goLive, setGoLive] = useState(false); // the domain / go-live flow
   const [editor, setEditor] = useState(false); // the mini-CMS: text / colors / fonts (direct, instant)
+  const [deleting, setDeleting] = useState(false); // brand deletion in flight
   const [uploading, setUploading] = useState(false); // post cover image upload in flight
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -328,6 +329,35 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
       { text: 'Refund', style: 'destructive', onPress: () => void refundOrder(id) },
     ]);
 
+  // Permanently delete this brand — its store, products, designs, posts, orders, and site records.
+  const deleteBrand = async () => {
+    if (!active) return;
+    setDeleting(true);
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl(`/api/creator/stores/${encodeURIComponent(active)}`), { method: 'DELETE', headers });
+      if (!res.ok) throw new Error();
+      onDeleted?.();
+      onClose();
+    } catch {
+      setNote('Could not delete this brand — try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmDeleteBrand = () => {
+    const name = brandName ?? activeStore?.name ?? 'this brand';
+    Alert.alert(
+      `Delete ${name}?`,
+      'This permanently deletes the brand — its store, products, designs, posts, and sales records. The live website stops serving. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete brand', style: 'destructive', onPress: () => void deleteBrand() },
+      ],
+    );
+  };
+
   const buildSite = async () => {
     if (!active) return;
     setSiteAction('building');
@@ -478,7 +508,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
               ) : null}
 
               <View style={styles.tabBar}>
-                {(['edit', 'posts', 'sell', 'insights'] as const).map((t) => (
+                {(['edit', 'posts', 'sell', 'settings'] as const).map((t) => (
                   <Pressable key={t} onPress={() => setTab(t)} style={[styles.tabItem, tab === t && styles.tabItemOn]}>
                     <ThemedText type="code" style={tab === t ? styles.tabTextOn : styles.tabText}>{TAB_LABEL[t]}</ThemedText>
                   </Pressable>
@@ -502,11 +532,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                     <View style={styles.previewTap}>
                       <ThemedText type="code" style={styles.previewTapText}>tap to explore your live site →</ThemedText>
                     </View>
-                  </Pressable>
-                  <Pressable onPress={() => setGoLive(true)} style={styles.goLiveRow}>
-                    <ThemedText type="code" style={styles.green}>
-                      {activeStore?.customDomain ? `● Live · ${activeStore.customDomain}` : '○ Go live with a custom domain →'}
-                    </ThemedText>
                   </Pressable>
                 </>
               ) : null}
@@ -680,9 +705,29 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                 </>
               ) : null}
 
-              {/* Insights — this brand's analytics + earnings */}
-              {tab === 'insights' ? (
+              {/* Settings — domain, this brand's performance, and the danger zone */}
+              {tab === 'settings' ? (
                 <>
+                  {/* Custom domain / go live */}
+                  <ThemedText type="code" style={styles.sectionLabel}>DOMAIN</ThemedText>
+                  {siteUrl ? (
+                    <Pressable onPress={() => setGoLive(true)} style={styles.settingRow}>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText type="smallBold" style={styles.white}>
+                          {activeStore?.customDomain ? 'Custom domain' : 'Assign a custom domain'}
+                        </ThemedText>
+                        <ThemedText type="code" style={styles.dim}>
+                          {activeStore?.customDomain ? `● Live · ${activeStore.customDomain}` : 'Connect your own domain & go live'}
+                        </ThemedText>
+                      </View>
+                      <ThemedText type="code" style={styles.green}>{activeStore?.customDomain ? 'manage →' : 'set up →'}</ThemedText>
+                    </Pressable>
+                  ) : (
+                    <ThemedText type="small" style={styles.dim}>Build a website first (in Edit site) to assign a domain.</ThemedText>
+                  )}
+
+                  {/* Performance */}
+                  <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>PERFORMANCE</ThemedText>
                   <View style={styles.metricRow}>
                     <View style={styles.metric}>
                       <ThemedText type="code" style={styles.metricLabel}>REVENUE</ThemedText>
@@ -742,6 +787,15 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                   ) : (
                     <ThemedText type="small" style={[styles.dim, { marginTop: Spacing.three }]}>No orders yet — share your store to make the first sale.</ThemedText>
                   )}
+
+                  {/* Danger zone */}
+                  <ThemedText type="code" style={[styles.sectionLabel, styles.dangerLabel, { marginTop: Spacing.five }]}>DANGER ZONE</ThemedText>
+                  <Pressable onPress={confirmDeleteBrand} disabled={deleting} style={[styles.deleteBrandBtn, deleting && { opacity: 0.5 }]}>
+                    <ThemedText type="smallBold" style={styles.deleteBrandText}>{deleting ? 'Deleting…' : 'Delete this brand'}</ThemedText>
+                  </Pressable>
+                  <ThemedText type="code" style={styles.dim}>
+                    Permanently removes the brand — its store, products, designs, posts, and sales records. The live site stops serving. This can&apos;t be undone.
+                  </ThemedText>
                 </>
               ) : null}
             </ScrollView>
@@ -829,6 +883,10 @@ function makeStyles(pal: StudioPalette) {
     previewTap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingVertical: Spacing.two, alignItems: 'center', backgroundColor: 'rgba(6,11,22,0.82)' },
     previewTapText: { color: pal.accent, fontSize: 11, letterSpacing: 0.5 },
     goLiveRow: { paddingVertical: Spacing.two, alignItems: 'center' },
+    settingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
+    dangerLabel: { color: '#e24b4a' },
+    deleteBrandBtn: { borderWidth: 1, borderColor: 'rgba(226,75,74,0.5)', borderRadius: 10, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.two },
+    deleteBrandText: { color: '#e24b4a' },
     revRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
     revStatus: { color: pal.dim, fontSize: 11, marginTop: 2 },
     revActions: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center' },

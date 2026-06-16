@@ -121,11 +121,15 @@ when you have several. Four tabs:
   cost), feed **video ad** (`/api/video`, voiceover mode), and **delete** (removes the product from
   the catalog, storefront site, and Printful — see the delete-a-product loop). Plus **✦ Make a scene
   short** (`SceneShortComposer` → fal.ai, pick Wan/Seedance/Veo 3). 402s prompt a top-up.
-- **Insights** — this brand's revenue, orders, 30-day views, avg margin, per-product margins, and
-  recent orders with **refund** on refundable statuses (`/api/creator/{stats,orders,margins}`,
-  `/api/creator/orders/:id/refund`).
+- **Settings** — brand controls + performance. **Domain**: assign a custom domain / go live
+  (`GoLiveComposer`). **Performance**: revenue, orders, 30-day views, avg margin, per-product
+  margins, and recent orders with **refund** on refundable statuses. **Danger zone**: **Delete this
+  brand** (confirm dialog → `DELETE /api/creator/stores/:slug`, owner-only; cascades the store →
+  catalogues/designs/products/variants/orders/posts/revisions; external resources cleaned out of
+  band). On delete the console closes and the dashboard refetches.
 - **Calls:** `/api/creator/{stats,orders,margins,posts,revisions,products,credits,build-site,revise,
-  model-shots,model-videos,upload}`, `/api/video`.
+  site-config,enhance-copy,model-shots,model-videos,upload}`, `/api/creator/stores/:slug` (GET/PATCH/
+  **DELETE**), `/api/creator/orders/:id/refund`, `/api/video`.
 
 ### Earnings Cockpit (`src/components/earnings-cockpit.tsx`)
 All-brands business overview (opened from Account → Earnings): revenue / orders / 30-day views /

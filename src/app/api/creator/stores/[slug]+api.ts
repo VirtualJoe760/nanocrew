@@ -60,3 +60,15 @@ export async function PATCH(req: Request, { slug }: Record<string, string>) {
   const [updated] = await db.update(schema.stores).set(patch).where(eq(schema.stores.id, r.id)).returning();
   return Response.json({ store: summary(updated) });
 }
+
+// DELETE /api/creator/stores/:slug — permanently delete this brand. Owner-only (resolve() checks
+// creatorId, so collaborators can't). Deleting the store row cascades to its catalogues, designs,
+// products, variants, orders, posts, page_views, collaborators, and revisions (all FK
+// onDelete: cascade). External resources (Printful sub-store, GitHub repo, Vercel project) are left
+// and cleaned up out of band — same policy as account deletion (DELETE /api/me).
+export async function DELETE(req: Request, { slug }: Record<string, string>) {
+  const r = await resolve(req, slug);
+  if (r instanceof Response) return r;
+  await db.delete(schema.stores).where(eq(schema.stores.id, r.id));
+  return Response.json({ ok: true });
+}

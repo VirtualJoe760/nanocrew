@@ -661,6 +661,7 @@ export default function StudioScreen() {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
+  const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
   const [hasStore, setHasStore] = useState(false);
   const [paywall, setPaywall] = useState<'subscription_required' | 'brand_limit' | 'manage' | null>(null);
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
@@ -1157,7 +1158,7 @@ export default function StudioScreen() {
         </View>
         {session ? (
           <>
-            <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
+            <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} onDeleted={() => { setShowComposer(false); setConsoleBrand(null); setDashKey((k) => k + 1); }} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
             <Paywall visible={!!paywall} onClose={() => setPaywall(null)} token={session.access_token} reason={paywall} />
           </>
         ) : null}
@@ -1195,6 +1196,7 @@ export default function StudioScreen() {
           <ActivityIndicator style={styles.center} color="#cdd1d9" />
         ) : mode === 'dashboard' ? (
           <StudioDashboard
+            key={dashKey}
             token={session.access_token}
             onEditBrand={(slug, name) => { setConsoleBrand({ slug, name }); setShowComposer(true); }}
             onNewBrand={onNewBrand}
