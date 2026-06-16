@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -71,11 +71,20 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [buildElapsed, setBuildElapsed] = useState(0); // seconds since we first saw this build running
+  const progressAnim = useRef(new Animated.Value(0)).current; // indeterminate build-progress sweep
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const activeStore = stores.find((s) => s.slug === active);
   const siteUrl = siteUrlFor(activeStore);
   const ogImageUrl = activeStore?.ogImageUrl ?? null;
+  // Build status is derived from DURABLE signals (store status + the provision job row), not a
+  // local flag — so reopening the console mid-build still shows "building", and the view flips to
+  // the live site on its own when the forge worker finishes (we poll while building).
+  const provisionRev = revisions.find((r) => r.requestMd.includes('"kind":"provision"'));
+  const building =
+    !siteUrl && (siteAction === 'building' || activeStore?.status === 'building' || provisionRev?.status === 'building');
+  const buildFailed = !siteUrl && !building && provisionRev?.status === 'failed';
 
   const loadStores = useCallback(async () => {
     setLoading(true);
@@ -309,6 +318,33 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     }
   }, [visible, active, loadPosts, loadRevisions, loadProducts, loadInsights]);
 
+  // While a site is building, poll the durable status so the view updates itself — when the forge
+  // worker finishes, `building` flips false (status→ready + deploymentUrl set) and the live site
+  // appears with no action from the creator. Also ticks an elapsed timer + an indeterminate sweep.
+  useEffect(() => {
+    if (!visible || !active || !building) {
+      setBuildElapsed(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setBuildElapsed(0);
+    const tick = setInterval(() => setBuildElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    const poll = setInterval(() => {
+      void loadStores();
+      void loadRevisions();
+    }, 6000);
+    const sweep = Animated.loop(
+      Animated.timing(progressAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
+    );
+    progressAnim.setValue(0);
+    sweep.start();
+    return () => {
+      clearInterval(tick);
+      clearInterval(poll);
+      sweep.stop();
+    };
+  }, [visible, active, building, loadStores, loadRevisions, progressAnim]);
+
   const refundOrder = async (id: string) => {
     setRefundingId(id);
     setNote(null);
@@ -540,10 +576,38 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               {/* Edit the site by chatting with Venus — a brand can also sell on the shop with no site */}
               {!siteUrl ? (
                 <View style={styles.noSite}>
-                  {siteAction === 'building' ? (
+                  {building ? (
                     <>
                       <ThemedText type="code" style={styles.sectionLabel}>BUILDING YOUR SITE</ThemedText>
-                      <ThemedText type="small" style={styles.dim}>Venus is building your storefront — this takes a few minutes. It’ll appear here when it’s ready.</ThemedText>
+                      <ThemedText type="small" style={styles.dim}>Venus is designing and deploying your storefront. It’ll appear here on its own when it’s ready — usually 3–5 minutes.</ThemedText>
+                      <View style={styles.progressTrack}>
+                        <Animated.View
+                          style={[
+                            styles.progressBar,
+                            {
+                              transform: [
+                                {
+                                  translateX: progressAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [-90, 230],
+                                  }),
+                                },
+                              ],
+                            },
+                          ]}
+                        />
+                      </View>
+                      <ThemedText type="code" style={styles.progressMeta}>
+                        {`${Math.floor(buildElapsed / 60)}:${String(buildElapsed % 60).padStart(2, '0')} elapsed · designing → building → deploying`}
+                      </ThemedText>
+                    </>
+                  ) : buildFailed ? (
+                    <>
+                      <ThemedText type="code" style={styles.sectionLabel}>BUILD DIDN’T FINISH</ThemedText>
+                      <ThemedText type="small" style={styles.dim}>That build hit a snag before going live. You can start it again:</ThemedText>
+                      <Pressable onPress={buildSite} style={styles.primaryBtn}>
+                        <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Rebuild site</ThemedText>
+                      </Pressable>
                     </>
                   ) : (
                     <>
@@ -882,6 +946,9 @@ function makeStyles(pal: StudioPalette) {
     pillOn: { backgroundColor: pal.accent, borderColor: pal.accent },
     sectionLabel: { color: pal.accent, letterSpacing: 1.5, fontSize: 11 },
     noSite: { gap: Spacing.two, padding: Spacing.three, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: pal.line },
+    progressTrack: { height: 6, borderRadius: 3, backgroundColor: pal.line, overflow: 'hidden', marginTop: Spacing.one },
+    progressBar: { position: 'absolute', top: 0, bottom: 0, width: 90, borderRadius: 3, backgroundColor: pal.accent },
+    progressMeta: { color: pal.dim, fontSize: 10, letterSpacing: 0.5 },
     sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     adRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
     adThumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: pal.surface },
