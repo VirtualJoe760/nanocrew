@@ -36,6 +36,8 @@ import { DesignCanvas, NODE_H, NODE_W, type CanvasNode } from '@/components/desi
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
 import { DOCK_TAB_CLEARANCE, TemplatesDock } from '@/components/designer/TemplatesDock';
+import { ContentDock } from '@/components/designer/ContentDock';
+import { WebAssetsDock, type WebSlot } from '@/components/designer/WebAssetsDock';
 import { router } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
@@ -226,6 +228,8 @@ export default function DesignScreen() {
   const [blanksLoading, setBlanksLoading] = useState(true);
   const [dockHeight, setDockHeight] = useState(160);
   const [dockCollapsed, setDockCollapsed] = useState(false);
+  // Which target panel the dock shows: apparel to print on, the site's slots, or video.
+  const [dockPanel, setDockPanel] = useState<'products' | 'web' | 'content'>('products');
 
   // A product on the canvas with no design yet → the next step is Generate: collapse the
   // dock and pulse the Generate button red. Everything grouped → dock open for browsing.
@@ -1069,11 +1073,39 @@ export default function DesignScreen() {
           </View>
         </GestureDetector>
         {dockCollapsed ? null : (
-          <TemplatesDock
-            blanks={blanks}
-            loading={blanksLoading}
-            onAdd={(b) => addNode('template', String(b.id))}
-          />
+          <>
+            {/* Pick what you're attaching a generation to: apparel, a website slot, or video. */}
+            <View style={styles.dockToggle}>
+              {(
+                [
+                  ['products', 'Products'],
+                  ['web', 'Web assets'],
+                  ['content', 'Content'],
+                ] as const
+              ).map(([key, label]) => (
+                <Pressable key={key} style={styles.flex} onPress={() => setDockPanel(key)}>
+                  <ThemedView
+                    type={dockPanel === key ? 'backgroundSelected' : 'backgroundElement'}
+                    style={styles.dockToggleTab}>
+                    <ThemedText type="small" themeColor={dockPanel === key ? 'text' : 'textSecondary'}>
+                      {label}
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              ))}
+            </View>
+            {dockPanel === 'products' ? (
+              <TemplatesDock
+                blanks={blanks}
+                loading={blanksLoading}
+                onAdd={(b) => addNode('template', String(b.id))}
+              />
+            ) : dockPanel === 'web' ? (
+              <WebAssetsDock designs={designs} onAssign={(url, slot: WebSlot) => void assignToSite(url, slot)} />
+            ) : (
+              <ContentDock />
+            )}
+          </>
         )}
       </View>
 
@@ -2029,6 +2061,8 @@ const styles = StyleSheet.create({
   genError: { marginTop: Spacing.one },
   comingSoon: { paddingVertical: Spacing.four, alignItems: 'center' },
   assignLabel: { alignSelf: 'center', marginRight: Spacing.one },
+  dockToggle: { flexDirection: 'row', gap: Spacing.one, paddingHorizontal: Spacing.three, marginBottom: Spacing.one },
+  dockToggleTab: { alignItems: 'center', paddingVertical: Spacing.one, borderRadius: 999 },
   effortBlock: { gap: Spacing.one, marginTop: Spacing.one },
   effortHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   effortTrackRow: { flexDirection: 'row', alignItems: 'center', height: 24 },
