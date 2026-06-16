@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { Footer, Nav } from '../site-chrome';
 
-export const metadata: Metadata = { title: 'Contact — Nanocrew' };
+export const metadata: Metadata = { title: 'Contact — Nano Crew' };
 
 export default function Contact() {
   return (
@@ -29,7 +29,7 @@ export default function Contact() {
         </p>
 
         <p className="updated" style={{ marginTop: 36 }}>
-          Nanocrew — AI-native creator commerce.
+          Nano Crew — AI-native creator commerce.
         </p>
       </main>
       <Footer />

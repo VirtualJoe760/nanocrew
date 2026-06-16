@@ -21,7 +21,7 @@ export function WaitlistForm() {
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) throw new Error(d.error || 'Something went wrong');
       setState('ok');
-      setMsg("You're on the list — we'll email you when Nanocrew opens.");
+      setMsg("You're on the list — we'll email you when Nano Crew opens.");
       setEmail('');
     } catch (err) {
       setState('err');

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { Footer, Nav } from '../site-chrome';
 
-export const metadata: Metadata = { title: 'Privacy Policy — Nanocrew' };
+export const metadata: Metadata = { title: 'Privacy Policy — Nano Crew' };
 
 export default function Privacy() {
   return (
@@ -13,7 +13,7 @@ export default function Privacy() {
         <p className="updated">Last updated: June 2026 · Starter draft — review with counsel before launch.</p>
 
         <p>
-          This policy explains what we collect, why, and your choices. It applies to the Nanocrew app
+          This policy explains what we collect, why, and your choices. It applies to the Nano Crew app
           and this website.
         </p>
 

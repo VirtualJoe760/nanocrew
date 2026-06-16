@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { Footer, Nav } from '../../site-chrome';
 
-export const metadata: Metadata = { title: 'Payouts set up — Nanocrew' };
+export const metadata: Metadata = { title: 'Payouts set up — Nano Crew' };
 
 // Where Stripe sends a creator after they finish payout (Connect) onboarding.
 export default function ConnectReturn() {
@@ -16,7 +16,7 @@ export default function ConnectReturn() {
           your brand can take its own sales and the money lands in your account automatically.
         </p>
         <p>
-          Head back to the <strong>Nanocrew app</strong> to finish launching your store. Your payout
+          Head back to the <strong>Nano Crew app</strong> to finish launching your store. Your payout
           status updates there under <em>Account → Payouts</em>.
         </p>
         <p className="updated" style={{ marginTop: 36 }}>

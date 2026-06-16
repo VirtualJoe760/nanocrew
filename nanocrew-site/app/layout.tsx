@@ -3,11 +3,11 @@ import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.SITE_URL || 'https://nanocrew.app'),
-  title: 'Nanocrew — speak your brand into existence',
+  title: 'Nano Crew — speak your brand into existence',
   description:
-    'Nanocrew turns a conversation into a real clothing brand: a shop, a custom storefront website, and the content to sell it — generated for you, run from your phone.',
+    'Nano Crew turns a conversation into a real clothing brand: a shop, a custom storefront website, and the content to sell it — generated for you, run from your phone.',
   openGraph: {
-    title: 'Nanocrew',
+    title: 'Nano Crew',
     description: 'AI-native creator commerce. Talk to Venus; get a brand, a shop, and a website.',
     type: 'website',
   },

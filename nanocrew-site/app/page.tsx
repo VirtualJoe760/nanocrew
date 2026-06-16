@@ -10,7 +10,7 @@ const FEATURES = [
   {
     n: '02',
     title: 'Get a shop and a site',
-    body: 'Nanocrew generates a shop and a custom storefront website for your brand — checkout and fulfillment handled for you from day one.',
+    body: 'Nano Crew generates a shop and a custom storefront website for your brand — checkout and fulfillment handled for you from day one.',
   },
   {
     n: '03',
@@ -28,7 +28,7 @@ export default function Home() {
         <p className="eyebrow">AI-native creator commerce</p>
         <h1>Speak your brand into existence.</h1>
         <p className="sub">
-          Nanocrew turns a conversation into a real clothing brand — a shop, a storefront website, and
+          Nano Crew turns a conversation into a real clothing brand — a shop, a storefront website, and
           the content to sell it. Generated for you. Run from your phone.
         </p>
         <div className="cta">
@@ -58,7 +58,7 @@ export default function Home() {
         <div className="wrap waitlist">
           <h2>Be first in line.</h2>
           <p>
-            Nanocrew launches on iOS soon. Leave your email and we&rsquo;ll let you know the moment you
+            Nano Crew launches on iOS soon. Leave your email and we&rsquo;ll let you know the moment you
             can build your brand.
           </p>
           <WaitlistForm />

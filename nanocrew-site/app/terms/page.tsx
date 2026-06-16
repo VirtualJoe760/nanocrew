@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { Footer, Nav } from '../site-chrome';
 
-export const metadata: Metadata = { title: 'Terms of Service — Nanocrew' };
+export const metadata: Metadata = { title: 'Terms of Service — Nano Crew' };
 
 export default function Terms() {
   return (
@@ -13,13 +13,13 @@ export default function Terms() {
         <p className="updated">Last updated: June 2026 · Starter draft — review with counsel before launch.</p>
 
         <p>
-          These Terms govern your use of Nanocrew (the &ldquo;Service&rdquo;), operated by Nanocrew
+          These Terms govern your use of Nano Crew (the &ldquo;Service&rdquo;), operated by Nano Crew
           (&ldquo;we&rdquo;, &ldquo;us&rdquo;). By creating an account or using the Service you agree to these Terms.
         </p>
 
         <h2>1. The Service</h2>
         <p>
-          Nanocrew lets creators design and run a clothing brand: it generates a storefront and lists
+          Nano Crew lets creators design and run a clothing brand: it generates a storefront and lists
           products that our online fulfillment prints and ships when they sell, with payments handled at
           checkout. Creators are responsible for the brands, content, and products they publish.
         </p>
@@ -34,7 +34,7 @@ export default function Terms() {
         <h2>3. Payments &amp; payouts</h2>
         <p>
           When you sell through your storefront, you are the merchant of record for those sales;
-          Nanocrew collects a platform fee on each transaction, and payments are processed securely at
+          Nano Crew collects a platform fee on each transaction, and payments are processed securely at
           checkout. You are responsible for taxes on your sales.
         </p>
 
