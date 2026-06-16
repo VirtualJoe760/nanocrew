@@ -8,18 +8,41 @@ AI-native creator commerce (Expo / React Native, iOS + Android). A creator talks
 ads, and edit their site by chatting. Built on the proven `stephen-lawyer` create→design→Printful
 loop (sibling dir).
 
+## How to work here (read this before changing anything)
+- **Reuse before you build. Audit first.** Most things already exist — one Supabase identity *is*
+  the `creators` table (id = supabase uid, email unique); orders link to a person by
+  `customerEmail`; blog posts write straight to the DB; domains, Stripe Connect payouts, the design
+  generator, and go-live phases are all built. Before adding a table, model, endpoint, or "system,"
+  search the code **and** the relevant `docs/` division and confirm it isn't already there. This is
+  Joe's repeated, explicit feedback: **stop rebuilding what exists.**
+- **The build flow is settled — make both ends brilliant, don't re-architect it.** Venus (AI #1)
+  authors a build prompt → a conditioned forge Claude (AI #2) builds/edits the site. The lifecycle
+  is **build (instant + presentable) → refine (design generator swaps in real assets) → publish
+  (link a domain, go live, store+fulfilment active, mirrored in the app)**. See `docs/studio/`.
+- **Direct vs forge.** Precise, deterministic actions go through **direct creator APIs** (like blog
+  posts: a DB write — instant, reliable), NOT the forge. Only open-ended creative work (build/edit a
+  whole site) goes to the forge robot. When adding a capability, prefer the direct path.
+- **Don't rush; don't over-engineer.** Confirm the plan, reuse existing pieces, keep changes scoped.
+  Quality + correctness over speed. When in doubt, audit and show the map before writing code.
+
 ## Read the docs first — and update them as you build
 Documentation is a first-class division in **`docs/`**. Start at **`docs/README.md`** (the map) and
 **`AGENTS.md` "Documentation discipline"**: **every code change updates the docs it affects, in the
 same change**, and storefront-facing features are wired at the *template* level so every generated
 brand site ships them.
-- **`docs/STOREFRONT_DATA_CONTRACT.md`** — ✅ THE doc for anything touching a brand website (app ↔
-  platform-api ↔ template data flow, exact API shapes, sync, the custom-site cutover). Read before
-  editing storefronts, the catalogue, or `platform-api/app/api/public/**`.
-- `docs/STOREFRONT_ENGINE.md` — how sites are generated (templates, forge, provisioning) ⚠️ refreshing
-- `docs/ARCHITECTURE.md` — the 4 deployable units · `docs/DATABASE_PLAN.md` — schema (both ⚠️ refreshing)
-- `docs/PAGES.md` · `docs/API.md` · `docs/REMAINING_FEATURES.md` · `docs/PRODUCTION_CHECKLIST.md` · `docs/DEV_BUILD.md`
-- Specs (designed at template level): `docs/FEATURED_PRODUCTS.md`, `docs/COLLECTIONS_LOOKBOOK.md`
+The division is organized into subdirectories — open the one you need:
+- **`docs/storefront/STOREFRONT_DATA_CONTRACT.md`** — THE doc for anything touching a brand website
+  (app ↔ platform-api ↔ template data flow, exact API shapes, sync, custom-site cutover). Read
+  before editing storefronts, the catalogue, or `platform-api/app/api/public/**`.
+- **`docs/storefront/BUILD_QUALITY.md`** + **`docs/studio/FORGE_AI.md`** — the **CURRENT FOCUS**:
+  why generated sites still look like bare templates, and how our AI talks to the forge robot (the
+  mail-merge brief, the unconditioned robot, the swallowed failures, and the fix). Read these before
+  touching provisioning, the brief, or the forge.
+- `architecture/` — ARCHITECTURE · DATABASE_PLAN · API
+- `storefront/` — STOREFRONT_ENGINE · STOREFRONT_DATA_CONTRACT · BUILD_QUALITY · FEATURED_PRODUCTS · COLLECTIONS_LOOKBOOK
+- `studio/` — BUILD_FLOW · FORGE_AI · DESIGN_GENERATOR (the Venus→forge build, refine, publish arc)
+- `accounts/` — AUTH_IDENTITY · ORDERS · BILLING_CREDITS (one Supabase identity; orders by email; plans/credits/Connect)
+- `app/` PAGES · `ops/` PRODUCTION_CHECKLIST + DEV_BUILD · `roadmap/`
 
 ## The four deployable units (one shared Supabase Postgres)
 1. **Mobile app** — this repo. `src/app/**+api.ts` server routes hold the authed creator logic. **The backend runs on Railway** (`backend-production-d7eb.up.railway.app`, persistent Node via `expo serve`) — NOT EAS Hosting (Cloudflare Workers broke postgres-js for authed routes; do not move it back). Deploy with the Railway GraphQL API + an explicit `commitSha` (no auto-deploy webhook yet). The iOS build's `EXPO_PUBLIC_API_URL` points here. See the `production-shipping` memory.
@@ -43,7 +66,7 @@ brand site ships them.
 - `account.tsx` — **Account** (auth, billing portal, account deletion, platform admin)
 
 ## Constraints / gotchas
-- **Dev build only (Expo Go retired as of build #12)**: `expo-notifications` (push, `PUSH_ENABLED=true`) + `expo-apple-authentication` (native Sign in with Apple, `src/lib/oauth.ts`) are now installed, so the project requires an EAS dev/standalone build — Expo Go can't load it. Still NOT installed (server sides done, seams off): IAP (`react-native-iap`, `IAP_ENABLED`), critique screenshots (`react-native-view-shot`). See `docs/DEV_BUILD.md`.
+- **Dev build only (Expo Go retired as of build #12)**: `expo-notifications` (push, `PUSH_ENABLED=true`) + `expo-apple-authentication` (native Sign in with Apple, `src/lib/oauth.ts`) are now installed, so the project requires an EAS dev/standalone build — Expo Go can't load it. Still NOT installed (server sides done, seams off): IAP (`react-native-iap`, `IAP_ENABLED`), critique screenshots (`react-native-view-shot`). See `docs/ops/DEV_BUILD.md`.
 - **Expo Go stale bundle**: only `xcrun simctl terminate booted host.exp.Exponent` + relaunch forces a fresh rebundle.
 - Nano Banana can't emit alpha → magenta chroma-key (`src/lib/transparency.ts`).
 - `AUTO_FIRST_DROP=1` enables server-side first-drop generation (real spend) — uses `INTERNAL_API_KEY` to call the now-authed designer routes.
@@ -60,10 +83,17 @@ auto-deploy is LIVE** (push to `main` → auto-deploy; the GitHub App had lost r
 `nanocrew-api.vercel.app/privacy` + `/terms`, linked in Account. **Security pass done** (no criticals;
 shipped SSRF guard `src/lib/safe-fetch.ts`, merge IDOR fix, constant-time internal-key, opt-in
 Printful-webhook token). Remaining is mostly Joe's config — see the **task list** +
-`docs/PRODUCTION_CHECKLIST.md`. Top open: **Stripe go-live** (deferred to last), **Railway billing**
+`docs/ops/PRODUCTION_CHECKLIST.md`. Top open: **Stripe go-live** (deferred to last), **Railway billing**
 (trial expiring → backend offline), **Apple IAP** (next build; react-native-iap v15 StoreKit-2 vs the
 server's legacy verifyReceipt — pick a path), and provisioning end-to-end verify (needs one Pro test
 brand). See the `production-shipping` memory.
+
+**Current focus — build quality.** The pipeline works end-to-end (Alpha Master built from a Venus
+chat), but generated sites look like bare templates, not brands (blank hero, off-brand stock
+placeholders, broken CTA — see `docs/storefront/BUILD_QUALITY.md`). The fix is the build-quality
+epic: Venus *authors* a masterful prompt (not a mail-merge), a **Master CLAUDE.md** conditions the
+forge robot, the robot gets **eyes + a self-critique loop** (no more `|| true` silent-fail), and the
+**build→refine→publish** arc gets stitched together. See `docs/studio/FORGE_AI.md` + the task list.
 
 ## Run
 `npm run ios` · `npm run android` · `npm run web`

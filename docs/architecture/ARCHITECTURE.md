@@ -3,10 +3,10 @@
 Nanocrew is an AI-native creator commerce platform: a creator talks to **Venus** (voice/typed
 AI) to define a clothing brand, and the system auto-generates a Printful-backed shop **and** a
 per-brand storefront website. This document is the system map. See also
-[DATABASE_PLAN.md](DATABASE_PLAN.md), [STOREFRONT_ENGINE.md](STOREFRONT_ENGINE.md) (provisioning
-detail), [STOREFRONT_DATA_CONTRACT.md](STOREFRONT_DATA_CONTRACT.md) (catalogue data flow),
-[PAGES.md](PAGES.md), [API.md](API.md), [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md),
-[REMAINING_FEATURES.md](REMAINING_FEATURES.md).
+[DATABASE_PLAN.md](DATABASE_PLAN.md), [STOREFRONT_ENGINE.md](../storefront/STOREFRONT_ENGINE.md) (provisioning
+detail), [STOREFRONT_DATA_CONTRACT.md](../storefront/STOREFRONT_DATA_CONTRACT.md) (catalogue data flow),
+[PAGES.md](../app/PAGES.md), [API.md](API.md), [PRODUCTION_CHECKLIST.md](../ops/PRODUCTION_CHECKLIST.md),
+[REMAINING_FEATURES.md](../roadmap/REMAINING_FEATURES.md).
 
 ## The four deployable units
 

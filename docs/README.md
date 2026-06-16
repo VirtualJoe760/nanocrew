@@ -10,43 +10,71 @@ in sync with the app's catalogue.
 > level so every generated brand site ships them. When a doc disagrees with the code, that's a bug —
 > fix it.
 
-## 🧭 Core system specs (how it's *supposed* to work — source of truth)
+The docs are organized into divisions. Start here, then open the division you need.
 
-| Doc | Covers | State |
-|---|---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | The four deployable units + end-to-end flow | ✅ current (2026-06-15) |
-| [DATABASE_PLAN.md](DATABASE_PLAN.md) | Multi-tenant schema (stores, catalogues, products, variants, credits, billing) | ✅ current (2026-06-15) |
-| [STOREFRONT_ENGINE.md](STOREFRONT_ENGINE.md) | How sites are generated: templates, brand.json, the forge, provisioning, revision | ✅ current (2026-06-15) |
-| **[STOREFRONT_DATA_CONTRACT.md](STOREFRONT_DATA_CONTRACT.md)** | **App ↔ platform-api ↔ template data flow, exact API shapes, sync, cutover** | ✅ current (2026-06-15) |
-| [API.md](API.md) | Endpoint reference (app routes + platform-api) | ✅ current (2026-06-15) |
-| [PAGES.md](PAGES.md) | Every screen/section (5 tabs + Studio modals) | ✅ current (2026-06-15) |
+## 🏛 Architecture (`architecture/`)
 
-## 🧩 Feature specs (what to build, designed at the template level)
-
-| Doc | |
+| Doc | Covers |
 |---|---|
-| [FEATURED_PRODUCTS.md](FEATURED_PRODUCTS.md) | Creators pick featured products that headline the home + market |
-| [COLLECTIONS_LOOKBOOK.md](COLLECTIONS_LOOKBOOK.md) | Collections with cover images, browsable as a lookbook (site + app) |
+| [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) | The four deployable units (app · platform-api · templates · forge) + end-to-end flow |
+| [architecture/DATABASE_PLAN.md](architecture/DATABASE_PLAN.md) | The shared multi-tenant schema (creators, stores, catalogues, products, variants, orders, credits, billing) |
+| [architecture/API.md](architecture/API.md) | Endpoint reference — app routes (Railway) + platform-api (Vercel) |
 
-## 🚀 Plan & ship
+## 🏪 Storefront engine (`storefront/`) — how brand sites are made & served
 
-- [REMAINING_FEATURES.md](REMAINING_FEATURES.md) — what's still open, by blocker.
-- [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md) — go-live checklist (security, payments, env, App Store).
-- [DEV_BUILD.md](DEV_BUILD.md) — EAS dev-build runbook (IAP, push, native Apple).
-- [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) · [LIFECYCLE_ROADMAP.md](LIFECYCLE_ROADMAP.md) — history + phases.
+| Doc | Covers |
+|---|---|
+| **[storefront/STOREFRONT_DATA_CONTRACT.md](storefront/STOREFRONT_DATA_CONTRACT.md)** | **THE doc for anything touching a brand site** — app ↔ platform-api ↔ template data flow, exact API shapes (nested variants), sync, the custom-site cutover |
+| [storefront/STOREFRONT_ENGINE.md](storefront/STOREFRONT_ENGINE.md) | How sites are generated: templates, brand.json, the forge, the provision/revision queue |
+| [storefront/BUILD_QUALITY.md](storefront/BUILD_QUALITY.md) | Why one generated site looks like a brand and another doesn't — the A/B, root causes, the target |
+| [storefront/FEATURED_PRODUCTS.md](storefront/FEATURED_PRODUCTS.md) | Creators pick featured products that headline the home + market |
+| [storefront/COLLECTIONS_LOOKBOOK.md](storefront/COLLECTIONS_LOOKBOOK.md) | Collections with cover images, browsable as a lookbook (site + app) |
+
+## 🎨 Studio (`studio/`) — the creator's build → refine → publish arc
+
+| Doc | Covers |
+|---|---|
+| [studio/README.md](studio/README.md) | Index of the studio division |
+| [studio/BUILD_FLOW.md](studio/BUILD_FLOW.md) | Talk to Venus → forge builds a presentable site → refine with real assets → publish. **Honest about CURRENT vs TARGET.** |
+| [studio/FORGE_AI.md](studio/FORGE_AI.md) | How our AI talks to the forge robot — the mail-merge brief, the unconditioned robot, the swallowed failures, and the plan. **Heart of the build-quality effort.** |
+| [studio/DESIGN_GENERATOR.md](studio/DESIGN_GENERATOR.md) | The Design tab: products (Printful publish), model shots, scene video — the asset pipeline that replaces the forge's temporary placeholders |
+
+## 👤 Accounts (`accounts/`) — identity, orders, money
+
+| Doc | Covers |
+|---|---|
+| [accounts/README.md](accounts/README.md) | Index of the accounts division |
+| [accounts/AUTH_IDENTITY.md](accounts/AUTH_IDENTITY.md) | One Supabase identity mirrored by `creators`; app (local) vs platform-api (remote) token verify; store ownership + collaborators; the TARGET unified account |
+| [accounts/ORDERS.md](accounts/ORDERS.md) | Orders keyed by `customerEmail` only; creator order views; the TARGET shopper "my orders" by email match |
+| [accounts/BILLING_CREDITS.md](accounts/BILLING_CREDITS.md) | Plans/subscriptions, AI credits (accounts + ledger + costs), Stripe Connect payouts |
+
+## 📱 App (`app/`)
+
+| Doc | Covers |
+|---|---|
+| [app/PAGES.md](app/PAGES.md) | Every screen/section — the 5 tabs (Feed · Market · Studio · Design · Account) + their modals |
+
+## 🚀 Ops & roadmap (`ops/`, `roadmap/`)
+
+| Doc | Covers |
+|---|---|
+| [ops/PRODUCTION_CHECKLIST.md](ops/PRODUCTION_CHECKLIST.md) | Go-live checklist (security, payments, env, App Store) |
+| [ops/DEV_BUILD.md](ops/DEV_BUILD.md) | EAS dev-build runbook (IAP, push, native Apple) |
+| [roadmap/REMAINING_FEATURES.md](roadmap/REMAINING_FEATURES.md) | What's still open, by blocker |
+| [roadmap/FEATURE_ROADMAP.md](roadmap/FEATURE_ROADMAP.md) · [roadmap/LIFECYCLE_ROADMAP.md](roadmap/LIFECYCLE_ROADMAP.md) | History + phases |
 
 ## ✋ Two invariants that bite if forgotten
 
 1. **Schema is duplicated.** `platform-api/db/schema.ts` is a copy of `src/db/schema.ts` — change
-   both on every migration.
+   both on every migration (see [architecture/DATABASE_PLAN.md](architecture/DATABASE_PLAN.md)).
 2. **The brand palette lives in three files** (`src/constants/theme.ts`, `src/lib/studio-palette.ts`,
    `src/app/studio.tsx`) — change all three together.
 
----
+## 🔭 Current focus — build quality
 
-### Keeping the index honest
-
-All six core specs were refreshed against the code on 2026-06-15 (the Railway move, the
-forge-worker provisioning queue, the Account rework + in-app store, storefront auto-revalidation,
-the nested-variant catalogue contract). When you change a system and its doc no longer matches,
-flip that row to ⚠️ and note what drifted — a stale ✅ is worse than an honest ⚠️.
+The pipeline runs end-to-end, but the **quality of what the forge builds** is the open problem:
+generated sites look like bare templates, not brands (see
+[storefront/BUILD_QUALITY.md](storefront/BUILD_QUALITY.md) and
+[studio/FORGE_AI.md](studio/FORGE_AI.md)). The fix — a masterful AI-authored prompt + a conditioned,
+sighted forge robot + a build→refine→publish arc — is tracked as the build-quality epic in the
+project task list.

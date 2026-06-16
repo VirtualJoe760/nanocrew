@@ -15,16 +15,16 @@ things are supposed to work*; the code is the source of truth for *how they curr
 those disagree, that's a bug in one of them — surface it.
 
 **The rule: every code change updates the docs it affects, in the same change.**
-- Touch the schema → update [`docs/DATABASE_PLAN.md`](docs/DATABASE_PLAN.md) **and** sync
+- Touch the schema → update [`docs/DATABASE_PLAN.md`](docs/architecture/DATABASE_PLAN.md) **and** sync
   `platform-api/db/schema.ts`.
-- Touch an API route or its response shape → update [`docs/API.md`](docs/API.md) and, if a
-  storefront reads it, [`docs/STOREFRONT_DATA_CONTRACT.md`](docs/STOREFRONT_DATA_CONTRACT.md).
+- Touch an API route or its response shape → update [`docs/API.md`](docs/architecture/API.md) and, if a
+  storefront reads it, [`docs/STOREFRONT_DATA_CONTRACT.md`](docs/storefront/STOREFRONT_DATA_CONTRACT.md).
 - Touch how storefronts get/render data, the provisioning pipeline, or the sync →
-  [`docs/STOREFRONT_ENGINE.md`](docs/STOREFRONT_ENGINE.md) +
-  [`docs/STOREFRONT_DATA_CONTRACT.md`](docs/STOREFRONT_DATA_CONTRACT.md).
+  [`docs/STOREFRONT_ENGINE.md`](docs/storefront/STOREFRONT_ENGINE.md) +
+  [`docs/STOREFRONT_DATA_CONTRACT.md`](docs/storefront/STOREFRONT_DATA_CONTRACT.md).
 - Build a storefront-facing feature → it must be wired at the **template level**
   (`nanocrew-templates`) so every generated brand site gets it, and its spec in `docs/` must say so.
-- Add/finish a feature → move it in [`docs/REMAINING_FEATURES.md`](docs/REMAINING_FEATURES.md) and
+- Add/finish a feature → move it in [`docs/REMAINING_FEATURES.md`](docs/roadmap/REMAINING_FEATURES.md) and
   update its spec.
 
 **If you change behavior and the doc still describes the old behavior, you are not done.** A PR

@@ -2,7 +2,7 @@
 
 Reference for every user-facing screen and major section. Five tabs (`src/components/app-tabs.tsx`,
 `src/app/*.tsx`) plus the modals/components each one opens. App chrome follows the brand system —
-cool monochrome (paper / near-black) + platinum silver, no gold (see [ARCHITECTURE.md](ARCHITECTURE.md)).
+cool monochrome (paper / near-black) + platinum silver, no gold (see [ARCHITECTURE.md](../architecture/ARCHITECTURE.md)).
 The tab bar uses a platinum-silver tint with thin outline glyphs and an opaque (mode-aware) background.
 **Individual brand storefronts keep their OWN palette** — only the app chrome is monochrome.
 
