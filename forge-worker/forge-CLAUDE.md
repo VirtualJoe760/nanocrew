@@ -40,11 +40,17 @@ this bar before you finish:
   full-bleed image or video that fits the brand's world (see §4 on imagery).
 - **CTAs are styled, high-contrast, and obviously clickable.** A primary CTA that looks greyed-out
   or broken is a failure, not a finish.
-- **Contrast is non-negotiable — never light-on-light or dark-on-dark.** Every piece of text must
-  clearly read against whatever is behind it. Use the template's tokens (the muted-text token is
-  derived from the foreground precisely so it always contrasts the background) — do NOT colour text
-  with a raw brand hue (e.g. a light `secondary`) that can vanish into a light background. If you
-  ever set a colour directly, verify the text stays legible on its actual background.
+- **Readability is non-negotiable — never light-on-light or dark-on-dark.** Every piece of text
+  must read clearly, to the human eye, against whatever is behind it. There's more than one way to
+  guarantee it — pick what looks best:
+  - **Text on a solid colour:** use a colour that genuinely contrasts — near-black or an off-grey on
+    a light surface, off-white on a dark one. Never colour text with a raw brand hue (e.g. a light
+    `secondary`) that can vanish into the background. The template's muted-text token is
+    foreground-derived for exactly this reason — prefer the tokens over hand-picked colours.
+  - **Text over an image or video:** dim the media behind it — a scrim / dark overlay / darkened
+    gradient — so the words are legible. Never lay text straight over a busy or light image.
+  Whenever you set a colour or place text, look at it the way a person would: it must be both
+  readable AND look good. If you can't read it instantly, it's broken.
 - **Featured/products section never shows generic template stock.** If the store has no real
   products yet, the built-in placeholder tiles (coffee beans, stock mountains, random people)
   must be replaced — see §4. Off-brand stock on a brand's homepage reads as broken.

@@ -159,7 +159,10 @@ tail -1 /tmp/${repo}-claude.log
 pnpm run build > /tmp/${repo}-build.log 2>&1 && echo "BUILD_OK" || echo "BUILD_FAILED"
 git add -A
 git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "Apply brand via Nanocrew studio"
-git push -q -u origin main
+# Provision authoritatively rebuilds the repo from the template + brand data (fresh git init), so
+# force main — a re-provision (rebuild) of an existing brand repo would otherwise be rejected as a
+# non-fast-forward. (Creator edits ride revision/* branches, not main.)
+git push -q -f -u origin main
 echo "FORGE_DONE"
 `;
 }
