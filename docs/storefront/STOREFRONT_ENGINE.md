@@ -1,4 +1,4 @@
-# Nanocrew Storefront Engine
+# Nano Crew Storefront Engine
 
 The system that turns a Studio interview into a live brand website — fast, cheap, and
 without writing new code per store. This document is the source of truth for **how a site
@@ -139,7 +139,7 @@ contains *zero* `process.env` reads — everything is read from `brand.json` via
   per-store, so there is nothing per-brand to "standardize" — the secrets live in exactly one place.
 - **Auth is unified the same way.** `lib/platform-auth.ts` authenticates against
   `brand.platform.supabaseUrl` + `supabaseAnonKey` — the same Supabase as the app — so "Login with
-  Nanocrew" is built into every template with no per-site config.
+  Nano Crew" is built into every template with no per-site config.
 - **`brand.json` IS the standard config, and it auto-ships.** It's written deterministically on the
   app server and committed into the repo by the forge worker, so a brand works out of the gate.
 
@@ -186,7 +186,7 @@ creator told Venus — same constraints, "apply ONLY the requested change" frami
 
 **Where the builder's guidance comes from.** The forge's headless Claude is steered by: a **global
 Master `CLAUDE.md`** at `/home/forge/.claude/CLAUDE.md` (source `forge-worker/forge-CLAUDE.md`) that
-carries the standing invariants for every job — you're branding a Nanocrew storefront; `brand.json`
+carries the standing invariants for every job — you're branding a Nano Crew storefront; `brand.json`
 is law; catalogue/auth/checkout come from the platform; the quality/anti-kitsch bar; always
 `pnpm run build` + self-check; **and the rule that the forge executes a concrete plan rather than
 decoding the creator (Venus already did that)** — plus the **per-repo** files: `brand.json` (data),
@@ -237,7 +237,7 @@ provision path no longer dials them — the worker owns all forge execution.)
 
 ## Commerce & data — see the data contract
 
-Brand sites are **headless storefronts on the Nanocrew platform API**. Everything about how a
+Brand sites are **headless storefronts on the Nano Crew platform API**. Everything about how a
 deployed template reads its catalogue (the nested-variant product shape, collections,
 checkout with the platform application fee), how it stays in sync (ISR `revalidate: 300` +
 `revalidateStorefront(slug)` on-demand rebuild), and how a bespoke site like
@@ -288,6 +288,6 @@ Wired into all 4 templates so each generated site is fully indexable, with **no 
 revenue + order count + 30-day traffic, order list. Traffic comes from a public beacon —
 brand sites POST `/api/public/beacon` per pageview into a `page_views` daily counter.
 
-**Platform admin — inside the Nanocrew app.** Role-gated section on Account backed by
+**Platform admin — inside the Nano Crew app.** Role-gated section on Account backed by
 `/api/admin/platform`: all stores w/ status, platform-wide orders/revenue, and adjustment
 actions (suspend store, re-provision).

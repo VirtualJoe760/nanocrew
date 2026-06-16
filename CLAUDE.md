@@ -71,7 +71,19 @@ The division is organized into subdirectories — open the one you need:
 - Nano Banana can't emit alpha → magenta chroma-key (`src/lib/transparency.ts`).
 - `AUTO_FIRST_DROP=1` enables server-side first-drop generation (real spend) — uses `INTERNAL_API_KEY` to call the now-authed designer routes.
 
-## Status (2026-06-15)
+## Status (2026-06-16)
+The product is now **Nano Crew** (spaced in prose; the `nanocrew` slug/URLs/repo names are unchanged).
+The app lands on **Studio** — the **social feed is hidden for v1** (code preserved at the `/feed`
+route, no tab; returns in v2), so the tab bar is **Studio · Design · Market · Account**. **Close to
+production-ready.**
+
+Shipped this session: the **mini-CMS** (Studio → ✦ Customize edits site copy/colors/fonts live with
+no rebuild — `stores.site_config`, migration 0018, `POST /api/creator/site-config` → public
+`GET /api/public/stores/:slug/site-config`, read by all 4 templates), **✦ Enhance** (AI rewrite per
+text box, `/api/creator/enhance-copy`), a full **SEO layer** in all 4 templates (canonical URLs +
+Organization/Product/BlogPosting JSON-LD, OpenGraph/Twitter, sitemap + robots), a header **cart icon**,
+the **Account screen rebrand**, and the **Design-tab brand→collection picker**.
+
 **LIVE on TestFlight**; backend on **Railway** (was EAS Hosting — Workers couldn't keep postgres-js
 alive). **Build #12 building/submitting** with **native Sign in with Apple** (`expo-apple-authentication`
 → `signInWithIdToken`, no client secret) + **push** (`expo-notifications`, `PUSH_ENABLED=true`). The
@@ -88,12 +100,12 @@ Printful-webhook token). Remaining is mostly Joe's config — see the **task lis
 server's legacy verifyReceipt — pick a path), and provisioning end-to-end verify (needs one Pro test
 brand). See the `production-shipping` memory.
 
-**Current focus — build quality.** The pipeline works end-to-end (Alpha Master built from a Venus
-chat), but generated sites look like bare templates, not brands (blank hero, off-brand stock
-placeholders, broken CTA — see `docs/storefront/BUILD_QUALITY.md`). The fix is the build-quality
-epic: Venus *authors* a masterful prompt (not a mail-merge), a **Master CLAUDE.md** conditions the
-forge robot, the robot gets **eyes + a self-critique loop** (no more `|| true` silent-fail), and the
-**build→refine→publish** arc gets stitched together. See `docs/studio/FORGE_AI.md` + the task list.
+**Build quality — mostly shipped.** The build-quality epic's first two fixes are in: Venus now
+*authors* the build brief (`authorBrandBrief`, gemini-2.5-pro — not a mail-merge) and a **Master
+CLAUDE.md** (`forge-worker/forge-CLAUDE.md` → `/home/forge/.claude/CLAUDE.md`) conditions the forge
+robot. What remains: give the robot **eyes + a self-critique loop** on the provision path and a real
+quality gate (no more `|| true` silent-fail flipping the store to `ready`). See
+`docs/storefront/BUILD_QUALITY.md` + `docs/studio/FORGE_AI.md`.
 
 ## Run
 `npm run ios` · `npm run android` · `npm run web`

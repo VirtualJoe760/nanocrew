@@ -1,7 +1,35 @@
-# Nanocrew — Remaining Features Audit
+# Nano Crew — Remaining Features Audit
 
-Status of everything still open, grouped by what unblocks it. As of 2026-06-13.
+**The canonical roadmap.** Status of everything, grouped by what unblocks it. As of 2026-06-16.
 Legend: 🟢 built · 🟡 partial · ⚪ not started · 🔒 blocked on an external/native dependency.
+
+For the brand build→domain→live→Connect **lifecycle** specifically, see
+[LIFECYCLE_ROADMAP.md](LIFECYCLE_ROADMAP.md) (Phases A–D code-complete, inert until Joe's config).
+The original designer-parity plan lives in [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) (delivered;
+historical).
+
+## 0. Shipped this session (2026-06-15/16)
+- 🟢 **Mini-CMS (✦ Customize)** — Studio brand console → `SiteEditor` edits site copy/colors/fonts
+  live with **no rebuild**: `stores.site_config` (migration 0018) via `POST /api/creator/site-config`;
+  served by `GET /api/public/stores/:slug/site-config`; read by all 4 templates' `lib/site-config.ts`.
+  Documented in STOREFRONT_DATA_CONTRACT, PAGES, DATABASE_PLAN. The **direct** (instant, deterministic)
+  edit path — distinct from the forge (open-ended redesigns).
+- 🟢 **✦ Enhance** — every mini-CMS text box has an AI rewrite-in-brand-voice button
+  (`POST /api/creator/enhance-copy`, gemini-2.5-flash, free + rate-limited like `/api/enhance`).
+- 🟢 **SEO layer (all 4 templates)** — `lib/seo.ts` (canonical siteUrl + Organization JSON-LD),
+  layout metadata + OpenGraph/Twitter, product-page `generateMetadata` + Product JSON-LD (offers),
+  blog-post `generateMetadata` + BlogPosting JSON-LD, `app/sitemap.ts`, `app/robots.ts`. See
+  STOREFRONT_ENGINE "SEO".
+- 🟢 **Cart icon** — templates' header shows a cart glyph + count badge (was a "Cart" text link).
+- 🟢 **Account screen rebrand** — branded NC header + eyebrow; Sign out neutral, red reserved for
+  Delete. (PAGES §5.)
+- 🟢 **Design-tab brand→collection picker** — the tab opens with a setup popup (pick brand, then
+  collection); finished web-slot groups (hero/cover/logo) auto-clear off the canvas. (PAGES §4.)
+- 🟢 **Feed hidden for v1** — the social feed is removed from the tab bar (code preserved at `/feed`,
+  returns in v2). The app now lands on **Studio**; tabs are **Studio · Design · Market · Account**.
+- 🟢 **Build-quality (partial)** — Venus authors the build brief (`authorBrandBrief`) + Master
+  `CLAUDE.md` conditions the forge robot, both shipped. Remaining: sighted robot + real quality gate
+  (see §7).
 
 ## 1. Blocked on a native dev build (can't run in Expo Go)
 These three all unlock with **one** EAS dev build. The server sides are already built.
@@ -55,7 +83,7 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 - 🟢 **In-app platform admin** — done: Account → "Platform admin" (admin emails only) opens a
   metrics + all-stores overview. (Task #25)
 - 🟢 **Creator /admin on the brand websites** — done (Task #24): the brand-site `/admin` now has the
-  full surface — Nanocrew sign-in (magic-link/password), revenue/orders/views, recent orders +
+  full surface — Nano Crew sign-in (magic-link/password), revenue/orders/views, recent orders +
   tracking, the **Journal** composer, and a new **Edit your site** panel (`components/blocks/site-editor.tsx`,
   synced to all 4 templates) that requests changes → reviews the preview → publishes, using new
   CORS'd platform-api routes `POST /api/creator/revise`, `GET /api/creator/revisions`,
@@ -79,3 +107,13 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 - ⚪ **On-device test pass** of the recent designer + selection features. (Task #1)
 - ⚪ **End-to-end live tests:** a real subscribe → store-launch → first-drop → purchase → fulfilment
   run with live keys; a real critique → revision → approve → merge run from a device.
+
+## 7. Build quality — remaining (the sighted forge)
+The first two of three fixes shipped (Venus authors the brief; Master `CLAUDE.md` conditions the
+robot — see [../studio/FORGE_AI.md](../studio/FORGE_AI.md) and
+[../storefront/BUILD_QUALITY.md](../storefront/BUILD_QUALITY.md)). Still open:
+- ⚪ **Give the forge robot eyes + a self-critique loop on the provision path** — screenshot the
+  built site, judge it against the brief + quality checklist, iterate before finishing. (The
+  annotated-screenshot rig already used for revisions is the foundation.)
+- ⚪ **A real quality gate** — stop swallowing the robot's exit code (`|| true`) and gate the
+  `ready`-flip on more than "does it compile," so a weak build doesn't silently ship.

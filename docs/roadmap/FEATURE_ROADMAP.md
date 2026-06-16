@@ -1,4 +1,11 @@
-# Nanocrew Designer — Feature Roadmap
+# Nano Crew Designer — Feature Roadmap (HISTORICAL · delivered)
+
+> **Status: this plan is delivered.** The designer parity (Track A), the Supabase/DB foundation
+> (Track B), and the full GAMEPLAN v2 (Phases 1–4: foundation, designer, market+feed, Studio + web
+> portal) all shipped. This file is kept for **history and rationale** — for the live, canonical
+> status of what's open vs. done, see **[REMAINING_FEATURES.md](REMAINING_FEATURES.md)**; for the
+> brand build→domain→live→Connect lifecycle, see **[LIFECYCLE_ROADMAP.md](LIFECYCLE_ROADMAP.md)**.
+> Nothing below is actively tracked here anymore.
 
 Porting the stephen-lawyer designer (`docs/DESIGN_GENERATOR.md` in that repo) to the native
 app. This tracks what's done, what's left, how each is implemented, and how I verify it.

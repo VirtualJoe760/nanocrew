@@ -43,7 +43,7 @@ shared POS (see [STOREFRONT_DATA_CONTRACT.md](../storefront/STOREFRONT_DATA_CONT
 
 The in-app store proxies this via `/api/store/[slug]/checkout`; storefront templates POST it
 directly. Either way the customer's identity is whatever they type into **Stripe Checkout**, not
-a Nanocrew login.
+a Nano Crew login.
 
 ## How the email gets filled — the webhook · `platform-api/app/api/public/stripe-webhook/route.ts`
 
@@ -56,7 +56,7 @@ stripePaymentIntentId: …,
 shippingAddress: collected?.shipping_details ?? s.customer_details ?? null,
 ```
 
-So `customerEmail` is **populated from Stripe**, not from any Nanocrew session. It then submits
+So `customerEmail` is **populated from Stripe**, not from any Nano Crew session. It then submits
 the paid order to Printful (`submitOrderToPrintful`). Other events: `checkout.session.expired` →
 `cancelled`; `charge.refunded` (full) → `refunded`. Further fulfilment transitions
 (`shipped`, `delivered`, `on_hold`, `returned`, `failed`) come from the Printful webhook.
@@ -90,7 +90,7 @@ receipt email and the order's tracking link.
 
 ## Target — shopper "my orders" by email match (task list #23–24, #26, #28)
 
-Once a brand site can create a real Nanocrew account ([AUTH_IDENTITY.md](AUTH_IDENTITY.md)
+Once a brand site can create a real Nano Crew account ([AUTH_IDENTITY.md](AUTH_IDENTITY.md)
 "Target"), a logged-in shopper gets a "my orders" view that works **with no schema change**:
 
 - **Match `orders.customerEmail` to the logged-in account's email.** The account's email comes
@@ -98,7 +98,7 @@ Once a brand site can create a real Nanocrew account ([AUTH_IDENTITY.md](AUTH_ID
   equal, the order is "yours." (`creators.email` is UNIQUE, so the match is unambiguous.)
 - A new **shopper-scoped, authed** read endpoint (distinct from the creator routes, which scope
   by store) returns the caller's orders where `customerEmail = <their account email>`.
-- Surfaced in **two places**: on the brand site (a shopper account page) **and** in the Nanocrew
+- Surfaced in **two places**: on the brand site (a shopper account page) **and** in the Nano Crew
   app (the buyer's order history across every brand they've purchased from) — one account, one
   order history, everywhere.
 

@@ -161,8 +161,8 @@ If a site shows stale products after a change: it either (a) hasn't rebuilt yet 
 
 ## Custom sites & the cutover (the stephenlawyer.clothing case)
 
-Some brands run a **bespoke** site, not a Nanocrew template — `stephenlawyer.clothing` is the
-original standalone app Nanocrew was prototyped from (its own Sanity CMS, its own Drizzle DB, its own
+Some brands run a **bespoke** site, not a Nano Crew template — `stephenlawyer.clothing` is the
+original standalone app Nano Crew was prototyped from (its own Sanity CMS, its own Drizzle DB, its own
 NextAuth/cart/checkout). Such a site **does not read our catalogue**, so it drifts permanently
 (it still showed 28 products incl. deleted camo while our DB had 21).
 

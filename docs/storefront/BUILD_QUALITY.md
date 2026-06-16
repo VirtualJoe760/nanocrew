@@ -45,7 +45,7 @@ site against a fresh forge-generated one.
 2. **Refine (creator's editorial control):** in the **design generator** the creator makes the real
    products, featured images, and video; these **progressively replace** the temporary imagery.
 3. **Publish (go live):** link a domain, push live with **zero placeholders**, a faithful brand,
-   and the **store + fulfilment active and mirrored in the Nanocrew app**.
+   and the **store + fulfilment active and mirrored in the Nano Crew app**.
 
 ## What "good" requires (the checklist the robot should pass)
 

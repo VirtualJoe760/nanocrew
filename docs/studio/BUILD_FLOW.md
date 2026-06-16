@@ -22,7 +22,7 @@ revise) and [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](../storefront/STOREF
 3. REFINE      creator makes real products / model shots   → real assets PROGRESSIVELY REPLACE
                / scene video in the Design generator          the temporary placeholders
 4. PUBLISH     link a domain, go live                      → zero placeholders, store + fulfilment
-                                                              active, mirrored in the Nanocrew app
+                                                              active, mirrored in the Nano Crew app
 ```
 
 ## 1 · Interview — the creator talks to Venus
@@ -112,7 +112,8 @@ The final step turns a refined site into a launched brand:
   copy in the brand's voice, palette/typography faithful to what the creator chose.
 - **Store + fulfilment active** — checkout runs through the central POS (`/api/public/checkout` →
   Stripe → Printful); no secret ever lives in the brand repo.
-- **Mirrored in the Nanocrew app** — the same products feed the Market tab and the feed, because
+- **Mirrored in the Nano Crew app** — the same products feed the Market tab (and the feed when it
+  returns in v2 — the social feed is hidden for v1), because
   publish writes to the shared catalogue (`/api/publish` mirrors into `products`/`variants`).
 
 ## The honest summary

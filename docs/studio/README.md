@@ -1,6 +1,6 @@
 # Studio
 
-The creator-facing half of Nanocrew: a creator **talks to Venus** → a brand + Printful shop +
+The creator-facing half of Nano Crew: a creator **talks to Venus** → a brand + Printful shop +
 storefront website get **generated** → the creator **refines** the site with real products, model
 shots, and scene video in the design generator → **publishes** (domain, go-live, store + fulfilment
 active, mirrored in the app).

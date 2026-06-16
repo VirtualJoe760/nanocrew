@@ -1,4 +1,4 @@
-# Nanocrew Database Plan
+# Nano Crew Database Plan
 
 The persistence layer is a **central multi-tenant Postgres** (Supabase) — every creator builds
 their own store/website through the app, sells auto-fulfilled clothing, and is billed via Stripe.
@@ -228,7 +228,7 @@ balance is the running sum, cached on the account.
 ## 10. Creator billing
 
 ### `subscriptions`
-Creator pays Nanocrew to run their store.
+Creator pays Nano Crew to run their store.
 - `id`, `creatorId` → `creators` (cascade).
 - `stripeCustomerId` (not null), `stripeSubscriptionId` (**unique**).
 - `plan` (`subscription_plan`, default `free`), `status` (`subscription_status`, default `active`).

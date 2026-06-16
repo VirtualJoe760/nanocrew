@@ -1,6 +1,6 @@
-# Nanocrew — Architecture
+# Nano Crew — Architecture
 
-Nanocrew is an AI-native creator commerce platform: a creator talks to **Venus** (voice/typed
+Nano Crew is an AI-native creator commerce platform: a creator talks to **Venus** (voice/typed
 AI) to define a clothing brand, and the system auto-generates a Printful-backed shop **and** a
 per-brand storefront website. This document is the system map. See also
 [DATABASE_PLAN.md](DATABASE_PLAN.md), [STOREFRONT_ENGINE.md](../storefront/STOREFRONT_ENGINE.md) (provisioning

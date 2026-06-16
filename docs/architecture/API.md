@@ -1,4 +1,4 @@
-# Nanocrew — API Reference
+# Nano Crew — API Reference
 
 Two HTTP surfaces, one shared Supabase Postgres:
 

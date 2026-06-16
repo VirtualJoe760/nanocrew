@@ -1,6 +1,6 @@
 # Auth & Identity
 
-How a person becomes known to Nanocrew, how the server proves it on every request, and what
+How a person becomes known to Nano Crew, how the server proves it on every request, and what
 that identity is allowed to touch. **Read this before editing anything that signs a user in,
 reads a token, or scopes data to a creator.**
 
@@ -108,7 +108,7 @@ Paid AI endpoints layer credits (`src/lib/credits.ts`) and rate-limiting
 ## Storefront `/admin` auth — CREATOR-ONLY today · `nanocrew-templates/templates/*/lib/platform-auth.ts`
 
 Every generated brand site ships an `/admin` that calls **platform-api** (not the app) with the
-**same Supabase account** as the Nanocrew app — no Supabase SDK in the template, just the REST
+**same Supabase account** as the Nano Crew app — no Supabase SDK in the template, just the REST
 endpoints (`lib/platform-auth.ts`, present in all four templates):
 
 - `sendMagicLink(email)` → `POST {supabaseUrl}/auth/v1/otp` **with `create_user: false`**.
@@ -117,7 +117,7 @@ endpoints (`lib/platform-auth.ts`, present in all four templates):
 
 **The load-bearing fact: `create_user: false` means a brand site cannot create a new account.**
 There is **no shopper signup** anywhere in the templates today — `/admin` is for the creator who
-already has a Nanocrew account to manage their own store. A random visitor cannot make an account
+already has a Nano Crew account to manage their own store. A random visitor cannot make an account
 on a brand site.
 
 ## Target — the unified account (task list #21–28)
@@ -125,12 +125,12 @@ on a brand site.
 The intended end state is **one account that works on the app AND every brand site**, built on
 the *same* Supabase identity we already have (no new auth system, no second user table):
 
-- **Signing up on a brand site creates a real Nanocrew account.** The shopper-facing auth on a
+- **Signing up on a brand site creates a real Nano Crew account.** The shopper-facing auth on a
   brand storefront flips from the creator-only `create_user: false` admin login to a normal
   `create_user: true` Supabase signup (email/password or OAuth), minting an `auth.users` row +
   its `creators` mirror — the exact same identity they'd have if they'd signed up in the app.
 - **The same Supabase identity everywhere.** A person who signed up on `brandA.clothing` is
-  signed in on the Nanocrew app and on `brandB.clothing` too — one token, one account. No
+  signed in on the Nano Crew app and on `brandB.clothing` too — one token, one account. No
   per-site accounts.
 - This unlocks the shopper "my orders" view (see [ORDERS.md](ORDERS.md) "Target") with **no
   schema change** — orders already carry `customerEmail`, which now maps to a logged-in account's

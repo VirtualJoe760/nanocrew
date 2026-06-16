@@ -135,7 +135,7 @@ Three coordinated fixes, mapped to the build-quality epic:
 2. **✅ SHIPPED — a Master `CLAUDE.md` conditions the robot.** `forge-worker/forge-CLAUDE.md` is
    deployed to `/home/forge/.claude/CLAUDE.md` (loaded for every build + revision) carrying the
    invariants every build must hold regardless of which brief generated it: you're branding a
-   Nanocrew storefront; never substitute `brand.json` palette/typography; catalogue/auth/checkout
+   Nano Crew storefront; never substitute `brand.json` palette/typography; catalogue/auth/checkout
    come from the platform — don't reinvent the rails; make it **presentable** (no blank hero, no
    generic stock placeholders, working CTAs); be faithful to the creator; always `pnpm run build` +
    self-check before finishing. (Install line in `forge-worker/README.md`.)

@@ -1,6 +1,6 @@
 # Accounts
 
-Everything about **who a person is** to Nanocrew and **what that identity can do** — sign in,
+Everything about **who a person is** to Nano Crew and **what that identity can do** — sign in,
 own a brand, place an order, pay for a plan, spend credits, get paid out. Three docs:
 
 | Doc | Covers | State |
@@ -17,7 +17,7 @@ owns hangs off that id (stores, credits, subscription, connected account). **Sho
 NOT yet first-class accounts — an order today is keyed only by `customerEmail`, with no user
 FK. The target work (the user's task list #21–28) is to make that single Supabase identity work
 **everywhere** — the app and every brand site — so signing up on a brand site creates a real
-Nanocrew account and "my orders" resolves by email match. See each doc's "Target" section.
+Nano Crew account and "my orders" resolves by email match. See each doc's "Target" section.
 
 ## Where the code lives
 

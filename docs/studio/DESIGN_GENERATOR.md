@@ -108,7 +108,7 @@ the routes:
   | `veo3` | Veo 3 | 8s | 400 (top-tier realism + native audio) |
 
 - **`target` routes the output:** `'website'` → appended to `products.modelVideos` (the site's
-  on-model video wall); `'feed'` → `products.videoUrl` (the Nanocrew feed).
+  on-model video wall); `'feed'` → `products.videoUrl` (the in-app feed, hidden for v1).
 - **`aspectRatio`** `9:16` (default) or `16:9`. fal needs a reachable URL, so the still is hosted on
   Cloudinary first; the resulting clip is uploaded to Cloudinary too (no short-lived fal URLs leak).
 - Rate-limited (4 / 10 min — video is the priciest call), ownership-checked, credit-gated with refund

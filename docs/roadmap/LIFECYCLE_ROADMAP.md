@@ -1,7 +1,12 @@
-# Nanocrew — Brand Lifecycle & Flow Roadmap
+# Nano Crew — Brand Lifecycle & Flow Roadmap
 
-The end-to-end flow we're building toward, an audit of where the code is today, and the
-sequenced work to close the gap. Written 2026-06-13.
+The canonical doc for the brand **build → edit → domain → go-live → Connect** lifecycle: the
+end-to-end flow, an audit of where the code is today, and the sequenced work. Written 2026-06-13.
+
+> **Status: Phases A–D are code-complete** (forge reliability, lifecycle state machine, domains,
+> Stripe Connect); Phase E needed no code. Domains + Connect are **inert until Joe's account config**
+> (see the bottom of this file). For the full feature roadmap across the app, see
+> **[REMAINING_FEATURES.md](REMAINING_FEATURES.md)** (canonical).
 
 ## Target flow
 1. **Create brand** — Venus interviews the creator → brand identity.

@@ -1,4 +1,4 @@
-# Nanocrew — Production / Go-Live Checklist
+# Nano Crew — Production / Go-Live Checklist
 
 Everything that must be true before shipping to real users. Ordered by blocker severity.
 Owner is you (Joe) unless marked **[code]** (an implementation task).

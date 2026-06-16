@@ -1,16 +1,21 @@
-# Nanocrew — Pages & Sections
+# Nano Crew — Pages & Sections
 
-Reference for every user-facing screen and major section. Five tabs (`src/components/app-tabs.tsx`,
-`src/app/*.tsx`) plus the modals/components each one opens. App chrome follows the brand system —
+Reference for every user-facing screen and major section. The app chrome follows the brand system —
 cool monochrome (paper / near-black) + platinum silver, no gold (see [ARCHITECTURE.md](../architecture/ARCHITECTURE.md)).
 The tab bar uses a platinum-silver tint with thin outline glyphs and an opaque (mode-aware) background.
 **Individual brand storefronts keep their OWN palette** — only the app chrome is monochrome.
 
-Tabs (in order): **Nanocrew** feed · **Market** · **Studio** · **Design** · **Account**.
+**Tab bar (v1, in order): `Studio` · `Design` · `Market` · `Account`** (`src/components/app-tabs.tsx`).
+**Studio is the app's home.** The **social feed is hidden for v1** — its code is preserved at the
+`/feed` route (`src/app/feed.tsx`) with no tab, and it returns as the lead tab in v2. Section 1 below
+documents that feed as-built for when it comes back.
 
 ---
 
-## 1. Nanocrew — the feed (`src/app/index.tsx`)
+## 1. The social feed — HIDDEN for v1 (`src/app/feed.tsx`)
+
+> **Hidden for v1.** Not in the tab bar; reachable only at the `/feed` route. The code below is
+> preserved and documented for the v2 return. (This was formerly the "Nanocrew" home tab.)
 
 TikTok-style full-screen vertical feed of published products across all brands; video-first with
 photo fallback. The active card autoplays its video (looped, muted); others pause.
@@ -136,8 +141,10 @@ Checkout opens **Stripe in the browser** (`/api/creator/billing/checkout`); acti
 
 ### Site Preview + Critique (`src/components/site-preview.tsx`)
 In-app browser (back / reload / open-in-browser). **Critique mode** for the live site: mark up the
-page + record a spoken critique → posts to `/api/creator/revise` (branch-based). *Annotated screenshot
-needs a dev build (`react-native-view-shot`); today Venus gets the spoken critique + region labels.*
+page + record a spoken critique → posts to `/api/creator/revise` (branch-based). Annotated screenshots
+are now rendered **on the forge** (Playwright/Chromium re-renders the page and overlays the circles at
+their document coords → `briefs/screenshots/` for Claude, then deletes them before commit), so no
+`react-native-view-shot` dev-build dependency is needed.
 
 ## 4. Design (`src/app/design.tsx`)
 
