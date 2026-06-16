@@ -140,17 +140,27 @@ needs a dev build (`react-native-view-shot`); today Venus gets the spoken critiq
 AI product designer — a zoomable canvas (the proven stephen-lawyer create→design→Printful loop). Auth
 required; signed-out shows a graceful sign-in prompt rather than the canvas.
 
-- **Top bar:** catalogue/drop switcher + design-history strip.
+- **Setup popup (first thing on the tab):** pick the **brand** you're designing for, then the
+  **collection**. One brand → it's pre-selected and you land on the collection step. The top-left
+  chip (`BRAND · COLLECTION ▾`) reopens it to switch. Catalogues are brand-scoped
+  (`/api/catalogues?store=<slug>`, access-checked).
+- **Top bar:** the brand·collection chip + design-history strip.
 - **Canvas:** node kinds — `design`, `template` (blank garment), `composition` (design-on-garment),
-  `group`. Pan/zoom, tap, box-select, blend. Auto-saves to `/api/canvas/:catalogueId`.
+  `webslot` (a website-asset target), `group`. Pan/zoom, tap, box-select, blend. Auto-saves to
+  `/api/canvas/:catalogueId`.
 - **Generate (FAB):** prompt or image, aspect ratio, transparent/filled, effort → `/api/generate`
   (Nano Banana; magenta chroma-key for transparency).
 - **Compose:** drag a design onto a blank → `/api/compositions` → `/api/composite`; **PlacementEditor**
   sizes/positions it and renders **real Printful mockups** (`/api/mockup`); **FinalizeSheet** sets
   name/collection/sizes/colors and publishes (`/api/publish`, with the cost+$5 price floor enforced).
 - **Blend / Combine:** merge two designs (`/api/merge`) or pick placements for a design+product.
-- **Catalogues/drops:** create with season presets (`/api/catalogues`).
-- **Templates dock:** the full Printful catalogue (`/api/blanks`, `/api/blank/:id/*`).
+- **Catalogues/drops:** create with season presets, scoped to the chosen brand (`/api/catalogues`).
+- **Dock (3 panels):** **Products** (the full Printful catalogue — `/api/blanks`, `/api/blank/:id/*`),
+  **Web assets** (the site's slots: hero / cover / logo), **Content**.
+- **Web assets:** drag a graphic onto a web-slot target → it "clicks together," assigns to the brand
+  site (`/api/creator/site-assets` — a direct DB write to `stores.site_assets`), and the finished
+  group then **clears off the canvas** (the asset is saved; nothing lingers). Slots that haven't been
+  filled stay; finished ones are also stripped on load.
 
 ## 5. Account (`src/app/account.tsx`)
 

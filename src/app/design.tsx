@@ -222,6 +222,14 @@ export default function DesignScreen() {
   const [catSheetOpen, setCatSheetOpen] = useState(false);
   const [newCat, setNewCat] = useState('');
   const [newCatSeason, setNewCatSeason] = useState<string | null>(null);
+  // Brand (store) context — the Design tab is scoped to one brand at a time. The setup popup
+  // (brand → collection) is the FIRST thing on entering the tab; the top-left chip reopens it.
+  type Brand = { id: string; slug: string; name: string };
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [brand, setBrand] = useState<Brand | null>(null);
+  const brandRef = useRef<Brand | null>(null);
+  brandRef.current = brand;
+  const [setupStep, setSetupStep] = useState<'brand' | 'collection'>('brand');
   const catalogueRef = useRef<{ id: string; name: string } | null>(null);
   catalogueRef.current = catalogue;
   const [blanks, setBlanks] = useState<CatalogBlank[]>([]);
@@ -302,14 +310,18 @@ export default function DesignScreen() {
       })
       .catch(() => {})
       .finally(() => alive && setBlanksLoading(false));
-    // Load catalogues, then hydrate the first one's canvas.
-    apiFetch('/api/catalogues')
+    // First thing on the Design tab: choose the brand you're designing for, then the collection.
+    // Load the creator's brands and open the setup popup. One brand → pre-select it and jump to
+    // the collection step; otherwise start at the brand step.
+    apiFetch('/api/creator/stats')
       .then((r) => r.json())
-      .then((d: { catalogues?: { id: string; name: string }[] }) => {
-        if (!alive || !d.catalogues?.length) return;
-        setCatalogues(d.catalogues);
-        setCatalogue(d.catalogues[0]);
-        loadCatalogue(d.catalogues[0].id);
+      .then((d: { stores?: Brand[] }) => {
+        if (!alive) return;
+        const list = (d.stores ?? []).map((s) => ({ id: s.id, slug: s.slug, name: s.name }));
+        setBrands(list);
+        setCatSheetOpen(true);
+        if (list.length === 1) chooseBrand(list[0]);
+        else setSetupStep('brand');
       })
       .catch(() => {});
     return () => {
@@ -367,35 +379,44 @@ export default function DesignScreen() {
               status: 'ready' as const,
             })),
           );
-          setNodes(
-            (d.nodes ?? []).map((n) => {
-              const base: CanvasNode = {
-                id: n.id,
-                kind: n.kind as CanvasNode['kind'],
-                refId: n.refId,
-                groupId:
-                  n.kind !== 'group' && n.groupId
-                    ? (groupKeyToId.get(n.groupId) ?? undefined)
-                    : undefined,
-                x: n.x,
-                y: n.y,
-                width: n.width ?? undefined,
-                height: n.height ?? undefined,
-                scale: (n.scale || 100) / 100,
-                colorImage: n.colorImage ?? undefined,
-                selectedColor: n.selectedColor ?? undefined,
-              };
-              if (n.kind === 'composition') {
-                const c = comps.get(n.refId);
-                if (c) {
-                  base.designRef = c.designId;
-                  base.blankRef = c.templateKey;
-                  base.previewUrl = c.previewUrl ?? undefined;
-                  base.status = 'ready';
-                }
+          const mapped = (d.nodes ?? []).map((n) => {
+            const base: CanvasNode = {
+              id: n.id,
+              kind: n.kind as CanvasNode['kind'],
+              refId: n.refId,
+              groupId:
+                n.kind !== 'group' && n.groupId
+                  ? (groupKeyToId.get(n.groupId) ?? undefined)
+                  : undefined,
+              x: n.x,
+              y: n.y,
+              width: n.width ?? undefined,
+              height: n.height ?? undefined,
+              scale: (n.scale || 100) / 100,
+              colorImage: n.colorImage ?? undefined,
+              selectedColor: n.selectedColor ?? undefined,
+            };
+            if (n.kind === 'composition') {
+              const c = comps.get(n.refId);
+              if (c) {
+                base.designRef = c.designId;
+                base.blankRef = c.templateKey;
+                base.previewUrl = c.previewUrl ?? undefined;
+                base.status = 'ready';
               }
-              return base;
-            }),
+            }
+            return base;
+          });
+          // A web-slot that's had a design assigned becomes a finished group. The asset is already
+          // saved to the site, so we don't keep that group sitting on the canvas — strip any group
+          // wrapping a web-slot (and its members) on load. Unassigned slots (no groupId) stay.
+          const webGroupIds = new Set(
+            mapped.filter((n) => n.kind === 'webslot' && n.groupId).map((n) => n.groupId as string),
+          );
+          setNodes(
+            webGroupIds.size
+              ? mapped.filter((n) => !webGroupIds.has(n.id) && !(n.groupId && webGroupIds.has(n.groupId)))
+              : mapped,
           );
         },
       )
@@ -650,6 +671,16 @@ export default function DesignScreen() {
             },
           ];
           void assignToSite(img, slotNode.refId as 'hero' | 'cover' | 'logo');
+          // The design + slot "click together", then the finished group clears off the canvas —
+          // it's assigned to the site now, so it shouldn't keep sitting there. Let the snap
+          // animation play, then drop the design, the slot, and the wrapping group.
+          const gid = groupNodeId;
+          setTimeout(() => {
+            const after = reflowGroups(nodesRef.current.filter((n) => n.groupId !== gid && n.id !== gid));
+            nodesRef.current = after;
+            setNodes(after);
+            scheduleSave();
+          }, 1300);
         } else {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         }
@@ -856,6 +887,18 @@ export default function DesignScreen() {
     scheduleSave();
   };
 
+  // Setup step 1: pick the brand → load its collections and advance to the collection step.
+  const chooseBrand = (b: Brand) => {
+    setBrand(b);
+    brandRef.current = b;
+    setCatalogues([]);
+    setSetupStep('collection');
+    apiFetch(`/api/catalogues?store=${encodeURIComponent(b.slug)}`)
+      .then((r) => r.json())
+      .then((d: { catalogues?: { id: string; name: string }[] }) => setCatalogues(d.catalogues ?? []))
+      .catch(() => {});
+  };
+
   const switchCatalogue = (cat: { id: string; name: string }) => {
     setCatSheetOpen(false);
     if (cat.id === catalogue?.id) return;
@@ -872,7 +915,7 @@ export default function DesignScreen() {
     apiFetch('/api/catalogues', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: n, season }),
+      body: JSON.stringify({ name: n, season, storeSlug: brandRef.current?.slug }),
     })
       .then((r) => r.json())
       .then((d: { catalogue?: { id: string; name: string } }) => {
@@ -1006,9 +1049,15 @@ export default function DesignScreen() {
       {/* Top: designs history bar */}
       <SafeAreaView edges={['top']}>
         <View style={styles.topBar}>
-          <Pressable onPress={() => setCatSheetOpen(true)} style={styles.catChip} hitSlop={6}>
+          <Pressable
+            onPress={() => {
+              setSetupStep('brand');
+              setCatSheetOpen(true);
+            }}
+            style={styles.catChip}
+            hitSlop={6}>
             <ThemedText type="code" themeColor="tint" style={styles.eyebrow} numberOfLines={1}>
-              {catalogue?.name ?? 'Design'} ▾
+              {brand ? `${brand.name}${catalogue ? ` · ${catalogue.name}` : ''}` : 'Design'} ▾
             </ThemedText>
           </Pressable>
           {designs.length === 0 ? (
@@ -1418,76 +1467,106 @@ export default function DesignScreen() {
         </Modal>
       ) : null}
 
-      {/* Catalogue (collection) switcher */}
+      {/* Setup: choose the brand you're designing for, then the collection. This is the first
+          popup on entering the Design tab; the top-left chip reopens it to switch. */}
       {catSheetOpen ? (
         <Modal visible transparent animationType="slide" onRequestClose={() => setCatSheetOpen(false)}>
           <View style={styles.modalBackdrop}>
             <ThemedView type="background" style={styles.sheet}>
               <View style={styles.sheetHeader}>
-                <ThemedText type="smallBold">Catalogue</ThemedText>
+                <ThemedText type="smallBold">
+                  {setupStep === 'brand' ? 'Which brand?' : `Collection for ${brand?.name ?? 'brand'}`}
+                </ThemedText>
                 <Pressable onPress={() => setCatSheetOpen(false)} hitSlop={10}>
                   <ThemedText type="small" themeColor="textSecondary">
                     Close
                   </ThemedText>
                 </Pressable>
               </View>
-              {catalogues.map((c) => (
-                <Pressable key={c.id} onPress={() => switchCatalogue(c)} style={styles.catRow}>
-                  <ThemedText
-                    type="small"
-                    themeColor={c.id === catalogue?.id ? 'text' : 'textSecondary'}>
-                    {c.id === catalogue?.id ? '●  ' : '○  '}
-                    {c.name}
+
+              {setupStep === 'brand' ? (
+                brands.length ? (
+                  brands.map((b) => (
+                    <Pressable key={b.id} onPress={() => chooseBrand(b)} style={styles.catRow}>
+                      <ThemedText type="small" themeColor={b.id === brand?.id ? 'text' : 'textSecondary'}>
+                        {b.id === brand?.id ? '●  ' : '○  '}
+                        {b.name}
+                      </ThemedText>
+                    </Pressable>
+                  ))
+                ) : (
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.catRow}>
+                    No brands yet — create one in Studio with Venus.
                   </ThemedText>
-                </Pressable>
-              ))}
-              <ThemedText type="small" themeColor="textSecondary" style={styles.catPresetLabel}>
-                New collection / drop
-              </ThemedText>
-              <View style={styles.catPresetRow}>
-                {(['Spring', 'Summer', 'Fall', 'Winter', 'Drop'] as const).map((s) => {
-                  const season = s.toLowerCase();
-                  const on = newCatSeason === season;
-                  return (
+                )
+              ) : (
+                <>
+                  {brands.length > 1 ? (
+                    <Pressable onPress={() => setSetupStep('brand')} hitSlop={6} style={styles.catRow}>
+                      <ThemedText type="small" themeColor="tint">
+                        ‹ Change brand
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
+                  {catalogues.map((c) => (
+                    <Pressable key={c.id} onPress={() => switchCatalogue(c)} style={styles.catRow}>
+                      <ThemedText
+                        type="small"
+                        themeColor={c.id === catalogue?.id ? 'text' : 'textSecondary'}>
+                        {c.id === catalogue?.id ? '●  ' : '○  '}
+                        {c.name}
+                      </ThemedText>
+                    </Pressable>
+                  ))}
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.catPresetLabel}>
+                    New collection / drop
+                  </ThemedText>
+                  <View style={styles.catPresetRow}>
+                    {(['Spring', 'Summer', 'Fall', 'Winter', 'Drop'] as const).map((s) => {
+                      const season = s.toLowerCase();
+                      const on = newCatSeason === season;
+                      return (
+                        <Pressable
+                          key={s}
+                          onPress={() => {
+                            setNewCatSeason(season);
+                            setNewCat(s === 'Drop' ? '' : `${s} ${new Date().getFullYear()}`);
+                          }}
+                          hitSlop={4}>
+                          <ThemedView type={on ? 'backgroundSelected' : 'backgroundElement'} style={styles.catPreset}>
+                            <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'}>
+                              {s}
+                            </ThemedText>
+                          </ThemedView>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.catCreateRow}>
+                    <TextInput
+                      value={newCat}
+                      onChangeText={setNewCat}
+                      placeholder="Collection name, e.g. Summer 2026"
+                      placeholderTextColor={theme.textSecondary}
+                      style={[
+                        styles.input,
+                        styles.flex,
+                        { color: theme.text, backgroundColor: theme.backgroundElement },
+                      ]}
+                    />
                     <Pressable
-                      key={s}
                       onPress={() => {
-                        setNewCatSeason(season);
-                        setNewCat(s === 'Drop' ? '' : `${s} ${new Date().getFullYear()}`);
+                        createCatalogue(newCat, newCatSeason ?? undefined);
+                        setNewCatSeason(null);
                       }}
-                      hitSlop={4}>
-                      <ThemedView type={on ? 'backgroundSelected' : 'backgroundElement'} style={styles.catPreset}>
-                        <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'}>
-                          {s}
-                        </ThemedText>
+                      hitSlop={6}>
+                      <ThemedView type="backgroundSelected" style={styles.chip}>
+                        <ThemedText type="small">Create</ThemedText>
                       </ThemedView>
                     </Pressable>
-                  );
-                })}
-              </View>
-              <View style={styles.catCreateRow}>
-                <TextInput
-                  value={newCat}
-                  onChangeText={setNewCat}
-                  placeholder="Collection name, e.g. Summer 2026"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[
-                    styles.input,
-                    styles.flex,
-                    { color: theme.text, backgroundColor: theme.backgroundElement },
-                  ]}
-                />
-                <Pressable
-                  onPress={() => {
-                    createCatalogue(newCat, newCatSeason ?? undefined);
-                    setNewCatSeason(null);
-                  }}
-                  hitSlop={6}>
-                  <ThemedView type="backgroundSelected" style={styles.chip}>
-                    <ThemedText type="small">Create</ThemedText>
-                  </ThemedView>
-                </Pressable>
-              </View>
+                  </View>
+                </>
+              )}
             </ThemedView>
           </View>
         </Modal>
