@@ -1,0 +1,43 @@
+{
+  "kind": "build",
+  "slug": "liberty-thread-test",
+  "brand": {
+    "name": "Liberty Thread",
+    "tagline": "Wear what you stand for.",
+    "mission": "Patriotic apparel made on demand for people proud of where they come from — honest, rugged, American-spirited.",
+    "audience": "Veterans, small-town America, outdoorsmen, and anyone who loves flag-forward everyday wear.",
+    "voice": "Bold, plain-spoken, proud — never preachy. Talks like a friend at a tailgate.",
+    "story": "Started in a garage in Ohio after a vet couldn't find a tee that felt like home. Every drop is printed to order so nothing's wasted and everything's earned.",
+    "vibeKeywords": ["patriotic", "rugged", "heritage", "bold", "honest"],
+    "logo": { "exists": false, "direction": "A worn-in vintage eagle crest, distressed star, muted flag tones — looks earned, not flashy." },
+    "designStyle": "bold",
+    "products": ["heavyweight flag tee", "distressed eagle hoodie", "stars-and-stripes cap"],
+    "siteNotes": [
+      "a big video at the top, like a flag waving",
+      "a scrolling line that says free shipping over seventy five dollars",
+      "app-style buttons at the bottom on my phone"
+    ],
+    "designSystem": {
+      "palette": [
+        { "role": "primary", "hex": "#0A1F44" },
+        { "role": "secondary", "hex": "#7A1F1F" },
+        { "role": "accent", "hex": "#B08D57" },
+        { "role": "background", "hex": "#F5F1E8" },
+        { "role": "text", "hex": "#15151A" }
+      ],
+      "typography": { "display": "bold condensed slab serif, stamped/military feel", "body": "clean utilitarian sans" },
+      "texture": ["distressed cotton", "worn flag canvas", "stamped ink"],
+      "motion": ["slow flag-wave drift", "firm decisive transitions"]
+    }
+  },
+  "transcript": [
+    { "role": "assistant", "text": "Hi! I'm Venus, your AI brand consultant. Tell me, what's your brand about?" },
+    { "role": "user", "text": "Patriotic apparel. I'm a vet, I want stuff that feels like home — flags, eagles, but not cheesy." },
+    { "role": "assistant", "text": "Earned, not flashy. I love that. How should wearing it feel?" },
+    { "role": "user", "text": "Rugged and proud. Like a worn-in tee you'd wear to a tailgate. Navy, a deep red, maybe a worn gold." },
+    { "role": "assistant", "text": "Navy, deep red, worn gold — bold and heritage. How should the website feel?" },
+    { "role": "user", "text": "Big video at the top like a flag waving. A scrolling line for free shipping over seventy five. And app-style buttons at the bottom on my phone." },
+    { "role": "assistant", "text": "Got it. What are you most excited to sell?" },
+    { "role": "user", "text": "A heavyweight flag tee, a distressed eagle hoodie, and a stars-and-stripes cap." }
+  ]
+}

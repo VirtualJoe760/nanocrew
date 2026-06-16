@@ -19,7 +19,8 @@ export type BrandResult = {
   designStyle: 'minimalist' | 'bold' | 'elegant' | 'extravagant';
   products: string[];
   /** Website look/layout wishes in the creator's own words ("slideshow at the top",
-   *  "mobile bottom bar") — the storefront briefs translate these via VOCABULARY.md. */
+   *  "mobile bottom bar") — Venus translates these to concrete blocks (via the template's
+   *  VOCABULARY.md) when she authors the build brief; see authorBrandBrief in lib/provision.ts. */
   siteNotes?: string[];
   designSystem: {
     palette: { role: string; hex: string }[];

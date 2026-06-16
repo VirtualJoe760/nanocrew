@@ -43,3 +43,6 @@ example
 # generated native folders
 /ios
 /android
+
+# studio-flow rendered prompts (local review only)
+scripts/studio-flow/out/

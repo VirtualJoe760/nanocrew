@@ -17,6 +17,11 @@ Why: single worker + the global `~/stores/.forge.lock` ⇒ never two forge jobs 
 ssh nanocrew-forge 'mkdir -p /home/forge/forge-worker && chown forge:forge /home/forge/forge-worker'
 scp forge-worker/worker.mjs forge-worker/package.json forge@<host>:/home/forge/forge-worker/
 
+# install the Master CLAUDE.md that conditions the headless `claude` robot for EVERY job
+# (build + revision). It's loaded as global user memory on top of each repo's @AGENTS.md.
+ssh nanocrew-forge 'mkdir -p /home/forge/.claude'
+scp forge-worker/forge-CLAUDE.md forge@<host>:/home/forge/.claude/CLAUDE.md
+
 # on the droplet, as forge:
 cd ~/forge-worker && npm i --omit=dev
 # create ~/forge-worker/.env with:  DATABASE_URL, GITHUB_TOKEN, GITHUB_OWNER, VERCEL_TOKEN

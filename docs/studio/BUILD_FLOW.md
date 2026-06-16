@@ -46,8 +46,9 @@ consumes (`src/lib/interview.ts`):
 - `designSystem`: `palette` (exactly 5 roled hexes), `typography`, `texture`, `motion`
 - `products` and `logo.direction`
 - **`siteNotes`** — the creator's site wishes kept **verbatim** ("a slideshow up top", "a video
-  behind the logo"). These are the only freeform layout intent that survives into the build, and the
-  briefs translate them via the template's `VOCABULARY.md`.
+  behind the logo"). These are the only freeform layout intent that survives into the build. **Venus
+  translates them to concrete blocks** via the template's `VOCABULARY.md` when she authors the build
+  brief (`authorBrandBrief`) — the forge receives named blocks, not the creator's loose words.
 
 The store row is created and `provisionStorefront()` is fired. (A brand that launched shop-only on
 Starter can add a website later via `POST /api/creator/build-site` — a Pro+ feature — which rebuilds

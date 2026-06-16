@@ -25,10 +25,14 @@ site against a fresh forge-generated one.
    **no real products**, the template's built-in mock products show through unchanged, and nothing
    swaps the stock images for anything on-brand.
 3. **CTA looks broken** → no standing rule that primary CTAs must be styled, high-contrast, working.
-4. **Brief is a mail-merge, not a prompt** → no art direction, no taste, flattened intent
-   (see [STOREFRONT_ENGINE.md](STOREFRONT_ENGINE.md) `buildBrandBrief`). Task: make Venus *author* it.
-5. **Robot is unconditioned** → no Master `CLAUDE.md` on the forge; no quality bar, no anti-kitsch
-   rule, no "make it presentable" mandate. Task: write the Master `CLAUDE.md`.
+4. ~~**Brief is a mail-merge, not a prompt**~~ → **✅ FIXED.** `authorBrandBrief()` in
+   `src/lib/provision.ts` now has `gemini-2.5-pro` *author* an art-directed `01-BRAND.md` from the
+   `BrandResult` + transcript + `siteNotes` (mail-merge kept only as never-break fallback). See
+   [../studio/FORGE_AI.md](../studio/FORGE_AI.md).
+5. ~~**Robot is unconditioned**~~ → **✅ FIXED.** A Master `CLAUDE.md` (`forge-worker/forge-CLAUDE.md`
+   → `/home/forge/.claude/CLAUDE.md`) now conditions every build + revision with the quality bar,
+   anti-kitsch rule, "make it presentable" mandate, data-is-law, the off-limits rails, and
+   always-build + self-check. See [../studio/FORGE_AI.md](../studio/FORGE_AI.md).
 6. **No eyes, no self-check, silent failure** → the forge runs the robot one-shot, ends the command
    in `|| true`, and only checks "does it compile" — never "does it look good." A bad build ships and
    the store flips to `ready` anyway.
