@@ -473,16 +473,16 @@ export default function DesignScreen() {
     }
   };
 
-  // Assign a graphic to a website slot (hero / collection cover / logo) — a direct DB write that
-  // overrides the storefront placeholder, then revalidates the live site.
-  const assignDesign = async (d: Design, slot: 'hero' | 'cover' | 'logo') => {
+  // Assign a hosted graphic to a website slot (hero / collection cover / logo) — a direct DB write
+  // that overrides the storefront placeholder, then revalidates the live site.
+  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo') => {
     const catId = catalogueRef.current?.id;
-    if (!catId || !d.image) return;
+    if (!catId || !url || !url.startsWith('http')) return;
     try {
       const res = await apiFetch('/api/creator/site-assets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ catalogueId: catId, slot, url: d.image }),
+        body: JSON.stringify({ catalogueId: catId, slot, url }),
       });
       if (!res.ok) {
         const e = (await res.json().catch(() => ({}))) as { error?: string };
@@ -501,6 +501,7 @@ export default function DesignScreen() {
       Alert.alert('Could not assign', e instanceof Error ? e.message : 'Try again.');
     }
   };
+  const assignDesign = (d: Design, slot: 'hero' | 'cover' | 'logo') => void assignToSite(d.image, slot);
 
   // Long-press a graphic → assign it to the website or remove it.
   const openDesignActions = (d: Design) => {
@@ -1095,6 +1096,7 @@ export default function DesignScreen() {
           void commitDesign(staged);
           setGenerateOpen(false);
         }}
+        onAssign={(staged, slot) => void assignToSite(staged.url, slot)}
       />
 
       {/* Composite review */}
@@ -1460,11 +1462,15 @@ function GenerateModal({
   open,
   onClose,
   onCommit,
+  onAssign,
 }: {
   open: boolean;
   onClose: () => void;
   // Called when the creator APPROVES a staged graphic — the parent lands it on the canvas + persists.
   onCommit: (staged: { url: string; prompt: string }) => void;
+  // Assign the staged graphic straight to a website slot (a discoverable alternative to the
+  // canvas long-press). The url is already hosted, so it can be assigned without committing first.
+  onAssign?: (staged: { url: string; prompt: string }, slot: 'hero' | 'cover' | 'logo') => void;
 }) {
   const theme = useTheme();
   const [modality, setModality] = useState<Modality>('design');
@@ -1691,6 +1697,33 @@ function GenerateModal({
                   </ThemedText>
                 </View>
               </Pressable>
+              {onAssign ? (
+                <View style={styles.optionRow}>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.assignLabel}>
+                    Put it on your site:
+                  </ThemedText>
+                  {(
+                    [
+                      ['hero', 'Hero'],
+                      ['cover', 'Collection cover'],
+                      ['logo', 'Logo'],
+                    ] as const
+                  ).map(([slot, label]) => (
+                    <Pressable
+                      key={slot}
+                      onPress={() => {
+                        onAssign(staged, slot);
+                        close();
+                      }}>
+                      <ThemedView type="backgroundElement" style={styles.chip}>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {label}
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
             </>
           ) : modality === 'video' ? (
             <View style={styles.comingSoon}>
@@ -2006,6 +2039,7 @@ const styles = StyleSheet.create({
   stagedImg: { width: '100%', height: 240, borderRadius: 12, marginVertical: Spacing.two, backgroundColor: 'rgba(0,0,0,0.18)' },
   genError: { marginTop: Spacing.one },
   comingSoon: { paddingVertical: Spacing.four, alignItems: 'center' },
+  assignLabel: { alignSelf: 'center', marginRight: Spacing.one },
   effortBlock: { gap: Spacing.one, marginTop: Spacing.one },
   effortHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   effortTrackRow: { flexDirection: 'row', alignItems: 'center', height: 24 },
