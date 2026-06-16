@@ -257,6 +257,22 @@ The engine in *this* doc stops at deploy; the contract doc owns the live data fl
 - **Images / short video**: uploaded in Studio → Cloudinary (existing plumbing) → URLs
   referenced in copy/products. **Long video**: YouTube embed component (no upload OAuth).
 
+## SEO — shipped at the template level (every brand site gets it)
+
+Wired into all 4 templates so each generated site is fully indexable, with **no per-brand work**:
+- **`lib/seo.ts`** — canonical `siteUrl()` (prefers a `brand.json` `siteUrl`, then Vercel's
+  production URL, then the `store-<slug>` host), `abs()`, and the `Organization` JSON-LD.
+- **`app/layout.tsx`** — `metadataBase` + a title template, rich **OpenGraph** + **Twitter** cards
+  (brand name / story / logo as the OG image), `canonical`, `robots`, and an `Organization`
+  JSON-LD `<script>`.
+- **Product pages** — `generateMetadata` (title, description, canonical, product-image OG) +
+  **`Product`** JSON-LD with `offers` (price from `variants[0].retailPriceCents`, USD, InStock).
+- **Blog posts** — `generateMetadata` (`article`, cover image, `publishedTime`) + **`BlogPosting`**
+  JSON-LD.
+- **`app/sitemap.ts`** — static routes + every **live** product and post (read through the same
+  public API); **`app/robots.ts`** — allow-all + sitemap pointer. Both refresh with the catalogue,
+  no rebuild.
+
 ## Cost & billing model
 
 - Initial generation: one bounded `claude` session on the forge (template + tokens keep it
