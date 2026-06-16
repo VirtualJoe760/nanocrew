@@ -1097,7 +1097,6 @@ export default function DesignScreen() {
           void commitDesign(staged);
           setGenerateOpen(false);
         }}
-        onAssign={(staged, slot) => void assignToSite(staged.url, slot)}
       />
 
       {/* Composite review */}
@@ -1463,15 +1462,11 @@ function GenerateModal({
   open,
   onClose,
   onCommit,
-  onAssign,
 }: {
   open: boolean;
   onClose: () => void;
   // Called when the creator APPROVES a staged graphic — the parent lands it on the canvas + persists.
   onCommit: (staged: { url: string; prompt: string }) => void;
-  // Assign the staged graphic straight to a website slot (a discoverable alternative to the
-  // canvas long-press). The url is already hosted, so it can be assigned without committing first.
-  onAssign?: (staged: { url: string; prompt: string }, slot: 'hero' | 'cover' | 'logo') => void;
 }) {
   const theme = useTheme();
   const [modality, setModality] = useState<Modality>('design');
@@ -1607,6 +1602,30 @@ function GenerateModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalBackdrop}>
         <ThemedView type="background" style={styles.sheet}>
+          {/* Preview pane FIRST (top) — viewing area up high, tappable controls kept lower/reachable. */}
+          <View style={styles.previewPane}>
+            {busy ? (
+              <View style={styles.previewCenter}>
+                <ActivityIndicator color={theme.text} />
+                <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
+                  Generating…
+                </ThemedText>
+              </View>
+            ) : staged ? (
+              <Image source={{ uri: staged.url }} style={styles.previewImg} contentFit="contain" />
+            ) : (
+              <View style={styles.previewCenter}>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
+                  {modality === 'video'
+                    ? 'Video generation lands here soon — scene videos for products and a motion hero for your site.'
+                    : modality === 'graphics'
+                      ? 'Your web graphic will appear here.'
+                      : 'Your design will appear here.'}
+                </ThemedText>
+              </View>
+            )}
+          </View>
+
           <View style={styles.sheetHeader}>
             <ThemedText type="code" themeColor="textSecondary">
               {staged
@@ -1650,30 +1669,6 @@ function GenerateModal({
               {error}
             </ThemedText>
           ) : null}
-
-          {/* Preview pane — the generation shows HERE (placeholder → spinner → result), all modes. */}
-          <View style={styles.previewPane}>
-            {busy ? (
-              <View style={styles.previewCenter}>
-                <ActivityIndicator color={theme.text} />
-                <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
-                  Generating…
-                </ThemedText>
-              </View>
-            ) : staged ? (
-              <Image source={{ uri: staged.url }} style={styles.previewImg} contentFit="contain" />
-            ) : (
-              <View style={styles.previewCenter}>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
-                  {modality === 'video'
-                    ? 'Video generation lands here soon — scene videos for products and a motion hero for your site.'
-                    : modality === 'graphics'
-                      ? 'Your web graphic will appear here.'
-                      : 'Your design will appear here.'}
-                </ThemedText>
-              </View>
-            )}
-          </View>
 
           {staged ? (
             <>
@@ -1721,33 +1716,6 @@ function GenerateModal({
                   </ThemedText>
                 </View>
               </Pressable>
-              {onAssign ? (
-                <View style={styles.optionRow}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.assignLabel}>
-                    Put it on your site:
-                  </ThemedText>
-                  {(
-                    [
-                      ['hero', 'Hero'],
-                      ['cover', 'Collection cover'],
-                      ['logo', 'Logo'],
-                    ] as const
-                  ).map(([slot, label]) => (
-                    <Pressable
-                      key={slot}
-                      onPress={() => {
-                        onAssign(staged, slot);
-                        close();
-                      }}>
-                      <ThemedView type="backgroundElement" style={styles.chip}>
-                        <ThemedText type="small" themeColor="textSecondary">
-                          {label}
-                        </ThemedText>
-                      </ThemedView>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
             </>
           ) : modality === 'video' ? null : (
             <>
