@@ -67,6 +67,7 @@ export function SiteEditor({
   const [copy, setCopy] = useState<Record<string, string>>({});
   const [colors, setColors] = useState<Record<string, string>>({});
   const [fonts, setFonts] = useState<{ display?: string; body?: string }>({});
+  const [enhancing, setEnhancing] = useState<string | null>(null); // which text field is being enhanced
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -91,6 +92,28 @@ export function SiteEditor({
   useEffect(() => {
     if (visible) void load();
   }, [visible, load]);
+
+  // ✦ Enhance one text field — AI rewrites/writes it in the brand voice, then drops it back in.
+  const enhance = async (field: string) => {
+    if (enhancing) return;
+    setEnhancing(field);
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl('/api/creator/enhance-copy'), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ storeSlug: slug, field, value: copy[field] ?? '' }),
+      });
+      const d = (await res.json()) as { enhanced?: string; error?: string };
+      if (res.status === 429) { setNote('Slow down a moment — enhance is rate-limited.'); return; }
+      if (!res.ok || !d.enhanced) throw new Error(d.error ?? 'failed');
+      setCopy((c) => ({ ...c, [field]: d.enhanced! }));
+    } catch {
+      setNote('Could not enhance that — try again.');
+    } finally {
+      setEnhancing(null);
+    }
+  };
 
   const save = async () => {
     // Validate any colors that were typed (empty = keep current).
@@ -144,7 +167,16 @@ export function SiteEditor({
               <ThemedText type="code" style={styles.sectionLabel}>TEXT</ThemedText>
               {TEXT_FIELDS.map((f) => (
                 <View key={f.key} style={styles.field}>
-                  <ThemedText type="code" style={styles.fieldLabel}>{f.label}</ThemedText>
+                  <View style={styles.fieldHead}>
+                    <ThemedText type="code" style={styles.fieldLabel}>{f.label}</ThemedText>
+                    <Pressable onPress={() => enhance(f.key)} disabled={!!enhancing} hitSlop={6}>
+                      {enhancing === f.key ? (
+                        <ActivityIndicator size="small" color={pal.accent} />
+                      ) : (
+                        <ThemedText type="code" style={[styles.enhance, !!enhancing && { opacity: 0.4 }]}>✦ Enhance</ThemedText>
+                      )}
+                    </Pressable>
+                  </View>
                   <TextInput
                     style={[styles.input, f.multiline && styles.multiline]}
                     placeholder={f.hint}
@@ -222,7 +254,9 @@ function makeStyles(pal: StudioPalette) {
     scroll: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
     sectionLabel: { color: pal.accent, letterSpacing: 1.5, fontSize: 11 },
     field: { gap: Spacing.one },
+    fieldHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 },
     fieldLabel: { color: pal.dim, fontSize: 11, letterSpacing: 0.5 },
+    enhance: { color: pal.accent, fontSize: 11, letterSpacing: 0.5 },
     input: { borderWidth: 1, borderColor: pal.line, backgroundColor: pal.field, borderRadius: 10, padding: Spacing.three, color: pal.ink, fontSize: 15 },
     multiline: { minHeight: 96, textAlignVertical: 'top' },
     colorRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },

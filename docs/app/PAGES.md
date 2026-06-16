@@ -103,10 +103,12 @@ when you have several. Four tabs:
 - **Edit site** — if a site exists: OG-image preview (tap → in-app browser with critique), a **go-live /
   custom-domain** row (`GoLiveComposer`), **✦ Customize** — the mini-CMS (`SiteEditor`), and **chat with
   Venus**. Two distinct paths: the **mini-CMS is direct + instant** (edit site copy / colors / fonts →
-  `POST /api/creator/site-config` → `stores.site_config`, read live by the template, **no rebuild**);
+  `POST /api/creator/site-config` → `stores.site_config`, read live by the template, **no rebuild**;
+  each text box has a **✦ Enhance** button — AI rewrites it in the brand voice via
+  `/api/creator/enhance-copy`, free + rate-limited like `/api/enhance`);
   the **Venus chat is the forge** (open-ended redesigns → preview → approve). If no site: **Build site**
-  (`/api/creator/build-site`; a `402` prompts the Pro upgrade). → `/api/creator/{site-config,revise,
-  revisions[/:id/approve]}`.
+  (`/api/creator/build-site`; a `402` prompts the Pro upgrade). → `/api/creator/{site-config,enhance-copy,
+  revise,revisions[/:id/approve]}`.
 - **Posts** — write/edit/publish/hide/delete journal posts with an optional cover image
   (`/api/creator/posts*`, `/api/creator/upload`). DB-backed, no redeploy.
 - **Sell** — per-product actions with a **credits display** (taps → Paywall to top up): **on-model
