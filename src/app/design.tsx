@@ -473,14 +473,52 @@ export default function DesignScreen() {
     }
   };
 
-  const confirmDeleteDesign = (d: Design) => {
+  // Assign a graphic to a website slot (hero / collection cover / logo) — a direct DB write that
+  // overrides the storefront placeholder, then revalidates the live site.
+  const assignDesign = async (d: Design, slot: 'hero' | 'cover' | 'logo') => {
+    const catId = catalogueRef.current?.id;
+    if (!catId || !d.image) return;
+    try {
+      const res = await apiFetch('/api/creator/site-assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ catalogueId: catId, slot, url: d.image }),
+      });
+      if (!res.ok) {
+        const e = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(e.error || 'Failed');
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert(
+        'Done',
+        slot === 'hero'
+          ? 'Set as your website hero — your site is updating.'
+          : slot === 'logo'
+            ? 'Set as your brand logo.'
+            : 'Set as this collection’s cover.',
+      );
+    } catch (e) {
+      Alert.alert('Could not assign', e instanceof Error ? e.message : 'Try again.');
+    }
+  };
+
+  // Long-press a graphic → assign it to the website or remove it.
+  const openDesignActions = (d: Design) => {
     Haptics.selectionAsync().catch(() => {});
+    const canAssign = typeof d.image === 'string' && d.image.startsWith('http');
     Alert.alert(
-      'Delete design?',
-      'Removes it from your designs and any proofs made from it. This can’t be undone.',
+      'Use this graphic',
+      canAssign ? 'Assign it to your website, or remove it.' : 'Save the graphic first, then you can assign it.',
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteDesign(d.id) },
+        ...(canAssign
+          ? [
+              { text: 'Set as website hero', onPress: () => void assignDesign(d, 'hero') },
+              { text: 'Set as collection cover', onPress: () => void assignDesign(d, 'cover') },
+              { text: 'Set as logo', onPress: () => void assignDesign(d, 'logo') },
+            ]
+          : []),
+        { text: 'Delete', style: 'destructive' as const, onPress: () => deleteDesign(d.id) },
+        { text: 'Cancel', style: 'cancel' as const },
       ],
     );
   };
@@ -946,7 +984,7 @@ export default function DesignScreen() {
                   <Pressable
                     key={d.id}
                     onPress={() => addNode('design', d.id)}
-                    onLongPress={() => confirmDeleteDesign(d)}
+                    onLongPress={() => openDesignActions(d)}
                     delayLongPress={350}>
                     {d.image ? (
                       <Image source={{ uri: d.image }} style={styles.thumbImg} contentFit="cover" />

@@ -42,6 +42,22 @@ assets. Generation is credit-gated and Nano-Banana-backed.
 > Nano Banana can't emit alpha → the magenta chroma-key trick in `src/lib/transparency.ts` produces
 > transparent design PNGs for printing.
 
+## Web graphics — generate → stage → assign to the site
+
+The Generate sheet has three modes (pill tabs): **Design** (printable artwork, today's behavior),
+**Graphics** (web-shaped images — hero/banner), and **Video** (wired later). Every generation is
+**staged for review** first — Apply change / Regenerate / Discard → **Use this** — before it lands
+on the canvas (generation happens in the sheet; `commitDesign()` persists on approve).
+
+A graphic on the canvas can then be **assigned to the site**: long-press it → *Set as website hero
+/ collection cover / logo*. That posts to **`POST /api/creator/site-assets { catalogueId, slot, url }`**
+(a direct DB write — store owner derived from the catalogue), which sets `stores.site_assets.hero`,
+`stores.logo_url`, or the catalogue's `cover_image_url`, then `revalidateStorefront(slug)`. The
+storefront's `getHeroMedia()` reads `site_assets` and **overrides** `content/placeholders.json`
+(`live ?? placeholder`) — see [STOREFRONT_DATA_CONTRACT.md](../storefront/STOREFRONT_DATA_CONTRACT.md)
+`/site-assets`. So an assigned hero replaces the brand-tinted placeholder with no re-layout — the
+same contract as products.
+
 ## Products — Printful publish (`/api/publish`)
 
 `POST /api/publish` (from `FinalizeSheet`) turns a composition into a **live Printful sync product**
