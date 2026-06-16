@@ -168,9 +168,43 @@ async function runEdit(job: EditJob) {
   console.log(`[studio-flow] the forge worker builds it on a branch → Vercel preview → approve to merge to main.`);
 }
 
+// Re-pull the LATEST template into every template-built brand (the way template improvements —
+// SEO, OG card, mini-CMS, cart icon, etc. — reach existing sites). Brand/products/posts/CMS all live
+// in the DB, so they survive; the forge re-applies them onto the fresh template. SKIPS bespoke sites
+// (stores.repo set to something other than store-<slug>, e.g. stephen-lawyer) so it can't clobber a
+// hand-built design — those get a targeted file-sync instead. Usage:
+//   npx tsx --env-file=.env.local scripts/studio-flow.ts --reprovision-all [--dry]
+async function reprovisionAll(dry: boolean) {
+  const stores = await db.query.stores.findMany();
+  const eligible: typeof stores = [];
+  const skipped: { slug: string; why: string }[] = [];
+  for (const s of stores) {
+    if (s.repo && s.repo !== `store-${s.slug}`) { skipped.push({ slug: s.slug, why: `bespoke repo "${s.repo}"` }); continue; }
+    const { brand } = brandFromStore(s);
+    if (!brand.name || !brand.designSystem) { skipped.push({ slug: s.slug, why: 'no brand profile / design system' }); continue; }
+    eligible.push(s);
+  }
+  console.log(`[studio-flow] reprovision-all — ${eligible.length} eligible, ${skipped.length} skipped:`);
+  skipped.forEach((x) => console.log(`  · skip ${x.slug} — ${x.why}`));
+  if (dry) {
+    eligible.forEach((s) => console.log(`  · would re-provision ${s.slug} → ${templateForStyle(brandFromStore(s).brand.designStyle)}`));
+    return;
+  }
+  for (const s of eligible) {
+    const { brand, transcript } = brandFromStore(s);
+    console.log(`  ▶ re-provisioning ${s.slug} → ${templateForStyle(brand.designStyle)}`);
+    await provisionStorefront({ storeId: s.id, slug: s.slug, brand, logoUrl: s.logoUrl, transcript });
+  }
+  console.log(`[studio-flow] enqueued ${eligible.length} re-provisions — the forge worker drains them one at a time.`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const dry = args.includes('--dry');
+  if (args.includes('--reprovision-all')) {
+    await reprovisionAll(dry);
+    process.exit(0);
+  }
   const file = args.find((a) => !a.startsWith('--'));
   if (!file) {
     console.error('usage: npx tsx --env-file=.env.local scripts/studio-flow.ts <file.json> [--dry]');
