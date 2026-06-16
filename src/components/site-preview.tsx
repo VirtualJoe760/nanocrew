@@ -9,8 +9,11 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { ThemedText } from '@/components/themed-text';
 import { VenusOrb } from '@/components/venus-orb';
+import { WebFrame } from '@/components/web-frame';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
+
+const IS_WEB = Platform.OS === 'web';
 
 // A live, navigable view of the creator's storefront — the in-app "iframe". In critique mode
 // it becomes a turn-based editor driven by Venus: tap the orb to talk, tap the pen to circle a
@@ -104,6 +107,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   const insets = useSafeAreaInsets();
   const ref = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0); // web: remount the iframe to reload
   const [canGoBack, setCanGoBack] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(url); // the page each edit is drawn on (may navigate)
 
@@ -274,6 +278,8 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   const speak = async (line: string) => {
     if (!critique) return;
     setSubtitle(line);
+    // Voice (TTS + expo-audio + FileSystem) is native-only; on web we just show the subtitle.
+    if (IS_WEB) return;
     try {
       const r = await fetch(apiUrl('/api/voice'), {
         method: 'POST',
@@ -319,6 +325,12 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   };
 
   const toggleTalk = async () => {
+    // No mic recording on web — steer to the keyboard, which works everywhere.
+    if (IS_WEB) {
+      setTyping(true);
+      setNote('Voice editing is in the app — here, tap ⌨ to type your change.');
+      return;
+    }
     if (recording) {
       setRecording(false);
       try {
@@ -400,7 +412,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
               {host(url)}
             </ThemedText>
           </View>
-          <Pressable onPress={() => ref.current?.reload()} hitSlop={12} style={styles.iconBtn}>
+          <Pressable onPress={() => { if (IS_WEB) { setLoading(true); setReloadKey((k) => k + 1); } else ref.current?.reload(); }} hitSlop={12} style={styles.iconBtn}>
             <Svg width={20} height={20}>
               <Path d="M5 10 a5 5 0 1 1 1.5 3.5" fill="none" stroke={DIM} strokeWidth={1.6} strokeLinecap="round" />
               <Polyline points="4,6 5,10 9,9" fill="none" stroke={DIM} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
@@ -416,17 +428,22 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
         </View>
 
         <View style={styles.webWrap} onLayout={onLayout}>
-          <WebView
-            ref={ref}
-            source={{ uri: url }}
-            onLoadStart={() => setLoading(true)}
-            onLoadEnd={() => setLoading(false)}
-            onNavigationStateChange={(s) => { setCanGoBack(s.canGoBack); if (s.url) setCurrentUrl(s.url); }}
-            onMessage={onWebMessage}
-            injectedJavaScript={SCROLL_SCRIPT}
-            style={styles.web}
-            pointerEvents={armed ? 'none' : 'auto'}
-          />
+          {IS_WEB ? (
+            // react-native-webview has no web build → use a real <iframe> so the site actually loads.
+            <WebFrame url={url} reloadKey={reloadKey} onLoad={() => setLoading(false)} />
+          ) : (
+            <WebView
+              ref={ref}
+              source={{ uri: url }}
+              onLoadStart={() => setLoading(true)}
+              onLoadEnd={() => setLoading(false)}
+              onNavigationStateChange={(s) => { setCanGoBack(s.canGoBack); if (s.url) setCurrentUrl(s.url); }}
+              onMessage={onWebMessage}
+              injectedJavaScript={SCROLL_SCRIPT}
+              style={styles.web}
+              pointerEvents={armed ? 'none' : 'auto'}
+            />
+          )}
           {/* Drawing layer — captures touches only while the pen is armed */}
           <View style={StyleSheet.absoluteFill} pointerEvents={armed ? 'auto' : 'none'} {...pan.panHandlers}>
             <Svg style={StyleSheet.absoluteFill}>
