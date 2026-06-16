@@ -23,8 +23,7 @@ export type Product = {
   imageUrl: string | null;
   modelShots: string[];
   category: string | null;
-  collection: string | null;
-  collectionSlug: string | null;
+  collection: { slug: string; name: string } | null;
   variants: Variant[];
 };
 

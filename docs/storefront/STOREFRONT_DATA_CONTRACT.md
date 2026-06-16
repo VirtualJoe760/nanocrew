@@ -51,8 +51,7 @@ Returns **published products with NESTED variants** (not flat rows — the #1 go
       "modelShots": ["url", ...],          // on-model gallery
       "modelVideos": ["url", ...],
       "category": "string | null",          // free text; templates infer (tee/hoodie/…) from the name
-      "collection": "Summer 2026 | null",   // the catalogue name
-      "collectionSlug": "summer-2026 | null",
+      "collection": { "slug": "summer-2026", "name": "Summer 2026" }, // NESTED, or null — NOT a flat collectionSlug
       "variants": [                          // ◄── prices/sizes/colours live HERE, nested
         { "id": "uuid", "sku": "5351847467", "color": "Black", "size": "S",
           "retailPriceCents": 7800, "inStock": true }

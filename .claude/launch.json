@@ -8,6 +8,12 @@
       "port": 3000
     },
     {
+      "name": "stephen-lawyer",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd ../stephen-lawyer && ./node_modules/.bin/next dev -p 3002"],
+      "port": 3002
+    },
+    {
       "name": "web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "web"],
