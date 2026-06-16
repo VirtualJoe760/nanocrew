@@ -144,11 +144,21 @@ Checkout opens **Stripe in the browser** (`/api/creator/billing/checkout`); acti
 **"Manage billing in Stripe ↗"** portal link. Reads `/api/creator/subscription`.
 
 ### Site Preview + Critique (`src/components/site-preview.tsx`)
-In-app browser (back / reload / open-in-browser). **Critique mode** for the live site: mark up the
-page + record a spoken critique → posts to `/api/creator/revise` (branch-based). Annotated screenshots
-are now rendered **on the forge** (Playwright/Chromium re-renders the page and overlays the circles at
-their document coords → `briefs/screenshots/` for Claude, then deletes them before commit), so no
-`react-native-view-shot` dev-build dependency is needed.
+In-app browser (back / reload / open-in-browser). On **web** the site loads in an `<iframe>`
+(react-native-webview has no web build); on native it's a real WebView. **Critique mode** for the
+live site: mark up the page + record a spoken critique → posts to `/api/creator/revise`
+(branch-based). The pen is a **toggle** (claims the gesture at capture phase + refuses termination so
+the WebView/iframe can't steal the stroke); an **undo** removes the last accidental circle. The
+hit-test resolves the most SPECIFIC thing circled — a **button/link + its label** first (e.g. *the
+"Shop the drop" button*), then the block/section/heading — so the brief says *what* was circled, not
+just where. Annotated screenshots are rendered **on the forge** (Playwright/Chromium re-renders the
+page and overlays the circles at their document coords → `briefs/screenshots/` for Claude, then
+deletes them before commit), so no `react-native-view-shot` dev-build dependency is needed.
+
+**Preview-ready push:** the forge **worker** (which marks revisions/provisions ready on the box)
+push-notifies the creator on **ready** and on **failed** (Expo push to their `device_tokens`) — so
+they're told when a preview lands or an edit didn't take, instead of watching "building…". (The
+older `src/lib/notify.ts` path only covered the in-app synchronous revise.)
 
 ## 4. Design (`src/app/design.tsx`)
 

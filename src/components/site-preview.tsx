@@ -52,7 +52,7 @@ function regionLabel(stroke: Pt[], w: number, h: number): string {
 // Enable the mic meter so Venus's orb can ride the live audio level while she listens.
 const REC_OPTS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
 
-type Hit = { __nanoHit?: boolean; i?: number; block?: string; tag?: string; heading?: string; text?: string };
+type Hit = { __nanoHit?: boolean; i?: number; block?: string; tag?: string; btnTag?: string; btnText?: string; heading?: string; text?: string };
 
 // Injected on every load: report the page's scroll position so native marks can stay anchored
 // to the content as it scrolls (rAF-throttled).
@@ -60,23 +60,33 @@ const SCROLL_SCRIPT = `(function(){if(window.__nanoScrollWired)return;window.__n
 function P(){window.ReactNativeWebView.postMessage(JSON.stringify({__nanoScroll:true,y:window.scrollY||window.pageYOffset||0}));}
 var t=false;window.addEventListener('scroll',function(){if(t)return;t=true;requestAnimationFrame(function(){t=false;P();});},{passive:true});P();})();true;`;
 
-/** A WebView hit-test: resolve a circled point to the page section it lands on — by block name,
- *  nearest heading, or nearby text — so Venus can tell Claude WHAT was circled, not just where. */
+/** A WebView hit-test: resolve a circled point to what it lands on — the most SPECIFIC thing first
+ *  (a button/link + its label), then the block/section, nearest heading, or nearby text — so Venus
+ *  can tell Claude WHAT was circled ("the 'Shop the drop' button"), not just where. */
 function hitScript(i: number, x: number, y: number): string {
   return `(function(){function P(o){o.__nanoHit=true;o.i=${i};window.ReactNativeWebView.postMessage(JSON.stringify(o));}
 try{var el=document.elementFromPoint(${x},${y});if(!el){P({});return;}
-var n=el,blk=null,sec=null;
-while(n&&n!==document.body){if(n.getAttribute&&n.getAttribute('data-block')){blk=n;break;}
-var t=(n.tagName||'').toLowerCase();if(!sec&&['section','header','footer','nav','main','article','form'].indexOf(t)>=0)sec=n;n=n.parentElement;}
+var n=el,blk=null,sec=null,btn=null;
+while(n&&n!==document.body){
+  if(!btn){var tg=(n.tagName||'').toLowerCase();var role=n.getAttribute&&n.getAttribute('role');
+    if(tg==='button'||tg==='a'||role==='button'||(tg==='input'&&['submit','button'].indexOf(n.getAttribute('type')||'')>=0))btn=n;}
+  if(n.getAttribute&&n.getAttribute('data-block')){blk=n;break;}
+  var t=(n.tagName||'').toLowerCase();if(!sec&&['section','header','footer','nav','main','article','form'].indexOf(t)>=0)sec=n;
+  n=n.parentElement;}
 var ctx=blk||sec||el;var h=ctx.querySelector?ctx.querySelector('h1,h2,h3'):null;
 P({block:blk?blk.getAttribute('data-block'):'',tag:(ctx.tagName||'').toLowerCase(),
+btnTag:btn?(btn.tagName||'').toLowerCase():'',btnText:btn?((btn.textContent||btn.value||'').replace(/\\s+/g,' ').trim().slice(0,40)):'',
 heading:h?(h.textContent||'').replace(/\\s+/g,' ').trim().slice(0,80):'',
 text:(el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,60)});
 }catch(e){P({});}})();true;`;
 }
 
-/** Turn a resolved hit into a phrase for the brief. null → fall back to a positional label. */
+/** Turn a resolved hit into a phrase for the brief. Most specific (a circled button/link) wins.
+ *  null → fall back to a positional label. */
 function describeHit(d: Hit): string | null {
+  const kind = (t?: string) => (t === 'a' ? 'link' : 'button');
+  if (d.btnText) return `the "${d.btnText}" ${kind(d.btnTag)}`;
+  if (d.btnTag) return `a ${kind(d.btnTag)}`;
   if (d.block) return `the "${d.block}" section${d.heading ? ` ("${d.heading}")` : ''}`;
   if (d.heading) return `the ${d.tag || 'section'} headed "${d.heading}"`;
   if (d.text) return `the ${d.tag || 'area'} near the text "${d.text}"`;
@@ -375,6 +385,19 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
 
   const removeEdit = (id: string) => setEdits((e) => e.filter((x) => x.id !== id));
 
+  // Undo the last circle drawn in the current (un-committed) turn — for stray/accidental marks.
+  const undoStroke = () => {
+    setDraftStrokes((s) => s.slice(0, -1));
+    setDraftHits((h) => {
+      const keys = Object.keys(h).map(Number);
+      if (!keys.length) return h;
+      const n = { ...h };
+      delete n[Math.max(...keys)];
+      return n;
+    });
+    tick((n) => n + 1);
+  };
+
   const submit = async () => {
     if (!critique || !edits.length) return;
     setSending(true);
@@ -512,6 +535,11 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
               </View>
             ) : (
               <>
+                {draftStrokes.length ? (
+                  <Pressable onPress={undoStroke} hitSlop={8} style={styles.undoBtn}>
+                    <ThemedText type="code" style={styles.undoText}>↶  undo last circle</ThemedText>
+                  </Pressable>
+                ) : null}
                 <View style={styles.controlsRow}>
                   <Pressable onPress={() => arm(!armed)} hitSlop={12} style={[styles.sideBtn, armed && styles.sideBtnOn]}>
                     <Svg width={22} height={22}>
@@ -595,6 +623,8 @@ const styles = StyleSheet.create({
   submitBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', alignSelf: 'stretch', backgroundColor: 'rgba(205,209,217,0.1)', borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)', borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
   submitCount: { color: DIM },
   submitCta: { color: GOLD },
+  undoBtn: { alignSelf: 'center', borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 6 },
+  undoText: { color: GOLD, fontSize: 12 },
   controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.six },
   sideBtn: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)' },
   sideBtnOn: { backgroundColor: GOLD, borderColor: GOLD },

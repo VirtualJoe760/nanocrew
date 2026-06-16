@@ -193,6 +193,28 @@ async function deployToVercel(fullRepo, repo) {
   return `https://${repo}.vercel.app`;
 }
 
+/** Push the creator when their preview is ready (or an edit failed). Mirrors src/lib/notify.ts,
+ *  but the worker marks revisions ready ON the box, so it must send the push itself. Never throws. */
+async function notifyCreator(storeId, title, body, data) {
+  try {
+    const [s] = await sql`select creator_id as "creatorId" from stores where id = ${storeId}`;
+    if (!s) return;
+    const rows = await sql`select token from device_tokens where creator_id = ${s.creatorId}`;
+    const messages = rows
+      .map((r) => r.token)
+      .filter((t) => typeof t === 'string' && t.startsWith('ExponentPushToken'))
+      .map((to) => ({ to, title, body, sound: 'default', data }));
+    if (!messages.length) return;
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(messages),
+    }).catch(() => {});
+  } catch (e) {
+    log(`notify failed: ${e?.message || e}`);
+  }
+}
+
 /** Run one first-time provision job, then flip the store to 'ready' with its deploy URL. */
 async function processProvision(row) {
   let payload;
@@ -222,11 +244,13 @@ async function processProvision(row) {
     await sql`update stores set deployment_url = ${url ?? `https://github.com/${fullRepo}`}, status = 'ready' where id = ${row.storeId}`;
     await sql`update store_revisions set status = 'ready', preview_url = ${url} where id = ${row.id}`;
     log(`✓ provision ${row.id} ready — ${url ?? 'no url'}`);
+    await notifyCreator(row.storeId, `${row.storeName} — your site is ready`, 'Your storefront is built. Open Studio to review it.', { kind: 'provision_ready', storeId: row.storeId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'provision failed';
     log(`✗ provision ${row.id} failed — ${msg}`);
     await sql`update stores set status = 'ready' where id = ${row.storeId}`.catch(() => {});
     await sql`update store_revisions set status = 'failed', error_msg = ${msg.slice(0, 500)} where id = ${row.id}`;
+    await notifyCreator(row.storeId, `${row.storeName} — build didn’t finish`, 'Your site build hit a snag. Open Studio to try again.', { kind: 'provision_failed', storeId: row.storeId });
   }
 }
 
@@ -262,10 +286,12 @@ async function processOne() {
     const previewUrl = await resolvePreviewUrl(row.slug, row.branch);
     await sql`update store_revisions set status = 'ready', preview_url = ${previewUrl} where id = ${row.id}`;
     log(`✓ revision ${row.id} ready — ${previewUrl ?? 'no preview url'}`);
+    await notifyCreator(row.storeId, `${row.storeName} — changes ready`, 'Your update is on a preview. Open Studio to review and publish it.', { kind: 'revision_ready', storeId: row.storeId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'revise failed';
     log(`✗ revision ${row.id} failed — ${msg}`);
     await sql`update store_revisions set status = 'failed', error_msg = ${msg.slice(0, 500)} where id = ${row.id}`;
+    await notifyCreator(row.storeId, `${row.storeName} — change didn’t take`, 'That edit didn’t apply. Open Studio to try rewording it.', { kind: 'revision_failed', storeId: row.storeId });
   }
   return true;
 }
