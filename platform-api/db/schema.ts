@@ -86,6 +86,9 @@ export const stores = pgTable(
     logoUrl: text('logo_url'),
     faviconUrl: text('favicon_url'),
     ogImageUrl: text('og_image_url'),
+    // Creator-generated website graphics that override the template's content/placeholders.json.
+    // { hero?: { imageUrl?, videoUrl?, poster? }, sections?: Record<string,string> }
+    siteAssets: jsonb('site_assets'),
     tagline: text('tagline'),
     descriptionMd: text('description_md'),
     printfulStoreId: text('printful_store_id'),

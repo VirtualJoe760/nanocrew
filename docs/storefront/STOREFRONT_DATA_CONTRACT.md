@@ -76,6 +76,22 @@ Collections (a.k.a. catalogues / drops). The `catalogues` table already carries 
 `season`, `sortOrder`, `isActive` — so collection covers + a lookbook are **data-model-ready**; what's
 missing is template rendering + app UI (see `docs/COLLECTIONS_LOOKBOOK.md`).
 
+### `GET /api/public/stores/:slug/site-assets`
+
+Creator-generated **website graphics** (made in the Design tab → Graphics), used to OVERRIDE the
+template's `content/placeholders.json`. Stored on `stores.site_assets` (jsonb).
+
+```jsonc
+{
+  "hero": { "imageUrl": "https://… | null", "videoUrl": "https://… | null", "poster": "https://… | null" },
+  "sections": { "<key>": "https://…" }   // reserved for section/banner graphics
+}
+```
+
+The template's `getHeroMedia()` merges this **per-field over the placeholder** (`live ?? placeholder`),
+so a hero set here replaces the brand-tinted placeholder with no re-layout — the same override model
+as products. `hero` is `null` and `sections` is `{}` until the creator generates one.
+
 ### `POST /api/public/checkout`  `{ storeSlug, items: [{ variantId, quantity }] }` → `{ url }`
 
 The shared **POS**: prices come from the DB (client cart untrusted), an order row is created
