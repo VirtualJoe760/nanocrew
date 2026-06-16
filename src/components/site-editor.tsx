@@ -46,6 +46,14 @@ const FONTS: { key: string; label: string }[] = [
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
+// A curated palette for the tap-to-pick color grid — neutrals + a spectrum — so creators don't need
+// to know hex (the hex field stays for precision).
+const PRESET_COLORS = [
+  '#000000', '#1a1a1a', '#404040', '#737373', '#a3a3a3', '#d4d4d4', '#f5f5f4', '#ffffff',
+  '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4',
+  '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#b07a33',
+];
+
 export function SiteEditor({
   visible,
   onClose,
@@ -68,6 +76,7 @@ export function SiteEditor({
   const [colors, setColors] = useState<Record<string, string>>({});
   const [fonts, setFonts] = useState<{ display?: string; body?: string }>({});
   const [enhancing, setEnhancing] = useState<string | null>(null); // which text field is being enhanced
+  const [pickerField, setPickerField] = useState<string | null>(null); // which color field's swatch grid is open
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -199,19 +208,36 @@ export function SiteEditor({
               {COLOR_FIELDS.map((f) => {
                 const v = colors[f.key]?.trim() ?? '';
                 const valid = HEX.test(v);
+                const open = pickerField === f.key;
                 return (
-                  <View key={f.key} style={styles.colorRow}>
-                    <View style={[styles.swatch, valid ? { backgroundColor: v } : styles.swatchEmpty]} />
-                    <ThemedText type="small" style={[styles.white, { flex: 1 }]}>{f.label}</ThemedText>
-                    <TextInput
-                      style={[styles.input, styles.hexInput]}
-                      placeholder="#hex"
-                      placeholderTextColor={pal.dim}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      value={colors[f.key] ?? ''}
-                      onChangeText={(t) => setColors((c) => ({ ...c, [f.key]: t }))}
-                    />
+                  <View key={f.key}>
+                    <View style={styles.colorRow}>
+                      <Pressable onPress={() => setPickerField(open ? null : f.key)} hitSlop={6}>
+                        <View style={[styles.swatch, valid ? { backgroundColor: v } : styles.swatchEmpty]} />
+                      </Pressable>
+                      <ThemedText type="small" style={[styles.white, { flex: 1 }]}>{f.label}</ThemedText>
+                      <TextInput
+                        style={[styles.input, styles.hexInput]}
+                        placeholder="#hex"
+                        placeholderTextColor={pal.dim}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        value={colors[f.key] ?? ''}
+                        onChangeText={(t) => setColors((c) => ({ ...c, [f.key]: t }))}
+                      />
+                      <Pressable onPress={() => setPickerField(open ? null : f.key)} hitSlop={6}>
+                        <ThemedText type="code" style={styles.enhance}>{open ? 'close' : 'pick'}</ThemedText>
+                      </Pressable>
+                    </View>
+                    {open ? (
+                      <View style={styles.swatchGrid}>
+                        {PRESET_COLORS.map((c) => (
+                          <Pressable key={c} onPress={() => { setColors((p) => ({ ...p, [f.key]: c })); setPickerField(null); }} hitSlop={2}>
+                            <View style={[styles.gridSwatch, { backgroundColor: c }, v.toLowerCase() === c && styles.gridSwatchOn]} />
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                 );
               })}
@@ -268,7 +294,10 @@ function makeStyles(pal: StudioPalette) {
     colorRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
     swatch: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: pal.line },
     swatchEmpty: { backgroundColor: pal.card },
-    hexInput: { width: 120, textAlign: 'center' },
+    hexInput: { width: 96, textAlign: 'center' },
+    swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, paddingVertical: Spacing.two, paddingLeft: 40 },
+    gridSwatch: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(127,127,127,0.3)' },
+    gridSwatchOn: { borderWidth: 2, borderColor: pal.accent },
     fontRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
     fontPill: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 999, borderWidth: 1, borderColor: pal.line },
     fontPillOn: { backgroundColor: pal.accent, borderColor: pal.accent },
