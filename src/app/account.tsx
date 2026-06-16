@@ -31,6 +31,7 @@ import { supabase } from '@/lib/supabase';
 type StoreRow = { id: string; name: string; slug: string; status: string };
 
 const DANGER = '#e24b4a';
+const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
 const PLAN_LABEL: Record<string, string> = { free: 'Free', starter: 'Starter', pro: 'Pro', advanced: 'Advanced' };
 
 // ---- Small layout primitives for a clean grouped (iOS-settings-style) list ----
@@ -254,6 +255,12 @@ export default function AccountScreen() {
               <ActivityIndicator style={{ marginTop: Spacing.six }} />
             ) : session ? (
               <>
+                {/* Branded chrome header — matches Studio/Market (NC serif mark + eyebrow) */}
+                <View style={styles.brandHeader}>
+                  <ThemedText style={[styles.ncMark, { color: theme.tint }]}>NC</ThemedText>
+                  <ThemedText type="code" themeColor="textSecondary" style={styles.eyebrow}>ACCOUNT</ThemedText>
+                </View>
+
                 {/* Profile header */}
                 <View style={styles.profile}>
                   {avatarUrl ? (
@@ -337,13 +344,14 @@ export default function AccountScreen() {
                 ) : null}
 
                 <View style={styles.dangerZone}>
+                  {/* Sign out is safe + reversible → neutral, themed. Red is reserved for Delete. */}
                   <Pressable onPress={() => supabase.auth.signOut()}>
-                    <View style={[styles.signOutBtn, { borderColor: `${DANGER}55` }]}>
-                      <ThemedText type="smallBold" style={{ color: DANGER }}>Sign out</ThemedText>
+                    <View style={[styles.signOutBtn, { borderColor: `${theme.textSecondary}44` }]}>
+                      <ThemedText type="smallBold">Sign out</ThemedText>
                     </View>
                   </Pressable>
                   <Pressable onPress={confirmDelete} disabled={busy}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.deleteLink}>
+                    <ThemedText type="small" style={[styles.deleteLink, { color: DANGER }]}>
                       Delete account
                     </ThemedText>
                   </Pressable>
@@ -445,6 +453,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: Spacing.four, gap: Spacing.three, maxWidth: 520, width: '100%', alignSelf: 'center' },
+
+  // Branded chrome header
+  brandHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.one },
+  ncMark: { fontFamily: SERIF, fontSize: 18, letterSpacing: 1 },
 
   // Profile header
   profile: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.two },
