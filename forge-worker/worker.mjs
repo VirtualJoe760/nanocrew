@@ -39,9 +39,8 @@ function run(cmd, args, opts = {}) {
 }
 
 /** Poll Vercel for the branch's preview deployment URL (READY). Null if not found. */
-async function resolvePreviewUrl(slug, branch) {
+async function resolvePreviewUrl(app, branch) {
   if (!VERCEL_TOKEN) return null;
-  const app = `store-${slug}`;
   for (let i = 0; i < 18; i++) {
     try {
       const res = await fetch(`https://api.vercel.com/v6/deployments?app=${app}&limit=20`, {
@@ -258,7 +257,7 @@ async function processOne() {
   // Oldest queued revision (single worker → no row lock needed). Join the store for slug/name.
   const [row] = await sql`
     select r.id, r.request_md as "requestMd", r.branch, r.screenshots, r.store_id as "storeId",
-           s.slug, s.name as "storeName"
+           s.slug, s.name as "storeName", s.repo as "repo"
     from store_revisions r join stores s on s.id = r.store_id
     where r.status = 'building'
     order by r.created_at asc
@@ -271,7 +270,9 @@ async function processOne() {
     return true;
   }
 
-  const repo = `store-${row.slug}`;
+  // Bespoke/imported brands set stores.repo to their actual repo; provisioned brands default to
+  // store-<slug>. Same name is the Vercel project for the preview lookup.
+  const repo = row.repo || `store-${row.slug}`;
   const fullRepo = `${GITHUB_OWNER}/${repo}`;
   // `screenshots` jsonb carries the circled annotations at enqueue time.
   const annotations = Array.isArray(row.screenshots) ? row.screenshots : [];
@@ -283,7 +284,7 @@ async function processOne() {
     if (!out.includes('REVISE_DONE')) throw new Error('forge revision did not complete');
     if (out.includes('BUILD_FAILED')) log(`  build failing on ${row.branch}`);
 
-    const previewUrl = await resolvePreviewUrl(row.slug, row.branch);
+    const previewUrl = await resolvePreviewUrl(repo, row.branch);
     await sql`update store_revisions set status = 'ready', preview_url = ${previewUrl} where id = ${row.id}`;
     log(`✓ revision ${row.id} ready — ${previewUrl ?? 'no preview url'}`);
     await notifyCreator(row.storeId, `${row.storeName} — changes ready`, 'Your update is on a preview. Open Studio to review and publish it.', { kind: 'revision_ready', storeId: row.storeId });

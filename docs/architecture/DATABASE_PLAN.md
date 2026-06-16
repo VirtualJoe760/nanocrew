@@ -65,6 +65,9 @@ One per creator website/store (the thing the app generates).
   the template's `content/placeholders.json`. See STOREFRONT_DATA_CONTRACT `/site-assets`.
 - `siteConfig` (jsonb) — mini-CMS overrides (copy / colors / fonts) edited in Studio, read LIVE by the
   template over its baked `brand.json` + `copy.json` (no rebuild). See `/site-config`.
+- `repo` (text, nullable) — the brand's GitHub repo + Vercel project name. Provisioned brands default
+  to `store-<slug>` (null); bespoke/imported brands (e.g. `stephen-lawyer`) set their real repo so the
+  forge worker clones + previews the right one.
 - `printfulStoreId` (text) — per-creator Printful sub-store.
 - `deploymentUrl` (text) — the live/preview site URL.
 - `isPublic` (bool, default `false`) — marketplace visibility; `sortOrder`.

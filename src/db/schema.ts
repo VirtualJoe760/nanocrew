@@ -96,6 +96,10 @@ export const stores = pgTable(
     //     colors?: { background?, text?, primary?, accent? },
     //     fonts?: { display?, body? } }   // font preset keys, mapped to stacks in the template
     siteConfig: jsonb('site_config'),
+    // The brand's GitHub repo + Vercel project name. Provisioned brands are `store-<slug>` (the
+    // default when null); bespoke/imported brands (e.g. stephen-lawyer) set their actual repo name so
+    // the forge clones + previews the right one. See the forge worker (worker.mjs).
+    repo: text('repo'),
     tagline: text('tagline'),
     descriptionMd: text('description_md'),
     printfulStoreId: text('printful_store_id'),

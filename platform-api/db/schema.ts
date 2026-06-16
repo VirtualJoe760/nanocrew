@@ -92,6 +92,9 @@ export const stores = pgTable(
     // Mini-CMS overrides edited in Studio, live-read by the storefront (no rebuild).
     // { copy?: {...}, colors?: {...}, fonts?: { display?, body? } } — see src/db/schema.ts.
     siteConfig: jsonb('site_config'),
+    // The brand's GitHub repo + Vercel project name (default `store-<slug>` when null; bespoke brands
+    // set their actual repo). See src/db/schema.ts + the forge worker.
+    repo: text('repo'),
     tagline: text('tagline'),
     descriptionMd: text('description_md'),
     printfulStoreId: text('printful_store_id'),
