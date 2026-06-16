@@ -187,22 +187,35 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   const pan = useMemo(
     () =>
       PanResponder.create({
+        // Claim the gesture at the CAPTURE phase so the WebView/iframe underneath never gets it.
         onStartShouldSetPanResponder: () => armedRef.current,
+        onStartShouldSetPanResponderCapture: () => armedRef.current,
         onMoveShouldSetPanResponder: () => armedRef.current,
+        onMoveShouldSetPanResponderCapture: () => armedRef.current,
+        // CRITICAL: never yield mid-draw. Without these the web layer's scroll responder steals the
+        // gesture after the first touch, so the stroke never accumulates points (the "won't draw" bug).
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (e) => {
           if (!armedRef.current) return;
-          cur.current = [{ x: e.nativeEvent.locationX, y: e.nativeEvent.locationY + scrollYRef.current }];
+          cur.current = [{ x: e.nativeEvent.locationX ?? 0, y: (e.nativeEvent.locationY ?? 0) + scrollYRef.current }];
           tick((n) => n + 1);
         },
         onPanResponderMove: (e) => {
           if (!armedRef.current) return;
-          cur.current.push({ x: e.nativeEvent.locationX, y: e.nativeEvent.locationY + scrollYRef.current });
+          cur.current.push({ x: e.nativeEvent.locationX ?? 0, y: (e.nativeEvent.locationY ?? 0) + scrollYRef.current });
           tick((n) => n + 1);
         },
         onPanResponderRelease: () => {
-          if (armedRef.current && cur.current.length > 1) setDraftStrokes((s) => [...s, cur.current]);
+          // Keep the stroke; STAY armed (toggle) so a fumbled gesture doesn't silently turn the pen
+          // off — the user circles as many spots as they want, then taps ✎ to finish.
+          if (cur.current.length > 1) setDraftStrokes((s) => [...s, cur.current]);
           cur.current = [];
-          arm(false); // one-shot: disarm after the circle so the user can scroll/browse
+          tick((n) => n + 1);
+        },
+        onPanResponderTerminate: () => {
+          if (cur.current.length > 1) setDraftStrokes((s) => [...s, cur.current]);
+          cur.current = [];
           tick((n) => n + 1);
         },
       }),
@@ -430,7 +443,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
         <View style={styles.webWrap} onLayout={onLayout}>
           {IS_WEB ? (
             // react-native-webview has no web build → use a real <iframe> so the site actually loads.
-            <WebFrame url={url} reloadKey={reloadKey} onLoad={() => setLoading(false)} />
+            <WebFrame url={url} reloadKey={reloadKey} onLoad={() => setLoading(false)} blocked={armed} />
           ) : (
             <WebView
               ref={ref}
@@ -522,7 +535,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
                   {recording ? `Listening… ${Math.round((recState.durationMillis ?? 0) / 1000)}s` : subtitle}
                 </ThemedText>
                 <ThemedText type="code" style={styles.hint} numberOfLines={1}>
-                  {armed ? 'circle the area, then talk' : 'tap ✎ to circle · orb to talk · ⌨ to type'}
+                  {armed ? 'circle any spots, then tap ✎ to finish' : 'tap ✎ to circle · orb to talk · ⌨ to type'}
                 </ThemedText>
               </>
             )}
