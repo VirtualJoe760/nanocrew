@@ -84,7 +84,11 @@ template's `content/placeholders.json`. Stored on `stores.site_assets` (jsonb).
 ```jsonc
 {
   "hero": { "imageUrl": "https://… | null", "videoUrl": "https://… | null", "poster": "https://… | null" },
-  "sections": { "<key>": "https://…" }   // reserved for section/banner graphics
+  "sections": { "<key>": "https://…" },  // reserved for section/banner graphics
+  "og": "https://… | null"               // creator-assigned social-share image (the "Social image"
+                                          // bounty). The template's opengraph-image.tsx serves this
+                                          // when set, else a generated branded card — so every site
+                                          // always has a real OG image.
 }
 ```
 

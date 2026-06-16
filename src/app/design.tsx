@@ -509,7 +509,7 @@ export default function DesignScreen() {
 
   // Assign a hosted graphic to a website slot (hero / collection cover / logo) — a direct DB write
   // that overrides the storefront placeholder, then revalidates the live site.
-  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo') => {
+  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo' | 'og') => {
     const catId = catalogueRef.current?.id;
     if (!catId || !url || !url.startsWith('http')) return;
     try {
@@ -529,13 +529,15 @@ export default function DesignScreen() {
           ? 'Set as your website hero — your site is updating.'
           : slot === 'logo'
             ? 'Set as your brand logo.'
-            : 'Set as this collection’s cover.',
+            : slot === 'og'
+              ? 'Set as your social-share image — used when your site is shared.'
+              : 'Set as this collection’s cover.',
       );
     } catch (e) {
       Alert.alert('Could not assign', e instanceof Error ? e.message : 'Try again.');
     }
   };
-  const assignDesign = (d: Design, slot: 'hero' | 'cover' | 'logo') => void assignToSite(d.image, slot);
+  const assignDesign = (d: Design, slot: 'hero' | 'cover' | 'logo' | 'og') => void assignToSite(d.image, slot);
 
   // Long-press a graphic → assign it to the website or remove it.
   const openDesignActions = (d: Design) => {
@@ -550,6 +552,7 @@ export default function DesignScreen() {
               { text: 'Set as website hero', onPress: () => void assignDesign(d, 'hero') },
               { text: 'Set as collection cover', onPress: () => void assignDesign(d, 'cover') },
               { text: 'Set as logo', onPress: () => void assignDesign(d, 'logo') },
+              { text: 'Set as social image', onPress: () => void assignDesign(d, 'og') },
             ]
           : []),
         { text: 'Delete', style: 'destructive' as const, onPress: () => deleteDesign(d.id) },
@@ -670,7 +673,7 @@ export default function DesignScreen() {
               height: NODE_H + 2 * GROUP_PAD,
             },
           ];
-          void assignToSite(img, slotNode.refId as 'hero' | 'cover' | 'logo');
+          void assignToSite(img, slotNode.refId as 'hero' | 'cover' | 'logo' | 'og');
           // The design + slot "click together", then the finished group clears off the canvas —
           // it's assigned to the site now, so it shouldn't keep sitting there. Let the snap
           // animation play, then drop the design, the slot, and the wrapping group.

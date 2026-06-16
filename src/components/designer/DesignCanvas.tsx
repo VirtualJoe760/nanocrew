@@ -23,6 +23,7 @@ export const WEB_SLOT_LABELS: Record<string, string> = {
   hero: 'Website hero',
   logo: 'Logo',
   cover: 'Collection cover',
+  og: 'Social image',
 };
 
 export type CanvasNode = {

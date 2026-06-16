@@ -10,12 +10,14 @@ import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 // WRITE path that fills stores.site_assets (read by the storefront's /site-assets endpoint),
 // the logo, or a catalogue cover — a direct DB write (not the forge), then revalidate the site.
 //
-// slot ∈ 'hero' | 'heroVideo' | 'heroPoster' | 'logo' | 'cover'
+// slot ∈ 'hero' | 'heroVideo' | 'heroPoster' | 'logo' | 'cover' | 'og'
 //   hero/heroVideo/heroPoster → stores.site_assets.hero.{imageUrl,videoUrl,poster}
 //   logo                      → stores.logo_url
 //   cover                     → catalogues.cover_image_url (the given catalogue)
-type Slot = 'hero' | 'heroVideo' | 'heroPoster' | 'logo' | 'cover';
-const SLOTS: Slot[] = ['hero', 'heroVideo', 'heroPoster', 'logo', 'cover'];
+//   og                        → stores.site_assets.og (the social-share image; overrides the
+//                               generated opengraph-image card on the storefront)
+type Slot = 'hero' | 'heroVideo' | 'heroPoster' | 'logo' | 'cover' | 'og';
+const SLOTS: Slot[] = ['hero', 'heroVideo', 'heroPoster', 'logo', 'cover', 'og'];
 
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
@@ -45,6 +47,9 @@ export async function POST(req: Request) {
       await db.update(schema.stores).set({ logoUrl: url }).where(eq(schema.stores.id, storeId));
     } else if (slot === 'cover') {
       await db.update(schema.catalogues).set({ coverImageUrl: url }).where(eq(schema.catalogues.id, b.catalogueId));
+    } else if (slot === 'og') {
+      const current = (store.siteAssets ?? {}) as Record<string, unknown>;
+      await db.update(schema.stores).set({ siteAssets: { ...current, og: url } }).where(eq(schema.stores.id, storeId));
     } else {
       // Merge into site_assets.hero so we don't clobber the other hero fields.
       const current = (store.siteAssets ?? {}) as { hero?: Record<string, string | null>; sections?: Record<string, string> };

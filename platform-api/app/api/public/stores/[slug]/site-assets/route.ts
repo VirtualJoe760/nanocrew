@@ -17,8 +17,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       .where(eq(schema.stores.slug, slug))
       .limit(1);
     if (!store) return corsJson({ error: 'store not found' }, { status: 404 });
-    const assets = (store.siteAssets ?? {}) as { hero?: unknown; sections?: unknown };
-    return corsJson({ hero: assets.hero ?? null, sections: assets.sections ?? {} });
+    const assets = (store.siteAssets ?? {}) as { hero?: unknown; sections?: unknown; og?: unknown };
+    return corsJson({ hero: assets.hero ?? null, sections: assets.sections ?? {}, og: assets.og ?? null });
   } catch (e) {
     return corsJson({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });
   }
