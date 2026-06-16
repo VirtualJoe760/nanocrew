@@ -1,0 +1,1 @@
+ALTER TABLE "stores" ADD COLUMN "site_config" jsonb;

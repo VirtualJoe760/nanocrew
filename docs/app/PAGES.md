@@ -101,10 +101,12 @@ Per-brand management sheet (opened from the dashboard or the header manage icon)
 when you have several. Four tabs:
 
 - **Edit site** — if a site exists: OG-image preview (tap → in-app browser with critique), a **go-live /
-  custom-domain** row (`GoLiveComposer`), and **chat with Venus** — your change requests as bubbles,
-  her status replies (building / ready-to-review / published) with review + publish actions, and a
-  message composer. If no site: **Build site** (`/api/creator/build-site`; a `402` prompts the Pro
-  upgrade). → `/api/creator/revise`, `/api/creator/revisions[/:id/approve]`.
+  custom-domain** row (`GoLiveComposer`), **✦ Customize** — the mini-CMS (`SiteEditor`), and **chat with
+  Venus**. Two distinct paths: the **mini-CMS is direct + instant** (edit site copy / colors / fonts →
+  `POST /api/creator/site-config` → `stores.site_config`, read live by the template, **no rebuild**);
+  the **Venus chat is the forge** (open-ended redesigns → preview → approve). If no site: **Build site**
+  (`/api/creator/build-site`; a `402` prompts the Pro upgrade). → `/api/creator/{site-config,revise,
+  revisions[/:id/approve]}`.
 - **Posts** — write/edit/publish/hide/delete journal posts with an optional cover image
   (`/api/creator/posts*`, `/api/creator/upload`). DB-backed, no redeploy.
 - **Sell** — per-product actions with a **credits display** (taps → Paywall to top up): **on-model

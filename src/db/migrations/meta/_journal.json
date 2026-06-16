@@ -127,6 +127,13 @@
       "when": 1781583555133,
       "tag": "0017_lovely_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1781599046284,
+      "tag": "0018_empty_stark_industries",
+      "breakpoints": true
     }
   ]
 }

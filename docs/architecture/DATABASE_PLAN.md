@@ -61,6 +61,10 @@ One per creator website/store (the thing the app generates).
 - `brandProfile` (jsonb) — Studio interview output: identity + character data (movie lines, etc.).
 - `designSystem` (jsonb) — generated palette / typography / texture / motion language.
 - `logoUrl`, `faviconUrl`, `ogImageUrl`, `tagline`, `descriptionMd`.
+- `siteAssets` (jsonb) — creator-generated website graphics (hero media, section images) that override
+  the template's `content/placeholders.json`. See STOREFRONT_DATA_CONTRACT `/site-assets`.
+- `siteConfig` (jsonb) — mini-CMS overrides (copy / colors / fonts) edited in Studio, read LIVE by the
+  template over its baked `brand.json` + `copy.json` (no rebuild). See `/site-config`.
 - `printfulStoreId` (text) — per-creator Printful sub-store.
 - `deploymentUrl` (text) — the live/preview site URL.
 - `isPublic` (bool, default `false`) — marketplace visibility; `sortOrder`.

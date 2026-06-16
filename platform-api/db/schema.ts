@@ -89,6 +89,9 @@ export const stores = pgTable(
     // Creator-generated website graphics that override the template's content/placeholders.json.
     // { hero?: { imageUrl?, videoUrl?, poster? }, sections?: Record<string,string> }
     siteAssets: jsonb('site_assets'),
+    // Mini-CMS overrides edited in Studio, live-read by the storefront (no rebuild).
+    // { copy?: {...}, colors?: {...}, fonts?: { display?, body? } } — see src/db/schema.ts.
+    siteConfig: jsonb('site_config'),
     tagline: text('tagline'),
     descriptionMd: text('description_md'),
     printfulStoreId: text('printful_store_id'),

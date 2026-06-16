@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { GoLiveComposer } from '@/components/go-live-composer';
 import { SceneShortComposer } from '@/components/scene-short-composer';
+import { SiteEditor } from '@/components/site-editor';
 import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -63,6 +64,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
   const [refundingId, setRefundingId] = useState<string | null>(null); // order currently being refunded
   const [shortComposer, setShortComposer] = useState(false); // the "make a scene short" flow
   const [goLive, setGoLive] = useState(false); // the domain / go-live flow
+  const [editor, setEditor] = useState(false); // the mini-CMS: text / colors / fonts (direct, instant)
   const [uploading, setUploading] = useState(false); // post cover image upload in flight
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -530,6 +532,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
                 </View>
               ) : (
                 <>
+                  <Pressable onPress={() => setEditor(true)} style={styles.primaryBtn}>
+                    <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Customize — text, colors &amp; fonts</ThemedText>
+                  </Pressable>
+                  <ThemedText type="code" style={styles.dim}>Exact edits, applied instantly. For a bigger redesign, ask Venus below.</ThemedText>
+
                   <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.three }]}>CHAT WITH VENUS</ThemedText>
                   <View style={styles.venusBubble}>
                     <ThemedText type="small" style={styles.bubbleVenusText}>Tell me what to change about your site — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; I build it on a preview first; nothing goes live until you approve.</ThemedText>
@@ -766,6 +773,9 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, slug, b
           slug={active}
           onLive={() => { void loadStores(); }}
         />
+      ) : null}
+      {editor && active ? (
+        <SiteEditor visible={editor} onClose={() => setEditor(false)} token={token} slug={active} />
       ) : null}
     </Modal>
   );

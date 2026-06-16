@@ -90,6 +90,12 @@ export const stores = pgTable(
     // OVERRIDING the template's content/placeholders.json. Shape mirrors the placeholder index:
     //   { hero?: { imageUrl?, videoUrl?, poster? }, sections?: Record<string,string> }
     siteAssets: jsonb('site_assets'),
+    // Mini-CMS overrides edited in Studio (live-read by the storefront — no rebuild). Each field is
+    // optional; absent → the template keeps its baked brand.json / copy.json value. Shape:
+    //   { copy?: { heroHeadline?, heroSubline?, heroCta?, storyKicker?, story?, tagline? },
+    //     colors?: { background?, text?, primary?, accent? },
+    //     fonts?: { display?, body? } }   // font preset keys, mapped to stacks in the template
+    siteConfig: jsonb('site_config'),
     tagline: text('tagline'),
     descriptionMd: text('description_md'),
     printfulStoreId: text('printful_store_id'),

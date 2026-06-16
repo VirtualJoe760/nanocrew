@@ -92,6 +92,26 @@ The template's `getHeroMedia()` merges this **per-field over the placeholder** (
 so a hero set here replaces the brand-tinted placeholder with no re-layout — the same override model
 as products. `hero` is `null` and `sections` is `{}` until the creator generates one.
 
+### `GET /api/public/stores/:slug/site-config`
+
+The **mini-CMS** overrides — site **copy, colors, and fonts** a creator edits in Studio (the brand
+console → ✦ Customize). Stored on `stores.site_config` (jsonb). Read LIVE and layered over the
+template's baked `brand.json` + `copy.json`; absent fields keep the baked value. **No forge run, no
+rebuild** — an edit shows on the next page load.
+
+```jsonc
+{
+  "copy":   { "heroHeadline": "…", "heroSubline": "…", "heroCta": "…", "storyKicker": "…", "story": "…", "tagline": "…" },
+  "colors": { "background": "#…", "text": "#…", "primary": "#…", "accent": "#…" },
+  "fonts":  { "display": "<preset>", "body": "<preset>" }   // preset keys → font stacks in lib/site-config.ts
+}
+```
+
+Template wiring (`lib/site-config.ts`, all 4 templates): `getBrandColors()` feeds `layout.tsx`'s CSS
+vars, `getSiteCopy()` drives the hero + Our Story copy, `getFontVars()` resolves the font presets to
+CSS stacks + a Google Fonts `<link>`. The write path is **direct** (`POST /api/creator/site-config`,
+access-checked), distinct from the Venus→forge revision flow used for open-ended redesigns.
+
 ### `POST /api/public/checkout`  `{ storeSlug, items: [{ variantId, quantity }] }` → `{ url }`
 
 The shared **POS**: prices come from the DB (client cart untrusted), an order row is created
