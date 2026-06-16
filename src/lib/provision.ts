@@ -449,5 +449,17 @@ export async function provisionStorefront(input: ProvisionInput): Promise<void> 
       .set({ deploymentUrl: null, status: 'ready' })
       .where(eq(schema.stores.id, input.storeId))
       .catch(() => {});
+    // Record a failed provision job so the failure is VISIBLE in the console ("build didn't finish")
+    // instead of silently flapping the store back to 'ready' with no trace.
+    await db
+      .insert(schema.storeRevisions)
+      .values({
+        storeId: input.storeId,
+        requestMd: JSON.stringify({ kind: 'provision', error: msg }),
+        branch: PROVISION_BRANCH,
+        status: 'failed',
+        errorMsg: msg.slice(0, 500),
+      })
+      .catch(() => {});
   }
 }

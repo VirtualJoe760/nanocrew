@@ -82,8 +82,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   // local flag — so reopening the console mid-build still shows "building", and the view flips to
   // the live site on its own when the forge worker finishes (we poll while building).
   const provisionRev = revisions.find((r) => r.requestMd.includes('"kind":"provision"'));
-  const building =
-    !siteUrl && (siteAction === 'building' || activeStore?.status === 'building' || provisionRev?.status === 'building');
+  // Durable signals ONLY — a local flag can get stuck "building" forever if the server-side build
+  // fails before it ever flips the store status back. The store goes 'building' the instant
+  // build-site is called, and the forge worker flips it to 'ready' (+ deploymentUrl) or records a
+  // failed job — so this self-corrects on the next poll either way.
+  const building = !siteUrl && (activeStore?.status === 'building' || provisionRev?.status === 'building');
   const buildFailed = !siteUrl && !building && provisionRev?.status === 'failed';
 
   const loadStores = useCallback(async () => {
@@ -406,8 +409,18 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
         setNote('A website is a Pro feature — upgrade your plan to add one.');
         return;
       }
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const d = (await res.json().catch(() => null)) as { error?: string } | null;
+        setSiteAction('idle');
+        setNote(
+          d?.error === 'no_design_system'
+            ? 'This brand has no design system yet, so there’s nothing to build a site from. Finish its setup with Venus first.'
+            : 'Could not start building your site.',
+        );
+        return;
+      }
       setNote('Building your site — Venus will have it ready shortly. Check back in a few minutes.');
+      await loadStores(); // pick up status:'building' right away so the progress view shows with no gap
     } catch {
       setNote('Could not start building your site.');
       setSiteAction('idle');

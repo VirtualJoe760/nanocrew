@@ -30,6 +30,13 @@ export async function POST(req: Request) {
     if (store.deploymentUrl && !store.deploymentUrl.includes('github.com')) {
       return Response.json({ error: 'site_exists', deploymentUrl: store.deploymentUrl }, { status: 409 });
     }
+    // The whole pipeline (brand.json + the brief) is built from the brand's design system — with no
+    // palette/typography there is literally nothing to provision, and firing it would throw silently
+    // inside the fire-and-forget provision and leave the store flapping back to 'ready' (the
+    // Nano Crew HQ case). Refuse up front with a clear reason instead.
+    if (!store.designSystem) {
+      return Response.json({ error: 'no_design_system' }, { status: 422 });
+    }
 
     // brand_profile was stored as { ...brandResult-without-designSystem, transcript }.
     const profile = (store.brandProfile ?? {}) as Record<string, unknown> & { transcript?: ChatMessage[] };
