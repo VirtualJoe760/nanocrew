@@ -32,7 +32,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 
 import { DesignTile, tileColor } from '@/components/design-tile';
-import { DesignCanvas, NODE_H, NODE_W, type CanvasNode } from '@/components/designer/DesignCanvas';
+import { DesignCanvas, NODE_H, NODE_W, WEB_SLOT_LABELS, type CanvasNode } from '@/components/designer/DesignCanvas';
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
 import { DOCK_TAB_CLEARANCE, TemplatesDock } from '@/components/designer/TemplatesDock';
@@ -620,12 +620,38 @@ export default function DesignScreen() {
       const slotNode = next.find((n) => n.kind === 'webslot' && overlaps(movedNew, n));
       const tpl = next.find((n) => n.kind === 'template' && overlaps(movedNew, n));
       if (slotNode) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         const img = designs.find((d) => d.id === moved.refId)?.image;
         if (img && img.startsWith('http')) {
-          // Show the design on the slot node (confirmation) and write it to the site.
-          next = next.map((n) => (n.id === slotNode.id ? { ...n, previewUrl: img } : n));
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          // "Click together": group the design with the slot — the design takes the slot's spot,
+          // the slot slides right showing the assigned image — same grouped-row spring as a
+          // design+product link. reflowGroups (below) sizes the wrapping box.
+          const gx = slotNode.x;
+          const gy = slotNode.y;
+          const groupNodeId = `g${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+          const groupName = WEB_SLOT_LABELS[slotNode.refId] ?? 'Web slot';
+          next = next.map((n) =>
+            n.id === moved.id
+              ? { ...n, x: gx, y: gy, groupId: groupNodeId }
+              : n.id === slotNode.id
+                ? { ...n, x: gx + GROUP_COL, y: gy, groupId: groupNodeId, previewUrl: img }
+                : n,
+          );
+          next = [
+            ...next,
+            {
+              id: groupNodeId,
+              kind: 'group' as const,
+              refId: groupName,
+              x: gx - GROUP_PAD,
+              y: gy - GROUP_PAD,
+              width: GROUP_COL + NODE_W + 2 * GROUP_PAD,
+              height: NODE_H + 2 * GROUP_PAD,
+            },
+          ];
           void assignToSite(img, slotNode.refId as 'hero' | 'cover' | 'logo');
+        } else {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         }
       } else if (tpl) {
         // The "click": haptic + the Combine sheet asks which placement to print. The
