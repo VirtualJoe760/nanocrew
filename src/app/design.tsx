@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -1650,9 +1651,32 @@ function GenerateModal({
             </ThemedText>
           ) : null}
 
+          {/* Preview pane — the generation shows HERE (placeholder → spinner → result), all modes. */}
+          <View style={styles.previewPane}>
+            {busy ? (
+              <View style={styles.previewCenter}>
+                <ActivityIndicator color={theme.text} />
+                <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
+                  Generating…
+                </ThemedText>
+              </View>
+            ) : staged ? (
+              <Image source={{ uri: staged.url }} style={styles.previewImg} contentFit="contain" />
+            ) : (
+              <View style={styles.previewCenter}>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
+                  {modality === 'video'
+                    ? 'Video generation lands here soon — scene videos for products and a motion hero for your site.'
+                    : modality === 'graphics'
+                      ? 'Your web graphic will appear here.'
+                      : 'Your design will appear here.'}
+                </ThemedText>
+              </View>
+            )}
+          </View>
+
           {staged ? (
             <>
-              <Image source={{ uri: staged.url }} style={styles.stagedImg} contentFit="contain" />
               <TextInput
                 value={editText}
                 onChangeText={setEditText}
@@ -1725,14 +1749,7 @@ function GenerateModal({
                 </View>
               ) : null}
             </>
-          ) : modality === 'video' ? (
-            <View style={styles.comingSoon}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Video generation lands here soon — scene videos for products and a motion hero for
-                your site.
-              </ThemedText>
-            </View>
-          ) : (
+          ) : modality === 'video' ? null : (
             <>
               <TextInput
                 autoFocus
@@ -1968,6 +1985,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
+    height: '94%',
     padding: Spacing.four,
     paddingBottom: Spacing.six,
     borderTopLeftRadius: Spacing.four,
@@ -2036,7 +2054,10 @@ const styles = StyleSheet.create({
   chip: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
   tabsRow: { flexDirection: 'row', gap: Spacing.one, marginBottom: Spacing.two },
   tab: { alignItems: 'center', paddingVertical: Spacing.two, borderRadius: 999 },
-  stagedImg: { width: '100%', height: 240, borderRadius: 12, marginVertical: Spacing.two, backgroundColor: 'rgba(0,0,0,0.18)' },
+  previewPane: { flex: 1, minHeight: 160, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.18)' },
+  previewCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
+  previewImg: { flex: 1, width: '100%' },
+  previewHint: { textAlign: 'center', marginTop: Spacing.two },
   genError: { marginTop: Spacing.one },
   comingSoon: { paddingVertical: Spacing.four, alignItems: 'center' },
   assignLabel: { alignSelf: 'center', marginRight: Spacing.one },
