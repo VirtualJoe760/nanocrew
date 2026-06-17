@@ -125,6 +125,40 @@ export async function countBrands(creatorId: string): Promise<number> {
   return rows.length;
 }
 
+export function monthlyCreditsForPlan(plan: PaidPlan): number {
+  return TIERS[plan].monthlyCredits;
+}
+
+/** Upsert the creator's subscription from an Apple IAP auto-renewable purchase. We reuse the
+ *  (Stripe-named) identity columns: stripeSubscriptionId holds Apple's originalTransactionId
+ *  (unique per subscription) and stripeCustomerId is tagged `apple:<otid>`. Renewals/cancels
+ *  arrive via App Store Server Notifications V2 (platform-api), mirroring the Stripe webhook. */
+export async function upsertAppleSubscription(input: {
+  creatorId: string;
+  plan: PaidPlan;
+  status: 'active' | 'canceled' | 'past_due';
+  originalTransactionId: string;
+  currentPeriodEnd: Date | null;
+}): Promise<void> {
+  const values = {
+    plan: input.plan,
+    status: input.status,
+    stripeCustomerId: `apple:${input.originalTransactionId}`,
+    stripeSubscriptionId: input.originalTransactionId,
+    currentPeriodEnd: input.currentPeriodEnd,
+  };
+  const [existing] = await db
+    .select({ id: schema.subscriptions.id })
+    .from(schema.subscriptions)
+    .where(eq(schema.subscriptions.creatorId, input.creatorId))
+    .limit(1);
+  if (existing) {
+    await db.update(schema.subscriptions).set(values).where(eq(schema.subscriptions.id, existing.id));
+  } else {
+    await db.insert(schema.subscriptions).values({ creatorId: input.creatorId, ...values });
+  }
+}
+
 export interface LaunchCheck {
   ok: boolean;
   reason?: 'subscription_required' | 'brand_limit';
