@@ -96,8 +96,10 @@ auto-deploy is LIVE** (push to `main` → auto-deploy; the GitHub App had lost r
 shipped SSRF guard `src/lib/safe-fetch.ts`, merge IDOR fix, constant-time internal-key, opt-in
 Printful-webhook token). Remaining is mostly Joe's config — see the **task list** +
 `docs/ops/PRODUCTION_CHECKLIST.md`. Top open: **Stripe go-live** (deferred to last), **Railway billing**
-(trial expiring → backend offline), **Apple IAP** (next build; react-native-iap v15 StoreKit-2 vs the
-server's legacy verifyReceipt — pick a path), and provisioning end-to-end verify (needs one Pro test
+(trial expiring → backend offline), **Apple IAP** (server is now **StoreKit 2** / App Store Server
+API — `src/lib/app-store.ts` + `iap-verify`, handles plans + credit packs, inert until `APPLE_IAP_*`
+env is set; remaining: `expo install react-native-iap`, App Store Connect products + IAP key, client
+wiring, a build), and provisioning end-to-end verify (needs one Pro test
 brand). See the `production-shipping` memory.
 
 **Build quality — mostly shipped.** The build-quality epic's first two fixes are in: Venus now

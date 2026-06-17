@@ -102,7 +102,12 @@ export async function getEntitlements(creatorId: string): Promise<Entitlements> 
     .where(eq(schema.subscriptions.creatorId, creatorId))
     .limit(1);
   if (!sub || sub.plan === 'free') return FREE_ENTITLEMENTS;
-  const active = (ACTIVE_STATUSES as readonly string[]).includes(sub.status);
+  // Apple IAP subscriptions have no Stripe webhook flipping status at period end, so we treat them
+  // as lapsed once currentPeriodEnd passes (re-verifying on launch re-activates a renewal). Stripe
+  // subs keep their own status/period fresh via the billing webhook, so leave those to status.
+  const isApple = sub.stripeCustomerId?.startsWith('apple:') ?? false;
+  const lapsed = isApple && sub.currentPeriodEnd != null && sub.currentPeriodEnd.getTime() < Date.now();
+  const active = (ACTIVE_STATUSES as readonly string[]).includes(sub.status) && !lapsed;
   const tier = TIERS[sub.plan as PaidPlan];
   return {
     plan: sub.plan as Plan,

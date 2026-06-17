@@ -102,9 +102,18 @@ when the balance is too low.
 the balance, the `CREDIT_COSTS` price list, the scene-video model tiers, and a 20-row ledger.
 Top-ups: `POST /api/creator/billing/checkout { kind: 'credit_pack', packId }` →
 `createCreditPackCheckout()` (web Stripe); the buyer's plan `creditRateMultiplier` discounts the
-pack (flat $0.01/cr — no discount). In-app top-ups go through Apple IAP
-(`src/app/api/creator/billing/iap-verify+api.ts`; the client adds Apple's cut markup) — gated off
-until `IAP_ENABLED` (see `CLAUDE.md`). `CREDIT_PACKS`: 500¢→500, 1500¢→1500, 5000¢→5000 credits.
+pack (flat $0.01/cr — no discount). `CREDIT_PACKS`: 500¢→500, 1500¢→1500, 5000¢→5000 credits.
+
+**In-app purchases (Apple IAP) — StoreKit 2.** Both plans (auto-renewable subscriptions,
+`com.nanocrew.plan.*`) and credit packs (consumables, `com.nanocrew.credits.*`) can be bought via
+IAP on iOS, at App-Store prices set ~43% above web to absorb Apple's cut; web Stripe stays cheaper.
+The server verifies via the **App Store Server API** (`src/lib/app-store.ts` signs an ES256 JWT and
+pulls the signed transaction straight from Apple — no legacy verifyReceipt, no extra deps). The
+client sends a `transactionId` (with `appAccountToken` = creator id for binding);
+`iap-verify` grants credits or activates the subscription + first month, idempotent on the
+transactionId. Subscriptions re-verify on launch (new period → new transactionId → grant);
+`getEntitlements` lapses an Apple sub once `currentPeriodEnd` passes. **Inert until `APPLE_IAP_*`
+env + App Store Connect products + `react-native-iap` + a build** (see `CLAUDE.md`).
 
 **Grants land via the webhook** — `topup` (credit packs) and `subscription_grant` (monthly
 invoices) are credited in `billing-webhook`, **idempotent on the Stripe id** via
