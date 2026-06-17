@@ -33,8 +33,6 @@ async function fetchRepoJson(repo: string, path: string): Promise<Record<string,
   try {
     const res = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contents/${path}`, {
       headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.raw' },
-      // cache a little — the repo copy changes rarely; keeps Customize snappy.
-      next: { revalidate: 120 },
     });
     if (!res.ok) return null;
     return (await res.json()) as Record<string, unknown>;

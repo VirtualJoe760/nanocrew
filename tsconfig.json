@@ -18,6 +18,7 @@
     "expo-env.d.ts"
   ],
   "exclude": [
-    "platform-api"
+    "platform-api",
+    "nanocrew-site"
   ]
 }

@@ -54,18 +54,20 @@ export const TIERS: Record<PaidPlan, TierDef> = {
     monthlyCredits: 12000,
     maxBrands: 99,
     website: true,
-    creditRateMultiplier: 0.8, // 20% better rate on credit top-ups
+    creditRateMultiplier: 1, // no pack discount — value comes from the larger monthly allotment
     priceEnv: 'STRIPE_PRICE_ADVANCED',
-    blurb: 'The most credits and the best rate on top-ups, plus website + domain.',
+    blurb: 'The most monthly credits, plus website + domain.',
   },
 };
 
-// One-time credit packs (web prices). In-app packs cost more to cover Apple's IAP cut —
-// that markup is applied in the client, not here.
+// One-time credit packs. A credit is a flat $0.01 everywhere (no volume discount) — that $0.01 is
+// the profitability FLOOR every generation charge is sized against (≥2× our API cost at $0.01/cr).
+// Plan allotments give a better effective rate; packs do not. In-app (Apple IAP) packs cost more to
+// cover Apple's cut — that markup is applied in the client, not here.
 export const CREDIT_PACKS: { id: string; credits: number; priceCents: number; label: string }[] = [
-  { id: 'pack_500', credits: 500, priceCents: 500, label: '500 credits' },
-  { id: 'pack_1500', credits: 1500, priceCents: 1200, label: '1,500 credits' },
-  { id: 'pack_5000', credits: 5000, priceCents: 3500, label: '5,000 credits' },
+  { id: 'pack_500', credits: 500, priceCents: 500, label: '500 credits' }, // $0.010/cr
+  { id: 'pack_1500', credits: 1500, priceCents: 1500, label: '1,500 credits' }, // $0.010/cr
+  { id: 'pack_5000', credits: 5000, priceCents: 5000, label: '5,000 credits' }, // $0.010/cr
 ];
 
 const ACTIVE_STATUSES = ['active', 'trialing'] as const;

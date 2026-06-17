@@ -28,11 +28,20 @@ stripeCustomerId, stripeSubscriptionId (unique), currentPeriodEnd
 The tier definitions live in `TIERS` (`src/lib/billing.ts`) — **the source of truth for
 prices/credits/caps** (the schema enum comment lists older numbers; trust the code):
 
-| Plan | Price/mo | Monthly credits | Max brands | Website + domain | Top-up rate |
-|---|---|---|---|---|---|
-| `starter` | $10 (1000¢) | 500 | 1 | ❌ | list |
-| `pro` | $50 (5000¢) | 3000 | 3 | ✅ | list |
-| `advanced` | $149 (14900¢) | 12000 | 99 | ✅ | 0.8 (20% off) |
+| Plan | Price/mo | Monthly credits | Eff. $/credit | Max brands | Website + domain | Top-up rate |
+|---|---|---|---|---|---|---|
+| `starter` | $10 (1000¢) | 500 | $0.020 | 1 | ❌ | list ($0.01) |
+| `pro` | $50 (5000¢) | 3000 | $0.0167 | 3 | ✅ | list ($0.01) |
+| `advanced` | $149 (14900¢) | 12000 | $0.0124 | 99 | ✅ | list ($0.01) |
+
+**The credit economy (the rule that keeps every generation profitable):** a credit is a flat
+**$0.01 everywhere** — credit packs carry **no volume discount** (removed the old Advanced 20%-off),
+so $0.01/cr is the hard **profitability floor**. Every generation charge is sized at **≥2× our real
+API cost measured at that floor**. Plan allotments give a *better effective rate* (Starter $0.020/cr
+→ Advanced $0.0124/cr), so the **cheaper the plan, the better our margin** — and every tier still
+clears the floor. Real costs anchoring the charges: Nano Banana (gemini-2.5-flash-image) ≈
+**$0.039/image**, Veo 3 Fast ≈ **$0.15/s**, fal Seedance 2.0 (5s) ≈ **$1.21**, fal Wan 2.5 (5s) ≈
+**$0.25**, ElevenLabs voiceover ≈ **$0.01**.
 
 `website: true` (Pro+) is what entitles a creator to a real storefront website + custom domain.
 
@@ -79,7 +88,7 @@ on first use.
 | `design_generate` | 5 |
 | `tryon` | 6 |
 | `logo_generate` | 8 |
-| `model_shots` | 20 |
+| `model_shots` | 25 |
 | `video_voiceover` | 25 |
 | `revision` | 60 |
 | `video_veo` | 400 |
@@ -93,9 +102,9 @@ when the balance is too low.
 the balance, the `CREDIT_COSTS` price list, the scene-video model tiers, and a 20-row ledger.
 Top-ups: `POST /api/creator/billing/checkout { kind: 'credit_pack', packId }` →
 `createCreditPackCheckout()` (web Stripe); the buyer's plan `creditRateMultiplier` discounts the
-pack (Advanced 20% off). In-app top-ups go through Apple IAP
+pack (flat $0.01/cr — no discount). In-app top-ups go through Apple IAP
 (`src/app/api/creator/billing/iap-verify+api.ts`; the client adds Apple's cut markup) — gated off
-until `IAP_ENABLED` (see `CLAUDE.md`). `CREDIT_PACKS`: 500¢→500, 1200¢→1500, 3500¢→5000 credits.
+until `IAP_ENABLED` (see `CLAUDE.md`). `CREDIT_PACKS`: 500¢→500, 1500¢→1500, 5000¢→5000 credits.
 
 **Grants land via the webhook** — `topup` (credit packs) and `subscription_grant` (monthly
 invoices) are credited in `billing-webhook`, **idempotent on the Stripe id** via

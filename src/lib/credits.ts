@@ -5,13 +5,16 @@ import { db, schema } from '@/lib/db';
 // Credit metering. 1 credit ≈ $0.01 retail. Costs already include our markup over the
 // real AI spend, so debits = revenue and the ledger doubles as the cost/profit audit.
 
+// Charges are sized at ≥2× our real API cost measured at the $0.01/credit floor (see CREDIT_PACKS).
+// Nano Banana (gemini-2.5-flash-image) = ~$0.039/image; Veo 3 Fast = ~$0.15/s; ElevenLabs voiceover
+// ~$0.01. So 2× cost ≈ (cost$ × 200) credits.
 export const CREDIT_COSTS = {
-  video_voiceover: 25, // ~$0.10 real → 25 credits (~2.5×)
-  video_veo: 400, // ~$1-3 real → 400 credits
+  video_voiceover: 25, // ~$0.01 real → huge margin (content floor)
+  video_veo: 400, // Veo 3 Fast 8s ~$1.20 real → ~3.3× (premium tier, kept generous)
   design_generate: 5,
   logo_generate: 8,
-  tryon: 6,
-  model_shots: 20, // ~3 on-model renders
+  tryon: 6, // shopper-facing conversion feature — NOT currently debited (rate-limited instead)
+  model_shots: 25, // 3 Nano Banana renders ~$0.12 → ~2×
   revision: 60,
   // NOTE: scene-video ("cool short") is variable-cost — the creator picks a model tier whose price
   // lives in VIDEO_MODELS (src/lib/fal-video.ts). It charges via debitCredits() with reason

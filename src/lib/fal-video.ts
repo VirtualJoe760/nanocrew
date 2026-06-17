@@ -47,7 +47,7 @@ export const VIDEO_MODELS: Record<VideoModelKey, VideoModelSpec> = {
     falModel: 'bytedance/seedance-2.0/fast/image-to-video',
     label: 'Seedance 2.0',
     blurb: 'Premium · cinematic + audio',
-    credits: 160, // ~$1.21 real → 160cr (~1.3×)
+    credits: 260, // ~$1.21 real → 260cr (~2× at the $0.01/cr floor)
     durationSec: 5,
     buildBody: ({ imageUrl, prompt, aspect, audio }) => ({
       prompt,
