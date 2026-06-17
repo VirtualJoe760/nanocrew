@@ -60,14 +60,19 @@ function decodeJws(jws: string): AppleTransaction {
 // transaction (or vice-versa), so we fall back to the sandbox environment.
 export async function fetchTransaction(transactionId: string): Promise<AppleTransaction | null> {
   const jwt = signJwt();
+  // Try production, then sandbox. A pre-release app (no production release yet) gets 401 on the
+  // PROD endpoint even with a valid key — and TestFlight purchases are sandbox anyway — so any 4xx
+  // in one environment means "try the other". Only a real 5xx is an error worth surfacing.
   const call = async (base: string): Promise<AppleTransaction | null> => {
     const res = await fetch(`${base}/inApps/v1/transactions/${encodeURIComponent(transactionId)}`, {
       headers: { Authorization: `Bearer ${jwt}` },
     });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`app_store_api_${res.status}`);
-    const d = (await res.json()) as { signedTransactionInfo?: string };
-    return d.signedTransactionInfo ? decodeJws(d.signedTransactionInfo) : null;
+    if (res.ok) {
+      const d = (await res.json()) as { signedTransactionInfo?: string };
+      return d.signedTransactionInfo ? decodeJws(d.signedTransactionInfo) : null;
+    }
+    if (res.status >= 500) throw new Error(`app_store_api_${res.status}`);
+    return null; // 401/404/400 here → fall through to the other environment
   };
   return (await call(PROD_API)) ?? (await call(SANDBOX_API));
 }
