@@ -220,7 +220,10 @@ async function stripePost(path: string, params: Record<string, unknown>): Promis
 }
 
 function urls() {
-  const base = process.env.BILLING_RETURN_URL ?? process.env.PLATFORM_API_BASE ?? 'https://nanocrew.app';
+  // Stripe rejects a success_url without an http(s) scheme — and a host-only env var (common on
+  // Railway) would 502 the whole checkout. Normalize to a valid absolute https URL.
+  let base = (process.env.BILLING_RETURN_URL ?? process.env.PLATFORM_API_BASE ?? 'https://nanocrew.app').trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
   return { success: `${base}/billing/success`, cancel: `${base}/billing/cancel` };
 }
 
