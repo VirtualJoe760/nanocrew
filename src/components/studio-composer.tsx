@@ -56,6 +56,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [previewTarget, setPreviewTarget] = useState<string | null>(null);
   const [critiquePreview, setCritiquePreview] = useState(false);
   const [siteAction, setSiteAction] = useState<'idle' | 'building'>('idle');
+  const [publishing, setPublishing] = useState(false); // open/close shop in the marketplace in flight
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [credits, setCredits] = useState<number | null>(null);
@@ -396,6 +397,26 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
         { text: 'Delete brand', style: 'destructive', onPress: () => void deleteBrand() },
       ],
     );
+  };
+
+  // App-only "open shop": list (or unlist) the brand in the ecosystem — in-app Market + nanocrew.app
+  // — with no website/domain required. A custom domain stays a separate Pro upgrade.
+  const publishToMarket = async (listed: boolean) => {
+    if (!active) return;
+    setPublishing(true);
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl(`/api/creator/stores/${active}/publish`), { method: 'POST', headers, body: JSON.stringify({ listed }) });
+      const d = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (res.status === 402) { setNote('Opening a shop needs an active plan — subscribe first.'); return; }
+      if (res.status === 409 && d?.error === 'no_published_products') { setNote('Publish at least one product before opening your shop.'); return; }
+      if (!res.ok) { setNote('Could not update your shop listing.'); return; }
+      await loadStores();
+    } catch {
+      setNote('Could not update your shop listing.');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const buildSite = async () => {
@@ -797,8 +818,28 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               {/* Settings — domain, this brand's performance, and the danger zone */}
               {tab === 'settings' ? (
                 <>
+                  {/* Open shop in the ecosystem (app + nanocrew.app) — no website needed */}
+                  <ThemedText type="code" style={styles.sectionLabel}>MARKETPLACE</ThemedText>
+                  <Pressable onPress={() => publishToMarket(activeStore?.status !== 'live')} disabled={publishing} style={styles.settingRow}>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="smallBold" style={styles.white}>
+                        {activeStore?.status === 'live' ? 'Shop is open' : 'Open your shop'}
+                      </ThemedText>
+                      <ThemedText type="code" style={styles.dim}>
+                        {activeStore?.status === 'live'
+                          ? '● Selling in the Nano Crew app + on nanocrew.app'
+                          : 'List this brand to sell in the app + web — no website needed'}
+                      </ThemedText>
+                    </View>
+                    {publishing ? (
+                      <ActivityIndicator size="small" color={pal.accent} />
+                    ) : (
+                      <ThemedText type="code" style={styles.green}>{activeStore?.status === 'live' ? 'close shop' : 'open shop →'}</ThemedText>
+                    )}
+                  </Pressable>
+
                   {/* Custom domain / go live */}
-                  <ThemedText type="code" style={styles.sectionLabel}>DOMAIN</ThemedText>
+                  <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>DOMAIN</ThemedText>
                   {siteUrl ? (
                     <Pressable onPress={() => setGoLive(true)} style={styles.settingRow}>
                       <View style={{ flex: 1 }}>
