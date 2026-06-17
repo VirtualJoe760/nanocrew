@@ -27,6 +27,9 @@ export async function POST(req: Request) {
     return Response.json({ url });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'checkout failed';
+    // Log it — a 502 here is almost always a Stripe/config problem on the host, and the silent
+    // swallow made it invisible in the Railway logs.
+    console.error('[billing/checkout] failed:', msg);
     // Missing price config is an operator problem, not the creator's — surface clearly.
     const status = /not configured|missing/.test(msg) ? 503 : 502;
     return Response.json({ error: msg }, { status });
