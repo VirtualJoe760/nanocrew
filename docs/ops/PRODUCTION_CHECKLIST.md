@@ -71,7 +71,8 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
   `DELETE /api/me` wipes the creator + all cascaded data; best-effort deletes the Supabase auth
   identity when `SUPABASE_SERVICE_ROLE_KEY` is set (set it so the auth user is removed too).
   *Note: live Printful products + active Stripe subs aren't auto-cancelled — handle out of band.*
-- [ ] Legal: **Privacy Policy + Terms** URLs (host them; link from the app/App Store/Meta).
+- [x] Legal: **Privacy Policy + Terms** ✅ live at `nanocrew-api.vercel.app/privacy` + `/terms`
+  (real content, branded "Nano Crew"), linked from Account.
 
 ## 🟠 Required infrastructure / env
 Set in `.env.local` (dev) **and** the Vercel projects (app server + `platform-api`). Provisioning
