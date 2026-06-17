@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
+import { isCompCreator } from '@/lib/comp';
 
 // Subscriptions gate launching a store; credits meter AI spend. This module owns the tier
 // definitions, the entitlement lookup, and Stripe Checkout session creation (web). We talk
@@ -94,8 +95,22 @@ const FREE_ENTITLEMENTS: Entitlements = {
   currentPeriodEnd: null,
 };
 
+// Comp / internal accounts get top-tier access for free (and never get charged credits — see
+// credits.ts). It makes no sense to bill ourselves.
+const COMP_ENTITLEMENTS: Entitlements = {
+  plan: 'advanced',
+  status: 'comp',
+  active: true,
+  maxBrands: 9999,
+  monthlyCredits: 0, // credit charges are skipped for comp accounts, so no monthly grant needed
+  website: true,
+  creditRateMultiplier: 1,
+  currentPeriodEnd: null,
+};
+
 /** The creator's current entitlements — free (cannot launch) unless a paid plan is active. */
 export async function getEntitlements(creatorId: string): Promise<Entitlements> {
+  if (await isCompCreator(creatorId)) return COMP_ENTITLEMENTS;
   const [sub] = await db
     .select()
     .from(schema.subscriptions)

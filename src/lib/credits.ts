@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
+import { isCompCreator } from '@/lib/comp';
 
 // Credit metering. 1 credit ≈ $0.01 retail. Costs already include our markup over the
 // real AI spend, so debits = revenue and the ledger doubles as the cost/profit audit.
@@ -80,6 +81,8 @@ export class InsufficientCreditsError extends Error {
 /** Debit an arbitrary amount (variable-cost ops, e.g. scene-video tiers). Throws if balance too low. */
 export async function debitCredits(creatorId: string, amount: number, reason: CreditReason, refId?: string): Promise<number> {
   const balance = await ensureCreditAccount(creatorId);
+  // Comp / internal accounts are never charged (and so never hit the insufficient-credits gate).
+  if (await isCompCreator(creatorId)) return balance;
   if (balance < amount) throw new InsufficientCreditsError(amount, balance);
   return move(creatorId, -amount, reason, refId);
 }
