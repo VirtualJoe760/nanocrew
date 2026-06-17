@@ -22,6 +22,13 @@ export interface IapResult {
   error?: string;
 }
 
+// A human-readable explanation of the last iapReady() result, surfaced in the Paywall so we can
+// see WHY IAP isn't engaging on-device (StoreKit/RNIap don't log anything we can read remotely).
+let lastDetail = 'not checked';
+export function iapDetail(): string {
+  return lastDetail;
+}
+
 let initialized = false;
 async function ensureInit(): Promise<boolean> {
   if (initialized) return true;
@@ -29,7 +36,8 @@ async function ensureInit(): Promise<boolean> {
     await initConnection();
     initialized = true;
     return true;
-  } catch {
+  } catch (e) {
+    lastDetail = `connect failed: ${e instanceof Error ? e.message : String(e)}`;
     return false;
   }
 }
@@ -40,8 +48,11 @@ export async function iapReady(): Promise<boolean> {
   if (!(await ensureInit())) return false;
   try {
     const products = await fetchProducts({ skus: ALL_IAP_PRODUCT_IDS, type: 'all' });
-    return Array.isArray(products) && products.length > 0;
-  } catch {
+    const n = Array.isArray(products) ? products.length : 0;
+    lastDetail = `${n}/${ALL_IAP_PRODUCT_IDS.length} products available`;
+    return n > 0;
+  } catch (e) {
+    lastDetail = `fetch error: ${e instanceof Error ? e.message : String(e)}`;
     return false;
   }
 }

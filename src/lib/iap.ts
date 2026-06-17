@@ -14,6 +14,11 @@ export async function iapReady(): Promise<boolean> {
   return false;
 }
 
+/** Why IAP isn't ready — only meaningful on iOS (see iap.ios.ts). */
+export function iapDetail(): string {
+  return 'non-iOS';
+}
+
 /** Purchase a plan (subscription) or credit pack via Apple IAP. Unavailable off-iOS. */
 export async function purchaseInApp(_opts: {
   productId: string;

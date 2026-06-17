@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
-import { iapReady, purchaseInApp } from '@/lib/iap';
+import { iapDetail, iapReady, purchaseInApp } from '@/lib/iap';
 import { creditProductId, planProductId } from '@/lib/iap-products';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
@@ -46,6 +46,7 @@ export function Paywall({
   // On iOS, Apple requires digital goods to use IAP — we use it whenever it's ready (native module
   // present + App Store products live), and fall back to web Stripe otherwise.
   const [iapOn, setIapOn] = useState(false);
+  const [iapNote, setIapNote] = useState<string | null>(null); // diagnostic: why IAP did/didn't engage
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -74,7 +75,10 @@ export function Paywall({
     if (visible) {
       setNote(null);
       void load();
-      void iapReady().then(setIapOn);
+      void iapReady().then((r) => {
+        setIapOn(r);
+        if (Platform.OS === 'ios') setIapNote(iapDetail());
+      });
     }
   }, [visible, load]);
 
@@ -256,6 +260,7 @@ export function Paywall({
                   ? 'Purchases handled by the App Store. Manage or cancel anytime in Settings.'
                   : 'Subscriptions and credits purchased on the web. Manage or cancel any time.'}
               </ThemedText>
+              {iapNote ? <ThemedText type="code" style={s.fine}>IAP status: {iapNote}</ThemedText> : null}
             </ScrollView>
           )}
         </View>
