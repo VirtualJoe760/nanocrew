@@ -41,3 +41,12 @@ export const ALL_IAP_PRODUCT_IDS = [
   ...IAP_CREDIT_PRODUCTS.map((p) => p.productId),
   ...IAP_PLAN_PRODUCTS.map((p) => p.productId),
 ];
+
+// Map the app's plan/pack identities to their App Store product ids (for the client purchase flow).
+export function planProductId(plan: 'starter' | 'pro' | 'advanced'): string {
+  return IAP_PLAN_PRODUCTS.find((p) => p.plan === plan)?.productId ?? `com.nanocrew.plan.${plan}`;
+}
+
+export function creditProductId(credits: number): string | null {
+  return IAP_CREDIT_PRODUCTS.find((p) => p.credits === credits)?.productId ?? null;
+}

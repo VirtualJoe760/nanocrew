@@ -6,6 +6,8 @@ import * as WebBrowser from 'expo-web-browser';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
+import { iapReady, purchaseInApp } from '@/lib/iap';
+import { creditProductId, planProductId } from '@/lib/iap-products';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // The store-launch paywall. A subscription is required to launch a store (free accounts
@@ -41,6 +43,9 @@ export function Paywall({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // On iOS, Apple requires digital goods to use IAP — we use it whenever it's ready (native module
+  // present + App Store products live), and fall back to web Stripe otherwise.
+  const [iapOn, setIapOn] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -69,8 +74,38 @@ export function Paywall({
     if (visible) {
       setNote(null);
       void load();
+      void iapReady().then(setIapOn);
     }
   }, [visible, load]);
+
+  // Subscribe / switch to a plan. iOS → Apple IAP (subscription); web/Android or IAP failure →
+  // web Stripe Checkout. A user cancelling IAP just aborts (no fallback browser pop).
+  const subscribe = async (plan: string) => {
+    if (iapOn) {
+      setBusy(plan);
+      setNote(null);
+      const r = await purchaseInApp({ productId: planProductId(plan as 'starter' | 'pro' | 'advanced'), isSubscription: true, token });
+      setBusy(null);
+      if (r.ok) { await load(); return; }
+      if (r.error === 'cancelled') return;
+      // fall through to web on any IAP error
+    }
+    await checkout({ kind: 'subscription', plan }, plan);
+  };
+
+  // Buy a credit pack. iOS → Apple IAP (consumable); else web Stripe.
+  const buyPack = async (pk: Pack) => {
+    const productId = creditProductId(pk.credits);
+    if (iapOn && productId) {
+      setBusy(pk.id);
+      setNote(null);
+      const r = await purchaseInApp({ productId, isSubscription: false, token });
+      setBusy(null);
+      if (r.ok) { await load(); return; }
+      if (r.error === 'cancelled') return;
+    }
+    await checkout({ kind: 'credit_pack', packId: pk.id }, pk.id);
+  };
 
   const checkout = async (body: object, key: string) => {
     setBusy(key);
@@ -169,7 +204,7 @@ export function Paywall({
                       </View>
                     ) : (
                       <Pressable
-                        onPress={() => checkout({ kind: 'subscription', plan: t.plan }, t.plan)}
+                        onPress={() => subscribe(t.plan)}
                         disabled={!!busy}
                         style={s.btn}
                       >
@@ -199,7 +234,7 @@ export function Paywall({
                       {money(yourPrice)}{mult < 1 ? ` · ${Math.round((1 - mult) * 100)}% off (your rate)` : ''}
                     </ThemedText>
                   </View>
-                  <Pressable onPress={() => checkout({ kind: 'credit_pack', packId: pk.id }, pk.id)} disabled={!!busy} style={s.packBtn}>
+                  <Pressable onPress={() => buyPack(pk)} disabled={!!busy} style={s.packBtn}>
                     {busy === pk.id ? <ActivityIndicator size="small" color={p.accent} /> : <ThemedText type="code" style={s.accent}>buy</ThemedText>}
                   </Pressable>
                 </View>
@@ -217,7 +252,9 @@ export function Paywall({
               ) : null}
 
               <ThemedText type="code" style={s.fine}>
-                Subscriptions and credits purchased on the web. Manage or cancel any time.
+                {iapOn
+                  ? 'Purchases handled by the App Store. Manage or cancel anytime in Settings.'
+                  : 'Subscriptions and credits purchased on the web. Manage or cancel any time.'}
               </ThemedText>
             </ScrollView>
           )}
