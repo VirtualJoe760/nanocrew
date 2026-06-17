@@ -8,6 +8,7 @@ import { API_BASE, STORE_SLUG } from '@/lib/store';
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => null)) as {
+      storeSlug?: string;
       items?: { variantId?: string; quantity?: number }[];
     } | null;
 
@@ -19,10 +20,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Your bag is empty.' }, { status: 400 });
     }
 
+    // The cart is single-brand; use its store slug (falls back to HQ).
+    const storeSlug = body?.storeSlug || STORE_SLUG;
     const res = await fetch(`${API_BASE}/api/public/checkout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ storeSlug: STORE_SLUG, items }),
+      body: JSON.stringify({ storeSlug, items }),
     });
     const d = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
     if (!res.ok || !d?.url) {

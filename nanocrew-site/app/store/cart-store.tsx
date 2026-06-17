@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 // display only (the POS re-prices from the DB at checkout, so the cart can never set the price).
 export type CartLine = {
   variantId: string;
+  storeSlug: string; // which brand this line belongs to (the cart is single-brand)
   productSlug: string;
   name: string;
   color: string | null;

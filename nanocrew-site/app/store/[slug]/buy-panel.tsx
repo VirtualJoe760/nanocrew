@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
-import { optionsOf, type Product } from '@/lib/store';
+import { optionsOf, STORE_SLUG, type Product } from '@/lib/store';
 import { useCart } from '../cart-store';
 
 // Variant selection → resolve the exact variant id → add to the cart. The cart only ever holds a
-// variant id + display info; the POS re-prices from the DB at checkout.
-export function BuyPanel({ product }: { product: Product }) {
+// variant id + display info; the POS re-prices from the DB at checkout. `storeSlug` defaults to the
+// HQ store but is passed explicitly for per-brand pages (nanocrew.app/b/<brand>).
+export function BuyPanel({ product, storeSlug = STORE_SLUG }: { product: Product; storeSlug?: string }) {
   const colors = useMemo(() => optionsOf(product, 'color'), [product]);
   const sizes = useMemo(() => optionsOf(product, 'size'), [product]);
   const { add } = useCart();
@@ -26,6 +27,7 @@ export function BuyPanel({ product }: { product: Product }) {
     if (!variant || !available) return;
     add({
       variantId: variant.id,
+      storeSlug,
       productSlug: product.slug,
       name: product.name,
       color: variant.color,

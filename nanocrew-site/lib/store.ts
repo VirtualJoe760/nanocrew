@@ -27,9 +27,17 @@ export type Product = {
   variants: Variant[];
 };
 
-async function fetchCatalogue(): Promise<Product[]> {
+export type Brand = {
+  slug: string;
+  name: string;
+  tagline: string | null;
+  logoUrl: string | null;
+  listed: boolean; // public + live in the ecosystem
+};
+
+async function fetchCatalogue(storeSlug: string): Promise<Product[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/public/stores/${STORE_SLUG}/products`, {
+    const res = await fetch(`${API_BASE}/api/public/stores/${storeSlug}/products`, {
       next: { revalidate: 120 },
     });
     if (!res.ok) return [];
@@ -40,12 +48,31 @@ async function fetchCatalogue(): Promise<Product[]> {
   }
 }
 
-export async function getProducts(): Promise<Product[]> {
-  return fetchCatalogue();
+export async function getProducts(storeSlug: string = STORE_SLUG): Promise<Product[]> {
+  return fetchCatalogue(storeSlug);
 }
 
-export async function getProduct(slug: string): Promise<Product | null> {
-  return (await fetchCatalogue()).find((p) => p.slug === slug) ?? null;
+export async function getProduct(productSlug: string, storeSlug: string = STORE_SLUG): Promise<Product | null> {
+  return (await fetchCatalogue(storeSlug)).find((p) => p.slug === productSlug) ?? null;
+}
+
+// Live brand facts (name/tagline/logo) + whether it's listed in the ecosystem.
+export async function getBrand(storeSlug: string): Promise<Brand | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/public/stores/${storeSlug}`, { next: { revalidate: 120 } });
+    if (!res.ok) return null;
+    const d = (await res.json()) as { store?: { slug: string; name: string; tagline: string | null; logoUrl: string | null; isPublic?: boolean; status?: string } };
+    if (!d.store) return null;
+    return {
+      slug: d.store.slug,
+      name: d.store.name,
+      tagline: d.store.tagline,
+      logoUrl: d.store.logoUrl,
+      listed: Boolean(d.store.isPublic) && d.store.status === 'live',
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Lowest in-stock variant price, in cents — the "from" price on a card.

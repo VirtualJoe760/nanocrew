@@ -20,7 +20,7 @@ export default function CartPage() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity })) }),
+        body: JSON.stringify({ storeSlug: lines[0]?.storeSlug, items: lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity })) }),
       });
       const d = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !d.url) throw new Error(d.error ?? 'Checkout failed.');

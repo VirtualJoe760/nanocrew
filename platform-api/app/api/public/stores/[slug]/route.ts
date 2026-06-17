@@ -18,6 +18,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
         tagline: schema.stores.tagline,
         logoUrl: schema.stores.logoUrl,
         faviconUrl: schema.stores.faviconUrl,
+        // Whether the brand is listed/shoppable in the ecosystem (in-app Market + nanocrew.app/<slug>).
+        isPublic: schema.stores.isPublic,
+        status: schema.stores.status,
       })
       .from(schema.stores)
       .where(eq(schema.stores.slug, slug))
