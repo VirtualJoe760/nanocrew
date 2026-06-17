@@ -16,20 +16,30 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
   (`src/lib/rate-limit.ts` + `rate_limits` table) guards generate/merge/composite/tryon (gen),
   voice (voice), enhance/idea (ai), mockup/publish (pf) per creator/min; `/api/video` is already
   credit-gated. Over-limit returns `429` with `Retry-After`. tryon is now authed too.
-- [ ] Rotate any secrets that have been pasted in chat/commits; confirm `.env*` is git-ignored.
-- [ ] Confirm **Supabase RLS** posture: the app uses server routes with the service path, but verify no
-  table is publicly writable via the anon key.
+- [ ] Rotate any secrets that have been pasted in chat/commits. (`.env.local` is git-ignored ✓.)
+- [x] **[code] Supabase RLS locked down** ✅ (2026-06-16). Found a CRITICAL hole: RLS was OFF on all
+  21 public tables AND the public `anon` role held full CRUD grants — so the shipped anon key could
+  read/write the whole DB (credit balances, orders, emails) via PostgREST. Fixed by enabling RLS on
+  every public table (no policies = deny-all for anon/authenticated). The app is unaffected: it
+  connects as `postgres` (rolbypassrls), and `service_role` bypasses too; the anon key is auth-only
+  (zero `.from()` data calls, storefronts read via platform-api). Verified: anon GET now returns 0
+  rows, app reads still work. **On every new migration, enable RLS on the new table** (Drizzle/owner
+  creates them RLS-off by default).
 
-### Payments (Stripe — currently TEST keys)
-- [ ] Create the platform's **live** Stripe keys; set `STRIPE_SECRET_KEY` (app + platform-api).
-- [ ] Create 3 recurring Prices → `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ADVANCED`.
-- [ ] Commerce webhook → `…/api/public/stripe-webhook` → `STRIPE_WEBHOOK_SECRET`.
-- [ ] Billing webhook → `…/api/public/billing-webhook` (events: `checkout.session.completed`,
-  `invoice.paid`, `customer.subscription.updated/deleted`) → `STRIPE_BILLING_WEBHOOK_SECRET`.
+### Payments (Stripe — LIVE keys already set)
+Stripe is on `sk_live` and the 3 `STRIPE_PRICE_*` ids are set (app/Railway). **Credit pricing is
+finalized**: 1 credit = $0.01 flat (no pack discount), every generation charge ≥2× our API cost at
+that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaining is dashboard config:
+- [ ] **Commerce webhook** → `https://nanocrew-api.vercel.app/api/public/stripe-webhook` →
+  `STRIPE_WEBHOOK_SECRET` on platform-api/Vercel. Events: `checkout.session.completed`,
+  `checkout.session.expired`, `charge.refunded`, `account.updated`.
+- [ ] **Billing webhook** → `https://nanocrew-api.vercel.app/api/public/billing-webhook` →
+  `STRIPE_BILLING_WEBHOOK_SECRET` on platform-api/Vercel. Events: `checkout.session.completed`,
+  `invoice.paid`, `customer.subscription.updated`, `customer.subscription.deleted`.
+- [ ] Confirm `STRIPE_SECRET_KEY` (sk_live) is set on **platform-api/Vercel** too (handlers 503 without it).
 - [ ] Turn on Stripe receipts/emails.
-- [ ] **Stripe Connect** (per-creator payouts + application fee) — schema is ready
-  (`connectedAccounts`, `orders.application_fee_cents`); onboarding flow not yet built. Decide whether
-  v1 settles to the platform and pays creators manually, or Connect is required at launch.
+- [ ] **Stripe Connect** — enable in the dashboard for per-creator payouts (destination charges +
+  `orders.application_fee_cents` are built; `account.updated` on the commerce webhook tracks status).
 
 ### Fulfilment (Printful)
 - [ ] Set `PRINTFUL_CONFIRM_ORDERS=1` (paid orders auto-confirm instead of staying drafts).
@@ -47,11 +57,15 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
   `com.nanocrew.app`; App ID has the Sign-in-with-Apple capability. Works once build #12 lands.
 
 ### App store
-- [ ] **EAS dev/production build** (unblocks IAP, push, critique screenshots — all three). Scaffolding
-  is in (`eas.json`, bundle id `com.nanocrew.app`); follow **[DEV_BUILD.md](DEV_BUILD.md)** for the
-  native-dep installs + wiring (don't install them while you still want Expo Go).
-- [ ] **Apple IAP** must sell in-app credits/subscriptions on iOS (Apple rejects Stripe for digital
-  goods). Configure App Store Connect consumables + `APPLE_IAP_SHARED_SECRET`, enable `IAP_ENABLED`.
+- [x] **[code] EAS production build** ✅ — building/submitting routinely (build #16, 2026-06-16, with
+  `react-native-iap` in the binary). One-command flow in the `production-shipping` memory.
+- [x] **[code] Apple IAP — plans + credits, StoreKit 2** ✅ — server verifies via the **App Store
+  Server API** (`src/lib/app-store.ts` + `iap-verify`, no legacy verifyReceipt); client purchase flow
+  wired (`iap.ios.ts`, paywall prefers IAP on iOS, web Stripe fallback). **Your remaining config:**
+  create the App Store Connect products (`com.nanocrew.credits.{500,1500,5000}` consumables +
+  `com.nanocrew.plan.{starter,pro,advanced}` subscriptions, ~43% over web price) + an In-App Purchase
+  API key; set `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY / BUNDLE_ID` on Railway. IAP stays dormant
+  (app uses web Stripe) until those exist, so the current build is safe.
 - [ ] App icon, splash, App Store screenshots/metadata, privacy nutrition labels, age rating.
 - [x] **Account/data deletion path** ✅ Code done (2026-06-13) — "Delete account" in Account →
   `DELETE /api/me` wipes the creator + all cascaded data; best-effort deletes the Supabase auth
