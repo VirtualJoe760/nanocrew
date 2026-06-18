@@ -314,7 +314,13 @@ export default function DesignScreen() {
     // First thing on the Design tab: choose the brand you're designing for, then the collection.
     // Load the creator's brands and open the setup popup. One brand → pre-select it and jump to
     // the collection step; otherwise start at the brand step.
-    apiFetch('/api/creator/stats')
+    //
+    // Source the brand list from /api/me — the SAME lightweight endpoint Studio + Account use —
+    // not /api/creator/stats. stats runs 5 aggregations and selects many extra columns; any one
+    // failing 500s the whole call, which (with the old silent `.catch`) left Design showing "no
+    // brands" while Studio/Account showed them fine for the same account. Design only needs
+    // id/slug/name, so /api/me gives guaranteed parity.
+    apiFetch('/api/me')
       .then((r) => r.json())
       .then((d: { stores?: Brand[] }) => {
         if (!alive) return;
@@ -324,7 +330,14 @@ export default function DesignScreen() {
         if (list.length === 1) chooseBrand(list[0]);
         else setSetupStep('brand');
       })
-      .catch(() => {});
+      .catch((e) => {
+        // Don't fail silently — open the picker on the brand step so the user can retry,
+        // and surface the error rather than masquerading as "no brands".
+        if (!alive) return;
+        console.warn('[design] failed to load brands', e);
+        setCatSheetOpen(true);
+        setSetupStep('brand');
+      });
     return () => {
       alive = false;
     };
