@@ -6,23 +6,26 @@ import { interviewSystem, parseTurn, type ChatMessage } from '@/lib/interview';
 // POST /api/interview — the text version of the Studio brand interview (the voice route
 // /api/voice is the primary experience; this stays for fallback/testing).
 const MODEL = 'gemini-2.5-flash';
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
 const TRANSIENT = /unavailable|overloaded|try again|503|429|rate.?limit|deadline|temporar/i;
 
 async function generateWithRetry(
   ai: GoogleGenAI,
   params: Parameters<GoogleGenAI['models']['generateContent']>[0],
-  attempts = 3,
+  attempts = 2,
 ) {
   let lastErr: unknown;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await ai.models.generateContent(params);
-    } catch (e) {
-      lastErr = e;
-      const msg = e instanceof Error ? e.message : String(e);
-      if (!TRANSIENT.test(msg) || i === attempts - 1) throw e;
-      await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+  for (const model of MODELS) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await ai.models.generateContent({ ...params, model });
+      } catch (e) {
+        lastErr = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!TRANSIENT.test(msg)) throw e;
+        await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+      }
     }
   }
   throw lastErr;

@@ -11,26 +11,35 @@ import { resolveVoice } from '@/lib/voices';
 //   init: true  → no audio; generate the opening line.
 // Returns: { userText?, done, question?, brand?, speech: base64 mp3 }
 const MODEL = 'gemini-2.5-flash';
+// On a persistent 2.5-flash overload wave, fall back to 2.0-flash so Venus keeps talking.
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
 // Gemini occasionally returns 503 UNAVAILABLE / "overloaded" / 429 — transient, server-side.
 const TRANSIENT = /unavailable|overloaded|try again|503|429|rate.?limit|deadline|temporar/i;
 
-/** generateContent with backoff retries on transient (overload/unavailable) errors. */
+/**
+ * generateContent with backoff retries on transient (overload/unavailable) errors, then a model
+ * fallback: each model gets `attempts` tries; if it's still overloaded we move to the next model.
+ * A non-transient error (bad request, etc.) throws immediately.
+ */
 async function generateWithRetry(
   ai: GoogleGenAI,
   params: Parameters<GoogleGenAI['models']['generateContent']>[0],
-  attempts = 3,
+  attempts = 2,
 ) {
   let lastErr: unknown;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await ai.models.generateContent(params);
-    } catch (e) {
-      lastErr = e;
-      const msg = e instanceof Error ? e.message : String(e);
-      if (!TRANSIENT.test(msg) || i === attempts - 1) throw e;
-      await new Promise((r) => setTimeout(r, 700 * (i + 1))); // 700ms, 1400ms
+  for (const model of MODELS) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await ai.models.generateContent({ ...params, model });
+      } catch (e) {
+        lastErr = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!TRANSIENT.test(msg)) throw e; // not an overload — real error, surface it
+        await new Promise((r) => setTimeout(r, 600 * (i + 1))); // 600ms, 1200ms
+      }
     }
+    // this model stayed overloaded across all attempts → try the next model
   }
   throw lastErr;
 }
