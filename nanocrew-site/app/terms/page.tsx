@@ -10,7 +10,7 @@ export default function Terms() {
       <Nav />
       <main className="wrap prose">
         <h1>Terms of Service</h1>
-        <p className="updated">Last updated: June 2026 · Starter draft — review with counsel before launch.</p>
+        <p className="updated">Effective June 18, 2026 · v2026-06-18 · Draft — review with counsel before launch.</p>
 
         <p>
           These Terms govern your use of Nano Crew (the &ldquo;Service&rdquo;), operated by Nano Crew
@@ -49,17 +49,34 @@ export default function Terms() {
         <h2>5. Acceptable use</h2>
         <p>
           You may not use the Service to infringe others&rsquo; rights, sell prohibited or unlawful
-          goods, or upload content you don&rsquo;t have the right to use. We may suspend brands that
-          violate these Terms.
+          goods, or upload content you don&rsquo;t have the right to use. In particular, you may not
+          create, generate, or sell <strong>sexually explicit content or graphic violence/gore</strong> —
+          these are prohibited on the Service and on any product, and our generation tools are configured
+          to block them. We may remove content and suspend brands that violate these Terms.
         </p>
 
-        <h2>6. Disclaimers &amp; liability</h2>
+        <h2>6. Your designs, indemnification &amp; generation records</h2>
+        <p>
+          You are solely responsible for the designs, brand assets, and products you create and sell
+          (&ldquo;Your Designs&rdquo;), and you represent that you own them or have all rights necessary to
+          sell them. Nano Crew is a platform and tool provider: we do not pre-screen Your Designs, do not
+          claim ownership of them, and do not warrant that they are non-infringing. You agree to indemnify,
+          defend, and hold harmless Nano Crew, its affiliates and personnel, and our fulfillment and
+          manufacturing partners (including Printful) from any claims arising out of Your Designs, your
+          products, or your violation of these Terms — including any claim that Your Designs infringe a
+          copyright, trademark, patent, publicity, or other right. For designs made with our AI tools we
+          retain generation metadata (the prompts you provided and the time of creation) as a record of how
+          and when a design was made; it is a record only and not a warranty of originality.
+        </p>
+
+        <h2>7. Disclaimers &amp; liability</h2>
         <p>
           The Service is provided &ldquo;as is.&rdquo; To the maximum extent permitted by law, our
-          liability is limited to the amount you paid us in the prior twelve months.
+          liability is limited to the amount you paid us in the prior twelve months. By creating an account
+          you accept these Terms, and we record which version you accepted and when.
         </p>
 
-        <h2>7. Contact</h2>
+        <h2>8. Contact</h2>
         <p>
           Questions about these Terms: <a href="mailto:support@nanocrew.app">support@nanocrew.app</a>.
         </p>
