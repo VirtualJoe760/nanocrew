@@ -567,6 +567,7 @@ export default function StudioScreen() {
   const messages = useRef<ChatMessage[]>([]);
   const started = useRef(false);
   const playCount = useRef(0);
+  const playGenRef = useRef(0); // bumps each playSpeech so a stale playback watchdog bails
 
   // Which AI they chose. First-time creators (no store, no saved pick) choose; everyone
   // else goes straight to their consultant.
@@ -680,8 +681,11 @@ export default function StudioScreen() {
 
   const playSpeech = useCallback(
     async (b64: string) => {
+      const gen = ++playGenRef.current;
       const file = `${FileSystem.cacheDirectory}entity-${playCount.current++}.mp3`;
       await FileSystem.writeAsStringAsync(file, b64, { encoding: FileSystem.EncodingType.Base64 });
+      // Switch the audio session OUT of record mode (we may have just recorded), then give iOS a
+      // beat to actually apply the category switch before playing — otherwise play() no-ops silently.
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       // If the user left the Studio tab or paused while this reply was loading, stay silent —
       // never let her start talking on a tab the user isn't looking at.
@@ -689,9 +693,43 @@ export default function StudioScreen() {
         setState('idle');
         return;
       }
-      player.replace({ uri: file });
-      player.play();
+      try {
+        player.replace({ uri: file });
+      } catch {
+        setState('idle');
+        return;
+      }
+      // CRITICAL: wait for the clip to actually LOAD before play() — calling play() on an
+      // unloaded source no-ops silently (this was the "first word shows but no audio" freeze).
+      // Also gives the record→playback audio-session switch time to apply.
+      for (let i = 0; i < 25 && !player.isLoaded; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (gen !== playGenRef.current) return; // superseded by a newer reply
+      }
+      if (gen !== playGenRef.current || !focusedRef.current || pausedRef.current) {
+        setState('idle');
+        return;
+      }
       setState('speaking');
+      player.play();
+      // Watchdog: confirm playback ACTUALLY started. If play() no-op'd (session/load race), nudge
+      // once, and if it still never starts, drop to idle so she never freezes silent in "speaking"
+      // (the reply text is already on screen). didJustFinish handles the normal end.
+      for (let i = 0; i < 16; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (gen !== playGenRef.current || pausedRef.current) return;
+        if (player.playing || player.currentTime > 0.02) return; // real playback — done
+        if (i === 4 || i === 9) {
+          // play() no-op'd — re-assert the playback session + nudge again.
+          try {
+            await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+            player.play();
+          } catch {}
+        }
+      }
+      if (gen === playGenRef.current && !player.playing && player.currentTime <= 0.02) {
+        setState('idle'); // never started — don't leave her hung
+      }
     },
     [player],
   );
@@ -885,18 +923,27 @@ export default function StudioScreen() {
   const sendRecording = useCallback(async () => {
     if (busyRef.current) return;
     busyRef.current = true;
+    let audio: string;
     try {
       await recorder.stop();
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       const uri = recorder.uri;
       if (!uri) throw new Error('No recording captured');
-      const audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-      await turn({ audio });
+      audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Recording failed');
       setState('idle');
-    } finally {
       busyRef.current = false;
+      return;
+    }
+    // Release the send-lock BEFORE the model turn + playback, so a reply that's thinking/speaking
+    // never blocks the next hold (lets you interrupt). turn() runs its own state machine.
+    busyRef.current = false;
+    try {
+      await turn({ audio });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setState('idle');
     }
   }, [recorder, turn]);
 
@@ -1125,7 +1172,13 @@ export default function StudioScreen() {
         {session ? (
           <>
             <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} onDeleted={() => { setShowComposer(false); setConsoleBrand(null); setDashKey((k) => k + 1); }} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
-            <Paywall visible={!!paywall} onClose={() => setPaywall(null)} token={session.access_token} reason={paywall} />
+            <Paywall
+              visible={!!paywall}
+              onClose={() => setPaywall(null)}
+              token={session.access_token}
+              reason={paywall}
+              onFreeSlot={() => { setPaywall(null); setMode('dashboard'); }}
+            />
           </>
         ) : null}
 
@@ -1161,14 +1214,23 @@ export default function StudioScreen() {
         ) : !voiceResolved || mode === 'loading' ? (
           <ActivityIndicator style={styles.center} color="#cdd1d9" />
         ) : mode === 'dashboard' ? (
-          <StudioDashboard
-            key={dashKey}
-            token={session.access_token}
-            onEditBrand={(slug, name) => { setConsoleBrand({ slug, name }); setShowComposer(true); }}
-            onNewBrand={onNewBrand}
-            onOpenBilling={() => setPaywall('manage')}
-            onBounty={(panel) => router.navigate(`/design?panel=${panel}`)}
-          />
+          <>
+            {brand ? (
+              <Pressable onPress={() => setMode('interview')} style={[styles.stagedBanner, { borderColor: p.accent }]}>
+                <ThemedText type="code" style={{ color: p.accent, fontSize: 12, letterSpacing: 0.5 }}>
+                  ‹ “{brand.name}” is staged — delete a brand below to free a slot, then tap to launch it
+                </ThemedText>
+              </Pressable>
+            ) : null}
+            <StudioDashboard
+              key={dashKey}
+              token={session.access_token}
+              onEditBrand={(slug, name) => { setConsoleBrand({ slug, name }); setShowComposer(true); }}
+              onNewBrand={onNewBrand}
+              onOpenBilling={() => setPaywall('manage')}
+              onBounty={(panel) => router.navigate(`/design?panel=${panel}`)}
+            />
+          </>
         ) : brand ? (
           <ScrollView
             style={styles.fill}
@@ -1447,6 +1509,7 @@ const styles = StyleSheet.create({
   cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
   hint: { color: '#9396a0', letterSpacing: 1 },
   pausePill: { marginTop: Spacing.three, borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two, alignSelf: 'center' },
+  stagedBanner: { borderWidth: 1, borderRadius: 12, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three, marginBottom: Spacing.three },
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },

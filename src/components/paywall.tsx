@@ -32,11 +32,14 @@ export function Paywall({
   onClose,
   token,
   reason,
+  onFreeSlot,
 }: {
   visible: boolean;
   onClose: () => void;
   token: string;
   reason: 'subscription_required' | 'brand_limit' | 'manage' | null;
+  /** brand_limit only: "free up a slot" → caller takes the user to their brands to delete one. */
+  onFreeSlot?: () => void;
 }) {
   const p = useStudioPalette();
   const s = useMemo(() => makeStyles(p), [p]);
@@ -186,6 +189,12 @@ export function Paywall({
               <ThemedText type="title" style={s.ink}>{title}</ThemedText>
               <ThemedText type="small" style={s.dim}>{sub}</ThemedText>
               {note ? <ThemedText type="small" style={s.warn}>{note}</ThemedText> : null}
+
+              {reason === 'brand_limit' && onFreeSlot ? (
+                <Pressable onPress={onFreeSlot} style={[s.btn, s.btnCurrent]}>
+                  <ThemedText type="smallBold" style={s.accent}>Free up a slot — delete a brand</ThemedText>
+                </Pressable>
+              ) : null}
 
               {data?.tiers?.map((t) => {
                 const current = data.entitlements.active && data.entitlements.plan === t.plan;
