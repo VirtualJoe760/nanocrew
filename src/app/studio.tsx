@@ -143,24 +143,16 @@ function FabricBackground({ p }: { p: Palette }) {
 
 // ---------- The NC monogram + circular nucleus ----------
 
-/** The Nano Crew "NC" serif monogram — brushed-silver metallic on dark, solid ink on light. */
-function NCMark({ size, color, metallic }: { size: number; color: string; metallic?: boolean }) {
+/** The Nano Crew "NC" brand mark — the real logo asset (assets/brand/nc-mark.png), tinted to the
+ *  foreground so it reads on both light and dark (same treatment as the paywall header). */
+function NCMark({ size, color }: { size: number; color: string; metallic?: boolean }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      {metallic ? (
-        <Defs>
-          <LinearGradient id="nc-metal" x1="0.1" y1="0" x2="0.9" y2="1">
-            <Stop offset="0" stopColor="#ffffff" />
-            <Stop offset="0.45" stopColor="#d6d9df" />
-            <Stop offset="0.72" stopColor="#9aa0aa" />
-            <Stop offset="1" stopColor="#eef0f3" />
-          </LinearGradient>
-        </Defs>
-      ) : null}
-      <SvgText x="50" y="71" fill={metallic ? 'url(#nc-metal)' : color} fontFamily={SERIF} fontSize={62} fontWeight="500" textAnchor="middle" letterSpacing={-6}>
-        NC
-      </SvgText>
-    </Svg>
+    <Image
+      source={require('../assets/brand/nc-mark.png')}
+      style={{ width: size, height: size }}
+      contentFit="contain"
+      tintColor={color}
+    />
   );
 }
 
@@ -889,6 +881,20 @@ export default function StudioScreen() {
     setMode(voiceId ? 'interview' : 'cta');
   }, [voiceId]);
 
+  // Just finished creating a brand — graduate from the compiled/created screen back to the brand
+  // picker (dashboard). Bump dashKey so the freshly created brand shows up in the list.
+  const onFinishedBrand = useCallback(() => {
+    started.current = false;
+    messages.current = [];
+    setBrand(null);
+    setCreated(null);
+    setHeard('');
+    setLine('');
+    setHasStore(true);
+    setDashKey((k) => k + 1);
+    setMode('dashboard');
+  }, []);
+
   const previewVoice = useCallback(
     async (v: AiVoice) => {
       if (!session || previewing) return;
@@ -1242,14 +1248,23 @@ export default function StudioScreen() {
               {brand.story}
             </ThemedText>
             {created ? (
-              <View style={[styles.createBtn, styles.createdBox]}>
-                <ThemedText type="code" style={styles.green}>
-                  {'> store online · @' + created}
-                </ThemedText>
-                <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-                  Head to Design to start your first drop.
-                </ThemedText>
-              </View>
+              <>
+                <View style={[styles.createBtn, styles.createdBox]}>
+                  <ThemedText type="code" style={styles.green}>
+                    {'> store online · @' + created}
+                  </ThemedText>
+                  <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
+                    Head to Design to start your first drop.
+                  </ThemedText>
+                </View>
+                <Pressable onPress={onFinishedBrand}>
+                  <View style={styles.createBtn}>
+                    <ThemedText type="smallBold" style={{ color: BG }}>
+                      Finished — view my brands
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              </>
             ) : (
               <Pressable onPress={createStore} disabled={creating}>
                 <View style={[styles.createBtn, { opacity: creating ? 0.5 : 1 }]}>
