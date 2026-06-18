@@ -54,7 +54,7 @@ The division is organized into subdirectories — open the one you need:
 - Expo SDK 54, expo-router, RN 0.81, React 19, TS. npm (not pnpm).
 - Supabase Auth + Postgres via Drizzle. `npm run db:generate` / `db:migrate`, then sync the platform-api schema copy.
 - **Authed client calls use `apiFetch()`** (`src/lib/api.ts`) — attaches the Supabase token. The designer + creator endpoints are auth + per-creator scoped (`src/lib/tenant.ts`); paid AI endpoints are credit-gated (`src/lib/credits.ts`) and rate-limited (`src/lib/rate-limit.ts`).
-- **Brand = cool monochrome (paper / near-pure black) + platinum silver** (the Nano Crew asset sheet — "depth, dimension, sophistication"; NO gold), clean sans, serif only for the NC mark. Palette lives in THREE places — keep aligned: `src/constants/theme.ts` (`Colors`), `src/lib/studio-palette.ts` (Studio modals), `src/app/studio.tsx` `makePalette` (Studio screen). Individual brand storefronts keep their OWN colors — only the app chrome is monochrome.
+- **Brand = cool monochrome (paper / near-pure black) + platinum silver** (the Nano Crew asset sheet — "depth, dimension, sophistication"; NO gold), clean sans, serif only for the NC mark. Palette lives in THREE places — keep aligned: `src/constants/theme.ts` (`Colors`), `src/lib/studio-palette.ts` (Studio modals), `src/app/studio.tsx` `makePalette` (Studio screen). Individual brand storefronts keep their OWN colors — only the app chrome is monochrome. The **NC app icon + marks** were regenerated from `assets/brand/nano-crew-logo.png` into `assets/images/*` (icon, favicon, splash, Android adaptive) + `assets/brand/*` (`nc-mark.png` transparent, `play-store-icon-512.png`); the paywall header + nanocrew.app nav/favicon use the NC mark.
 - **Site edits are branch-based** (`revise.ts`): never edit a brand's `main` directly — change → `revision/<id>` branch → Vercel preview → creator approves → merge.
 - **Commit often + push** (Joe's preference): commit at each logical milestone; verify `tsc` + `npx expo export` before pushing. End commit messages with the Co-Authored-By trailer.
 
@@ -66,12 +66,12 @@ The division is organized into subdirectories — open the one you need:
 - `account.tsx` — **Account** (auth, billing portal, account deletion, platform admin)
 
 ## Constraints / gotchas
-- **Dev build only (Expo Go retired as of build #12)**: `expo-notifications` (push, `PUSH_ENABLED=true`) + `expo-apple-authentication` (native Sign in with Apple, `src/lib/oauth.ts`) are now installed, so the project requires an EAS dev/standalone build — Expo Go can't load it. Still NOT installed (server sides done, seams off): IAP (`react-native-iap`, `IAP_ENABLED`), critique screenshots (`react-native-view-shot`). See `docs/ops/DEV_BUILD.md`.
+- **Dev build only (Expo Go retired as of build #12)**: `expo-notifications` (push, `PUSH_ENABLED=true`), `expo-apple-authentication` (native Sign in with Apple, `src/lib/oauth.ts`), and `react-native-iap` (v15, **Apple IAP / StoreKit 2** — client `src/lib/iap.ios.ts`, dormant until `APPLE_IAP_*` env) are installed, so the project requires an EAS dev/standalone build — Expo Go can't load it. Still NOT installed (server side done, seam off): critique screenshots (`react-native-view-shot`). See `docs/ops/DEV_BUILD.md`.
 - **Expo Go stale bundle**: only `xcrun simctl terminate booted host.exp.Exponent` + relaunch forces a fresh rebundle.
 - Nano Banana can't emit alpha → magenta chroma-key (`src/lib/transparency.ts`).
 - `AUTO_FIRST_DROP=1` enables server-side first-drop generation (real spend) — uses `INTERNAL_API_KEY` to call the now-authed designer routes.
 
-## Status (2026-06-16)
+## Status (2026-06-17)
 The product is now **Nano Crew** (spaced in prose; the `nanocrew` slug/URLs/repo names are unchanged).
 The app lands on **Studio** — the **social feed is hidden for v1** (code preserved at the `/feed`
 route, no tab; returns in v2), so the tab bar is **Studio · Design · Market · Account**. **Close to
@@ -84,23 +84,35 @@ text box, `/api/creator/enhance-copy`), a full **SEO layer** in all 4 templates 
 Organization/Product/BlogPosting JSON-LD, OpenGraph/Twitter, sitemap + robots), a header **cart icon**,
 the **Account screen rebrand**, and the **Design-tab brand→collection picker**.
 
+Also shipped this session: **app-only Publish** (`POST /api/creator/stores/:slug/publish` — sell in
+the in-app Market + on `nanocrew.app/b/<slug>` with just an active plan + a published product; a
+custom domain/dedicated website is now a SEPARATE Pro upgrade, not a prerequisite), **per-brand web
+storefronts + the Nano Crew company store** (`nanocrew.app/b/<slug>` + `/store`, in `./nanocrew-site`,
+single-brand cart, shared POS), **comp/internal accounts** (`src/lib/comp.ts`, `COMP_EMAILS` →
+top-tier free entitlements + `debitCredits` no-op), the **Supabase RLS lockdown** (RLS enabled
+deny-all on all public tables — new migrations must `ENABLE ROW LEVEL SECURITY`), a **mini-CMS hex
+color picker** (HSB gradient sliders in `src/components/site-editor.tsx`), **durable real-time build
+status** (Studio Edit-site tab derives "building" from store status + the `store_revisions` job row,
+not a local flag), the **Stephen Lawyer migration deployed** (app-driven lookbook, on-model imagery
+for all 21 products), the **new NC icon/marks**, and **finalized credit pricing** (flat $0.01/cr
+floor, no pack discount, every charge ≥2× real cost — `model_shots` 25, Seedance 260).
+
 **LIVE on TestFlight**; backend on **Railway** (was EAS Hosting — Workers couldn't keep postgres-js
-alive). **Build #12 building/submitting** with **native Sign in with Apple** (`expo-apple-authentication`
-→ `signInWithIdToken`, no client secret) + **push** (`expo-notifications`, `PUSH_ENABLED=true`). The
-Apple App ID now carries all 3 capabilities (IAP, Push, Apple) and the old provisioning profile was
-invalidated → EAS regenerates clean (clears the cache that blocked builds #7–9). **Railway GitHub
-auto-deploy is LIVE** (push to `main` → auto-deploy; the GitHub App had lost repo access — re-granted).
-**Supabase auth** prod-ready (Site URL + redirects fixed, Apple provider enabled native-only,
-**Facebook hidden for v1** — button removed + provider off). **Legal live**: Privacy + Terms at
-`nanocrew-api.vercel.app/privacy` + `/terms`, linked in Account. **Security pass done** (no criticals;
-shipped SSRF guard `src/lib/safe-fetch.ts`, merge IDOR fix, constant-time internal-key, opt-in
-Printful-webhook token). Remaining is mostly Joe's config — see the **task list** +
-`docs/ops/PRODUCTION_CHECKLIST.md`. Top open: **Stripe go-live** (deferred to last), **Railway billing**
-(trial expiring → backend offline), **Apple IAP** (server is now **StoreKit 2** / App Store Server
-API — `src/lib/app-store.ts` + `iap-verify`, handles plans + credit packs, inert until `APPLE_IAP_*`
-env is set; remaining: `expo install react-native-iap`, App Store Connect products + IAP key, client
-wiring, a build), and provisioning end-to-end verify (needs one Pro test
-brand). See the `production-shipping` memory.
+alive). **Build #16** (2026-06-16) ships **native Sign in with Apple** (`expo-apple-authentication`
+→ `signInWithIdToken`, no client secret), **push** (`expo-notifications`, `PUSH_ENABLED=true`), and
+**Apple IAP — StoreKit 2** (`react-native-iap` v15 in the binary; server verifies via the App Store
+Server API, `src/lib/app-store.ts` + `iap-verify`, plans + credit packs, dormant until `APPLE_IAP_*`
+env + App Store Connect products). The Apple App ID carries all 3 capabilities (IAP, Push, Apple).
+**Railway GitHub auto-deploy is LIVE** (push to `main` → auto-deploy). **Supabase auth** prod-ready
+(Site URL + redirects fixed, Apple provider native-only, **Facebook hidden for v1**). **Legal live**:
+Privacy + Terms at `nanocrew-api.vercel.app/privacy` + `/terms`. **Security pass done** (no criticals;
+SSRF guard `src/lib/safe-fetch.ts`, merge IDOR fix, constant-time internal-key, opt-in Printful-webhook
+token, RLS lockdown). **Android build + Google Play** in progress (`docs/ops/PLAY_STORE.md`). Remaining
+is mostly Joe's config — see `docs/ops/PRODUCTION_CHECKLIST.md`. Top open: **🔴 platform-api commerce
+is still on a TEST Stripe key** (`cs_test_` sessions — real purchases won't charge until its
+`STRIPE_SECRET_KEY` is switched to live), **Stripe Connect go-live**, App Store Connect IAP product
+config, and provisioning end-to-end verify (needs one Pro test brand). See the `production-shipping`
+memory.
 
 **Build quality — mostly shipped.** The build-quality epic's first two fixes are in: Venus now
 *authors* the build brief (`authorBrandBrief`, gemini-2.5-pro — not a mail-merge) and a **Master

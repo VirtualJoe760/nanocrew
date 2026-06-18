@@ -41,13 +41,21 @@ Call `registerForPush(session.access_token)` after sign-in (e.g. in `account.tsx
 **APNs:** in the Apple Developer portal enable Push Notifications for `com.nanocrew.app`; EAS
 manages the key during `eas build`.
 
-## 3. Apple IAP — wire StoreKit
-Server verify is done (`/api/creator/billing/iap-verify`, set `APPLE_IAP_SHARED_SECRET`). In
-`src/lib/iap.ts`: set `IAP_ENABLED = true` and implement `buyCreditsIap` with `react-native-iap`
-(`initConnection` → `requestPurchase({ sku })` → `getReceiptIOS()` → POST to the verify endpoint →
-`finishTransaction`). Create the **consumable** products in App Store Connect matching the ids in
-`src/lib/iap-products.ts` (`com.nanocrew.credits.500/1500/5000`). Route the Paywall's credit packs
-through IAP when `iapAvailable()` (iOS), Stripe on web.
+## 3. Apple IAP — StoreKit 2 (shipped)
+**`react-native-iap` (v15) is now installed** and the IAP path is wired end-to-end on **StoreKit 2**:
+- **Server:** `/api/creator/billing/iap-verify` verifies via the **App Store Server API**
+  (`src/lib/app-store.ts` signs an ES256 JWT with `node:crypto` and pulls the signed transaction
+  from Apple — prod→sandbox fallback for pre-release apps). **Not legacy verifyReceipt.** The client
+  sends a `transactionId` (with `appAccountToken` = creator id); credit packs grant credits, plan
+  products activate the subscription + first month, idempotent on the transactionId.
+- **Client:** `src/lib/iap.ios.ts` (react-native-iap) + the paywall prefer IAP on iOS, with web
+  Stripe as the fallback. Products are in `src/lib/iap-products.ts` — credit-pack **consumables**
+  `com.nanocrew.credits.{500,1500,5000}` **and** plan **subscriptions**
+  `com.nanocrew.plan.{starter,pro,advanced}`.
+- **Config:** create those products in App Store Connect (IAP prices ~43% over web — or 15% on the
+  Small Business Program — to absorb Apple's cut) + an In-App Purchase API key, then set
+  `APPLE_IAP_KEY_ID / APPLE_IAP_ISSUER_ID / APPLE_IAP_PRIVATE_KEY / APPLE_BUNDLE_ID` on Railway. IAP
+  stays dormant (web Stripe) until those exist.
 
 ## 4. Critique screenshots
 In `src/components/site-preview.tsx` (critique `send()`): capture the WebView+overlay with
@@ -107,5 +115,6 @@ npx eas submit --platform ios --profile production  # uploads the build to App S
 - **External testing** (≤10,000, needs a brief Beta App Review): add a public link or emails.
 - Testers install the **TestFlight** app + accept the invite.
 
-Notes: IAP / push / view-shot remain off (`IAP_ENABLED` / `PUSH_ENABLED`), so a build works for testing
-the core app without those native deps.
+Notes: **push** (`PUSH_ENABLED=true`) and **IAP** (StoreKit 2, `react-native-iap` v15) now ship in
+the binary; IAP stays dormant until the `APPLE_IAP_*` env + App Store Connect products exist.
+**view-shot** (critique screenshots) is still off and not installed.

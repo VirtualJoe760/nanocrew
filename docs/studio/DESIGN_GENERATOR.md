@@ -104,7 +104,7 @@ the routes:
   | key | model | clip | credits |
   |---|---|---|---|
   | `wan` | Wan 2.5 | 5s | 60 (best value) |
-  | `seedance` | Seedance 2.0 fast | 5s | 160 (premium, cinematic + audio) — **default** |
+  | `seedance` | Seedance 2.0 fast | 5s | 260 (premium, cinematic + audio) — **default** |
   | `veo3` | Veo 3 | 8s | 400 (top-tier realism + native audio) |
 
 - **`target` routes the output:** `'website'` → appended to `products.modelVideos` (the site's

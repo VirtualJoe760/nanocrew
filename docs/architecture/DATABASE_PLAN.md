@@ -11,6 +11,12 @@ Auth itself lives in **Supabase Auth** (`auth.users`); `creators.id` mirrors the
 > EVERY migration — the public storefront API + webhooks read through that copy, and a drift
 > between the two silently breaks the storefront. Treat "edit schema → migrate → copy to
 > platform-api" as one atomic operation.
+>
+> **🔒 RLS rule — every new migration must enable RLS on the new table.** Row-Level Security is
+> ENABLED (deny-all, no policies) on all public tables; the shipped Supabase anon key previously
+> had full CRUD with RLS off. The app is unaffected — it connects as `postgres` (rolbypassrls) and
+> the anon key is auth-only. Drizzle creates tables RLS-off, so each migration must add
+> `ALTER TABLE public.<t> ENABLE ROW LEVEL SECURITY;` for any new table.
 
 ---
 

@@ -36,7 +36,10 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
 - [ ] **Billing webhook** → `https://nanocrew-api.vercel.app/api/public/billing-webhook` →
   `STRIPE_BILLING_WEBHOOK_SECRET` on platform-api/Vercel. Events: `checkout.session.completed`,
   `invoice.paid`, `customer.subscription.updated`, `customer.subscription.deleted`.
-- [ ] Confirm `STRIPE_SECRET_KEY` (sk_live) is set on **platform-api/Vercel** too (handlers 503 without it).
+- [ ] 🔴 **platform-api commerce is still on a TEST Stripe key** — checkout produces `cs_test_`
+  sessions, so **real product purchases won't charge** until platform-api's `STRIPE_SECRET_KEY` is
+  switched to the **live** key on Vercel (handlers 503 without any key). This is the live-commerce
+  blocker.
 - [ ] Turn on Stripe receipts/emails.
 - [ ] **Stripe Connect** — enable in the dashboard for per-creator payouts (destination charges +
   `orders.application_fee_cents` are built; `account.updated` on the commerce webhook tracks status).
@@ -87,7 +90,8 @@ Set in `.env.local` (dev) **and** the Vercel projects (app server + `platform-ap
 | Billing | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_BILLING_WEBHOOK_SECRET`, `STRIPE_PRICE_*`, `BILLING_RETURN_URL` |
 | Provisioning | `GITHUB_TOKEN`, `GITHUB_OWNER`, `TEMPLATES_REPO`, `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VERCEL_TOKEN`, `PLATFORM_API_BASE` |
 | Email | `RESEND_API_KEY`, `EMAIL_FROM` |
-| Flags/admin | `AUTO_FIRST_DROP`, `APPLE_IAP_SHARED_SECRET`, `PLATFORM_ADMIN_EMAILS`, `INTERNAL_API_KEY` (server-to-server first-drop) |
+| IAP (StoreKit 2) | `APPLE_IAP_KEY_ID`, `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_PRIVATE_KEY`, `APPLE_BUNDLE_ID` (App Store Server API; IAP dormant until set) |
+| Flags/admin | `AUTO_FIRST_DROP`, `PLATFORM_ADMIN_EMAILS`, `COMP_EMAILS` (comp/internal accounts — never billed; falls back to `PLATFORM_ADMIN_EMAILS`), `INTERNAL_API_KEY` (server-to-server first-drop) |
 
 - [ ] On **every migration**: regenerate, apply, and **copy `src/db/schema.ts` → `platform-api/db/schema.ts`**.
 - [ ] Confirm the forge VPS is reachable and `VERCEL_TOKEN` deploys (otherwise "Build site" pushes a

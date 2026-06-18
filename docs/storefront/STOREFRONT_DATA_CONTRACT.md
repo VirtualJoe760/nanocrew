@@ -115,6 +115,13 @@ vars, `getSiteCopy()` drives the hero + Our Story copy, `getFontVars()` resolves
 CSS stacks + a Google Fonts `<link>`. The write path is **direct** (`POST /api/creator/site-config`,
 access-checked), distinct from the Venus→forge revision flow used for open-ended redesigns.
 
+The Customize editor (`src/components/site-editor.tsx`) picks colors with a **true hex picker** —
+continuous Hue/Saturation/Brightness gradient sliders (react-native-svg) that yield any hex, not a
+fixed set of preset swatches.
+
+`GET /api/public/stores/:slug` (the brand-facts read) now also returns **`isPublic` + `status`**, so
+a consumer can tell whether a brand is listed/live without a separate call.
+
 ### `POST /api/public/checkout`  `{ storeSlug, items: [{ variantId, quantity }] }` → `{ url }`
 
 The shared **POS**: prices come from the DB (client cart untrusted), an order row is created
@@ -122,6 +129,15 @@ The shared **POS**: prices come from the DB (client cart untrusted), an order ro
 order to Printful. The in-app store proxies this via `/api/store/:slug/checkout`. A storefront's
 "add to cart → checkout" MUST go through here — never its own Stripe — so variant IDs, pricing, and
 fulfilment are single-source.
+
+## The nanocrew.app web storefronts (`./nanocrew-site`)
+
+Every **listed** brand also gets a web storefront at **`nanocrew.app/b/<slug>`** (`app/b/[brand]`),
+reusing the shared POS — so a brand with no dedicated website still sells on the web (and in-app)
+the moment it's published. The **Nano Crew company store** lives at **`nanocrew.app/store`** (HQ).
+The cart is **single-brand** (`CartLine.storeSlug`); checkout (`app/api/checkout/route.ts`) forwards
+that slug to `/api/public/checkout`, so the same data contract and POS apply. These pages read the
+public store/products/collections endpoints exactly like the templates — Rule #1 still holds.
 
 ## How a template consumes the catalogue
 
@@ -179,6 +195,10 @@ NextAuth/cart/checkout). Such a site **does not read our catalogue**, so it drif
    the now-API-backed data layer.
 4. Deploy a **preview** (never straight to production), eyeball it, then merge.
 5. Checkout is a separate phase: re-point the bespoke cart/checkout to `POST /api/public/checkout`.
+
+**Status — deployed.** The cutover shipped: the `nanocrew-migration` branch merged → live. The
+lookbook is now **app-driven** (reads collections + products; no more hardcoded Unsplash), and
+on-model imagery was generated for all **21 products** via `scripts/gen-stephen-imagery.mjs`.
 
 Going forward, the durable fix for new brands is **not** bespoke sites — it's generating them from
 the templates, which already obey this contract.

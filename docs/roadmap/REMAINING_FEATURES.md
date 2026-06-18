@@ -34,10 +34,13 @@ historical).
 ## 1. Blocked on a native dev build (can't run in Expo Go)
 These three all unlock with **one** EAS dev build. The server sides are already built.
 
-- 🔒 **Apple IAP (in-app purchases)** — server verify (`/api/creator/billing/iap-verify`) + product
-  catalogue + client seam exist. Needs: `npx expo install react-native-iap`, a dev build, App Store
-  Connect consumable products, `APPLE_IAP_SHARED_SECRET`, then flip `IAP_ENABLED` in `src/lib/iap.ts`
-  and fill the StoreKit calls. (Task #39)
+- 🟢 **Apple IAP (in-app purchases) — shipped (StoreKit 2)** — `react-native-iap` (v15) is installed
+  and in the binary; the server verifies via the **App Store Server API** (`src/lib/app-store.ts` +
+  `iap-verify`, no legacy verifyReceipt), handling both plans and credit packs; the client
+  (`src/lib/iap.ios.ts`) + paywall prefer IAP on iOS with web-Stripe fallback. Remaining is Joe's
+  config: create the App Store Connect products (`com.nanocrew.credits.{500,1500,5000}` +
+  `com.nanocrew.plan.{starter,pro,advanced}`) + an IAP API key, then set
+  `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY / APPLE_BUNDLE_ID` on Railway. (Task #39)
 - 🔒 **Push notifications** — `device_tokens` table, registration endpoint, and `notify.ts` delivery
   are live (revision "ready to review" fires once a token exists). Needs: `expo-notifications` + dev
   build + mint the token (`src/lib/push.ts`, `PUSH_ENABLED`). (Task #35)

@@ -52,7 +52,16 @@ consumes (`src/lib/interview.ts`):
 
 The store row is created and `provisionStorefront()` is fired. (A brand that launched shop-only on
 Starter can add a website later via `POST /api/creator/build-site` — a Pro+ feature — which rebuilds
-the `BrandResult` from the stored profile and fires the same pipeline.)
+the `BrandResult` from the stored profile and fires the same pipeline. `build-site` now **refuses a
+brand with no `designSystem`** — `422 no_design_system` — instead of firing a doomed provision.)
+
+**The "building…" state is durable.** The Studio console's Edit-site tab
+(`src/components/studio-composer.tsx`) derives "building" from **durable signals** — the store's
+`status` plus the provision job row in `store_revisions` — not a local flag, so it survives the
+creator reopening the console and self-heals on a ~6s poll. It shows an animated progress bar,
+elapsed timer, and phase label, plus a **"build didn't finish"** failure state.
+`provisionStorefront()` records a **failed `store_revisions` row** on error, so failures surface
+instead of vanishing.
 
 ## 2 · Build — the forge robot builds a presentable site
 
@@ -104,7 +113,17 @@ storefront engine's revision path, not the design generator.
 
 ## 4 · Publish — go live
 
-The final step turns a refined site into a launched brand:
+**Selling is now decoupled from websites.** The cheapest path to live is **app-only Publish**:
+`POST /api/creator/stores/:slug/publish { listed }` (`src/app/api/creator/stores/[slug]/publish+api.ts`)
+sets `isPublic + status='live'` with **only an active plan + ≥1 published product — NO website, NO
+custom domain**. That lists the brand in the in-app **Market** (`/api/market` lists
+`isPublic && status='live'`) and on `nanocrew.app/b/<slug>` (see
+[STOREFRONT_DATA_CONTRACT.md](../storefront/STOREFRONT_DATA_CONTRACT.md)). Studio → Settings →
+**"Marketplace → Open shop"** drives it; `listed: false` closes the shop. A **custom domain /
+dedicated website** (the go-live flow below) is now a **separate Pro upgrade layered on top — not a
+prerequisite to sell**.
+
+The fuller step turns a refined site into a launched brand with its own domain:
 
 - **Link a domain** (custom domain on Vercel; a Pro+/lifecycle feature — see the `lifecycle-phases`
   notes and `docs/storefront/STOREFRONT_ENGINE.md`).

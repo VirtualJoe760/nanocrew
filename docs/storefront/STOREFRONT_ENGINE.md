@@ -21,6 +21,13 @@ token costs flat and quality guaranteed.
 After setup, **there is no need for new code**. Products and the catalogue flow through the
 platform API (the data contract); copy and blog posts flow through pre-wired content rails.
 
+**A generated/custom site is now optional, not the way to sell.** Any **listed** brand gets a web
+storefront for free at `nanocrew.app/b/<slug>` (in `./nanocrew-site`), reusing the shared POS, and
+shows up in the in-app Market — so a brand can sell on web + in-app with **no dedicated website and
+no custom domain** (app-only Publish; see [BUILD_FLOW.md](../studio/BUILD_FLOW.md)). A dedicated
+template site + custom domain is a Pro upgrade layered on top. Nano Crew's own **company store**
+lives at `nanocrew.app/store`. The data flow for all of these is the data contract.
+
 ## Architecture at a glance — the queue-based pipeline
 
 > **KEY CORRECTION (2026-06-15):** provisioning no longer SSHes the forge from the app.

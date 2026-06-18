@@ -59,7 +59,8 @@ The docs are organized into divisions. Start here, then open the division you ne
 | Doc | Covers |
 |---|---|
 | [ops/PRODUCTION_CHECKLIST.md](ops/PRODUCTION_CHECKLIST.md) | Go-live checklist (security, payments, env, App Store) |
-| [ops/DEV_BUILD.md](ops/DEV_BUILD.md) | EAS dev-build runbook (IAP, push, native Apple) |
+| [ops/DEV_BUILD.md](ops/DEV_BUILD.md) | EAS dev-build runbook (IAP StoreKit 2, push, native Apple) |
+| [ops/PLAY_STORE.md](ops/PLAY_STORE.md) | Google Play first-launch playbook (incl. FCM/Firebase for Android push) |
 | **[roadmap/REMAINING_FEATURES.md](roadmap/REMAINING_FEATURES.md)** | **The canonical roadmap** — what's shipped vs. still open, by blocker |
 | [roadmap/LIFECYCLE_ROADMAP.md](roadmap/LIFECYCLE_ROADMAP.md) | The brand build→domain→live→Connect lifecycle (Phases A–D, all code-complete; inert until Joe's config) |
 | [roadmap/FEATURE_ROADMAP.md](roadmap/FEATURE_ROADMAP.md) | Historical — the original designer-parity plan (delivered). Kept for context; see REMAINING_FEATURES for live status. |
@@ -90,8 +91,16 @@ is close to production-ready on TestFlight. Recent work has shipped:
   ([studio/FORGE_AI.md](studio/FORGE_AI.md)). What remains open: giving the robot **eyes + a
   self-critique loop** and a real quality gate (no more silent `|| true` ready-flip) — see
   [storefront/BUILD_QUALITY.md](storefront/BUILD_QUALITY.md).
+- **App-only Publish** — selling is decoupled from websites: `POST /api/creator/stores/:slug/publish`
+  lists a brand in the in-app Market + on `nanocrew.app/b/<slug>` with only an active plan + a
+  published product (a custom domain is now a separate Pro upgrade). See
+  [studio/BUILD_FLOW.md](studio/BUILD_FLOW.md) + [storefront/STOREFRONT_DATA_CONTRACT.md](storefront/STOREFRONT_DATA_CONTRACT.md).
+- **Apple IAP (StoreKit 2)** shipped — plans + credit packs verify via the App Store Server API; the
+  **mini-CMS hex color picker**, **durable real-time build status**, **comp/internal accounts**
+  (never billed), and the **Supabase RLS lockdown** are all in. Credit pricing is finalized at a flat
+  $0.01/cr floor ([accounts/BILLING_CREDITS.md](accounts/BILLING_CREDITS.md)).
 
-The remaining open work is mostly Joe's account/config (Stripe go-live, Connect, domain-buy contact)
-plus end-to-end live verification — tracked in
-[roadmap/REMAINING_FEATURES.md](roadmap/REMAINING_FEATURES.md) and
+The remaining open work is mostly Joe's account/config (notably **switching platform-api to the live
+Stripe key** — commerce is still on a test key — plus Connect + domain-buy contact) and end-to-end
+live verification — tracked in [roadmap/REMAINING_FEATURES.md](roadmap/REMAINING_FEATURES.md) and
 [ops/PRODUCTION_CHECKLIST.md](ops/PRODUCTION_CHECKLIST.md).

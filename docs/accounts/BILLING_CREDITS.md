@@ -94,15 +94,17 @@ on first use.
 | `video_veo` | 400 |
 
 **Variable-cost ops** debit via `debitCredits()` with their own reason: scene-video ("cool
-short", `scene_video`) charges the tier price from `VIDEO_MODELS` (`src/lib/fal-video.ts`); buying
-a custom domain charges `domain` (`src/lib/domains.ts`). Debits throw `InsufficientCreditsError`
-when the balance is too low.
+short", `scene_video`) charges the tier price from `VIDEO_MODELS` (`src/lib/fal-video.ts` — Wan
+**60** / Seedance 2.0 **260** / Veo3 **400**, each ≥~2× real cost at the floor); buying a custom
+domain charges `domain` (`src/lib/domains.ts`). Debits throw `InsufficientCreditsError` when the
+balance is too low.
 
 **Reads / top-ups** — `GET /api/creator/credits` (`src/app/api/creator/credits+api.ts`) returns
 the balance, the `CREDIT_COSTS` price list, the scene-video model tiers, and a 20-row ledger.
 Top-ups: `POST /api/creator/billing/checkout { kind: 'credit_pack', packId }` →
-`createCreditPackCheckout()` (web Stripe); the buyer's plan `creditRateMultiplier` discounts the
-pack (flat $0.01/cr — no discount). `CREDIT_PACKS`: 500¢→500, 1500¢→1500, 5000¢→5000 credits.
+`createCreditPackCheckout()` (web Stripe). **No volume discount** — every plan's
+`creditRateMultiplier` is **1**, so packs are a flat $0.01/cr. `CREDIT_PACKS`: 500¢→500,
+1500¢→1500, 5000¢→5000 credits.
 
 **In-app purchases (Apple IAP) — StoreKit 2.** Both plans (auto-renewable subscriptions,
 `com.nanocrew.plan.*`) and credit packs (consumables, `com.nanocrew.credits.*`) can be bought via
@@ -112,12 +114,22 @@ pulls the signed transaction straight from Apple — no legacy verifyReceipt, no
 client sends a `transactionId` (with `appAccountToken` = creator id for binding);
 `iap-verify` grants credits or activates the subscription + first month, idempotent on the
 transactionId. Subscriptions re-verify on launch (new period → new transactionId → grant);
-`getEntitlements` lapses an Apple sub once `currentPeriodEnd` passes. **Inert until `APPLE_IAP_*`
-env + App Store Connect products + `react-native-iap` + a build** (see `CLAUDE.md`).
+`getEntitlements` lapses an Apple sub once `currentPeriodEnd` passes. `react-native-iap` (v15) is
+**installed** and the client (`src/lib/iap.ios.ts`) + paywall prefer IAP on iOS with a web-Stripe
+fallback; plan products (`com.nanocrew.plan.{starter,pro,advanced}`) are defined in
+`src/lib/iap-products.ts`. **Inert until `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY` +
+`APPLE_BUNDLE_ID` are set on Railway and the App Store Connect products exist** (see `CLAUDE.md`).
 
 **Grants land via the webhook** — `topup` (credit packs) and `subscription_grant` (monthly
 invoices) are credited in `billing-webhook`, **idempotent on the Stripe id** via
 `ledgerHas(reason, refId)`.
+
+### Comp / internal accounts · `src/lib/comp.ts`
+
+Founders, team, and demo accounts aren't billed. `COMP_EMAILS` (comma-separated; **falls back to
+`PLATFORM_ADMIN_EMAILS`**) lists the comp emails. For a comp creator, `getEntitlements` returns
+**top-tier free entitlements** and `debitCredits` **no-ops** (never charged). So internal use never
+spends real money or hits the paywall.
 
 ---
 

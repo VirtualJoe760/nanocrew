@@ -5,9 +5,29 @@ Claude; the **[YOU]** steps are inside your Google account (account, payment, ag
 submit) and only you can do them. Paste the prepared copy/answers straight into the Console.
 
 ## 0. Prereqs
-- **No Firebase needed** for v1 — that's only Android push; we ship without push on Android.
+- **Firebase / FCM IS needed** — Android push goes through FCM (see §A). iOS push already works (APNs).
 - App icon (512): `assets/brand/play-store-icon-512.png` (ready).
 - Privacy policy: `https://nanocrew-api.vercel.app/privacy` (live).
+
+## A. Android push — Firebase / FCM setup
+The app uses `expo-notifications` + Expo's push service; on Android that requires FCM. Two files
+come out of Firebase — both live in your Google account, so **[YOU]** download them; Claude wires
+them and rebuilds.
+
+1. **[YOU]** [console.firebase.google.com](https://console.firebase.google.com) → **Add project**
+   `Nano Crew` (Analytics optional).
+2. **[YOU]** In the project → **Add app → Android** → Android package name **`com.nanocrew.app`** →
+   register → **download `google-services.json`**. Drop it in the repo root. *(That's all that's
+   needed for the build; Claude sets `android.googleServicesFile` in app.json.)*
+3. **[YOU]** Project Settings (gear) → **Service accounts** → **Generate new private key** → download
+   the JSON. This is the **FCM V1 key** Expo's push service uses to deliver to Android.
+4. **[CLAUDE/YOU]** Upload that key to EAS: easiest is **expo.dev → the project → Credentials →
+   Android → FCM V1 → upload the service-account JSON** (or `eas credentials`). Without it, the app
+   gets a token but pushes won't deliver on Android.
+5. **[CLAUDE]** Rebuild Android (now bundling `google-services.json`) → Android push works.
+
+No app code changes — the existing notification code gets an FCM-backed token once the config + creds
+are in place.
 
 ## 1. [YOU] Create the Play Console account
 [play.google.com/console](https://play.google.com/console) → sign in with the owning Google account

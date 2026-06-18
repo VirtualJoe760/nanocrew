@@ -66,7 +66,8 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | PATCH/DELETE | `/api/creator/posts/:id` | bearer | Edit / delete a journal post. |
 | GET | `/api/creator/stores/:slug/domain/search` | bearer | Search available custom domains. |
 | POST | `/api/creator/stores/:slug/domain/buy` | bearer, **credits** | Buy a custom domain (variable credit charge, price→credits in `src/lib/domains.ts`). |
-| POST | `/api/creator/stores/:slug/go-live` | bearer | Flip a brand to live. |
+| POST | `/api/creator/stores/:slug/publish` | bearer | **App-only Publish** `{ listed? }` — open (or close) the brand's shop in the ecosystem: sets `isPublic + status='live'` (lists in the in-app Market + `nanocrew.app/b/<slug>`). Needs **only an active plan + ≥1 published product** — NO website, NO custom domain. `409` if still building / `no_published_products`; `402 subscription_required`. |
+| POST | `/api/creator/stores/:slug/go-live` | bearer | Flip a brand to live with its own custom domain (the separate Pro website upgrade, layered on top of app-only publish). |
 
 ## 3. AI / designer
 
@@ -86,9 +87,9 @@ credits up front and refund on failure.
 | POST | `/api/interview` | bearer | Text-mode interview turn (fallback). |
 | POST | `/api/transcribe` | bearer | Verbatim transcription of base64 m4a/mp4 (Gemini). Powers critique. |
 | POST | `/api/video` | bearer, **credits** | Product video. `voiceover` cheap / `veo` = 400 credits (`CREDIT_COSTS.video_veo`). |
-| POST | `/api/creator/model-shots` | bearer, **credits** | On-model image gallery (Nano Banana). Debits 20 (`model_shots`). |
+| POST | `/api/creator/model-shots` | bearer, **credits** | On-model image gallery (Nano Banana). Debits 25 (`model_shots`). |
 | POST | `/api/creator/model-videos` | bearer, RL, **credits** | On-model Veo film for the website (appends, max 3 angles). Debits 400; rate-limited. |
-| POST | `/api/creator/scene-video` | bearer, RL, **credits** | "Cool short" on fal.ai — pick `wan` (60) / `seedance` (160) / `veo3` (400); variable charge. |
+| POST | `/api/creator/scene-video` | bearer, RL, **credits** | "Cool short" on fal.ai — pick `wan` (60) / `seedance` (260) / `veo3` (400); variable charge. |
 
 ## 4. Store & feed (app, public read)
 
@@ -112,7 +113,7 @@ credits up front and refund on failure.
 | GET | `/api/creator/subscription` | bearer | Plan + entitlements, brand count vs cap, tiers + credit packs. |
 | POST | `/api/creator/billing/checkout` | bearer | Stripe Checkout URL (`kind: subscription | credit_pack`). |
 | POST | `/api/creator/billing/portal` | bearer | Stripe billing-portal URL. |
-| POST | `/api/creator/billing/iap-verify` | bearer | Apple IAP receipt verify → grant credits. **501** until `APPLE_IAP_SHARED_SECRET`. |
+| POST | `/api/creator/billing/iap-verify` | bearer | Apple IAP (StoreKit 2) — client sends `{ transactionId }` (`appAccountToken` = creator id); the server pulls the signed transaction via the App Store Server API (`src/lib/app-store.ts`, no legacy verifyReceipt), then grants credits **or** activates the subscription + first month. Idempotent on the transactionId. Needs `APPLE_IAP_*` + `APPLE_BUNDLE_ID`. |
 | GET/POST | `/api/creator/connect` | bearer | Read / start Stripe Connect onboarding for creator payouts. |
 
 ---
@@ -123,7 +124,7 @@ credits up front and refund on failure.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/public/stores/:slug` | Brand facts for the live OG overlay. |
+| GET | `/api/public/stores/:slug` | Brand facts for the live OG overlay; now also returns `isPublic` + `status`. |
 | GET | `/api/public/stores/:slug/products` | Headless catalog. **Returns products each with a NESTED `variants[]` array** (`{id, sku, color, size, retailPriceCents, inStock}`, size-sorted); products with zero variants are dropped. |
 | GET | `/api/public/stores/:slug/collections` | Drops + counts. |
 | GET | `/api/public/stores/:slug/videos` | Featured on-model film wall (Veo) for the homepage. |
