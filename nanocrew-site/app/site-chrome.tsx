@@ -16,8 +16,7 @@ export function Nav() {
   return (
     <nav className="nav wrap">
       <Link href="/" className="mark" aria-label="Nano Crew — home" onClick={close}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/nc-icon.png" alt="" className="nc-img" />
+        <span className="nc">NC</span>
         <span className="word">Nano Crew</span>
       </Link>
 
