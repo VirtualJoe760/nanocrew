@@ -27,9 +27,14 @@ revise) and [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](../storefront/STOREF
 
 ## 1 · Interview — the creator talks to Venus
 
-Entry point is the **Studio tab** (`src/app/studio.tsx`). It's gated, not auto-launched: a new
-creator picks a voice and taps *Get started*, which runs the interview in `mode: 'interview'`;
-returning creators with a store land on the dashboard.
+Entry point is the **Studio tab** (`src/app/studio.tsx`). It's gated, not auto-launched, and never
+starts Venus talking before the creator is ready. Flow: pick a voice (`mode: 'cta'`) → a **primer**
+(`mode: 'primer'`) that previews what Venus will ask and offers two ways in — **"Talk with Venus"**
+(recommended; requests the mic *here*, the only place we prompt) or **"I'd rather type"** (starts in
+keyboard mode, no mic) — → the interview (`mode: 'interview'`), where Venus greets. Returning creators
+with a store land on the dashboard. The conversation also **auto-pauses when the Studio tab loses
+focus** (a `playSpeech` focus/pause guard, so she never talks over another tab) and there's a manual
+**pause/resume** control in the interview header; tapping the orb resumes.
 
 **Venus** is the brand consultant (`src/lib/interview.ts`, `interviewSystem()`). She runs voice-first
 (`/api/voice` — Gemini hears the audio, ElevenLabs voices the reply) with a typed fallback

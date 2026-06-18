@@ -659,7 +659,7 @@ export default function StudioScreen() {
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
   // get started), returning creators see their dashboard, and the AI entity only
   // runs in 'interview'. 'loading' until we know which.
-  const [mode, setMode] = useState<'loading' | 'cta' | 'interview' | 'dashboard'>('loading');
+  const [mode, setMode] = useState<'loading' | 'cta' | 'primer' | 'interview' | 'dashboard'>('loading');
 
   useEffect(() => {
     if (!session) return;
@@ -736,7 +736,9 @@ export default function StudioScreen() {
   const [micGranted, setMicGranted] = useState(false);
   useEffect(() => {
     if (!session) return;
-    AudioModule.requestRecordingPermissionsAsync()
+    // Only CHECK on load (no prompt) — we ask for the mic on the primer when the user picks voice,
+    // so Venus never pops a permission dialog before the user has chosen to talk.
+    AudioModule.getRecordingPermissionsAsync()
       .then((p) => setMicGranted(p.granted))
       .catch(() => {});
   }, [session]);
@@ -744,6 +746,11 @@ export default function StudioScreen() {
   // Keyboard mode: type instead of talk (noisy environments). Her voice still replies.
   const [keyboardMode, setKeyboardMode] = useState(false);
   const [typed, setTyped] = useState('');
+
+  // Paused = the user explicitly paused (or the tab blurred). Gates ALL playback + listening so
+  // Venus never talks over another tab, and so an unprepared user can stop her mid-question.
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
 
   // Voice-activity bookkeeping for auto-send.
   const spokeRef = useRef(false);
@@ -758,6 +765,12 @@ export default function StudioScreen() {
       const file = `${FileSystem.cacheDirectory}entity-${playCount.current++}.mp3`;
       await FileSystem.writeAsStringAsync(file, b64, { encoding: FileSystem.EncodingType.Base64 });
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      // If the user left the Studio tab or paused while this reply was loading, stay silent —
+      // never let her start talking on a tab the user isn't looking at.
+      if (!focusedRef.current || pausedRef.current) {
+        setState('idle');
+        return;
+      }
       player.replace({ uri: file });
       player.play();
       setState('speaking');
@@ -827,7 +840,7 @@ export default function StudioScreen() {
   useEffect(() => {
     if (!voiceResolved) return;
     setMode((m) => {
-      if (m === 'interview') return m;
+      if (m === 'interview' || m === 'primer') return m; // never yank the user out of an in-progress flow
       if (hasStore) return 'dashboard';
       if (m === 'loading') return 'cta';
       return m;
@@ -867,8 +880,43 @@ export default function StudioScreen() {
     setVoiceId(v.id); // just the pick — the interview waits for "Get started"
   }, []);
 
-  // New creator pressed Get started — now (and only now) the AI wakes up.
-  const onGetStarted = useCallback(() => setMode('interview'), []);
+  // New creator pressed Get started — show the primer first (what Venus will ask), so the AI
+  // never starts talking before the user knows what's coming.
+  const onGetStarted = useCallback(() => setMode('primer'), []);
+
+  // Primer choices. Voice (recommended) requests the mic HERE — the only place we prompt — then
+  // starts the spoken interview. Text starts the same interview in keyboard mode (no mic needed);
+  // if mic is denied we also fall back to text so the user is never stranded.
+  const startVoice = useCallback(async () => {
+    setKeyboardMode(false);
+    const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
+    setMicGranted(!!perm?.granted);
+    if (!perm?.granted) {
+      setKeyboardMode(true);
+      setError('No microphone access — you can type your answers, or enable the mic in Settings.');
+    }
+    setMode('interview');
+  }, []);
+  const startText = useCallback(() => {
+    setKeyboardMode(true);
+    setMode('interview');
+  }, []);
+
+  // Pause/resume the whole experience: stops her voice + the mic. Resume leaves it idle so the
+  // user taps the mark to continue (the question text stays on screen).
+  const togglePause = useCallback(() => {
+    setPaused((prev) => {
+      const next = !prev;
+      pausedRef.current = next;
+      if (next) {
+        try { player.pause(); } catch {}
+        recorder.stop().catch(() => {});
+        busyRef.current = false;
+      }
+      setState('idle');
+      return next;
+    });
+  }, [player, recorder]);
 
   // Returning creator wants another brand — reset the interview and start fresh.
   const onNewBrand = useCallback(() => {
@@ -878,7 +926,7 @@ export default function StudioScreen() {
     setCreated(null);
     setHeard('');
     setLine('');
-    setMode(voiceId ? 'interview' : 'cta');
+    setMode(voiceId ? 'primer' : 'cta');
   }, [voiceId]);
 
   // Just finished creating a brand — graduate from the compiled/created screen back to the brand
@@ -967,9 +1015,9 @@ export default function StudioScreen() {
       setState('idle');
       return;
     }
-    if (micGranted && !brand && started.current && focusedRef.current && !keyboardMode) {
+    if (micGranted && !brand && started.current && focusedRef.current && !pausedRef.current && !keyboardMode) {
       const t = setTimeout(() => {
-        if (focusedRef.current) void startListening();
+        if (focusedRef.current && !pausedRef.current) void startListening();
       }, 450);
       return () => clearTimeout(t);
     }
@@ -1025,6 +1073,7 @@ export default function StudioScreen() {
   const onEntityPress = useCallback(async () => {
     if (!session || brand) return;
     if (state === 'thinking') return;
+    if (pausedRef.current) { pausedRef.current = false; setPaused(false); } // tapping the mark resumes
     setKeyboardMode(false); // touching the orb always means voice
     if (state === 'speaking') {
       player.pause(); // interrupt her — your turn
@@ -1128,6 +1177,7 @@ export default function StudioScreen() {
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
   // comfortable gap so the karaoke captions never dip under it.
   const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
+  const aiName = AI_VOICES.find((v) => v.id === voiceId)?.name ?? 'Venus';
 
   return (
     <View style={[styles.container, { backgroundColor: p.bg }]}>
@@ -1152,6 +1202,13 @@ export default function StudioScreen() {
               {hasStore && mode === 'interview' ? (
                 <Pressable onPress={() => setMode('dashboard')} hitSlop={10}>
                   <BrandsIcon />
+                </Pressable>
+              ) : null}
+              {mode === 'interview' ? (
+                <Pressable onPress={togglePause} hitSlop={10} accessibilityLabel={paused ? 'Resume' : 'Pause'}>
+                  <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 16 }}>
+                    {paused ? '▶' : '❚❚'}
+                  </ThemedText>
                 </Pressable>
               ) : null}
               {mode === 'interview' ? (
@@ -1325,6 +1382,50 @@ export default function StudioScreen() {
                   Get started →
                 </ThemedText>
               </View>
+            </Pressable>
+          </ScrollView>
+        ) : mode === 'primer' ? (
+          <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
+            <ThemedText type="code" style={styles.brandEyebrow}>
+              {'// BEFORE WE START'}
+            </ThemedText>
+            <ThemedText type="title" style={[styles.introTitle, { color: p.ink }]}>
+              {aiName} will interview you
+            </ThemedText>
+            <ThemedText type="small" style={[styles.introBody, { color: p.dim, textAlign: 'left' }]}>
+              On the next screen, {aiName} talks with you to design your brand — a quick back-and-forth.
+              Answer out loud (or tap the keyboard to type). Have a rough idea of:
+            </ThemedText>
+            {[
+              'Your brand name + what it stands for',
+              'A logo — or the direction for one',
+              'Colors + the kind of look (minimal, bold, street…)',
+              'The vibe, and how your site should feel',
+              'The products you want to sell',
+            ].map((q) => (
+              <View key={q} style={{ flexDirection: 'row', gap: 10, alignSelf: 'stretch', marginBottom: 8 }}>
+                <ThemedText type="code" style={{ color: p.accent }}>›</ThemedText>
+                <ThemedText type="small" style={[styles.dim, { color: p.dim, flex: 1 }]}>{q}</ThemedText>
+              </View>
+            ))}
+            <ThemedText type="code" style={[styles.introFoot, { color: p.faint }]}>
+              No perfect answers needed — {aiName} guides you, and you can pause anytime.
+            </ThemedText>
+            {/* Voice is the recommended, prominent choice; typing is a quieter fallback. */}
+            <Pressable onPress={startVoice}>
+              <View style={styles.getStarted}>
+                <ThemedText type="smallBold" style={{ color: BG }}>
+                  🎙  Talk with {aiName} — recommended
+                </ThemedText>
+              </View>
+            </Pressable>
+            <ThemedText type="code" style={[styles.ctaSecondaryText, { color: p.faint, textAlign: 'center', marginTop: 6 }]}>
+              We’ll ask for microphone access — best experience.
+            </ThemedText>
+            <Pressable onPress={startText} hitSlop={8} style={{ marginTop: Spacing.three, alignSelf: 'center' }}>
+              <ThemedText type="code" style={[styles.ctaSecondaryText, { color: p.dim }]}>
+                I’d rather type
+              </ThemedText>
             </Pressable>
           </ScrollView>
         ) : (
