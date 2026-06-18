@@ -16,7 +16,7 @@ body {
   font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 a { color: inherit; text-decoration: none; }
-.wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+.wrap { max-width: var(--max); margin: 0 auto; padding-inline: 24px; }
 
 /* ── Nav ─────────────────────────────────────────────── */
 .nav { display: flex; align-items: center; justify-content: space-between; padding-block: 22px; }
@@ -187,7 +187,7 @@ a { color: inherit; text-decoration: none; }
 
 /* ── Mobile / tablet spacing pass ────────────────────── */
 @media (max-width: 860px) {
-  .wrap { padding: 0 22px; }
+  .wrap { padding-inline: 22px; }
   .hero { padding-block: 48px 56px; }
   .hero .cta { margin-top: 28px; }
   .section { padding-block: 56px; }
