@@ -1393,9 +1393,16 @@ export default function StudioScreen() {
         )}
 
         {error ? (
-          <ThemedText type="code" style={styles.error}>
-            {'! ' + error}
-          </ThemedText>
+          <Pressable
+            onPress={() => setError(null)}
+            style={[styles.errorBar, { bottom: BottomTabInset + insets.bottom + Spacing.two }]}>
+            <ThemedText type="code" style={styles.error}>
+              {error}
+            </ThemedText>
+            <ThemedText type="code" style={styles.errorDismiss}>
+              tap to dismiss
+            </ThemedText>
+          </Pressable>
         ) : null}
       </KeyboardAvoidingView>
     </View>
@@ -1471,7 +1478,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   line: { color: '#dfe2e8', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: MONO },
-  error: { color: '#ff5c5c', textAlign: 'center', paddingTop: Spacing.two },
+  errorBar: {
+    position: 'absolute',
+    left: Spacing.four,
+    right: Spacing.four,
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    borderRadius: 16,
+    backgroundColor: 'rgba(40,12,14,0.94)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#ff5c5c55',
+  },
+  error: { color: '#ff8a8a', textAlign: 'center' },
+  errorDismiss: { color: '#ff8a8a99', fontSize: 11, letterSpacing: 1 },
 
   // Scroll content must clear the native tab bar so the last action (Create my store /
   // Get started) is fully tappable and not intercepted by the bar.

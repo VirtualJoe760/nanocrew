@@ -12,6 +12,29 @@ import { resolveVoice } from '@/lib/voices';
 // Returns: { userText?, done, question?, brand?, speech: base64 mp3 }
 const MODEL = 'gemini-2.5-flash';
 
+// Gemini occasionally returns 503 UNAVAILABLE / "overloaded" / 429 — transient, server-side.
+const TRANSIENT = /unavailable|overloaded|try again|503|429|rate.?limit|deadline|temporar/i;
+
+/** generateContent with backoff retries on transient (overload/unavailable) errors. */
+async function generateWithRetry(
+  ai: GoogleGenAI,
+  params: Parameters<GoogleGenAI['models']['generateContent']>[0],
+  attempts = 3,
+) {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!TRANSIENT.test(msg) || i === attempts - 1) throw e;
+      await new Promise((r) => setTimeout(r, 700 * (i + 1))); // 700ms, 1400ms
+    }
+  }
+  throw lastErr;
+}
+
 
 /** Subtle sci-fi room reverb via ffmpeg, when the host has it. Falls back to dry audio. */
 async function addReverb(mp3: Buffer): Promise<Buffer> {
@@ -173,7 +196,7 @@ export async function POST(req: Request) {
             { text: 'This audio is my answer. Continue per the contract.' },
           ];
 
-    const res = await ai.models.generateContent({
+    const res = await generateWithRetry(ai, {
       model: MODEL,
       contents: [...history, { role: 'user', parts: lastParts }],
       config: {
@@ -209,6 +232,11 @@ export async function POST(req: Request) {
       words: tts.words,
     });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
+    const msg = e instanceof Error ? e.message : 'Failed';
+    // Never dump raw provider JSON at the creator — map to a calm, human line.
+    const friendly = TRANSIENT.test(msg)
+      ? 'Venus is in high demand right now — give it a sec, then tap to try again.'
+      : 'Hmm, that didn’t go through — tap to try again.';
+    return Response.json({ error: friendly }, { status: 502 });
   }
 }

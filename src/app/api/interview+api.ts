@@ -7,6 +7,27 @@ import { interviewSystem, parseTurn, type ChatMessage } from '@/lib/interview';
 // /api/voice is the primary experience; this stays for fallback/testing).
 const MODEL = 'gemini-2.5-flash';
 
+const TRANSIENT = /unavailable|overloaded|try again|503|429|rate.?limit|deadline|temporar/i;
+
+async function generateWithRetry(
+  ai: GoogleGenAI,
+  params: Parameters<GoogleGenAI['models']['generateContent']>[0],
+  attempts = 3,
+) {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!TRANSIENT.test(msg) || i === attempts - 1) throw e;
+      await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -24,7 +45,7 @@ export async function POST(req: Request) {
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const res = await ai.models.generateContent({
+    const res = await generateWithRetry(ai, {
       model: MODEL,
       contents: messages.length
         ? messages.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] }))
@@ -39,6 +60,10 @@ export async function POST(req: Request) {
     if (!raw) throw new Error('empty response');
     return Response.json(parseTurn(raw));
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 502 });
+    const msg = e instanceof Error ? e.message : 'Failed';
+    const friendly = TRANSIENT.test(msg)
+      ? 'Venus is in high demand right now — give it a sec, then try again.'
+      : 'Hmm, that didn’t go through — try again.';
+    return Response.json({ error: friendly }, { status: 502 });
   }
 }
