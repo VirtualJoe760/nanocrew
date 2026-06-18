@@ -14,7 +14,10 @@ export const creators = pgTable('creators', {
   id: uuid('id').primaryKey(),            // = Supabase auth.users.id (NOT defaultRandom)
   email: text('email').notNull().unique(),
   name: text('name'),
+  phone: text('phone'),                   // collected on email signup
   image: text('image'),
+  termsAcceptedAt: timestamp('terms_accepted_at'),  // legal acceptance, recorded at account creation
+  termsVersion: text('terms_version'),              // which Terms+Creator-Agreement version (lib/legal.ts)
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 ```
@@ -49,6 +52,15 @@ The app authenticates against Supabase Auth via `supabase-js`. Providers (`src/l
 `onAuthStateChange`, and — once signed in — best-effort registers the device for push
 (`registerForPush(session.access_token)`). Authed client calls attach the Supabase token via
 `apiFetch()` (`src/lib/api.ts`).
+
+**Email signup collects more + records legal acceptance.** The Account screen's email signup asks for
+**name + phone** and requires accepting the **Terms + Creator Agreement** (a required checkbox; OAuth
+providers usually supply name only, so this is the gap we fill). These ride in `signUp`'s
+`options.data` (`user_metadata`: `name`, `phone`, `terms_version`); `getUserFromRequest` surfaces
+`phone` + `termsVersion`, and `/api/me` upserts them onto `creators` and **stamps `termsAcceptedAt`
+server-side** the first time (never overwriting an existing acceptance). The accepted version comes
+from `src/lib/legal.ts` `TERMS_VERSION`; the full text (incl. the creator indemnification /
+manufacturer-hold-harmless / generation-records clause) is at `/terms`.
 
 > The redirect URI is `nanocrew://auth` in a dev/standalone build (`exp://…/--/auth` in the
 > retired Expo Go). It plus the web origin must be allow-listed in Supabase → Auth → Redirect

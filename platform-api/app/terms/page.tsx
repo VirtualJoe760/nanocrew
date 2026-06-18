@@ -1,13 +1,17 @@
 // Terms of Service — served at /terms (https://nanocrew-api.vercel.app/terms).
 // PLACEHOLDERS to confirm before launch: {LEGAL_ENTITY}, {JURISDICTION} (governing law).
-// Solid app-specific draft, not legal advice — have counsel review before launch.
+// DRAFT — not legal advice; have counsel review before launch. The §12 creator-indemnification +
+// manufacturer-hold-harmless + generation-records language (added 2026-06-18) is legally material —
+// review it specifically. The accepted version is recorded on creators.terms_version; keep the
+// VERSION below in sync with src/lib/legal.ts TERMS_VERSION when the text materially changes.
 
 export const metadata = {
   title: 'Terms of Service — Nano Crew',
   description: 'The terms that govern your use of Nano Crew.',
 };
 
-const EFFECTIVE = 'June 14, 2026';
+const EFFECTIVE = 'June 18, 2026';
+const VERSION = '2026-06-18'; // keep in sync with src/lib/legal.ts TERMS_VERSION
 const ENTITY = 'Nano Crew'; // {LEGAL_ENTITY}
 const JURISDICTION = 'the State of California, USA'; // {JURISDICTION}
 const CONTACT = 'support@nanocrew.app';
@@ -18,7 +22,7 @@ export default function Terms() {
       <div style={styles.wrap}>
         <a href="/" style={styles.back}>← Nano Crew</a>
         <h1 style={styles.h1}>Terms of Service</h1>
-        <p style={styles.meta}>Effective {EFFECTIVE}</p>
+        <p style={styles.meta}>Effective {EFFECTIVE} · v{VERSION}</p>
 
         <p style={styles.p}>
           These Terms govern your use of the Nano Crew app, the storefronts it generates, and related
@@ -65,6 +69,7 @@ export default function Terms() {
         <p style={styles.p}>You agree not to use the Service to:</p>
         <ul style={styles.ul}>
           <li style={styles.li}>infringe intellectual-property, privacy, or publicity rights;</li>
+          <li style={styles.li}>create, generate, or sell <b>sexually explicit content or graphic violence/gore</b> — these are prohibited on the Service and on any product, and our generation tools are configured to block them;</li>
           <li style={styles.li}>create or sell unlawful, hateful, harassing, deceptive, or infringing products or content;</li>
           <li style={styles.li}>impersonate others or misrepresent your affiliation;</li>
           <li style={styles.li}>abuse, reverse-engineer, overload, or attempt to disrupt or gain unauthorized access to the Service;</li>
@@ -118,10 +123,31 @@ export default function Terms() {
           greater of the amounts you paid us in the 12 months before the claim or USD $100.
         </p>
 
-        <h2 style={styles.h2}>12. Indemnification</h2>
+        <h2 style={styles.h2}>12. Designs, indemnification &amp; generation records</h2>
         <p style={styles.p}>
-          You agree to indemnify and hold harmless {ENTITY} from claims, damages, and expenses arising
-          out of Your Content, your products, or your violation of these Terms or applicable law.
+          You are solely responsible for the designs, brand assets, and products you create and sell
+          (&ldquo;Your Designs&rdquo;), and you represent that you own them or have all rights necessary
+          to sell them. {ENTITY} is a platform and tool provider: we do not pre-screen Your Designs, do
+          not claim ownership of them, and do not warrant that they are non-infringing.
+        </p>
+        <p style={styles.p}>
+          You agree to indemnify, defend, and hold harmless {ENTITY}, its affiliates and personnel, and
+          our fulfillment and manufacturing partners (including Printful) from and against any claims,
+          demands, damages, liabilities, losses, and expenses (including reasonable legal fees) arising
+          out of or relating to Your Designs, Your Content, your products, or your violation of these
+          Terms or applicable law — including any claim that Your Designs infringe a copyright,
+          trademark, patent, publicity, or other right. Any such claim is your responsibility (and,
+          where applicable, the purchasing customer&rsquo;s), not {ENTITY}&rsquo;s or our manufacturers&rsquo;.
+        </p>
+        <p style={styles.p}>
+          <b>Generation records.</b> For designs made with our AI tools, we retain generation metadata —
+          including the prompts you provided and the time of creation — as a record of how and when a
+          design was made. We may use these records to respond to disputes or rights claims. They are a
+          record only and are not a warranty that any design is original or non-infringing.
+        </p>
+        <p style={styles.p}>
+          By creating an account you accept these Terms, and we record which version you accepted and
+          when.
         </p>
 
         <h2 style={styles.h2}>13. Governing law &amp; changes</h2>

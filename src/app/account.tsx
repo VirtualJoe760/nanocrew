@@ -23,6 +23,7 @@ import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { Paywall } from '@/components/paywall';
 import { PlatformAdmin } from '@/components/platform-admin';
 import { useAuth } from '@/hooks/use-auth';
+import { TERMS_URL, TERMS_VERSION } from '@/lib/legal';
 import { useTheme } from '@/hooks/use-theme';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { apiFetch, apiUrl } from '@/lib/api';
@@ -106,6 +107,10 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [agreed, setAgreed] = useState(false);
+  const [isSignup, setIsSignup] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -180,13 +185,29 @@ export default function AccountScreen() {
       setError('Enter an email and a password of at least 6 characters.');
       return;
     }
+    if (mode === 'up') {
+      if (!fullName.trim()) {
+        setError('Enter your name.');
+        return;
+      }
+      if (!agreed) {
+        setError('Please accept the Terms & Creator Agreement to create an account.');
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
     try {
       const { error: err } =
         mode === 'in'
           ? await supabase.auth.signInWithPassword({ email: e, password })
-          : await supabase.auth.signUp({ email: e, password });
+          : await supabase.auth.signUp({
+              email: e,
+              password,
+              // Captured in user_metadata; /api/me persists these onto the creator + records the
+              // accepted terms version (server stamps the time) on first sign-in.
+              options: { data: { name: fullName.trim(), phone: phone.trim() || undefined, terms_version: TERMS_VERSION } },
+            });
       if (err) throw err;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
@@ -388,6 +409,28 @@ export default function AccountScreen() {
                 <ThemedText type="small" themeColor="textSecondary" style={styles.divider}>
                   or with email
                 </ThemedText>
+                {isSignup ? (
+                  <>
+                    <TextInput
+                      value={fullName}
+                      onChangeText={setFullName}
+                      placeholder="Full name"
+                      placeholderTextColor={theme.textSecondary}
+                      autoCapitalize="words"
+                      autoComplete="name"
+                      style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                    />
+                    <TextInput
+                      value={phone}
+                      onChangeText={setPhone}
+                      placeholder="Phone (optional)"
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="phone-pad"
+                      autoComplete="tel"
+                      style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                    />
+                  </>
+                ) : null}
                 <TextInput
                   value={email}
                   onChangeText={setEmail}
@@ -407,25 +450,42 @@ export default function AccountScreen() {
                   autoComplete="password"
                   style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
                 />
+                {isSignup ? (
+                  <>
+                    <Pressable onPress={() => setAgreed((v) => !v)} style={styles.agreeRow} hitSlop={6}>
+                      <View style={[styles.checkbox, { borderColor: theme.textSecondary, backgroundColor: agreed ? theme.text : 'transparent' }]}>
+                        {agreed ? <ThemedText type="smallBold" style={{ color: theme.background, fontSize: 12, lineHeight: 15 }}>✓</ThemedText> : null}
+                      </View>
+                      <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
+                        I agree to the Terms &amp; Creator Agreement — I own my designs and indemnify Nano Crew and its manufacturers against claims arising from them.
+                      </ThemedText>
+                    </Pressable>
+                    <Pressable onPress={() => Linking.openURL(TERMS_URL)} hitSlop={6}>
+                      <ThemedText type="code" style={[styles.createLink, { color: theme.tint }]}>
+                        Read the full Terms &amp; Creator Agreement →
+                      </ThemedText>
+                    </Pressable>
+                  </>
+                ) : null}
                 {error ? (
                   <ThemedText type="small" style={{ color: DANGER }}>
                     {error}
                   </ThemedText>
                 ) : null}
-                <Pressable onPress={() => submit('in')} disabled={busy}>
+                <Pressable onPress={() => submit(isSignup ? 'up' : 'in')} disabled={busy}>
                   <View style={[styles.button, { backgroundColor: theme.text, opacity: busy ? 0.5 : 1 }]}>
                     {busy ? (
                       <ActivityIndicator color={theme.background} />
                     ) : (
                       <ThemedText type="smallBold" style={{ color: theme.background }}>
-                        Sign in
+                        {isSignup ? 'Create account' : 'Sign in'}
                       </ThemedText>
                     )}
                   </View>
                 </Pressable>
-                <Pressable onPress={() => submit('up')} disabled={busy}>
+                <Pressable onPress={() => { setIsSignup((v) => !v); setError(null); }} disabled={busy}>
                   <ThemedText type="small" themeColor="textSecondary" style={styles.createLink}>
-                    New here? Create an account
+                    {isSignup ? 'Have an account? Sign in' : 'New here? Create an account'}
                   </ThemedText>
                 </Pressable>
               </View>
@@ -497,6 +557,8 @@ const styles = StyleSheet.create({
   appleText: { color: '#fff' },
   divider: { textAlign: 'center', marginVertical: Spacing.one },
   createLink: { textAlign: 'center', marginTop: Spacing.two, textDecorationLine: 'underline' },
+  agreeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two, paddingVertical: Spacing.one },
+  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
 
   // Legal
   legalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Spacing.six, marginBottom: Spacing.four },

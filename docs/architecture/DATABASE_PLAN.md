@@ -57,7 +57,11 @@ published). `suspended` = disabled.
 ### `creators`
 The app users (people building stores).
 - `id` (uuid PK) — **= Supabase `auth.users.id`** (no separate auth tables; Supabase owns auth).
-- `email` (text, **unique**, not null), `name`, `image`, `createdAt`.
+- `email` (text, **unique**, not null), `name`, `phone`, `image`, `createdAt`.
+- `termsAcceptedAt`, `termsVersion` — legal acceptance recorded at account creation (the version of
+  the Terms + Creator Agreement they accepted; see [AUTH_IDENTITY](../accounts/AUTH_IDENTITY.md)).
+  `name`/`phone` come from the email-signup form's `user_metadata` (providers usually supply name only);
+  `/api/me` upserts them + stamps acceptance server-side on first sign-in (migration 0020).
 
 ### `stores`
 One per creator website/store (the thing the app generates).

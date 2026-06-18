@@ -1,6 +1,3 @@
-// COPY of nanocrew/src/db/schema.ts — keep in sync when the schema migrates.
-// The platform API deploys from this folder alone (Vercel rootDirectory), so it
-// cannot import outside it.
 import {
   boolean,
   index,
@@ -22,6 +19,9 @@ import { relations } from 'drizzle-orm';
 
 // ---------- Enums ----------
 
+// Lifecycle: draft (interview saved) → building (forge provisioning) → ready (deployed to the
+// store-<slug>.vercel.app preview, creator reviewing/editing) → live (custom domain attached &
+// published). suspended = disabled.
 export const storeStatus = pgEnum('store_status', ['draft', 'building', 'ready', 'live', 'suspended']);
 
 export const compositionStatus = pgEnum('composition_status', [
@@ -64,7 +64,12 @@ export const creators = pgTable('creators', {
   id: uuid('id').primaryKey(), // = Supabase auth.users.id
   email: text('email').notNull().unique(),
   name: text('name'),
+  phone: text('phone'), // collected at email signup (providers usually supply name only)
   image: text('image'),
+  // Legal acceptance recorded at account creation: when they accepted + which version of the
+  // Terms + Creator Agreement (indemnification / liability release). See docs + /terms.
+  termsAcceptedAt: timestamp('terms_accepted_at'),
+  termsVersion: text('terms_version'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -86,14 +91,19 @@ export const stores = pgTable(
     logoUrl: text('logo_url'),
     faviconUrl: text('favicon_url'),
     ogImageUrl: text('og_image_url'),
-    // Creator-generated website graphics that override the template's content/placeholders.json.
-    // { hero?: { imageUrl?, videoUrl?, poster? }, sections?: Record<string,string> }
+    // Creator-generated WEBSITE graphics (Design tab → Graphics), served to the storefront and
+    // OVERRIDING the template's content/placeholders.json. Shape mirrors the placeholder index:
+    //   { hero?: { imageUrl?, videoUrl?, poster? }, sections?: Record<string,string> }
     siteAssets: jsonb('site_assets'),
-    // Mini-CMS overrides edited in Studio, live-read by the storefront (no rebuild).
-    // { copy?: {...}, colors?: {...}, fonts?: { display?, body? } } — see src/db/schema.ts.
+    // Mini-CMS overrides edited in Studio (live-read by the storefront — no rebuild). Each field is
+    // optional; absent → the template keeps its baked brand.json / copy.json value. Shape:
+    //   { copy?: { heroHeadline?, heroSubline?, heroCta?, storyKicker?, story?, tagline? },
+    //     colors?: { background?, text?, primary?, accent? },
+    //     fonts?: { display?, body? } }   // font preset keys, mapped to stacks in the template
     siteConfig: jsonb('site_config'),
-    // The brand's GitHub repo + Vercel project name (default `store-<slug>` when null; bespoke brands
-    // set their actual repo). See src/db/schema.ts + the forge worker.
+    // The brand's GitHub repo + Vercel project name. Provisioned brands are `store-<slug>` (the
+    // default when null); bespoke/imported brands (e.g. stephen-lawyer) set their actual repo name so
+    // the forge clones + previews the right one. See the forge worker (worker.mjs).
     repo: text('repo'),
     tagline: text('tagline'),
     descriptionMd: text('description_md'),
@@ -508,8 +518,8 @@ export const connectedAccounts = pgTable('connected_accounts', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
-// Extra creators who may admin + design for a store beyond its owner (stores.creatorId). Mirror of
-// src/db/schema.ts. Lets a client (e.g. Stephen Lawyer) and the agency share a store.
+// Extra creators who may admin + design for a store beyond its owner (stores.creatorId). The owner
+// is implicit and never listed here. Lets a client (e.g. Stephen Lawyer) and the agency share a store.
 export const storeCollaborators = pgTable(
   'store_collaborators',
   {
@@ -520,7 +530,7 @@ export const storeCollaborators = pgTable(
     creatorId: uuid('creator_id')
       .notNull()
       .references(() => creators.id, { onDelete: 'cascade' }),
-    role: text('role').notNull().default('admin'),
+    role: text('role').notNull().default('admin'), // admin (manage + design) — room to add 'designer' etc.
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (c) => ({ memberIdx: uniqueIndex('store_collaborators_member_idx').on(c.storeId, c.creatorId) }),

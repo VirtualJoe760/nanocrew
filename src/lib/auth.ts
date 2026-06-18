@@ -13,8 +13,12 @@ const ISSUER = SUPABASE_URL ? `${SUPABASE_URL}/auth/v1` : '';
 export interface AuthedUser {
   id: string;
   email: string;
-  /** Display name from the auth provider (e.g. Google), when available. */
+  /** Display name from the auth provider (e.g. Google) or the signup form, when available. */
   name?: string;
+  /** Phone collected at email signup (user_metadata.phone), when available. */
+  phone?: string;
+  /** Version of the Terms/Creator Agreement accepted at signup (user_metadata.terms_version). */
+  termsVersion?: string;
 }
 
 // Trusted server-to-server calls (e.g. first-drop generation) carry a shared internal key
@@ -85,7 +89,7 @@ async function verifyToken(token: string): Promise<AuthedUser | null> {
   const [h, p, sig] = parts;
 
   let header: { alg?: string; kid?: string };
-  let payload: { sub?: string; email?: string; exp?: number; aud?: string; iss?: string; user_metadata?: { full_name?: string; name?: string } };
+  let payload: { sub?: string; email?: string; exp?: number; aud?: string; iss?: string; user_metadata?: { full_name?: string; name?: string; phone?: string; terms_version?: string } };
   try {
     header = b64urlToJson(h) as typeof header;
     payload = b64urlToJson(p) as typeof payload;
@@ -111,8 +115,9 @@ async function verifyToken(token: string): Promise<AuthedUser | null> {
   if (ISSUER && payload.iss !== ISSUER) return null;
   if (!payload.sub || !payload.email) return null;
 
-  const name = payload.user_metadata?.full_name ?? payload.user_metadata?.name;
-  return { id: payload.sub, email: payload.email, name };
+  const md = payload.user_metadata;
+  const name = md?.full_name ?? md?.name;
+  return { id: payload.sub, email: payload.email, name, phone: md?.phone, termsVersion: md?.terms_version };
 }
 
 export async function getUserFromRequest(req: Request): Promise<AuthedUser | null> {

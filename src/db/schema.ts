@@ -64,7 +64,12 @@ export const creators = pgTable('creators', {
   id: uuid('id').primaryKey(), // = Supabase auth.users.id
   email: text('email').notNull().unique(),
   name: text('name'),
+  phone: text('phone'), // collected at email signup (providers usually supply name only)
   image: text('image'),
+  // Legal acceptance recorded at account creation: when they accepted + which version of the
+  // Terms + Creator Agreement (indemnification / liability release). See docs + /terms.
+  termsAcceptedAt: timestamp('terms_accepted_at'),
+  termsVersion: text('terms_version'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

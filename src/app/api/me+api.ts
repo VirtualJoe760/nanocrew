@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
@@ -10,10 +10,29 @@ export async function GET(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   try {
+    // Create the creator on first sign-in, capturing the profile + legal acceptance the email-
+    // signup form put in user_metadata (providers usually give name only). On an existing row we
+    // backfill missing name/phone and record the accepted terms version + timestamp once — we never
+    // overwrite an already-recorded acceptance or email.
     await db
       .insert(schema.creators)
-      .values({ id: user.id, email: user.email })
-      .onConflictDoNothing();
+      .values({
+        id: user.id,
+        email: user.email,
+        name: user.name ?? null,
+        phone: user.phone ?? null,
+        termsVersion: user.termsVersion ?? null,
+        termsAcceptedAt: user.termsVersion ? new Date() : null,
+      })
+      .onConflictDoUpdate({
+        target: schema.creators.id,
+        set: {
+          name: sql`coalesce(${schema.creators.name}, excluded.name)`,
+          phone: sql`coalesce(${schema.creators.phone}, excluded.phone)`,
+          termsVersion: sql`coalesce(${schema.creators.termsVersion}, excluded.terms_version)`,
+          termsAcceptedAt: sql`coalesce(${schema.creators.termsAcceptedAt}, excluded.terms_accepted_at)`,
+        },
+      });
     const stores = await db
       .select({ id: schema.stores.id, name: schema.stores.name, slug: schema.stores.slug, status: schema.stores.status })
       .from(schema.stores)
