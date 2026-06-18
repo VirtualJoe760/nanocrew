@@ -4,7 +4,8 @@ export function Nav() {
   return (
     <nav className="nav wrap">
       <Link href="/" className="mark" aria-label="Nano Crew — home">
-        <span className="nc">NC</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/nc-icon.png" alt="" className="nc-img" />
         <span className="word">Nano Crew</span>
       </Link>
       <div className="links">

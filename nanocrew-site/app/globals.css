@@ -27,6 +27,7 @@ a { color: inherit; text-decoration: none; }
   width: 38px; height: 38px; display: grid; place-items: center;
   border: 1px solid var(--ink); border-radius: 10px;
 }
+.mark .nc-img { width: 30px; height: 30px; border-radius: 8px; display: block; }
 .mark .word { font-size: 13px; letter-spacing: 0.32em; text-transform: uppercase; }
 .nav .links { display: flex; gap: 26px; font-size: 13px; letter-spacing: 0.06em; color: var(--dim); }
 .nav .links a:hover { color: var(--ink); }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
+import { Image } from 'expo-image';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -170,7 +171,8 @@ export function Paywall({
       <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
         <View style={s.sheet}>
           <View style={styles.headerRow}>
-            <ThemedText type="code" style={s.eyebrow}>// PLANS</ThemedText>
+            <Image source={require('../assets/brand/nc-mark.png')} style={styles.brandMark} contentFit="contain" tintColor={p.ink} />
+            <ThemedText type="code" style={[s.eyebrow, { marginLeft: Spacing.two }]}>PLANS &amp; CREDITS</ThemedText>
             <View style={{ flex: 1 }} />
             <Pressable onPress={onClose} hitSlop={12}>
               <ThemedText type="code" style={s.dim}>close ✕</ThemedText>
@@ -273,6 +275,7 @@ export function Paywall({
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   headerRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.four, paddingBottom: Spacing.two },
+  brandMark: { width: 30, height: 26 },
   center: { paddingVertical: Spacing.six },
   scroll: { padding: Spacing.four, paddingTop: Spacing.two, gap: Spacing.three },
   cardTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },

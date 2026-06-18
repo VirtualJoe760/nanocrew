@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     description: 'AI-native creator commerce. Talk to Venus; get a brand, a shop, and a website.',
     type: 'website',
   },
-  icons: { icon: '/favicon.svg' },
+  icons: { icon: '/nc-icon.png' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
