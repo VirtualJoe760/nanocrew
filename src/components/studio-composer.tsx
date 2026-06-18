@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, AppState, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -53,6 +53,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [change, setChange] = useState('');
   const [changeState, setChangeState] = useState<'idle' | 'sending' | 'queued'>('idle');
   const [hiddenRevIds, setHiddenRevIds] = useState<Set<string>>(new Set()); // "reset chat" hides past revisions
+  const [refreshing, setRefreshing] = useState(false);
   const [previewTarget, setPreviewTarget] = useState<string | null>(null);
   const [critiquePreview, setCritiquePreview] = useState(false);
   const [siteAction, setSiteAction] = useState<'idle' | 'building'>('idle');
@@ -349,6 +350,32 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     };
   }, [visible, active, building, loadStores, loadRevisions, progressAnim]);
 
+  // Self-heal when the console comes back to the foreground: once a revision is `ready` we stop
+  // polling (above), so a build that finishes — or any server-side change to a revision — while the
+  // app was backgrounded would otherwise leave the chat stale until it's reopened. Refetch on
+  // foreground so returning to the app always shows current state.
+  useEffect(() => {
+    if (!visible) return;
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') {
+        void loadStores();
+        if (active) void loadRevisions();
+      }
+    });
+    return () => sub.remove();
+  }, [visible, active, loadStores, loadRevisions]);
+
+  // Pull-to-refresh: a manual escape hatch so the creator can always force the latest revision /
+  // preview state without reopening the console.
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadStores(), active ? loadRevisions() : Promise.resolve(), active ? loadProducts() : Promise.resolve()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [active, loadStores, loadRevisions, loadProducts]);
+
   const refundOrder = async (id: string) => {
     setRefundingId(id);
     setNote(null);
@@ -567,7 +594,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               </View>
             </ScrollView>
           ) : (
-            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              contentContainerStyle={styles.scroll}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={pal.dim} />}
+            >
               {!slug && stores.length > 1 ? (
                 <View style={styles.pills}>
                   {stores.map((s) => (
