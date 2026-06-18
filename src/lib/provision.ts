@@ -34,6 +34,7 @@ const TEMPLATE_BY_STYLE: Record<BrandResult['designStyle'], string> = {
   bold: 'bold',
   elegant: 'elegant',
   extravagant: 'extravagant',
+  street: 'street',
 };
 
 /** The storefront template a brand's designStyle maps to (single source of truth). */

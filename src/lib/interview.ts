@@ -16,7 +16,7 @@ export type BrandResult = {
   story: string;
   vibeKeywords: string[];
   logo: { exists: boolean; direction: string };
-  designStyle: 'minimalist' | 'bold' | 'elegant' | 'extravagant';
+  designStyle: 'minimalist' | 'bold' | 'elegant' | 'extravagant' | 'street';
   products: string[];
   /** Website look/layout wishes in the creator's own words ("slideshow at the top",
    *  "mobile bottom bar") — Venus translates these to concrete blocks (via the template's
@@ -61,7 +61,8 @@ You need answers to these, in roughly this order (skip anything they already cov
 1. Does the brand have a name, or should you invent one together? What's the core idea?
 2. Do they have a logo? If not, what should it look like?
 3. Colors — what palette do they want?
-4. Fonts and design temperament: do they prefer minimalist, bold, elegant, or extravagant?
+4. Fonts and design temperament: do they prefer minimalist, bold, elegant, extravagant, or street
+   (bold full-bleed streetwear/skate — big wordmark hero, a scrolling news ticker, lookbook)?
 5. How should the brand's aesthetic feel and manifest on their website? (Listen for
    layout wishes — "a slideshow up top", "a video playing", "scrolling text" — and keep
    their exact words for siteNotes.)
@@ -89,7 +90,7 @@ or
     "story": "<short brand story/lore paragraph>",
     "vibeKeywords": ["<3-6 keywords>"],
     "logo": {"exists": <true if they already have one>, "direction": "<what it looks like or should look like>"},
-    "designStyle": "<minimalist|bold|elegant|extravagant — their stated preference>",
+    "designStyle": "<minimalist|bold|elegant|extravagant|street — their stated preference; 'street' = bold full-bleed streetwear/skate>",
     "products": ["<the products they're excited to sell>"],
     "siteNotes": ["<any website look/layout wishes, kept VERBATIM in their own words — e.g. 'a slideshow of photos at the top', 'a video playing behind the logo', 'buttons at the bottom on phones'. Empty array if none came up>"],
     "designSystem": {

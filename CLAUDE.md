@@ -47,7 +47,7 @@ The division is organized into subdirectories — open the one you need:
 ## The four deployable units (one shared Supabase Postgres)
 1. **Mobile app** — this repo. `src/app/**+api.ts` server routes hold the authed creator logic. **The backend runs on Railway** (`backend-production-d7eb.up.railway.app`, persistent Node via `expo serve`) — NOT EAS Hosting (Cloudflare Workers broke postgres-js for authed routes; do not move it back). Deploy with the Railway GraphQL API + an explicit `commitSha` (no auto-deploy webhook yet). The iOS build's `EXPO_PUBLIC_API_URL` points here. See the `production-shipping` memory.
 2. **platform-api** — `platform-api/` (Next.js, Vercel `nanocrew-api.vercel.app`). Public storefront API + webhooks. **`platform-api/db/schema.ts` is a COPY of `src/db/schema.ts` — re-sync it on EVERY migration.**
-3. **nanocrew-templates** (sibling repo) — 4 Next.js storefront templates; `brand.json` token contract.
+3. **nanocrew-templates** (sibling repo) — 5 Next.js storefront templates (minimal · bold · elegant · extravagant · **street** — the last a bold full-bleed streetwear/editorial design promoted from the Stephen Lawyer site, with the full copy/font/color mini-CMS); `brand.json` token contract.
 4. **forge** — DO droplet (`ssh nanocrew-forge`) running headless Claude; provisions + revises brand sites on working branches.
 
 ## Stack & conventions

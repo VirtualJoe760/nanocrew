@@ -141,7 +141,7 @@ public store/products/collections endpoints exactly like the templates — Rule 
 
 ## How a template consumes the catalogue
 
-Standard templates (`nanocrew-templates/templates/{minimal,bold,elegant,extravagant}`) fetch from
+Standard templates (`nanocrew-templates/templates/{minimal,bold,elegant,extravagant,street}`) fetch from
 platform-api using `brand.json.apiBase` + the store slug, with `next: { revalidate: 300 }` (ISR).
 The home, shop, product, and cart pages all read through this one data layer — so re-pointing the
 data layer re-points the whole site (this is what made the stephenlawyer.clothing cutover one file).
