@@ -4,6 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
+import { ContentSafetyError, IMAGE_SAFETY_SETTINGS, assertSafePrompt } from '@/lib/content-safety';
 import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 import { safeImageFetch } from '@/lib/safe-fetch';
@@ -65,6 +66,12 @@ export async function POST(req: Request) {
     const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
     if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });
 
+    try {
+      assertSafePrompt(body.prompt);
+    } catch (e) {
+      if (e instanceof ContentSafetyError) return Response.json({ error: e.message }, { status: e.status });
+      throw e;
+    }
     const collision = body.prompt?.trim() || 'fuse the two graphics into one cohesive design';
     const instruction =
       'Merge the two provided graphics into ONE new clothing graphic suitable for ' +
@@ -81,7 +88,7 @@ export async function POST(req: Request) {
         const res = (await ai.models.generateContent({
           model: MODEL,
           contents: [{ role: 'user', parts: [{ text: instruction }, imgA, imgB] }],
-          config: { responseModalities: [Modality.IMAGE] },
+          config: { responseModalities: [Modality.IMAGE], safetySettings: IMAGE_SAFETY_SETTINGS },
         })) as GenResponse;
         for (const part of res.candidates?.[0]?.content?.parts ?? []) {
           if (part.inlineData?.data) {

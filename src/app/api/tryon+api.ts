@@ -3,6 +3,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { IMAGE_SAFETY_SETTINGS } from '@/lib/content-safety';
 import { guardRate } from '@/lib/rate-limit';
 import { uploadImage } from '@/lib/cloudinary';
 
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
         const res = (await ai.models.generateContent({
           model: MODEL,
           contents: [{ role: 'user', parts: [{ text: instruction }, selfiePart, garmentPart] }],
-          config: { responseModalities: [Modality.IMAGE] },
+          config: { responseModalities: [Modality.IMAGE], safetySettings: IMAGE_SAFETY_SETTINGS },
         })) as GenResponse;
         for (const part of res.candidates?.[0]?.content?.parts ?? []) {
           if (part.inlineData?.data) {

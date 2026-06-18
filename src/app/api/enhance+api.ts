@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
+import { ContentSafetyError, assertSafePrompt } from '@/lib/content-safety';
 import { clampEffort, enhanceGuidance } from '@/lib/effort';
 import { guardRate } from '@/lib/rate-limit';
 
@@ -17,6 +18,12 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { prompt?: string; effort?: number } | null;
   const prompt = body?.prompt?.trim();
   if (!prompt) return Response.json({ error: 'prompt required' }, { status: 400 });
+  try {
+    assertSafePrompt(prompt);
+  } catch (e) {
+    if (e instanceof ContentSafetyError) return Response.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
   const effort = clampEffort(body?.effort);
 
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;

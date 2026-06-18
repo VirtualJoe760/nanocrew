@@ -383,14 +383,19 @@ export default function AccountScreen() {
               </>
             ) : (
               <View style={styles.authWrap}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <NCMark size={22} color={theme.text} />
-                  <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>ACCOUNT</ThemedText>
+                {/* Branded join hero — first impression before anyone has an account. */}
+                <View style={styles.joinHero}>
+                  <NCMark size={60} color={theme.text} />
+                  <ThemedText style={[styles.joinWordmark, { color: theme.text }]}>Nano Crew</ThemedText>
+                  <ThemedText type="title" style={styles.joinTitle}>
+                    {isSignup ? 'Build your brand' : 'Welcome back'}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.joinSub}>
+                    {isSignup
+                      ? 'Talk to Venus, launch an AI-designed clothing brand, and sell it anywhere — all from your phone.'
+                      : 'Sign in to sync your designs, stores and sales.'}
+                  </ThemedText>
                 </View>
-                <ThemedText type="title">Join the crew</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.authSub}>
-                  Sign in to sync your designs, stores and sales.
-                </ThemedText>
 
                 {/* Apple requires Sign in with Apple first on iOS when other social logins exist. */}
                 {Platform.OS === 'ios' ? (
@@ -549,6 +554,10 @@ const styles = StyleSheet.create({
 
   // Auth (logged-out)
   authWrap: { gap: Spacing.three },
+  joinHero: { alignItems: 'center', gap: Spacing.one, marginTop: Spacing.two, marginBottom: Spacing.two },
+  joinWordmark: { fontFamily: SERIF, fontSize: 30, letterSpacing: 1.5, marginTop: Spacing.two },
+  joinTitle: { textAlign: 'center', marginTop: Spacing.one },
+  joinSub: { textAlign: 'center', lineHeight: 21, maxWidth: 320 },
   eyebrow: { letterSpacing: 2, marginBottom: Spacing.one },
   authSub: { marginBottom: Spacing.two },
   input: { borderRadius: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, fontSize: 15 },

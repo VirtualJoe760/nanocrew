@@ -1,6 +1,7 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
+import { ContentSafetyError, IMAGE_SAFETY_SETTINGS, assertSafePrompt } from '@/lib/content-safety';
 import { uploadImage } from '@/lib/cloudinary';
 import { guardRate } from '@/lib/rate-limit';
 import { safeImageFetch } from '@/lib/safe-fetch';
@@ -89,6 +90,14 @@ export async function POST(req: Request) {
     return Response.json({ error: 'prompt or image is required' }, { status: 400 });
   }
 
+  // Reject sexual / graphic-violence prompts before spending credits (Terms §5).
+  try {
+    assertSafePrompt(prompt);
+  } catch (e) {
+    if (e instanceof ContentSafetyError) return Response.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
+
   // If we'll persist to a catalogue, the creator must own it — check up front.
   let ownedStoreId: string | null = null;
   if (catalogueId) {
@@ -122,7 +131,7 @@ export async function POST(req: Request) {
       const res = (await ai.models.generateContent({
         model: MODEL,
         contents: [{ role: 'user', parts }],
-        config: { responseModalities: [Modality.IMAGE] },
+        config: { responseModalities: [Modality.IMAGE], safetySettings: IMAGE_SAFETY_SETTINGS },
       })) as GenResponse;
 
       for (const part of res.candidates?.[0]?.content?.parts ?? []) {
