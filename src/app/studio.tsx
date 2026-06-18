@@ -55,7 +55,7 @@ const VOICE_KEY = 'nanocrew.voiceId';
 
 // The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
 // counter-rotating rings, digital rain behind — talks you through building your brand.
-// Tap it to speak; Gemini hears the audio, ElevenLabs gives the reply a voice.
+// Hold it to speak (push-to-talk); Gemini hears the audio, ElevenLabs gives the reply a voice.
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -83,12 +83,16 @@ function NCNucleus({
   level,
   state,
   onPress,
+  onPressIn,
+  onPressOut,
 }: {
   size: number;
   p: Palette;
   level?: SharedValue<number>;
   state?: EntityState;
   onPress?: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
 }) {
   const ring = state ? STATE_COLORS[STATE_INDEX[state]] : p.accent;
   const glow = useAnimatedStyle(() => {
@@ -117,8 +121,8 @@ function NCNucleus({
       <NCMark size={size * 0.58} color={p.ink} metallic={p.dark} />
     </View>
   );
-  return onPress ? (
-    <Pressable onPress={onPress} hitSlop={24}>
+  return onPress || onPressIn ? (
+    <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut} hitSlop={24}>
       {body}
     </Pressable>
   ) : (
@@ -650,8 +654,8 @@ export default function StudioScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  // Fluid conversation: ask for the mic once, then the entity listens by itself after
-  // each reply — silence ends your turn, no tapping.
+  // Push-to-talk: ask for the mic once (on the primer), then the user HOLDS the mark to record
+  // and releases to send — deterministic turns, no silence detection.
   const [micGranted, setMicGranted] = useState(false);
   useEffect(() => {
     if (!session) return;
@@ -671,11 +675,6 @@ export default function StudioScreen() {
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
 
-  // Voice-activity bookkeeping for auto-send.
-  const spokeRef = useRef(false);
-  const voicedCountRef = useRef(0);
-  const lastLoudRef = useRef(0);
-  const recStartRef = useRef(0);
   const busyRef = useRef(false);
   const lastTurnEmptyRef = useRef(false);
 
@@ -883,29 +882,6 @@ export default function StudioScreen() {
     [session, previewing, playSpeech],
   );
 
-  const startListening = useCallback(async () => {
-    if (busyRef.current) return;
-    // The recorder can fail to prepare while the player is still releasing the audio
-    // session (especially in the simulator) — be patient before falling back to tap mode.
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-        await recorder.prepareToRecordAsync();
-        recorder.record();
-        spokeRef.current = false;
-        voicedCountRef.current = 0;
-        lastLoudRef.current = 0;
-        recStartRef.current = Date.now();
-        setState('listening');
-        return;
-      } catch {
-        await new Promise((r) => setTimeout(r, 700));
-      }
-    }
-    setError('mic hiccup — tap the orb to talk');
-    setState('idle');
-  }, [recorder]);
-
   const sendRecording = useCallback(async () => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -924,50 +900,76 @@ export default function StudioScreen() {
     }
   }, [recorder, turn]);
 
-  // When she finishes speaking, she starts listening — the conversation just flows.
-  // (Small delay so the audio session settles before the mic takes over.)
-  useEffect(() => {
-    if (!playerStatus.didJustFinish) return;
-    if (lastTurnEmptyRef.current) {
-      // She asked for a tap — wait for it instead of re-opening the mic.
-      lastTurnEmptyRef.current = false;
-      setState('idle');
-      return;
-    }
-    if (micGranted && !brand && started.current && focusedRef.current && !pausedRef.current && !keyboardMode) {
-      const t = setTimeout(() => {
-        if (focusedRef.current && !pausedRef.current) void startListening();
-      }, 450);
-      return () => clearTimeout(t);
-    }
-    setState('idle');
-  }, [playerStatus.didJustFinish, micGranted, brand, startListening, keyboardMode]);
+  // Push-to-talk. holdingRef tracks whether the finger is currently down so we can abort cleanly
+  // if the user releases while the recorder is still preparing (the audio session can take a beat
+  // to hand off from the player, especially in the simulator).
+  const holdingRef = useRef(false);
+  const holdStartRef = useRef(0);
 
-  // Silence detection: real speech is SUSTAINED loudness (3+ samples ≈ a third of a
-  // second), not a noise spike. Once you've spoken, ~1.2s of quiet sends your turn. If
-  // you say nothing at all, she parks — no send, idle until you tap her awake.
-  useEffect(() => {
-    if (state !== 'listening' || busyRef.current) return;
-    const db = recState.metering;
-    if (typeof db !== 'number') return;
-    const now = Date.now();
-    if (db > -36) {
-      voicedCountRef.current++;
-      lastLoudRef.current = now;
-      if (voicedCountRef.current >= 3) spokeRef.current = true;
+  // Finger DOWN on the orb → start recording. Interrupts Venus if she's speaking; resumes if paused.
+  const beginHold = useCallback(async () => {
+    if (!session || brand || busyRef.current) return;
+    if (state === 'thinking') return; // can't talk over her thinking
+    if (pausedRef.current) { pausedRef.current = false; setPaused(false); } // holding resumes
+    setKeyboardMode(false); // touching the orb always means voice
+    if (state === 'speaking') { try { player.pause(); } catch {} } // hold interrupts her
+
+    if (!micGranted) {
+      const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
+      if (!perm?.granted) {
+        setError('Microphone needed — enable it in Settings, or tap the keyboard to type.');
+        return;
+      }
+      setMicGranted(true);
     }
-    if (spokeRef.current && (now - lastLoudRef.current > 1200 || now - recStartRef.current > 30000)) {
-      void sendRecording();
-      return;
+
+    holdingRef.current = true;
+    holdStartRef.current = Date.now();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        await recorder.prepareToRecordAsync();
+        if (!holdingRef.current) {
+          // released before we were ready — abort without sending
+          await recorder.stop().catch(() => {});
+          await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+          setState('idle');
+          return;
+        }
+        recorder.record();
+        setState('listening');
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 400));
+      }
     }
-    if (!spokeRef.current && now - recStartRef.current > 12000) {
-      // Nothing said — go quiet until they re-initiate by tapping.
+    holdingRef.current = false;
+    setError('mic hiccup — hold the mark again');
+    setState('idle');
+  }, [session, brand, state, micGranted, player, recorder]);
+
+  // Finger UP → send the held recording. Too-short holds are treated as accidental taps and
+  // discarded (no empty turn). If recording hadn't started yet, beginHold's guard handles abort.
+  const endHold = useCallback(() => {
+    if (!holdingRef.current) return;
+    holdingRef.current = false;
+    const held = Date.now() - holdStartRef.current;
+    if (held < 400 || state !== 'listening') {
       recorder.stop().catch(() => {});
       setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
       setState('idle');
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recState.metering, state, sendRecording]);
+    void sendRecording();
+  }, [state, recorder, sendRecording]);
+
+  // Push-to-talk: when she finishes speaking, just go idle and wait for the user to HOLD the mark
+  // to reply. No auto-opening the mic — deterministic turn-taking, no silence-detection races.
+  useEffect(() => {
+    if (!playerStatus.didJustFinish) return;
+    lastTurnEmptyRef.current = false;
+    setState('idle');
+  }, [playerStatus.didJustFinish]);
 
   const toggleKeyboard = useCallback(() => {
     setKeyboardMode((k) => {
@@ -989,29 +991,6 @@ export default function StudioScreen() {
     void turn({ text: t });
   }, [typed, state, player, turn]);
 
-  const onEntityPress = useCallback(async () => {
-    if (!session || brand) return;
-    if (state === 'thinking') return;
-    if (pausedRef.current) { pausedRef.current = false; setPaused(false); } // tapping the mark resumes
-    setKeyboardMode(false); // touching the orb always means voice
-    if (state === 'speaking') {
-      player.pause(); // interrupt her — your turn
-      void startListening();
-      return;
-    }
-    if (state === 'listening') {
-      void sendRecording(); // manual send without waiting for silence
-      return;
-    }
-    // idle — mic was denied or conversation hasn't started
-    const perm = await AudioModule.requestRecordingPermissionsAsync();
-    if (!perm.granted) {
-      setError('Microphone permission needed — enable it in Settings.');
-      return;
-    }
-    setMicGranted(true);
-    void startListening();
-  }, [session, brand, state, player, startListening, sendRecording]);
 
   // Word-by-word subtitles synced to the speech itself: ElevenLabs character timestamps
   // give each word its true start time (tempo-adjusted server-side). Linear fallback if
@@ -1084,14 +1063,16 @@ export default function StudioScreen() {
 
   const hint =
     state === 'listening'
-      ? '[ listening — just talk ]'
+      ? '[ recording — release to send ]'
       : state === 'thinking'
-        ? '[ processing… ]'
+        ? '[ thinking… ]'
         : state === 'speaking'
-          ? '[ tap to interrupt ]'
-          : micGranted
-            ? '[ tap to wake ]'
-            : '[ tap to enable the mic ]';
+          ? '[ hold to reply ]'
+          : paused
+            ? '[ paused — hold the mark to resume ]'
+            : micGranted
+              ? '[ hold the mark to talk ]'
+              : '[ hold the mark to enable the mic ]';
 
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
   // comfortable gap so the karaoke captions never dip under it.
@@ -1313,7 +1294,7 @@ export default function StudioScreen() {
             </ThemedText>
             <ThemedText type="small" style={[styles.introBody, { color: p.dim, textAlign: 'left' }]}>
               On the next screen, {aiName} talks with you to design your brand — a quick back-and-forth.
-              Answer out loud (or tap the keyboard to type). Have a rough idea of:
+              Hold the mark to talk, release to send (or tap the keyboard to type). Have a rough idea of:
             </ThemedText>
             {[
               'Your brand name + what it stands for',
@@ -1350,10 +1331,25 @@ export default function StudioScreen() {
         ) : (
           <>
             <View style={styles.entityArea}>
-              <NCNucleus size={232} p={p} level={level} state={state} onPress={onEntityPress} />
+              <NCNucleus
+                size={232}
+                p={p}
+                level={level}
+                state={state}
+                onPressIn={keyboardMode ? undefined : beginHold}
+                onPressOut={keyboardMode ? undefined : endHold}
+                onPress={keyboardMode ? () => setKeyboardMode(false) : undefined}
+              />
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
                 {keyboardMode ? '[ keyboard mode — tap the mark for voice ]' : hint}
               </ThemedText>
+              {!keyboardMode ? (
+                <Pressable onPress={togglePause} hitSlop={12} style={[styles.pausePill, { borderColor: paused ? p.accent : `${p.dim}66` }]}>
+                  <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 13, letterSpacing: 1 }}>
+                    {paused ? '▶  Resume' : '❚❚  Pause'}
+                  </ThemedText>
+                </Pressable>
+              ) : null}
             </View>
             {keyboardMode ? (
               <View style={styles.typeRow}>
@@ -1440,6 +1436,7 @@ const styles = StyleSheet.create({
   cornerBL: { left: 12, borderLeftWidth: 1.5, borderBottomWidth: 1.5 },
   cornerBR: { right: 12, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
   hint: { color: '#9396a0', letterSpacing: 1 },
+  pausePill: { marginTop: Spacing.three, borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two, alignSelf: 'center' },
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },

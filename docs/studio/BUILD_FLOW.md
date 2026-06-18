@@ -32,9 +32,15 @@ starts Venus talking before the creator is ready. Flow: pick a voice (`mode: 'ct
 (`mode: 'primer'`) that previews what Venus will ask and offers two ways in — **"Talk with Venus"**
 (recommended; requests the mic *here*, the only place we prompt) or **"I'd rather type"** (starts in
 keyboard mode, no mic) — → the interview (`mode: 'interview'`), where Venus greets. Returning creators
-with a store land on the dashboard. The conversation also **auto-pauses when the Studio tab loses
-focus** (a `playSpeech` focus/pause guard, so she never talks over another tab) and there's a manual
-**pause/resume** control in the interview header; tapping the orb resumes.
+with a store land on the dashboard.
+
+**Voice is push-to-talk (hold-to-talk):** the creator **holds the orb to record and releases to
+send** (`beginHold`/`endHold`); holding while Venus is speaking interrupts her and starts recording.
+This is deliberate — the old auto-listen/silence-detection turn-taking raced the audio session (she'd
+return text but not speak, or not respond at all), so it was removed for deterministic turns. After she
+finishes a reply the orb just goes **idle** and waits for the next hold. The conversation also
+**auto-pauses when the Studio tab loses focus** (a `playSpeech` focus/pause guard), and there's a
+prominent **Pause/Resume pill** beneath the orb (plus the header control); holding the orb resumes.
 
 **Venus** is the brand consultant (`src/lib/interview.ts`, `interviewSystem()`). She runs voice-first
 (`/api/voice` — Gemini hears the audio, ElevenLabs voices the reply) with a typed fallback
