@@ -39,6 +39,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
+import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
 
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
@@ -68,93 +69,11 @@ const STATE_INDEX: Record<EntityState, number> = { idle: 0, listening: 1, thinki
 
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
+// Palette + the silk FabricBackground + the NC mark now live in @/components/nc-screen so Studio,
+// Design, Market, and Account all share one look (imported above).
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Nano Crew palette — monochrome black/white with a single champagne-gold accent. Black
-// silk on dark, warm paper on light; gold holds on both.
-type Palette = ReturnType<typeof makePalette>;
-function makePalette(dark: boolean) {
-  return {
-    dark,
-    bg: dark ? '#08080a' : '#f5f5f6',
-    bgTop: dark ? '#141417' : '#fbfbfc', // top of the vertical wash
-    wave: dark
-      ? ['#101013', '#0d0d10', '#131318', '#0b0b0e'] // silk fold tones on black
-      : ['#eeeef0', '#e9e9ec', '#f0f0f2', '#e3e3e6'],
-    ink: dark ? '#f4f4f6' : '#131316',
-    dim: dark ? '#9396a0' : '#6a6c73',
-    faint: dark ? '#56575e' : '#a3a4ab',
-    accent: dark ? '#cdd1d9' : '#44474e', // champagne gold (darker on light for contrast)
-    accent2: dark ? '#e8eaee' : '#2c2e34',
-    line: dark ? 'rgba(205,209,217,0.16)' : 'rgba(68,71,78,0.20)',
-    coreInner: dark ? '#f4f4f6' : '#8a8d94',
-  };
-}
-function usePalette(): Palette {
-  return makePalette(useColorScheme() !== 'light');
-}
-
-// ---------- Static silk background (flat, no per-frame animation) ----------
-// Smooth bezier "folds" filled in near-black tones evoke black silk, with one soft gold
-// glow behind the nucleus. Entirely static — the laggy network/dust fields are gone.
-
-function wavePath(yBase: number, amp: number): string {
-  const W = SCREEN_W;
-  const H = SCREEN_H;
-  return (
-    `M0 ${yBase}` +
-    ` C ${W * 0.28} ${yBase - amp}, ${W * 0.42} ${yBase + amp}, ${W * 0.56} ${yBase}` +
-    ` C ${W * 0.72} ${yBase - amp}, ${W * 0.88} ${yBase + amp * 1.15}, ${W} ${yBase - amp * 0.35}` +
-    ` L ${W} ${H} L 0 ${H} Z`
-  );
-}
-
-const WAVES = [
-  { y: SCREEN_H * 0.34, amp: 64, tone: 0, op: 0.9 },
-  { y: SCREEN_H * 0.48, amp: 82, tone: 1, op: 0.85 },
-  { y: SCREEN_H * 0.62, amp: 70, tone: 2, op: 0.9 },
-  { y: SCREEN_H * 0.76, amp: 92, tone: 3, op: 0.85 },
-  { y: SCREEN_H * 0.88, amp: 60, tone: 0, op: 0.95 },
-];
-
-function FabricBackground({ p }: { p: Palette }) {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg width={SCREEN_W} height={SCREEN_H}>
-        <Defs>
-          <LinearGradient id="nc-wash" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={p.bgTop} />
-            <Stop offset="1" stopColor={p.bg} />
-          </LinearGradient>
-          <RadialGradient id="nc-glow" cx="50%" cy="34%" r="52%">
-            <Stop offset="0" stopColor={p.accent} stopOpacity={p.dark ? 0.12 : 0.07} />
-            <Stop offset="1" stopColor={p.accent} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Rect width={SCREEN_W} height={SCREEN_H} fill="url(#nc-wash)" />
-        {WAVES.map((w, i) => (
-          <Path key={i} d={wavePath(w.y, w.amp)} fill={p.wave[w.tone]} opacity={w.op} />
-        ))}
-        <Rect width={SCREEN_W} height={SCREEN_H} fill="url(#nc-glow)" />
-      </Svg>
-    </View>
-  );
-}
-
-// ---------- The NC monogram + circular nucleus ----------
-
-/** The Nano Crew "NC" brand mark — the real logo asset (assets/brand/nc-mark.png), tinted to the
- *  foreground so it reads on both light and dark (same treatment as the paywall header). */
-function NCMark({ size, color }: { size: number; color: string; metallic?: boolean }) {
-  return (
-    <Image
-      source={require('../assets/brand/nc-mark.png')}
-      style={{ width: size, height: size }}
-      contentFit="contain"
-      tintColor={color}
-    />
-  );
-}
+// ---------- The circular nucleus (the Venus orb) ----------
 
 /** The circular logo as the entity's nucleus: a thin gold ring around the NC monogram, on
  *  a soft glow. Optionally breathes with the live audio level (one cheap animated node). */

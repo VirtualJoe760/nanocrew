@@ -17,6 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
 import { BrandStore } from '@/components/brand-store';
 import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { Paywall } from '@/components/paywall';
@@ -100,6 +101,7 @@ function Row({
 
 export default function AccountScreen() {
   const theme = useTheme();
+  const p = usePalette();
   const { session, loading } = useAuth();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
@@ -243,7 +245,8 @@ export default function AccountScreen() {
   const payoutTitle = payouts?.chargesEnabled ? 'Payouts active' : payouts?.connected ? 'Finish payout setup' : 'Set up payouts';
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={[styles.container, { backgroundColor: p.bg }]}>
+      <FabricBackground p={p} />
       <SafeAreaView edges={['top']} style={styles.flex}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
           <ScrollView
@@ -257,7 +260,7 @@ export default function AccountScreen() {
               <>
                 {/* Branded chrome header — matches Studio/Market (NC serif mark + eyebrow) */}
                 <View style={styles.brandHeader}>
-                  <ThemedText style={[styles.ncMark, { color: theme.tint }]}>NC</ThemedText>
+                  <NCMark size={22} color={theme.text} />
                   <ThemedText type="code" themeColor="textSecondary" style={styles.eyebrow}>ACCOUNT</ThemedText>
                 </View>
 
@@ -359,7 +362,10 @@ export default function AccountScreen() {
               </>
             ) : (
               <View style={styles.authWrap}>
-                <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>ACCOUNT</ThemedText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <NCMark size={22} color={theme.text} />
+                  <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>ACCOUNT</ThemedText>
+                </View>
                 <ThemedText type="title">Join the crew</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.authSub}>
                   Sign in to sync your designs, stores and sales.
@@ -445,7 +451,7 @@ export default function AccountScreen() {
       {session ? <EarningsCockpit visible={showEarnings} onClose={() => setShowEarnings(false)} token={session.access_token} /> : null}
       {session ? <Paywall visible={showPaywall} onClose={() => setShowPaywall(false)} token={session.access_token} reason="manage" /> : null}
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
-    </ThemedView>
+    </View>
   );
 }
 

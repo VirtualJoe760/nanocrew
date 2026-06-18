@@ -18,6 +18,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BrandStore } from '@/components/brand-store';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
 import { apiUrl } from '@/lib/api';
 
 type TrendingItem = {
@@ -142,6 +143,7 @@ function BrandCard({
 
 export default function MarketScreen() {
   const theme = useTheme();
+  const p = usePalette();
   const [query, setQuery] = useState('');
   const [data, setData] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -181,15 +183,19 @@ export default function MarketScreen() {
   }, [store]);
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={[styles.container, { backgroundColor: p.bg }]}>
+      <FabricBackground p={p} />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.inner}>
           <View style={styles.header}>
-            <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>
-              Marketplace
-            </ThemedText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+              <NCMark size={22} color={theme.text} />
+              <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>
+                MARKET
+              </ThemedText>
+            </View>
             <ThemedText type="title" style={styles.title}>
-              Market
+              Discover
             </ThemedText>
           </View>
 
@@ -254,7 +260,7 @@ export default function MarketScreen() {
         </View>
       </SafeAreaView>
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
-    </ThemedView>
+    </View>
   );
 }
 
