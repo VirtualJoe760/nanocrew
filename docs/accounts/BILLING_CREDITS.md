@@ -96,8 +96,9 @@ on first use.
 **Variable-cost ops** debit via `debitCredits()` with their own reason: scene-video ("cool
 short", `scene_video`) charges the tier price from `VIDEO_MODELS` (`src/lib/fal-video.ts` — Wan
 **60** / Seedance 2.0 **260** / Veo3 **400**, each ≥~2× real cost at the floor); buying a custom
-domain charges `domain` (`src/lib/domains.ts`). Debits throw `InsufficientCreditsError` when the
-balance is too low.
+domain charges `domain` (`src/lib/domains.ts` — Vercel's yearly registration price passed through
+at par **plus a flat $2.99 service fee**, `domainCredits()` = `price×100 + 299` credits; e.g. a
+$6.99 domain → 998cr / $9.98). Debits throw `InsufficientCreditsError` when the balance is too low.
 
 **Reads / top-ups** — `GET /api/creator/credits` (`src/app/api/creator/credits+api.ts`) returns
 the balance, the `CREDIT_COSTS` price list, the scene-video model tiers, and a 20-row ledger.

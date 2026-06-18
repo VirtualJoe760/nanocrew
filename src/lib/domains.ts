@@ -17,10 +17,14 @@ export type DomainState = {
   verification?: { type: string; domain: string; value: string; reason: string }[];
 };
 
-/** Credits we charge a creator to buy a domain. 1 credit ≈ $0.01 retail, so the yearly price in
- *  dollars × 100 is cost; ×1.25 adds a small margin over Vercel's registration fee. */
+/** Flat service charge added on top of a domain's registration price, in cents ($2.99). */
+export const DOMAIN_SERVICE_FEE_CENTS = 299;
+
+/** Credits we charge a creator to buy a domain. 1 credit ≈ $0.01 retail. Vercel's yearly
+ *  registration price is passed through at par (dollars × 100) plus a flat $2.99 service fee —
+ *  our margin. e.g. a $6.99 domain → 699 + 299 = 998 credits ($9.98). */
 export function domainCredits(priceUsd: number): number {
-  return Math.ceil(priceUsd * 100 * 1.25);
+  return Math.ceil(priceUsd * 100) + DOMAIN_SERVICE_FEE_CENTS;
 }
 
 /** Normalize user input to a bare hostname (no protocol, no path, lowercase). */

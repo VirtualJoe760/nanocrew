@@ -93,8 +93,9 @@ Cross-cutting guarantees:
 ### Phase C — Domains (G3)  ·  **Vercel for everything** (decided)  ·  ✅ done (code)
 - ✅ `src/lib/domains.ts`: `attachDomain` (Projects API, idempotent; 409 → re-verify), `searchDomain`
   + `buyDomain` on Vercel's **Domains Registrar API** (`/v1/registrar/...` — the old `/v4/domains/*`
-  + `/v5/domains/buy` were sunsetted Nov 2025; verified live), `domainCredits(priceUsd)` (yearly price →
-  credits, 1.25× over cost), `normalizeDomain`. Buy passes the platform registrant contact + an
+  + `/v5/domains/buy` were sunsetted Nov 2025; verified live), `domainCredits(priceUsd)` (yearly price
+  passed through at par **+ a flat $2.99 service fee** = our margin; `price×100 + 299` credits),
+  `normalizeDomain`. Buy passes the platform registrant contact + an
   expectedPrice that must match; the buy endpoint never refunds once the domain is bought (retries
   attach, reports "registering" on lag).
 - ✅ **Own / transfer a domain**: `POST /api/creator/stores/:slug/go-live { domain }` attaches to the
@@ -110,11 +111,14 @@ Cross-cutting guarantees:
 - ✅ **Verified live (2026-06-14)**: registrar availability + price return real data with the current
   `VERCEL_TOKEN`; the Projects domains API (attach/verify) works. Attach/connect of an owned domain is
   fully functional now.
-- ⏳ **Needs Joe's config to BUY**: set `DOMAIN_CONTACT_*` (registrant: FIRST_NAME, LAST_NAME, EMAIL,
-  PHONE [E.164], ADDRESS1, CITY, STATE, ZIP, COUNTRY [ISO-2]) — the registrar requires full contact on
-  every purchase — plus a billing method on Vercel. Without those, search + attach work; buy returns a
-  clear "registrant not configured" error.
-- Note: domain purchase charges the platform's Vercel account; we recoup via the creator's credits.
+- ✅ **BUY verified end-to-end (2026-06-18)**: `DOMAIN_CONTACT_*` (registrant: FIRST_NAME, LAST_NAME,
+  EMAIL, PHONE [E.164], ADDRESS1, CITY, STATE, ZIP, COUNTRY [ISO-2]) + a Vercel billing method are
+  configured, so a real purchase succeeds: **`aetherrun.run` bought for $6.99** via the same code path
+  the buy endpoint runs (search → debit → `buyDomain` → `attachDomain` → status `live`), attached +
+  `verified=true` on `store-aether-run`. **Still unexercised: the literal in-app UI** (the RN
+  go-live screen / button) — the server logic behind it is proven, the front end is not yet.
+- Note: domain purchase charges the platform's Vercel account; we recoup via the creator's credits —
+  Vercel's price at par **+ a flat $2.99 service fee** (`DOMAIN_SERVICE_FEE_CENTS`).
   (The roadmap originally said "charge via Stripe" — credits are the simpler v1 and already paid-for.)
 
 ### Phase D — Stripe Connect (G4)  ·  **created at brand establishment** (decided)  ·  ✅ done (code, inert)
