@@ -71,11 +71,12 @@ The division is organized into subdirectories — open the one you need:
 - Nano Banana can't emit alpha → magenta chroma-key (`src/lib/transparency.ts`).
 - `AUTO_FIRST_DROP=1` enables server-side first-drop generation (real spend) — uses `INTERNAL_API_KEY` to call the now-authed designer routes.
 
-## Status (2026-06-17)
+## Status (2026-06-18)
 The product is now **Nano Crew** (spaced in prose; the `nanocrew` slug/URLs/repo names are unchanged).
 The app lands on **Studio** — the **social feed is hidden for v1** (code preserved at the `/feed`
-route, no tab; returns in v2), so the tab bar is **Studio · Design · Market · Account**. **Close to
-production-ready.**
+route, no tab; returns in v2), so the tab bar is **Studio · Design · Market · Account**.
+**SUBMITTED to the Apple App Store** (iPhone-only — `supportsTablet:false`; build 22 was the first
+submission, build 23 supersedes it with the push-to-talk Venus fix). Awaiting Apple review.
 
 Shipped this session: the **mini-CMS** (Studio → ✦ Customize edits site copy/colors/fonts live with
 no rebuild — `stores.site_config`, migration 0018, `POST /api/creator/site-config` → public
@@ -107,12 +108,26 @@ env + App Store Connect products). The Apple App ID carries all 3 capabilities (
 (Site URL + redirects fixed, Apple provider native-only, **Facebook hidden for v1**). **Legal live**:
 Privacy + Terms at `nanocrew-api.vercel.app/privacy` + `/terms`. **Security pass done** (no criticals;
 SSRF guard `src/lib/safe-fetch.ts`, merge IDOR fix, constant-time internal-key, opt-in Printful-webhook
-token, RLS lockdown). **Android build + Google Play** in progress (`docs/ops/PLAY_STORE.md`). Remaining
-is mostly Joe's config — see `docs/ops/PRODUCTION_CHECKLIST.md`. Top open: **🔴 platform-api commerce
-is still on a TEST Stripe key** (`cs_test_` sessions — real purchases won't charge until its
-`STRIPE_SECRET_KEY` is switched to live), **Stripe Connect go-live**, App Store Connect IAP product
-config, and provisioning end-to-end verify (needs one Pro test brand). See the `production-shipping`
-memory.
+token, RLS lockdown). **Android build + Google Play** in progress (`docs/ops/PLAY_STORE.md`).
+
+**Shipped 2026-06-18 (launch push):** **App Store submission** (iPhone-only build 23, listing/IAP/
+privacy/review-notes from `docs/ops/APP_STORE_LISTING.md`); **commerce went LIVE** (platform-api
+`STRIPE_SECRET_KEY` → `sk_live`, `cs_live` confirmed, live webhook secret); **Stripe Connect payouts
+ENABLED** (`STRIPE_CONNECT_ENABLED=1` on Railway — Express onboarding + destination-charge split,
+runbook `docs/ops/PAYOUTS_SETUP.md`); **NSFW/gore generation guard** (`src/lib/content-safety.ts` —
+prompt pre-check + Gemini safetySettings on every image route); **signup data + legal acceptance**
+(creators += name/phone/terms, migration 0020, Terms v2026-06-18 w/ creator indemnification + mfr
+hold-harmless + generation records); **push-to-talk Venus** (hold-to-talk replaces auto-listen — fixed
+the "responds in text but not voice" / "no response" races, `studio.tsx` `beginHold`/`endHold`) + more
+conversational interview prompt + prominent Pause pill + branded join screen; **nanocrew.app mobile
+pass** (hamburger, `padding-inline` gutter fix, serif NC logo) + **OG/Twitter share images** (site card
++ per-product/per-brand photos). **Android `.aab` built** (ready for Play internal testing).
+
+Remaining is mostly Joe's config — see `docs/ops/PRODUCTION_CHECKLIST.md`. Top open: **Apple App Store
+review** (build 23 submitted, awaiting); **Google Play public launch is gated by the 20-tester /
+14-day closed-test** rule for personal accounts (org account would exempt — see PLAY_STORE.md);
+**confirm `STRIPE_BILLING_WEBHOOK_SECRET` is live**; rotate the briefly-exposed VERCEL/RAILWAY/EXPO
+tokens; provisioning end-to-end verify (needs one Pro test brand). See the `production-shipping` memory.
 
 **Build quality — mostly shipped.** The build-quality epic's first two fixes are in: Venus now
 *authors* the build brief (`authorBrandBrief`, gemini-2.5-pro — not a mail-merge) and a **Master

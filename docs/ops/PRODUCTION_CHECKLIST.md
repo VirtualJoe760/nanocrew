@@ -30,19 +30,19 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
 Stripe is on `sk_live` and the 3 `STRIPE_PRICE_*` ids are set (app/Railway). **Credit pricing is
 finalized**: 1 credit = $0.01 flat (no pack discount), every generation charge ≥2× our API cost at
 that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaining is dashboard config:
-- [ ] **Commerce webhook** → `https://nanocrew-api.vercel.app/api/public/stripe-webhook` →
-  `STRIPE_WEBHOOK_SECRET` on platform-api/Vercel. Events: `checkout.session.completed`,
-  `checkout.session.expired`, `charge.refunded`, `account.updated`.
+- [x] **Commerce webhook** ✅ (2026-06-18) → `…/api/public/stripe-webhook` → live `STRIPE_WEBHOOK_SECRET`
+  set on platform-api/Vercel. Events: `checkout.session.completed`, `checkout.session.expired`,
+  `charge.refunded`, `account.updated`.
 - [ ] **Billing webhook** → `https://nanocrew-api.vercel.app/api/public/billing-webhook` →
-  `STRIPE_BILLING_WEBHOOK_SECRET` on platform-api/Vercel. Events: `checkout.session.completed`,
-  `invoice.paid`, `customer.subscription.updated`, `customer.subscription.deleted`.
-- [ ] 🔴 **platform-api commerce is still on a TEST Stripe key** — checkout produces `cs_test_`
-  sessions, so **real product purchases won't charge** until platform-api's `STRIPE_SECRET_KEY` is
-  switched to the **live** key on Vercel (handlers 503 without any key). This is the live-commerce
-  blocker.
+  `STRIPE_BILLING_WEBHOOK_SECRET` on platform-api/Vercel — **confirm this one is the LIVE secret**
+  (the commerce one was the trap). Events: `checkout.session.completed`, `invoice.paid`,
+  `customer.subscription.updated`, `customer.subscription.deleted`.
+- [x] 🟢 **platform-api commerce is LIVE** ✅ (2026-06-18) — `STRIPE_SECRET_KEY` switched to `sk_live`
+  on Vercel; checkout produces `cs_live` sessions (confirmed). Real product purchases charge.
 - [ ] Turn on Stripe receipts/emails.
-- [ ] **Stripe Connect** — enable in the dashboard for per-creator payouts (destination charges +
-  `orders.application_fee_cents` are built; `account.updated` on the commerce webhook tracks status).
+- [x] **Stripe Connect — ENABLED** ✅ (2026-06-18). `STRIPE_CONNECT_ENABLED=1` on Railway; Express
+  onboarding + destination-charge split live (`src/lib/connect.ts`, checkout split in platform-api).
+  Runbook: `docs/ops/PAYOUTS_SETUP.md`. Creators onboard via Account → Set up payouts.
 
 ### Fulfilment (Printful)
 - [ ] Set `PRINTFUL_CONFIRM_ORDERS=1` (paid orders auto-confirm instead of staying drafts).
@@ -60,8 +60,11 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
   `com.nanocrew.app`; App ID has the Sign-in-with-Apple capability. Works once build #12 lands.
 
 ### App store
-- [x] **[code] EAS production build** ✅ — building/submitting routinely (build #16, 2026-06-16, with
-  `react-native-iap` in the binary). One-command flow in the `production-shipping` memory.
+- [x] **[code] EAS production build** ✅ — building/submitting routinely. One-command flow in the
+  `production-shipping` memory.
+- [x] **🟢 SUBMITTED to the App Store** ✅ (2026-06-18) — iPhone-only (`supportsTablet:false`) build 23
+  auto-submitted via EAS; awaiting Apple review. Listing/IAP/privacy/review-notes from
+  `docs/ops/APP_STORE_LISTING.md`. Reviewer comp account in `COMP_EMAILS`. (Builds 19–22 superseded.)
 - [x] **[code] Apple IAP — plans + credits, StoreKit 2** ✅ — server verifies via the **App Store
   Server API** (`src/lib/app-store.ts` + `iap-verify`, no legacy verifyReceipt); client purchase flow
   wired (`iap.ios.ts`, paywall prefers IAP on iOS, web Stripe fallback). **Your remaining config:**
@@ -69,7 +72,8 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
   `com.nanocrew.plan.{starter,pro,advanced}` subscriptions, ~43% over web price) + an In-App Purchase
   API key; set `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY / BUNDLE_ID` on Railway. IAP stays dormant
   (app uses web Stripe) until those exist, so the current build is safe.
-- [ ] App icon, splash, App Store screenshots/metadata, privacy nutrition labels, age rating.
+- [x] App icon, splash, App Store screenshots/metadata, privacy nutrition labels, age rating ✅
+  (2026-06-18; submitted with build 23). Screenshots at 1284×2778 (`~/Desktop/nanocrew-appstore/`).
 - [x] **Account/data deletion path** ✅ Code done (2026-06-13) — "Delete account" in Account →
   `DELETE /api/me` wipes the creator + all cascaded data; best-effort deletes the Supabase auth
   identity when `SUPABASE_SERVICE_ROLE_KEY` is set (set it so the auth user is removed too).
