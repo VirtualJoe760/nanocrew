@@ -29,8 +29,34 @@ a { color: inherit; text-decoration: none; }
 }
 .mark .nc-img { width: 30px; height: 30px; border-radius: 8px; display: block; }
 .mark .word { font-size: 13px; letter-spacing: 0.32em; text-transform: uppercase; }
+.nav { position: relative; flex-wrap: wrap; }
 .nav .links { display: flex; gap: 26px; font-size: 13px; letter-spacing: 0.06em; color: var(--dim); }
+.nav .links a { white-space: nowrap; }
 .nav .links a:hover { color: var(--ink); }
+
+/* Hamburger toggle — hidden on desktop, shown on mobile */
+.nav-toggle { display: none; background: none; border: 0; padding: 8px; margin: -8px; cursor: pointer; color: var(--ink); }
+.burger { display: block; width: 22px; height: 14px; position: relative; }
+.burger i { position: absolute; left: 0; right: 0; height: 2px; background: currentColor; border-radius: 2px; transition: transform 0.2s ease, opacity 0.2s ease, top 0.2s ease; }
+.burger i:nth-child(1) { top: 0; }
+.burger i:nth-child(2) { top: 6px; }
+.burger i:nth-child(3) { top: 12px; }
+.burger.open i:nth-child(1) { top: 6px; transform: rotate(45deg); }
+.burger.open i:nth-child(2) { opacity: 0; }
+.burger.open i:nth-child(3) { top: 6px; transform: rotate(-45deg); }
+.links-mobile { display: none; }
+
+@media (max-width: 640px) {
+  .nav .links-desktop { display: none; }
+  .nav-toggle { display: inline-flex; align-items: center; }
+  .links-mobile {
+    display: flex; flex-direction: column; gap: 2px;
+    flex-basis: 100%; width: 100%;
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .links-mobile a { padding: 13px 2px; font-size: 15px; letter-spacing: 0.04em; color: var(--ink); }
+}
 
 /* ── Buttons ─────────────────────────────────────────── */
 .btn {
@@ -157,4 +183,24 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 720px) {
   .store-grid { grid-template-columns: repeat(2, 1fr); }
   .product-grid { grid-template-columns: 1fr; gap: 28px; }
+}
+
+/* ── Mobile spacing pass ─────────────────────────────── */
+@media (max-width: 640px) {
+  .wrap { padding: 0 22px; }
+  .hero { padding: 48px 0 56px; }
+  .hero .cta { margin-top: 28px; }
+  .section { padding: 56px 0; }
+  .kicker { margin: 0 0 24px; }
+  .grid3 { gap: 22px; }
+  .store { padding: 28px 0 64px; }
+  .store-grid { gap: 22px 16px; }
+  .product, .cart { padding: 24px 0 64px; }
+  .footer { padding: 32px 0; }
+  .footer .row { gap: 14px; }
+}
+
+/* Very small phones — keep two product columns from getting cramped */
+@media (max-width: 380px) {
+  .store-grid { grid-template-columns: 1fr; }
 }
