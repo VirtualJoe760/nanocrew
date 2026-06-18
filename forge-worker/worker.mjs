@@ -192,6 +192,38 @@ async function deployToVercel(fullRepo, repo) {
   return `https://${repo}.vercel.app`;
 }
 
+/** Deploy a revision BRANCH as a Vercel preview via the API (the projects aren't wired for
+ *  push-triggered previews), then poll it to READY. Mirrors deployToVercel but ref=branch + no
+ *  production target. Returns the preview URL, or null if it never readies. */
+async function deployPreview(fullRepo, repo, branch) {
+  if (!VERCEL_TOKEN) return null;
+  const headers = { Authorization: `Bearer ${VERCEL_TOKEN}`, 'Content-Type': 'application/json' };
+  try {
+    const repoRes = await fetch(`https://api.github.com/repos/${fullRepo}`, {
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+    });
+    if (!repoRes.ok) return null;
+    const repoId = (await repoRes.json()).id;
+    const dep = await fetch('https://api.vercel.com/v13/deployments', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: repo, project: repo, gitSource: { type: 'github', repoId, ref: branch } }),
+    });
+    if (!dep.ok) return null;
+    const { id, url } = await dep.json();
+    for (let i = 0; i < 30; i++) {
+      const r = await fetch(`https://api.vercel.com/v13/deployments/${id}`, { headers });
+      const s = await r.json();
+      if (s.readyState === 'READY') return `https://${s.url}`;
+      if (s.readyState === 'ERROR' || s.readyState === 'CANCELED') return null;
+      await new Promise((res) => setTimeout(res, 10_000));
+    }
+    return url ? `https://${url}` : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Push the creator when their preview is ready (or an edit failed). Mirrors src/lib/notify.ts,
  *  but the worker marks revisions ready ON the box, so it must send the push itself. Never throws. */
 async function notifyCreator(storeId, title, body, data) {
@@ -284,7 +316,7 @@ async function processOne() {
     if (!out.includes('REVISE_DONE')) throw new Error('forge revision did not complete');
     if (out.includes('BUILD_FAILED')) log(`  build failing on ${row.branch}`);
 
-    const previewUrl = await resolvePreviewUrl(repo, row.branch);
+    const previewUrl = await deployPreview(fullRepo, repo, row.branch);
     await sql`update store_revisions set status = 'ready', preview_url = ${previewUrl} where id = ${row.id}`;
     log(`✓ revision ${row.id} ready — ${previewUrl ?? 'no preview url'}`);
     await notifyCreator(row.storeId, `${row.storeName} — changes ready`, 'Your update is on a preview. Open Studio to review and publish it.', { kind: 'revision_ready', storeId: row.storeId });
