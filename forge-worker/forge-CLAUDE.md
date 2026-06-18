@@ -18,6 +18,14 @@ conflict, these rules win on the rails and the safety items; the brief wins on t
 - Products, prices, catalogue, auth, and checkout come from the **platform API** at runtime
   (`brand.json.apiBase`). You are wiring a *headless client*, not a data source. Never hardcode a
   product, a price, or a fake "Add to cart".
+- **Copy is data too — `content/copy.json` is the single source of all prose** (hero headline /
+  subline / CTA, story, section titles), read via `siteCopy` (`lib/content`). When you change site
+  text, **edit `content/copy.json`** — never hardcode a headline, subline, or CTA label as a string
+  literal or a default prop in a component. A hardcoded prose default *shadows* `copy.json` in the
+  blocks' `o.heroX || prop || copy.hero.X` fallback chain, so a later Studio/forge copy edit silently
+  never renders (the exact build-quality bug we killed). When you compose `<HeroVideo>` etc., either
+  pass the value from `siteCopy` (`label={siteCopy.hero.cta}`) or pass nothing and let the block fall
+  back to `copy.json` — but never bake an English default in.
 
 ## 2. Don't reinvent the rails — these are off-limits
 - **Never touch:** `lib/api.ts`, `lib/cart.tsx`, `lib/platform-auth.ts`,

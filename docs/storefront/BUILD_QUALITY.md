@@ -36,6 +36,19 @@ site against a fresh forge-generated one.
 6. **No eyes, no self-check, silent failure** → the forge runs the robot one-shot, ends the command
    in `|| true`, and only checks "does it compile" — never "does it look good." A bad build ships and
    the store flips to `ready` anyway.
+7. ~~**Edit-fidelity gap — a correct copy edit silently doesn't render**~~ → **✅ FIXED**
+   (2026-06-17). Venus edited `content/copy.json` `hero.cta` → "Shop the drop", the build was green,
+   the branch + preview deployed — but the hero kept showing "Discover". Root cause: at provision the
+   robot composes the richer `<HeroVideo />` **propless**, and the block's label default was a
+   hardcoded `label = 'Discover'`, so the precedence `o.heroCta || label || copy.hero.cta` resolved to
+   the literal `'Discover'` and **`copy.hero.cta` was dead code** — the edited field could never
+   render. (Headlines appeared to work only because the live `site_config.heroHeadline` override wins
+   *before* the prop.) **Fix:** removed the hardcoded default from `HeroVideo` in all 4 templates so
+   the chain falls through to `copy.json` (commit `nanocrew-templates@ae4e122`); same one-line patch
+   backfilled into already-provisioned repos (e.g. `store-aether-run`). Forge conditioning hardened:
+   the Master `CLAUDE.md` now states **copy is data — `content/copy.json` is the single source; never
+   bake a prose default into a component.** The deeper lesson: a generated edit isn't done when the
+   build is green — it's done when the changed field actually *renders*.
 
 ## The target — a build→refine→publish arc
 

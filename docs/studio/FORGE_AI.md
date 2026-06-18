@@ -138,7 +138,12 @@ Three coordinated fixes, mapped to the build-quality epic:
    Nano Crew storefront; never substitute `brand.json` palette/typography; catalogue/auth/checkout
    come from the platform — don't reinvent the rails; make it **presentable** (no blank hero, no
    generic stock placeholders, working CTAs); be faithful to the creator; always `pnpm run build` +
-   self-check before finishing. (Install line in `forge-worker/README.md`.)
+   self-check before finishing. (Install line in `forge-worker/README.md`.) **Now also carries the
+   "copy is data" rule** (added 2026-06-17): `content/copy.json` is the single source of all prose;
+   never hardcode a headline/subline/CTA as a string literal or a default prop — a baked default
+   *shadows* `copy.json` in the blocks' fallback chain and silently eats later edits. This closed the
+   **edit-fidelity gap** (a green copy edit that never rendered) — see BUILD_QUALITY.md root-cause #7;
+   the matching template fix removed `HeroVideo`'s hardcoded `'Discover'` default in all 4 templates.
 3. **Give the robot eyes + a self-critique loop.** Screenshot the built site, have the robot judge
    its own output against the brief and the quality checklist, and iterate before finishing — and
    stop swallowing failure: surface a real quality signal (not just `BUILD_OK`) so a weak build does
