@@ -36,8 +36,14 @@ async function generateWithRetry(
 }
 
 
-/** Subtle sci-fi room reverb via ffmpeg, when the host has it. Falls back to dry audio. */
-async function addReverb(mp3: Buffer): Promise<Buffer> {
+const TEMPO = 0.87; // the atempo factor; playback is slowed to this fraction of real-time
+
+/**
+ * Subtle sci-fi room reverb + gentle tempo pull-down via ffmpeg, when the host has it.
+ * Returns the audio AND the tempo factor ACTUALLY applied — 1.0 when ffmpeg is missing/failed
+ * (dry take), so word timings scale to reality and never drift out of sync.
+ */
+async function addReverb(mp3: Buffer): Promise<{ buffer: Buffer; tempo: number }> {
   try {
     const { execFileSync } = await import('node:child_process');
     const { writeFileSync, readFileSync, rmSync } = await import('node:fs');
@@ -46,36 +52,33 @@ async function addReverb(mp3: Buffer): Promise<Buffer> {
     writeFileSync(`${base}.mp3`, mp3);
     execFileSync(
       'ffmpeg',
-      // Gentle tempo pull-down (delicate pace) + a subtle sci-fi room echo.
-      ['-y', '-i', `${base}.mp3`, '-af', 'atempo=0.87,aecho=0.8:0.55:38|57:0.16|0.10', '-b:a', '64k', `${base}-wet.mp3`],
+      ['-y', '-i', `${base}.mp3`, '-af', `atempo=${TEMPO},aecho=0.8:0.55:38|57:0.16|0.10`, '-b:a', '64k', `${base}-wet.mp3`],
       { stdio: 'ignore', timeout: 10000 },
     );
     const wet = readFileSync(`${base}-wet.mp3`);
     rmSync(`${base}.mp3`, { force: true });
     rmSync(`${base}-wet.mp3`, { force: true });
-    return wet;
+    return { buffer: wet, tempo: TEMPO };
   } catch {
-    return mp3; // no ffmpeg (or it failed) — ship the dry take
+    return { buffer: mp3, tempo: 1 }; // no ffmpeg (or it failed) — dry take at real tempo
   }
 }
 
-const TEMPO = 0.87; // must match the atempo factor in addReverb
-
-/** Map ElevenLabs character alignment → per-word start times, scaled for our tempo. */
-function toWordTimings(chars: string[], starts: number[]): TimedWord[] {
+/** Map ElevenLabs character alignment → per-word start times, scaled by the tempo actually applied. */
+function toWordTimings(chars: string[], starts: number[], tempo: number): TimedWord[] {
   const words: TimedWord[] = [];
   let current = '';
   let start = 0;
   chars.forEach((c, i) => {
     if (/\s/.test(c)) {
-      if (current) words.push({ w: current, t: start / TEMPO });
+      if (current) words.push({ w: current, t: start / tempo });
       current = '';
     } else {
       if (!current) start = starts[i] ?? 0;
       current += c;
     }
   });
-  if (current) words.push({ w: current, t: start / TEMPO });
+  if (current) words.push({ w: current, t: start / tempo });
   return words;
 }
 
@@ -100,9 +103,10 @@ async function speak(text: string, voiceId: string): Promise<{ speech: string; w
     alignment?: { characters: string[]; character_start_times_seconds: number[] };
   };
   const dry = Buffer.from(data.audio_base64, 'base64');
-  const speech = (await addReverb(dry)).toString('base64');
+  const { buffer, tempo } = await addReverb(dry);
+  const speech = buffer.toString('base64');
   const words = data.alignment
-    ? toWordTimings(data.alignment.characters, data.alignment.character_start_times_seconds)
+    ? toWordTimings(data.alignment.characters, data.alignment.character_start_times_seconds, tempo)
     : [];
   return { speech, words };
 }

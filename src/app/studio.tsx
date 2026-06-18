@@ -1004,8 +1004,11 @@ export default function StudioScreen() {
   useEffect(() => {
     if (state !== 'speaking' || !words.length) return;
     setWordIdx(0);
+    // Highlight a hair AHEAD of the audio cursor — perceptually the word should appear as it's
+    // spoken, and a small lead absorbs playback/poll latency so it never reads as lagging.
+    const LEAD = 0.12;
     const id = setInterval(() => {
-      const ct = player.currentTime;
+      const ct = player.currentTime + LEAD;
       if (timedWords.length) {
         let i = 0;
         while (i + 1 < timedWords.length && timedWords[i + 1].t <= ct) i++;
@@ -1014,7 +1017,7 @@ export default function StudioScreen() {
         const dur = player.duration;
         if (dur > 0) setWordIdx(Math.min(words.length - 1, Math.floor((ct / dur) * words.length)));
       }
-    }, 60);
+    }, 40);
     return () => clearInterval(id);
   }, [state, words, timedWords, player]);
 
