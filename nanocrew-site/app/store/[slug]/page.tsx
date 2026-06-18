@@ -11,10 +11,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const p = await getProduct(slug);
   if (!p) return { title: 'Not found — Nano Crew' };
+  const title = `${p.name} — Nano Crew`;
+  const description = p.descriptionMd?.slice(0, 150) ?? `Shop ${p.name} from Nano Crew.`;
+  // The product photo is the share image — set BOTH og + twitter so it overrides the inherited
+  // site-wide card on every platform (X/iMessage read twitter:image).
+  const images = p.imageUrl ? [p.imageUrl] : [];
   return {
-    title: `${p.name} — Nano Crew`,
-    description: p.descriptionMd?.slice(0, 150) ?? `Shop ${p.name} from Nano Crew.`,
-    openGraph: { images: p.imageUrl ? [p.imageUrl] : [] },
+    title,
+    description,
+    openGraph: { title, description, images },
+    twitter: { card: 'summary_large_image', title, description, images },
   };
 }
 

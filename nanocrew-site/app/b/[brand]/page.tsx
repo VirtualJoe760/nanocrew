@@ -12,7 +12,19 @@ export async function generateMetadata({ params }: { params: Promise<{ brand: st
   const { brand } = await params;
   const b = await getBrand(brand);
   if (!b) return { title: 'Not found — Nano Crew' };
-  return { title: `${b.name} — Nano Crew`, description: b.tagline ?? `Shop ${b.name} on Nano Crew.` };
+  const title = `${b.name} — Nano Crew`;
+  const description = b.tagline ?? `Shop ${b.name} on Nano Crew.`;
+  // Per-brand share card: lead with a real product photo (more compelling than a logo), fall back
+  // to the brand logo, else inherit the site-wide card. Set og + twitter so it shows everywhere.
+  const products = await getProducts(brand).catch(() => []);
+  const hero = products.find((p) => p.imageUrl)?.imageUrl ?? b.logoUrl;
+  const images = hero ? [hero] : undefined;
+  return {
+    title,
+    description,
+    openGraph: { title, description, ...(images ? { images } : {}) },
+    twitter: { card: 'summary_large_image', title, description, ...(images ? { images } : {}) },
+  };
 }
 
 // A storefront page for ANY ecosystem brand on nanocrew.app — same catalogue + POS as the in-app
