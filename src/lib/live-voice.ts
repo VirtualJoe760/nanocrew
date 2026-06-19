@@ -29,7 +29,7 @@ Open by greeting them warmly${first ? ` by name (${first})` : ''} in a sentence 
 
 Across the chat, come away knowing: the brand name (or coin one together) + core idea; a logo (have one, or the direction for it); colors; design temperament (minimalist, bold, elegant, extravagant, or street); how the website should FEEL in their words; and the products they're most excited to sell. Gather these naturally, skip what they've covered, and NEVER override an explicit choice (if they say "black and white", the palette is black, white, and grays).
 
-When you genuinely have enough — don't drag it out — tell them warmly their brand is ready and CALL the save_brand tool with everything, including a 5-color palette (primary, secondary, accent, background, text) honoring their stated colors, and display + body fonts. Don't announce the tool or say "saving"; just speak the warm line and call it.`;
+CRITICAL — how the interview ENDS: the ONLY way the brand gets created is by CALLING the save_brand function. The moment you have the essentials (a name — theirs or one you coin together — a design style, and the products), say ONE warm sentence that their brand is ready, and in that SAME turn you MUST call save_brand. Just saying "your brand is ready" does nothing — if you don't invoke the save_brand tool, the brand is never created and the creator is stuck. So: speak the warm line AND call the tool together. Fill every field you can — a 5-color palette (primary, secondary, accent, background, text) honoring their stated colors, plus display + body fonts; make sensible choices for anything not explicitly discussed. Never read the tool name, JSON, or hex codes aloud.`;
 }
 
 const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
@@ -72,7 +72,7 @@ const SAVE_BRAND: FunctionDeclaration = {
       displayFont: { type: Type.STRING },
       bodyFont: { type: Type.STRING },
     },
-    required: ['name', 'tagline', 'designStyle', 'products', 'palette'],
+    required: ['name', 'designStyle', 'products'],
   },
 };
 
