@@ -83,15 +83,17 @@ on first use.
 
 **Fixed per-operation costs** — `CREDIT_COSTS` (`src/lib/credits.ts`):
 
-| Op | Credits |
-|---|---|
-| `design_generate` | 5 |
-| `tryon` | 6 |
-| `logo_generate` | 8 |
-| `model_shots` | 25 |
+| Op | Credits | Charged at |
+|---|---|---|
+| `design_generate` | 5 | `POST /api/generate` (default) — every image generation: Design tab + the voice critique loop's hero/og. **Flag: 5 is below the stated 2× floor for one Nano Banana image (~$0.039 → ~8cr); confirm or bump to 8.** |
+| `tryon` | 6 | NOT debited — rate-limited instead (shopper-facing conversion feature) |
+| `logo_generate` | 8 | `POST /api/generate` when `purpose:'logo'` (the critique loop sends it for the logo slot) |
+| `model_shots` | 25 | `POST /api/creator/model-shots` |
 | `video_voiceover` | 25 |
 | `revision` | 60 |
 | `video_veo` | 400 |
+
+`/api/generate` skips the debit for the **internal first-drop system identity** (`x-internal-key` → `internal@nanocrew`), since the auto first drop is a free onboarding gift; comp creators are also no-oped by `debit()`. On a no-image failure the charge is **refunded** via `grant(..., 'refund')`.
 
 **Variable-cost ops** debit via `debitCredits()` with their own reason: scene-video ("cool
 short", `scene_video`) charges the tier price from `VIDEO_MODELS` (`src/lib/fal-video.ts` — Wan

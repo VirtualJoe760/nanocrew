@@ -2,6 +2,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { ContentSafetyError, IMAGE_SAFETY_SETTINGS, assertSafePrompt } from '@/lib/content-safety';
+import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
 import { uploadImage } from '@/lib/cloudinary';
 import { guardRate } from '@/lib/rate-limit';
 import { safeImageFetch } from '@/lib/safe-fetch';
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
     background?: 'transparent' | 'filled';
     aspectRatio?: string;
     catalogueId?: string;
+    purpose?: 'logo' | 'design';
   } | null;
   const prompt = body?.prompt?.trim();
   const catalogueId = body?.catalogueId;
@@ -111,6 +113,25 @@ export async function POST(req: Request) {
 
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });
+
+  // Credit-gate creator-initiated generation. Skip the internal first-drop system identity
+  // (it generates on the creator's behalf as a free onboarding gift); debit() already no-ops
+  // comp accounts. Charge BEFORE the model call, refund on any no-image failure below.
+  const charge = user.email !== 'internal@nanocrew';
+  const costKey = body?.purpose === 'logo' ? 'logo_generate' : 'design_generate';
+  if (charge) {
+    try {
+      await debit(user.id, costKey, catalogueId);
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return Response.json({ error: 'insufficient_credits', needed: e.needed, balance: e.balance }, { status: 402 });
+      }
+      throw e;
+    }
+  }
+  const refund = () => {
+    if (charge) void grant(user.id, CREDIT_COSTS[costKey], 'refund', catalogueId).catch(() => {});
+  };
 
   const ai = new GoogleGenAI({ apiKey });
 
@@ -174,10 +195,12 @@ export async function POST(req: Request) {
       const msg = e instanceof Error ? e.message : String(e);
       // Quota/auth/model errors won't be fixed by retrying.
       if (/RESOURCE_EXHAUSTED|quota|\b429\b|PERMISSION_DENIED|UNAUTHENT|\b401\b|\b403\b|NOT_FOUND|\b404\b/i.test(msg)) {
+        refund();
         return Response.json({ error: msg }, { status: 502 });
       }
       lastErr = msg;
     }
   }
+  refund();
   return Response.json({ error: lastErr }, { status: 502 });
 }

@@ -374,7 +374,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
         setNote(`Generating the ${img.slot} image…`);
         const outcome: ImageOutcome = { slot: img.slot, prompt: img.prompt, generated: false, placed: false, error: null };
         try {
-          const gr = await fetch(apiUrl('/api/generate'), { method: 'POST', headers: auth, body: JSON.stringify({ prompt: img.prompt, background: 'filled', aspectRatio: img.slot === 'logo' ? '1:1' : '16:9' }) });
+          const gr = await fetch(apiUrl('/api/generate'), { method: 'POST', headers: auth, body: JSON.stringify({ prompt: img.prompt, background: 'filled', aspectRatio: img.slot === 'logo' ? '1:1' : '16:9', purpose: img.slot === 'logo' ? 'logo' : 'design' }) });
           const gd = (await gr.json().catch(() => ({}))) as { image?: string; error?: string };
           if (!gr.ok || !gd.image) {
             outcome.error = gd.error || `generate failed (${gr.status})`;
