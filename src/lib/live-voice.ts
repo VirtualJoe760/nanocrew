@@ -38,6 +38,18 @@ CRITICAL about style: you DISCERN the right look yourself from how they describe
 DON'T wrap up early. Keep the conversation going until you genuinely have the name, the products, and a confident read on the style. ONLY THEN, warmly tell them you've got everything you need and they can **build their brand** whenever they're ready (use that natural "ready to build your brand" language) — that's the cue that unlocks the Build button for them. Until then, keep gently drawing them out instead of inviting them to build. Don't read field names or hex codes aloud — just talk like a person.`;
 }
 
+/** Voice persona for EDITING an existing brand site (Console → Edit site), not building a new brand. */
+export function editSiteInstruction(brandName?: string): string {
+  const b = brandName?.trim() ? ` "${brandName.trim()}"` : '';
+  return `You are VENUS — Nano Crew's warm AI site assistant, talking OUT LOUD with a creator who wants to EDIT their EXISTING brand website${b}. This is NOT a new brand — they already have a live site; you're just capturing the change they want made to it.
+
+Keep it SHORT and practical. When they describe a change ("make the hero full-screen", "change the headline to …", "add an Our Story section", "rounder buttons"), reflect it back in ONE quick sentence so they know you caught it, then ask "anything else?". Don't over-talk, don't ask for a brand name or products, don't recite style options. When they're done, tell them to tap send and you'll build a preview to review. Never read JSON, code, or hex codes aloud — just talk like a person.`;
+}
+
+/** Greeting nudge for the edit-site session (overrides the brand-build greeting). */
+export const EDIT_SITE_GREETING =
+  "(The creator just opened the site editor. In one short sentence, greet them and ask what they'd like to change about their site.)";
+
 const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
 const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
 
@@ -164,11 +176,29 @@ export class LiveVoiceSession {
     }
   }
 
-  constructor(opts: { accessToken: string; userName?: string; firstTime?: boolean; voiceName?: string; callbacks: LiveCallbacks }) {
+  // Override the persona/tool/greeting so the SAME session can serve other voice flows (e.g. editing
+  // an existing site) instead of only the brand interview.
+  private instructionOverride?: string;
+  private greetingOverride?: string;
+  private enableBrandTool: boolean;
+
+  constructor(opts: {
+    accessToken: string;
+    userName?: string;
+    firstTime?: boolean;
+    voiceName?: string;
+    instruction?: string;
+    greeting?: string;
+    enableBrandTool?: boolean;
+    callbacks: LiveCallbacks;
+  }) {
     this.accessToken = opts.accessToken;
     this.userName = opts.userName;
     this.firstTime = opts.firstTime;
     this.voiceName = opts.voiceName ?? 'Aoede'; // warm Gemini voice
+    this.instructionOverride = opts.instruction;
+    this.greetingOverride = opts.greeting;
+    this.enableBrandTool = opts.enableBrandTool ?? true;
     this.cb = opts.callbacks;
     this.token = '';
   }
@@ -238,11 +268,11 @@ export class LiveVoiceSession {
       },
       config: {
         responseModalities: [Modality.AUDIO],
-        systemInstruction: liveSystemInstruction(this.userName, this.firstTime),
+        systemInstruction: this.instructionOverride ?? liveSystemInstruction(this.userName, this.firstTime),
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } } },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
-        tools: [{ functionDeclarations: [SAVE_BRAND] }],
+        ...(this.enableBrandTool ? { tools: [{ functionDeclarations: [SAVE_BRAND] }] } : {}),
       },
     });
   }
@@ -278,7 +308,9 @@ export class LiveVoiceSession {
       console.warn('[live] setupComplete → greeting');
       const first = this.userName?.trim().split(/\s+/)[0];
       const hi = first ? `Hi ${first}` : 'Hi';
-      const nudge = this.firstTime
+      const nudge = this.greetingOverride
+        ? this.greetingOverride
+        : this.firstTime
         ? `(The creator just opened the studio for the FIRST time. In one warm sentence introduce yourself — you're Venus and you'll help them build their brand and store by talking it through — then greet them: "${hi}, how's your day going? Want to talk branding your store?")`
         : `(The creator just opened the studio. Greet them warmly: "${hi}, how's your day going? Want to talk branding your store?")`;
       try {

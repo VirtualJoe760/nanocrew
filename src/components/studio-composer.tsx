@@ -10,7 +10,9 @@ import { SiteEditor } from '@/components/site-editor';
 import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
+import { EDIT_SITE_GREETING, editSiteInstruction } from '@/lib/live-voice';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // Venus's management surface for a returning creator: request site changes in plain
@@ -75,6 +77,32 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [note, setNote] = useState<string | null>(null);
   const [buildElapsed, setBuildElapsed] = useState(0); // seconds since we first saw this build running
   const progressAnim = useRef(new Animated.Value(0)).current; // indeterminate build-progress sweep
+
+  // ---- Talk-to-edit: the same Gemini Live voice flow, but for revising an EXISTING site. Venus
+  // listens to the change the creator describes; their words fill the composer; they tap send → forge.
+  const [voiceOn, setVoiceOn] = useState(false);
+  const editInstruction = useMemo(() => editSiteInstruction(brandName), [brandName]);
+  const editVoice = useLiveVoice({
+    accessToken: token,
+    instruction: editInstruction,
+    greeting: EDIT_SITE_GREETING,
+    enableBrandTool: false,
+    onBrand: () => {},
+  });
+  // Run the session only while the mic is on AND the edit tab is open in the Console.
+  useEffect(() => {
+    if (voiceOn && visible && tab === 'edit') editVoice.start();
+    else editVoice.stop();
+  }, [voiceOn, visible, tab, editVoice.start, editVoice.stop]);
+  // Pipe the creator's spoken request into the composer (they review + send). Voice owns the field.
+  useEffect(() => {
+    if (!voiceOn) return;
+    const said = editVoice.messages.filter((m) => m.role === 'user').map((m) => m.text);
+    const all = [...said, editVoice.userText].map((s) => s.trim()).filter(Boolean).join('. ');
+    if (all) { setChange(all); setChangeState('idle'); }
+  }, [voiceOn, editVoice.messages, editVoice.userText]);
+  // Never leave the mic live when the Console closes or you leave the Edit tab.
+  useEffect(() => { if (!visible || tab !== 'edit') setVoiceOn(false); }, [visible, tab]);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const activeStore = stores.find((s) => s.slug === active);
@@ -529,6 +557,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
 
   const sendChange = async () => {
     if (!change.trim() || !active) return;
+    setVoiceOn(false); // stop the mic — the request is captured
     setChangeState('sending');
     try {
       const res = await fetch(apiUrl('/api/creator/revise'), { method: 'POST', headers, body: JSON.stringify({ storeSlug: active, requestMd: change.trim() }) });
@@ -735,8 +764,20 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                     ))}
                   </ScrollView>
 
+                  {/* Talk-to-edit: tap the mic and just say what to change — Venus fills the box. */}
+                  {voiceOn ? (
+                    <View style={styles.voiceCaption}>
+                      <ThemedText type="code" style={styles.green}>
+                        {editVoice.state === 'listening' ? '● listening — say what to change' : editVoice.state === 'connecting' ? '○ connecting…' : '◗ Venus is talking'}
+                      </ThemedText>
+                      {editVoice.venusText ? <ThemedText type="small" style={styles.bubbleVenusText} numberOfLines={2}>{editVoice.venusText}</ThemedText> : null}
+                    </View>
+                  ) : null}
                   <View style={styles.composerRow}>
-                    <TextInput style={styles.composerInput} placeholder="Message Venus…" placeholderTextColor={pal.dim} value={change} onChangeText={(t) => { setChange(t); setChangeState('idle'); }} multiline />
+                    <Pressable onPress={() => setVoiceOn((v) => !v)} hitSlop={6} style={[styles.micBtn, voiceOn && { backgroundColor: pal.accent, borderColor: pal.accent }]}>
+                      <ThemedText type="code" style={{ color: voiceOn ? pal.onAccent : pal.dim }}>{voiceOn ? '◼' : '🎙'}</ThemedText>
+                    </Pressable>
+                    <TextInput style={styles.composerInput} placeholder="Message Venus… or tap the mic" placeholderTextColor={pal.dim} value={change} onChangeText={(t) => { setChange(t); setChangeState('idle'); }} multiline />
                     <Pressable onPress={sendChange} disabled={changeState === 'sending' || !change.trim()} hitSlop={6} style={[styles.composerSend, (!change.trim() || changeState === 'sending') && { opacity: 0.4 }]}>
                       <ThemedText type="code" style={{ color: pal.onAccent }}>{changeState === 'sending' ? '…' : 'send'}</ThemedText>
                     </Pressable>
@@ -1024,6 +1065,8 @@ function makeStyles(pal: StudioPalette) {
     composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, marginTop: Spacing.three },
     composerInput: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: pal.line, backgroundColor: pal.field, borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, color: pal.ink, fontSize: 15, textAlignVertical: 'top' },
     composerSend: { backgroundColor: pal.accent, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, alignItems: 'center', justifyContent: 'center' },
+    micBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: pal.line, backgroundColor: pal.field, alignItems: 'center', justifyContent: 'center' },
+    voiceCaption: { marginTop: Spacing.two, gap: 2, paddingHorizontal: Spacing.one },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.six },
     scroll: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.six },
     pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.two },

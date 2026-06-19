@@ -35,6 +35,10 @@ export function useLiveVoice(opts: {
   /** No stores yet → Venus introduces herself on her first line. */
   firstTime?: boolean;
   voiceName?: string;
+  /** Override the persona/greeting + drop the brand tool — for non-build flows (e.g. editing a site). */
+  instruction?: string;
+  greeting?: string;
+  enableBrandTool?: boolean;
   /** transcript is the full spoken conversation — pass it to /api/store so provisioning gets context. */
   onBrand: (b: BrandResult, transcript?: ChatMessage[]) => void;
 }): UseLiveVoice {
@@ -63,6 +67,9 @@ export function useLiveVoice(opts: {
       userName: opts.userName,
       firstTime: opts.firstTime,
       voiceName: opts.voiceName,
+      instruction: opts.instruction,
+      greeting: opts.greeting,
+      enableBrandTool: opts.enableBrandTool,
       callbacks: {
         onState: setState,
         // session emits the FULL current utterance (with per-turn resets), so just replace.
@@ -79,7 +86,7 @@ export function useLiveVoice(opts: {
       setState('error');
       sessionRef.current = null;
     });
-  }, [opts.accessToken, opts.userName, opts.firstTime, opts.voiceName]);
+  }, [opts.accessToken, opts.userName, opts.firstTime, opts.voiceName, opts.instruction, opts.greeting, opts.enableBrandTool]);
 
   const sendText = useCallback((text: string) => {
     sessionRef.current?.sendText(text);
