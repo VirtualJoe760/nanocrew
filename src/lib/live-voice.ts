@@ -14,7 +14,7 @@ import {
   type FunctionDeclaration,
   Type,
 } from '@google/genai';
-import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode } from 'react-native-audio-api';
+import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode, AudioManager } from 'react-native-audio-api';
 
 import { apiUrl } from '@/lib/api';
 import { type BrandResult } from '@/lib/interview';
@@ -126,6 +126,7 @@ export class LiveVoiceSession {
   private recorder: AudioRecorder | null = null;
   private outCtx: AudioContext | null = null;
   private queue: AudioBufferQueueSourceNode | null = null;
+  private playEndsAt = 0; // wall-clock ms when her queued audio finishes — mic is gated until then
   private cb: LiveCallbacks;
   private token: string;
   private accessToken: string;
@@ -154,10 +155,27 @@ export class LiveVoiceSession {
     this.token = d.token;
 
     // 2. audio output graph (24kHz, gapless queue)
+    // iOS audio session: play AND record at once, route to the SPEAKER (not earpiece), and use
+    // voiceChat mode for echo cancellation so Venus doesn't hear her own voice. Without this,
+    // recording forces the session into a mode where her playback is silent / earpiece-only.
+    console.warn('[live] configuring audio session');
+    AudioManager.setAudioSessionOptions({
+      iosCategory: 'playAndRecord',
+      iosMode: 'voiceChat',
+      iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
+    });
+    await AudioManager.setAudioSessionActivity(true);
+
+    console.warn('[live] A: new AudioContext');
     this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
+    await this.outCtx.resume();
+    console.warn('[live] B: createBufferQueueSource');
     this.queue = this.outCtx.createBufferQueueSource();
+    console.warn('[live] C: connect to destination');
     this.queue.connect(this.outCtx.destination);
-    this.queue.start();
+    console.warn('[live] D: queue.start(0, 0)');
+    this.queue.start(0, 0); // both when AND offset must be finite numbers, not undefined
+    console.warn('[live] E: audio graph ready → connecting…');
 
     // 3. connect to Gemini Live with the ephemeral token (client → Gemini directly)
     const ai = new GoogleGenAI({ apiKey: this.token, httpOptions: { apiVersion: 'v1alpha' } });
@@ -165,17 +183,8 @@ export class LiveVoiceSession {
       model: d.model,
       callbacks: {
         onopen: () => {
-          console.warn('[live] ws open → starting mic + greeting');
+          console.warn('[live] ws open → starting mic');
           this.startMic();
-          // Live won't speak until it gets input — nudge Venus to open the conversation.
-          try {
-            this.session?.sendClientContent({
-              turns: [{ role: 'user', parts: [{ text: '(The creator just opened the studio. Greet them and ask what their brand is about.)' }] }],
-              turnComplete: true,
-            });
-          } catch {
-            /* session not ready yet — she'll respond on first speech */
-          }
         },
         onmessage: (m) => this.onMessage(m),
         onerror: (e: ErrorEvent) => {
@@ -203,6 +212,10 @@ export class LiveVoiceSession {
     this.recorder = new AudioRecorder();
     this.recorder.onAudioReady({ sampleRate: IN_RATE, bufferLength: 1600, channelCount: 1 }, (ev) => {
       if (!this.session) return;
+      // Half-duplex: don't stream the mic while Venus's audio is still playing (+250ms tail),
+      // otherwise her voice loops back through the speaker as "user speech" and she interrupts
+      // herself. She finishes, then the mic opens for your turn.
+      if (Date.now() < this.playEndsAt + 250) return;
       const ch = ev.buffer.getChannelData(0);
       const data = float32ToPcm16Base64(ch);
       try {
@@ -215,21 +228,51 @@ export class LiveVoiceSession {
   }
 
   private onMessage(m: LiveServerMessage) {
+    // Diagnostic (skip the high-frequency audio chunks so the log stays readable)
+    if (!m.serverContent?.modelTurn) {
+      console.warn('[live] msg', JSON.stringify(Object.keys(m)), m.serverContent ? `sc:${Object.keys(m.serverContent).join(',')}` : '');
+    }
+    // Setup is done — NOW it's safe to nudge Venus to open the conversation.
+    if (m.setupComplete) {
+      console.warn('[live] setupComplete → greeting');
+      try {
+        this.session?.sendClientContent({
+          turns: [{ role: 'user', parts: [{ text: '(The creator just opened the studio. Greet them warmly and ask what their brand is about.)' }] }],
+          turnComplete: true,
+        });
+      } catch (e) {
+        console.warn('[live] greeting send failed', e instanceof Error ? e.message : e);
+      }
+      return;
+    }
     const sc = m.serverContent;
     // interruption — user spoke over Venus; flush her queued audio immediately
     if (sc?.interrupted) {
       this.queue?.clearBuffers();
+      this.playEndsAt = 0; // her audio is gone — reopen the mic
       this.cb.onState?.('listening');
     }
-    // streamed audio out → enqueue for gapless playback
-    const audio = m.data;
-    if (audio && this.outCtx && this.queue) {
-      const pcm = base64ToInt16(audio);
-      const buf = this.outCtx.createBuffer(1, pcm.length, OUT_RATE);
-      const f = buf.getChannelData(0);
-      for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
-      this.queue.enqueueBuffer(buf);
-      this.cb.onState?.('speaking');
+    // streamed audio out → it lives in modelTurn.parts[].inlineData.data (base64 PCM 24k), not m.data
+    const parts = sc?.modelTurn?.parts ?? [];
+    for (const part of parts) {
+      const b64 = part.inlineData?.data;
+      if (!b64 || !this.outCtx || !this.queue) continue;
+      try {
+        const pcm = base64ToInt16(b64);
+        if (pcm.length > 0) {
+          const buf = this.outCtx.createBuffer(1, pcm.length, OUT_RATE);
+          const f = buf.getChannelData(0);
+          for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
+          this.queue.enqueueBuffer(buf);
+          // Extend the "she's still talking" window by this chunk's real duration (chunks arrive
+          // faster than realtime, so accumulate from whichever is later: now or the prior end).
+          const durMs = (pcm.length / OUT_RATE) * 1000;
+          this.playEndsAt = Math.max(this.playEndsAt, Date.now()) + durMs;
+          this.cb.onState?.('speaking');
+        }
+      } catch (e) {
+        console.warn('[live] audio enqueue failed', e instanceof Error ? e.message : e);
+      }
     }
     if (sc?.inputTranscription?.text) this.cb.onUserTranscript?.(sc.inputTranscription.text);
     if (sc?.outputTranscription?.text) this.cb.onVenusTranscript?.(sc.outputTranscription.text);
