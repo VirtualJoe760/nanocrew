@@ -136,7 +136,8 @@ export class LiveVoiceSession {
       headers: { Authorization: `Bearer ${this.accessToken}` },
     });
     const d = (await r.json()) as { token?: string; model?: string; error?: string };
-    if (!d.token || !d.model) throw new Error(d.error || 'Could not start voice');
+    console.warn(`[live] token status=${r.status} hasToken=${!!d.token} model=${d.model ?? '-'} err=${d.error ?? '-'}`);
+    if (!d.token || !d.model) throw new Error(d.error || `token failed (${r.status})`);
     this.token = d.token;
 
     // 2. audio output graph (24kHz, gapless queue)
@@ -150,10 +151,17 @@ export class LiveVoiceSession {
     this.session = await ai.live.connect({
       model: d.model,
       callbacks: {
-        onopen: () => this.startMic(),
+        onopen: () => {
+          console.warn('[live] ws open → starting mic');
+          this.startMic();
+        },
         onmessage: (m) => this.onMessage(m),
-        onerror: (e: ErrorEvent) => this.fail(e.message || 'connection error'),
-        onclose: () => {
+        onerror: (e: ErrorEvent) => {
+          console.warn('[live] ws error', e?.message);
+          this.fail(e.message || 'connection error');
+        },
+        onclose: (e: CloseEvent) => {
+          console.warn('[live] ws close', e?.code, e?.reason);
           if (!this.closed) this.cb.onState?.('idle');
         },
       },

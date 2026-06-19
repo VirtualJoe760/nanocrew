@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -284,6 +284,11 @@ export default function AccountScreen() {
                   <NCMark size={22} color={theme.text} />
                   <ThemedText type="code" themeColor="textSecondary" style={styles.eyebrow}>ACCOUNT</ThemedText>
                 </View>
+
+                {/* TEMP dev-only entry to the Gemini Live spike (gemini-live branch) */}
+                <Pressable onPress={() => router.navigate('/live-test')} style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: theme.tint, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }}>
+                  <ThemedText type="code" themeColor="tint">🎙 Live voice test (dev)</ThemedText>
+                </Pressable>
 
                 {/* Profile header */}
                 <View style={styles.profile}>
