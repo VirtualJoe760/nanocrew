@@ -6,6 +6,7 @@ import { db, schema } from '@/lib/db';
 import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCompositionOwner } from '@/lib/tenant';
 import { createSyncProduct, getCatalogVariants, upscaleForPrint, type MockupPosition } from '@/lib/printful';
+import { checkProviderPolicy, resolvePodProvider } from '@/lib/pod-policy';
 import { minRetailCents } from '@/lib/pricing';
 import { revalidateStorefront } from '@/lib/storefront-revalidate';
 
@@ -83,10 +84,29 @@ export async function POST(req: Request) {
       : [{ placement: comp.placement, designId: comp.designId, position: comp.position ?? null }];
     const designIds = [...new Set(placementList.map((p) => p.designId))];
     const designRows = await db
-      .select({ id: schema.designs.id, url: schema.designs.url })
+      .select({ id: schema.designs.id, url: schema.designs.url, prompt: schema.designs.prompt })
       .from(schema.designs)
       .where(inArray(schema.designs.id, designIds));
     const urlById = new Map(designRows.map((r) => [r.id, r.url]));
+
+    // Fulfillment-policy gate: a design we generated permissively may still be REFUSED by the print
+    // provider. Screen name + description + design prompts against the provider's policy BEFORE we
+    // create the Printful product — so the creator hears it now, not after a customer pays. (Block
+    // hard violations; warnings ride along in the response for the UI to surface.) See lib/pod-policy.ts.
+    const provider = resolvePodProvider({ storeId: comp.storeId });
+    const policyText = [name, body.description, ...designRows.map((r) => r.prompt)].filter(Boolean).join('\n');
+    const policy = checkProviderPolicy(provider, policyText);
+    if (!policy.ok) {
+      return Response.json(
+        {
+          error: 'provider_policy',
+          provider,
+          message: `${policy.provider} won't print this design: ${policy.blocks.map((b) => b.reason).join(' ')}`,
+          blocks: policy.blocks,
+        },
+        { status: 422 },
+      );
+    }
 
     const files = placementList
       .filter((p) => {
@@ -188,7 +208,7 @@ export async function POST(req: Request) {
       .limit(1);
     void revalidateStorefront(store?.slug);
 
-    return Response.json({ ok: true, printfulSyncProductId: syncProductId, product });
+    return Response.json({ ok: true, printfulSyncProductId: syncProductId, product, warnings: policy.warnings });
   } catch (e) {
     const status = e instanceof TenantError ? e.status : 502;
     return Response.json({ error: e instanceof Error ? e.message : 'Publish failed' }, { status });
