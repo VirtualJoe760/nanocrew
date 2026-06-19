@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, AppState, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, AppState, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,7 +26,7 @@ function siteUrlFor(s: StoreRow | undefined): string | null {
   return s.deploymentUrl;
 }
 type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; coverImageUrl?: string | null; isPublished: boolean };
-type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null };
+type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null; createdAt?: string };
 type Product = { id: string; name: string; imageUrl: string | null; videoUrl: string | null; modelShots?: string[] | null; modelVideos?: string[] | null; isPublished: boolean };
 type Draft = { id?: string; title: string; excerpt: string; bodyMd: string; coverImageUrl?: string | null };
 const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '', coverImageUrl: null };
@@ -72,7 +72,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [buildElapsed, setBuildElapsed] = useState(0); // seconds since we first saw this build running
-  const progressAnim = useRef(new Animated.Value(0)).current; // indeterminate build-progress sweep
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const activeStore = stores.find((s) => s.slug === active);
@@ -329,29 +328,40 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   // While a site is building, poll the durable status so the view updates itself — when the forge
   // worker finishes, `building` flips false (status→ready + deploymentUrl set) and the live site
   // appears with no action from the creator. Also ticks an elapsed timer + an indeterminate sweep.
+  const revBuilding = pendingRev?.status === 'building';
   useEffect(() => {
-    if (!visible || !active || !building) {
+    if (!visible || !active || !(building || revBuilding)) {
       setBuildElapsed(0);
       return;
     }
-    const startedAt = Date.now();
-    setBuildElapsed(0);
-    const tick = setInterval(() => setBuildElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    // Elapsed is measured from the revision's server-side createdAt when we have it, so it survives
+    // polls/remounts and reflects the true build start — not a local timer that resets each render.
+    const rev = building ? provisionRev : pendingRev;
+    const startedAt = rev?.createdAt ? new Date(rev.createdAt).getTime() : Date.now();
+    const compute = () => setBuildElapsed(Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
+    compute();
+    const tick = setInterval(compute, 1000);
     const poll = setInterval(() => {
       void loadStores();
       void loadRevisions();
     }, 6000);
-    const sweep = Animated.loop(
-      Animated.timing(progressAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
-    );
-    progressAnim.setValue(0);
-    sweep.start();
     return () => {
       clearInterval(tick);
       clearInterval(poll);
-      sweep.stop();
     };
-  }, [visible, active, building, loadStores, loadRevisions, progressAnim]);
+  }, [visible, active, building, revBuilding, provisionRev, pendingRev, loadStores, loadRevisions]);
+
+  // Honest time-based progress: the forge gives no real "percent done", so fill toward (never past)
+  // a typical duration and never claim 100% until the revision actually flips to `ready`.
+  const expectedSecs = building ? 300 : 180;
+  const buildFill = Math.min(buildElapsed / expectedSecs, 0.95);
+  const buildEta = (() => {
+    const left = expectedSecs - buildElapsed;
+    if (left > 75) return `about ${Math.ceil(left / 60)} min left`;
+    if (left > 20) return 'less than a minute left';
+    if (left > -45) return 'almost there…';
+    return 'taking a little longer than usual…';
+  })();
 
   // Self-heal when the console comes back to the foreground: once a revision is `ready` we stop
   // polling (above), so a build that finishes — or any server-side change to a revision — while the
@@ -634,24 +644,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                       <ThemedText type="code" style={styles.sectionLabel}>BUILDING YOUR SITE</ThemedText>
                       <ThemedText type="small" style={styles.dim}>Venus is designing and deploying your storefront. It’ll appear here on its own when it’s ready — usually 3–5 minutes.</ThemedText>
                       <View style={styles.progressTrack}>
-                        <Animated.View
-                          style={[
-                            styles.progressBar,
-                            {
-                              transform: [
-                                {
-                                  translateX: progressAnim.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: [-90, 230],
-                                  }),
-                                },
-                              ],
-                            },
-                          ]}
-                        />
+                        <View style={[styles.progressFill, { width: `${Math.round(buildFill * 100)}%` }]} />
                       </View>
                       <ThemedText type="code" style={styles.progressMeta}>
-                        {`${Math.floor(buildElapsed / 60)}:${String(buildElapsed % 60).padStart(2, '0')} elapsed · designing → building → deploying`}
+                        {`${Math.floor(buildElapsed / 60)}:${String(buildElapsed % 60).padStart(2, '0')} elapsed · ${buildEta}`}
                       </ThemedText>
                     </>
                   ) : buildFailed ? (
@@ -680,10 +676,18 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                   {pendingRev ? (
                     <View style={styles.reviewCard}>
                       {pendingRev.status === 'building' ? (
-                        <View style={styles.reviewRow}>
-                          <ActivityIndicator size="small" color={pal.accent} />
-                          <ThemedText type="small" style={[styles.white, { flex: 1 }]}>A change is building a preview…</ThemedText>
-                        </View>
+                        <>
+                          <View style={styles.reviewRow}>
+                            <ActivityIndicator size="small" color={pal.accent} />
+                            <ThemedText type="small" style={[styles.white, { flex: 1 }]}>Venus is building a preview…</ThemedText>
+                          </View>
+                          <View style={styles.progressTrack}>
+                            <View style={[styles.progressFill, { width: `${Math.round(buildFill * 100)}%` }]} />
+                          </View>
+                          <ThemedText type="code" style={styles.progressMeta}>
+                            {`${Math.floor(buildElapsed / 60)}:${String(buildElapsed % 60).padStart(2, '0')} elapsed · ${buildEta}`}
+                          </ThemedText>
+                        </>
                       ) : pendingRev.status === 'ready' ? (
                         <>
                           <ThemedText type="smallBold" style={styles.white}>A change is ready to review</ThemedText>
@@ -1001,7 +1005,7 @@ function makeStyles(pal: StudioPalette) {
     sectionLabel: { color: pal.accent, letterSpacing: 1.5, fontSize: 11 },
     noSite: { gap: Spacing.two, padding: Spacing.three, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: pal.line },
     progressTrack: { height: 6, borderRadius: 3, backgroundColor: pal.line, overflow: 'hidden', marginTop: Spacing.one },
-    progressBar: { position: 'absolute', top: 0, bottom: 0, width: 90, borderRadius: 3, backgroundColor: pal.accent },
+    progressFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3, backgroundColor: pal.accent },
     progressMeta: { color: pal.dim, fontSize: 10, letterSpacing: 0.5 },
     sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     adRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
