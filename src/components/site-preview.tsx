@@ -169,12 +169,15 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   }, [venus.state]);
 
   // Run the session while the critique view is open (native only — mic needs the dev build).
+  // Depend on the STABLE slug/token, NOT the `critique` object — the parent rebuilds that object every
+  // render, which would otherwise stop+start the session (and re-trigger her greeting) on every
+  // re-render, stacking voices. Now it starts once and stops on unmount.
   useEffect(() => {
     if (!critique || IS_WEB) return;
     venus.start();
     return () => venus.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [critique]);
+  }, [critique?.slug, critique?.token]);
   // Tap-to-pause mutes the mic + her voice; re-applied on state changes so it sticks on reconnect.
   useEffect(() => { venus.mute(paused); }, [paused, venus.state, venus.mute]);
 

@@ -157,6 +157,16 @@ function toBrandResult(a: Record<string, unknown>): BrandResult {
   };
 }
 
+// Single-session guard: at most ONE Venus session is ever live across the whole app. start() kills
+// any other before connecting, so her voice can never overlap itself — whether two screens both try
+// to run her (studio interview ↔ site editor) or a component churns/remounts. Module-level on purpose.
+let activeLiveSession: LiveVoiceSession | null = null;
+
+/** True while a Venus session is connected/listening/speaking somewhere in the app. */
+export function isVenusLive(): boolean {
+  return activeLiveSession !== null;
+}
+
 export class LiveVoiceSession {
   private session: Session | null = null;
   private recorder: AudioRecorder | null = null;
@@ -221,6 +231,13 @@ export class LiveVoiceSession {
   }
 
   async start() {
+    // Enforce the single-session rule: tear down any OTHER live session first so two of her can't talk
+    // at once. (Our own session is a no-op re-entry — the hook guards double-start separately.)
+    if (activeLiveSession && activeLiveSession !== this) {
+      try { activeLiveSession.stop(); } catch {}
+    }
+    activeLiveSession = this;
+    this.closed = false;
     this.cb.onState?.('connecting');
     // Watchdog: if we never reach "ws open" (audio session wedged, token expiry, network), surface a
     // retry instead of sitting on "thinking…" forever. Cleared in onopen; re-armed each start().
@@ -459,6 +476,7 @@ export class LiveVoiceSession {
 
   async stop() {
     this.closed = true;
+    if (activeLiveSession === this) activeLiveSession = null; // release the single-session slot
     this.clearWatchdog();
     try {
       this.recorder?.stop();
