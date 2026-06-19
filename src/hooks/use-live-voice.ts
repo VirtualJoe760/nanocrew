@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { LiveVoiceSession, type LiveState } from '@/lib/live-voice';
-import type { BrandResult } from '@/lib/interview';
+import type { BrandResult, ChatMessage } from '@/lib/interview';
 import { apiUrl } from '@/lib/api';
 
 export interface UseLiveVoice {
@@ -29,7 +29,8 @@ export function useLiveVoice(opts: {
   accessToken: string | undefined;
   userName?: string;
   voiceName?: string;
-  onBrand: (b: BrandResult) => void;
+  /** transcript is the full spoken conversation — pass it to /api/store so provisioning gets context. */
+  onBrand: (b: BrandResult, transcript?: ChatMessage[]) => void;
 }): UseLiveVoice {
   const [state, setState] = useState<LiveState>('idle');
   const [venusText, setVenusText] = useState('');
@@ -92,7 +93,7 @@ export function useLiveVoice(opts: {
       if (d.brand) {
         s.stop();
         sessionRef.current = null;
-        onBrandRef.current(d.brand);
+        onBrandRef.current(d.brand, messages);
       } else {
         setError(d.error || 'Could not build the brand yet — keep chatting and try again.');
       }

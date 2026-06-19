@@ -686,7 +686,7 @@ export default function StudioScreen() {
   const live = useLiveVoice({
     accessToken: session?.access_token,
     voiceName: LIVE_VOICE,
-    onBrand: (b) => setBrand(b),
+    onBrand: (b, transcript) => { setBrand(b); if (transcript?.length) messages.current = transcript; },
   });
   // Mirror the Live session into the existing orb/caption state so the render is unchanged.
   useEffect(() => {
