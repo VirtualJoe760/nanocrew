@@ -178,6 +178,13 @@ async function deployToVercel(fullRepo, repo) {
   if (!proj.ok && proj.status !== 409) {
     throw new Error(`vercel project create failed: ${proj.status} ${(await proj.text()).slice(0, 300)}`);
   }
+  // Creators have no Vercel account — make preview/production deployments publicly reviewable by
+  // disabling Vercel Authentication (Deployment Protection). Idempotent; non-fatal.
+  await fetch(`https://api.vercel.com/v9/projects/${repo}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ ssoProtection: null }),
+  }).catch(() => {});
   const repoRes = await fetch(`https://api.github.com/repos/${fullRepo}`, {
     headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
   });
