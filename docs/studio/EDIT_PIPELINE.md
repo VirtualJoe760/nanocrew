@@ -28,10 +28,11 @@ failure localizes to exactly one hop.
 | CP | Where | What it tells you |
 |----|-------|-------------------|
 | **CP1 — said vs captured** | `store_revisions.transcript` (jsonb, raw turns) vs `request_md` (distilled) | Did the creator's words even reach the backend intact? If the transcript is missing the subject the creator spoke (e.g. "american flag"), the loss was in **voice capture/transcription** — upstream of everything else. |
+| **CP1b — what was attempted** | `store_revisions.edit_plan` (jsonb) | The structured outcome of the **whole submit**: `counts.{images,edits,total}` (how many requests), plus per-image `{slot, prompt, generated, placed, error}`. A `hero: gen-only (placement failed …)` here tells you the image generated but didn't get written; `FAILED` with an `error` tells you generation itself failed (content-safety, quota, empty prompt). |
 | **CP2 — classification** | Railway log `[pipeline:plan] … lastSaid=… → images=N[…] edits=M` | Did the plan turn the request into the right shape? A hero-image ask that yields `images=0` means the subject was vague/missing (often a CP1 loss) or misclassified. |
 | **CP3 — generation** | Railway log `[pipeline:generate] ok prompt=… → <url>` (or absence + an error) | Did the image actually generate? No line = generate never ran (no image in the plan) or it failed (content-safety, quota). |
 | **CP4 — placement** | Railway log `[pipeline:site-assets] slug=… slot=… url=… (revalidating)` + `stores.site_assets` in DB + public API `/api/public/stores/:slug/site-assets` | Did the new asset get written and the storefront revalidated? |
-| **CP5 — forge** | Railway log `[pipeline:revise] slug=… requestMd=…`, then the droplet worker journal (`journalctl -u nanocrew-forge-worker`) | Did the non-image edits reach the forge, and what exactly did it receive? |
+| **CP5 — submit + forge** | Railway log `[pipeline:submit] slug=… requests=N images=[hero:placed,…] edits=M forge=building(…)`, then the droplet worker journal (`journalctl -u nanocrew-forge-worker`) | The one-line summary of the whole submit: how many requests, what happened to each image, and whether a forge job was enqueued. **Every submit writes exactly one `store_revisions` row** — forge edits → `status=building` (worker drains it); image-only → `status=approved` (applied straight to the live site, worker skips it). Either way the transcript + edit_plan are persisted. |
 
 ## Worked example — the "american flag" hero that reverted to placeholder (2026-06-19)
 
@@ -48,9 +49,10 @@ Before this instrumentation we had **only** `request_md` and had to reconstruct 
 
 ```
 # one store's whole pipeline, newest last
-railway logs | grep -E "\[pipeline:(plan|generate|site-assets|revise)\]" | grep alpha-master
-# said vs captured for the latest revision
-select request_md, transcript from store_revisions
+railway logs | grep -E "\[pipeline:(plan|generate|site-assets|submit)\]" | grep alpha-master
+# said vs captured + what was attempted, for the latest submit
+select status, request_md, transcript, edit_plan
+  from store_revisions
   where store_id = (select id from stores where slug='<slug>') order by created_at desc limit 1;
 ```
 

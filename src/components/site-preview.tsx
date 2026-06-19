@@ -352,6 +352,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       // 1. Distill the conversation into image-generations (hero/logo/og) + other edits.
       let images: { slot: 'hero' | 'logo' | 'og'; prompt: string }[] = [];
       let editTexts: string[] = [];
+      let planned = false;
       try {
         const msgs = venus.messages.length ? venus.messages : edits.map((e) => ({ role: 'user' as const, text: e.note }));
         const pr = await fetch(apiUrl('/api/creator/plan-site-edits'), { method: 'POST', headers: auth, body: JSON.stringify({ messages: msgs }) });
@@ -359,18 +360,34 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
           const pd = (await pr.json()) as { images?: typeof images; edits?: string[] };
           images = pd.images ?? [];
           editTexts = pd.edits ?? [];
+          planned = true;
         }
       } catch {
         /* planning unavailable → fall back to forging the raw notes below */
       }
 
       // 2. Generate + place each new image straight onto the site (no forge — that can't make images).
+      //    Record the per-image OUTCOME so a silent failure (generate/place) is debuggable, not lost.
+      type ImageOutcome = { slot: string; prompt: string; generated: boolean; placed: boolean; error: string | null };
+      const imageOutcomes: ImageOutcome[] = [];
       for (const img of images) {
         setNote(`Generating the ${img.slot} image…`);
-        const gr = await fetch(apiUrl('/api/generate'), { method: 'POST', headers: auth, body: JSON.stringify({ prompt: img.prompt, background: 'filled', aspectRatio: img.slot === 'logo' ? '1:1' : '16:9' }) });
-        const gd = (await gr.json().catch(() => ({}))) as { image?: string };
-        if (!gr.ok || !gd.image) continue; // skip a failed one; the rest still go through
-        await fetch(apiUrl('/api/creator/site-assets'), { method: 'POST', headers: auth, body: JSON.stringify({ storeSlug: critique.slug, slot: img.slot, url: gd.image }) }).catch(() => {});
+        const outcome: ImageOutcome = { slot: img.slot, prompt: img.prompt, generated: false, placed: false, error: null };
+        try {
+          const gr = await fetch(apiUrl('/api/generate'), { method: 'POST', headers: auth, body: JSON.stringify({ prompt: img.prompt, background: 'filled', aspectRatio: img.slot === 'logo' ? '1:1' : '16:9' }) });
+          const gd = (await gr.json().catch(() => ({}))) as { image?: string; error?: string };
+          if (!gr.ok || !gd.image) {
+            outcome.error = gd.error || `generate failed (${gr.status})`;
+          } else {
+            outcome.generated = true;
+            const sr = await fetch(apiUrl('/api/creator/site-assets'), { method: 'POST', headers: auth, body: JSON.stringify({ storeSlug: critique.slug, slot: img.slot, url: gd.image }) });
+            if (sr.ok) outcome.placed = true;
+            else outcome.error = `placement failed (${sr.status})`;
+          }
+        } catch (e) {
+          outcome.error = e instanceof Error ? e.message : 'network error';
+        }
+        imageOutcomes.push(outcome);
       }
 
       // 3. The remaining (non-image) edits go to the forge. If planning failed entirely, forge the raw notes.
@@ -379,13 +396,29 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
         : images.length
           ? ''
           : rawMd();
-      if (md) {
-        setNote('Sending your edits…');
-        // Send the raw conversation alongside the distilled note so the backend can keep
-        // a "said vs captured" record (troubleshooting) — see docs/studio/EDIT_PIPELINE.md.
-        const transcript = venus.messages.map((m) => ({ role: m.role, text: m.text }));
-        const res = await fetch(apiUrl('/api/creator/revise'), { method: 'POST', headers: auth, body: JSON.stringify({ storeSlug: critique.slug, requestMd: md, transcript, annotations }) });
-        if (!res.ok) throw new Error();
+
+      // 4. Record ONE durable row for the whole submit — full transcript + structured per-request
+      //    outcomes — so an edit is debuggable end to end. See docs/studio/EDIT_PIPELINE.md.
+      const transcript = venus.messages.map((m) => ({ role: m.role, text: m.text }));
+      const editPlan = {
+        images: imageOutcomes,
+        // When planning failed we still forged the raw notes; surface that as the edit list.
+        edits: editTexts.length ? editTexts : md && !planned ? edits.map((e) => e.note) : [],
+      };
+      setNote('Saving your changes…');
+      const res = await fetch(apiUrl('/api/creator/revise'), {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ storeSlug: critique.slug, requestMd: md, transcript, editPlan, annotations }),
+      });
+      if (!res.ok) throw new Error();
+
+      // Tell the creator honestly if an image part failed (it used to fail silently).
+      const failedImg = imageOutcomes.filter((o) => !o.placed);
+      if (failedImg.length) {
+        setNote(`Couldn't apply the ${failedImg.map((o) => o.slot).join(', ')} image — try rewording what you want it to look like.`);
+        setSending(false);
+        return; // keep the editor open so they can retry the image
       }
 
       setEdits([]);

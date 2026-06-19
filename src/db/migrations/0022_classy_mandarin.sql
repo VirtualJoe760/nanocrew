@@ -1,0 +1,1 @@
+ALTER TABLE "store_revisions" ADD COLUMN "edit_plan" jsonb;
