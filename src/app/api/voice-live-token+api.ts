@@ -18,7 +18,8 @@ export async function POST(req: Request) {
   if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    // Ephemeral tokens (authTokens.create) are a v1alpha feature — the default API version 404s.
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1alpha' } });
     const now = Date.now();
     const token = await ai.authTokens.create({
       config: {
