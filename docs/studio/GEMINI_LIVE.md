@@ -81,7 +81,12 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
 2. Map `LiveState` → the orb's `EntityState` (listening/speaking/thinking/idle/error).
 3. `venusText`/`userText` transcripts → the existing captions + heard line.
 4. Finalize → `setBrand(...)` → the existing compiled-brand → **Create my store** screen (unchanged).
-5. Keep the **typed keyboard fallback** (`/api/interview`) for no-mic/noisy use.
+5. **Keyboard mode = a full chat window** (`ChatInterview`), not the orb layout with a cramped input:
+   message bubbles for Venus + the creator, a streaming reply bubble, a composer. It routes typed
+   turns into the SAME Live session (`live.sendText`) and renders `live.messages` (the committed
+   transcript, emitted via `onTranscript`). Entering chat **mutes the mic** (`live.mute(true)`) so she
+   doesn't react to the room; "🎙 Voice" returns to the orb. (The `/api/interview` text path remains
+   only for the dormant non-Live fallback.)
 6. Pause pill stays (stops the mic + her audio). The primer's "hold to talk" copy reverts to "just talk."
 7. **Rollout:** gate behind a flag; if Live (preview) misbehaves we flip back to turn-based. Remove
    turn-based once Live is proven in the wild.
