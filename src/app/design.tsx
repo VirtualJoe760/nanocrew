@@ -1842,6 +1842,11 @@ function GenerateModal({
             ))}
           </View>
 
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
           {error ? (
             <ThemedText type="small" themeColor="textSecondary" style={styles.genError}>
               {error}
@@ -2016,6 +2021,7 @@ function GenerateModal({
               </Pressable>
             </>
           )}
+          </ScrollView>
         </ThemedView>
       </KeyboardAvoidingView>
     </Modal>
@@ -2131,13 +2137,16 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
-    height: '94%',
+    maxHeight: '94%',
     padding: Spacing.four,
     paddingBottom: Spacing.six,
     borderTopLeftRadius: Spacing.four,
     borderTopRightRadius: Spacing.four,
     gap: Spacing.three,
   },
+  // The controls scroll independently so the Generate button is always reachable above the keyboard.
+  sheetScroll: { flexShrink: 1 },
+  sheetScrollContent: { gap: Spacing.three, paddingBottom: Spacing.three },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   swatchRow: { gap: Spacing.three, paddingVertical: Spacing.two, paddingRight: Spacing.four },
   swatchItem: { alignItems: 'center', width: 60, gap: Spacing.one },
@@ -2200,7 +2209,7 @@ const styles = StyleSheet.create({
   chip: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
   tabsRow: { flexDirection: 'row', gap: Spacing.one, marginBottom: Spacing.two },
   tab: { alignItems: 'center', paddingVertical: Spacing.two, borderRadius: 999 },
-  previewPane: { flex: 1, minHeight: 160, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.18)' },
+  previewPane: { height: 190, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.18)' },
   previewCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
   previewImg: { flex: 1, width: '100%' },
   previewHint: { textAlign: 'center', marginTop: Spacing.two },
