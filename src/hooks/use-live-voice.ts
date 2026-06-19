@@ -12,6 +12,7 @@ export interface UseLiveVoice {
   error: string | null;
   start: () => void;
   stop: () => void;
+  sendText: (text: string) => void;
 }
 
 /**
@@ -64,8 +65,12 @@ export function useLiveVoice(opts: {
     });
   }, [opts.accessToken, opts.userName, opts.voiceName]);
 
+  const sendText = useCallback((text: string) => {
+    sessionRef.current?.sendText(text);
+  }, []);
+
   // Always tear down on unmount.
   useEffect(() => () => { sessionRef.current?.stop(); sessionRef.current = null; }, []);
 
-  return { state, venusText, userText, error, start, stop };
+  return { state, venusText, userText, error, start, stop, sendText };
 }

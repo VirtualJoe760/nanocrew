@@ -107,7 +107,62 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
 ## Phases
 
 - **P0 (done):** feasibility, deps, token endpoint, bridge, hook, spike — all typecheck, dev build rebuilt.
-- **P1 (next):** validate the spike on-device; fix audio format/sample-rate as needed.
+- **P1 (done ✅):** spike validated on-device — fluid voice, echo loop fixed (half-duplex), input/output transcription working.
 - **P2:** token locking + `contextWindowCompression` + `sessionResumption`.
-- **P3:** Studio swap (open-mic, captions, save_brand → compiled screen), behind a flag.
+- **P3 (now):** Studio swap — see the detailed map below.
 - **P4:** harden (reconnect, rate-limit UX), ship build 25, then retire the turn-based path.
+
+## P3 — Studio migration: current → new (detailed, audited)
+
+Audited `src/app/studio.tsx` (StudioScreen). The migration is gated behind a `USE_LIVE` const so we
+can flip back instantly if the preview model misbehaves.
+
+### KEEP unchanged (the shell + non-voice flow)
+- The `mode` machine (`loading → cta → primer → interview → dashboard`) + landing logic
+  (`voiceResolved`/`hasStore`).
+- The **CTA voice picker** + **primer** screens (copy edit: "hold the mark" → "just talk").
+- `brand` state → the **compiled-brand screen** → `createStore()` → `/api/store`. **Untouched** — Live's
+  `save_brand` tool sets `brand` exactly like the old `done` turn did.
+- Dashboard, `StudioComposer`, paywall, **brand-limit free-a-slot** + staged banner, header icons,
+  `onNewBrand`/`onFinishedBrand`, the error banner, mic-permission request on the primer.
+
+### REPLACE (turn-based voice machine → `useLiveVoice`)
+Remove from the interview path: `turn()` (`/api/voice`), `playSpeech`, `beginHold`/`endHold`,
+`sendRecording`, the expo-audio `recorder`/`player`/`playerStatus`/`recState` + their metering
+effects, the `didJustFinish` effect, the greeting `turn({init})` effects, `busyRef`/`playGenRef`/
+`lastTurnEmptyRef`, and the word-timed karaoke (`timedWords`/`wordIdx`).
+
+Drive the orb + captions from the hook instead:
+- `live.state` → the orb's `EntityState` (map `connecting/thinking`→thinking, `listening`→listening,
+  `speaking`→speaking, `idle/error`→idle).
+- `live.venusText` → `line` (her caption), `live.userText` → `heard` (your caption). Captions become
+  the streaming transcript (drop the per-word animation; show the rolling text).
+- `live.onBrand` → `setBrand(...)`.
+- **Orb interaction:** open-mic, so tap = pause/resume (no hold-to-talk). `NCNucleus onPress`.
+- **Lifecycle:** start the session when `mode==='interview' && focused && !paused`; `live.stop()` on
+  blur/pause/unmount. Pause pill → `live.stop()`/`live.start()`.
+- **`level`** (orb amplitude): no expo-audio metering now — drive a gentle state-based pulse
+  (speaking/listening), refine later with an analyser node.
+
+### Keyboard fallback
+Route typed answers to the SAME Live session via `session.sendClientContent({ turns:[text] })` (she
+replies with audio, matching today's behavior). Keep `/api/interview` only as a dead fallback.
+*(First cut may keep keyboard on the turn-based path if Live text-in needs tuning — flag it.)*
+
+### Voice picker / preview
+The interview voice is now a **Gemini** voice. Map the chosen `AI_VOICES` id → a Gemini voice name
+(default `Aoede`) for the Live session. The ElevenLabs-based `previewVoice` mismatches the real voice
+now — either repoint preview to a Gemini sample or drop it (follow-up; not blocking).
+
+### Transcript for `createStore`
+Live has no `messages.current`. Accumulate completed turns in the hook (push `userText`/`venusText`
+on `turnComplete`) and pass that as the `transcript`. `brand` is the primary input; transcript is
+supplementary context for provisioning.
+
+### Execution order
+1. Add `USE_LIVE` flag + the `useLiveVoice` hook wiring in the interview branch; map state/captions/brand.
+2. Gate the turn-based effects/handlers behind `!USE_LIVE`.
+3. Orb → pause/resume; pause pill → stop/start; primer copy.
+4. Keyboard → `sendClientContent`. Transcript accumulation for `createStore`.
+5. Voice mapping (AI_VOICES → Gemini). tsc + on-device verify a full interview → `save_brand` → store.
+6. Once solid: remove the dead turn-based code + `/api/voice` client calls, drop the `USE_LIVE` flag.

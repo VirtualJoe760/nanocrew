@@ -47,11 +47,17 @@ import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
+import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
 import type { BrandResult, ChatMessage, TimedWord } from '@/lib/interview';
 import { AI_VOICES, DEFAULT_VOICE, type AiVoice } from '@/lib/voices';
 
 const VOICE_KEY = 'nanocrew.voiceId';
+
+// Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
+// Flip to false to fall back to the legacy turn-based /api/voice flow.
+const USE_LIVE = true;
+const LIVE_VOICE = 'Aoede'; // warm Gemini voice (picker is cosmetic until AI_VOICES→Gemini mapping)
 
 // The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
 // counter-rotating rings, digital rain behind — talks you through building your brand.
@@ -676,6 +682,42 @@ export default function StudioScreen() {
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
 
+  // ---- Gemini Live wiring (replaces the turn-based voice machine when USE_LIVE; GEMINI_LIVE.md) ----
+  const live = useLiveVoice({
+    accessToken: session?.access_token,
+    voiceName: LIVE_VOICE,
+    onBrand: (b) => setBrand(b),
+  });
+  // Mirror the Live session into the existing orb/caption state so the render is unchanged.
+  useEffect(() => {
+    if (!USE_LIVE) return;
+    const m: Record<string, EntityState> = {
+      connecting: 'thinking', thinking: 'thinking', listening: 'listening',
+      speaking: 'speaking', idle: 'idle', error: 'idle',
+    };
+    setState(m[live.state] ?? 'idle');
+  }, [live.state]);
+  useEffect(() => { if (USE_LIVE && live.venusText) setLine(live.venusText); }, [live.venusText]);
+  useEffect(() => { if (USE_LIVE && live.userText) setHeard(live.userText); }, [live.userText]);
+  useEffect(() => { if (USE_LIVE && live.error) setError(live.error); }, [live.error]);
+  // Start the session in the interview; stop on leaving / pause / brand-ready. start() is idempotent.
+  useEffect(() => {
+    if (!USE_LIVE) return;
+    if (mode === 'interview' && !brand && !paused) live.start();
+    else live.stop();
+  }, [mode, brand, paused, live.start, live.stop]);
+  // Orb amplitude: no expo-audio metering on the Live path — drive a gentle state-based pulse.
+  useEffect(() => {
+    if (!USE_LIVE) return;
+    if (state === 'speaking' || state === 'listening') {
+      level.value = withRepeat(withSequence(withTiming(0.6, { duration: 480 }), withTiming(0.18, { duration: 480 })), -1, true);
+    } else {
+      cancelAnimation(level);
+      level.value = withTiming(0, { duration: 400 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
   const busyRef = useRef(false);
   const lastTurnEmptyRef = useRef(false);
 
@@ -804,7 +846,9 @@ export default function StudioScreen() {
   }, [voiceResolved, hasStore]);
 
   // The greeting only fires in interview mode (after Get started / Build a new brand).
+  // On the Live path, Venus greets via the session's setupComplete — skip the turn-based init.
   useEffect(() => {
+    if (USE_LIVE) return;
     if (mode === 'interview' && session && voiceId && focusedRef.current && !started.current) {
       started.current = true;
       void turn({ init: true });
@@ -814,12 +858,19 @@ export default function StudioScreen() {
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
-      if (session && voiceId && mode === 'interview' && !started.current) {
+      if (USE_LIVE) {
+        // Resume the Live session when returning to a focused interview.
+        if (mode === 'interview' && !brand && !paused) live.start();
+      } else if (session && voiceId && mode === 'interview' && !started.current) {
         started.current = true;
         void turn({ init: true });
       }
       return () => {
         focusedRef.current = false;
+        if (USE_LIVE) {
+          live.stop(); // never let Venus keep talking on a tab the user left
+          return;
+        }
         try {
           player.pause();
         } catch {}
@@ -827,7 +878,7 @@ export default function StudioScreen() {
         busyRef.current = false;
         setState('idle');
       };
-    }, [session, voiceId, mode, turn, player, recorder]),
+    }, [session, voiceId, mode, turn, player, recorder, brand, paused, live.start, live.stop]),
   );
 
   const chooseVoice = useCallback((v: AiVoice) => {
@@ -1033,10 +1084,14 @@ export default function StudioScreen() {
   const sendTyped = useCallback(() => {
     const t = typed.trim();
     if (!t || state === 'thinking') return;
-    if (state === 'speaking') player.pause();
     setTyped('');
+    if (USE_LIVE) {
+      live.sendText(t); // keyboard fallback routes into the same Live session
+      return;
+    }
+    if (state === 'speaking') player.pause();
     void turn({ text: t });
-  }, [typed, state, player, turn]);
+  }, [typed, state, player, turn, live.sendText]);
 
 
   // Word-by-word subtitles synced to the speech itself: ElevenLabs character timestamps
@@ -1111,8 +1166,17 @@ export default function StudioScreen() {
     }
   }, [session, brand, playSpeech]);
 
-  const hint =
-    state === 'listening'
+  const hint = USE_LIVE
+    ? state === 'listening'
+      ? '[ listening — just talk ]'
+      : state === 'thinking'
+        ? '[ thinking… ]'
+        : state === 'speaking'
+          ? '[ Venus is speaking — tap to pause ]'
+          : paused
+            ? '[ paused — tap the mark to resume ]'
+            : '[ connecting… ]'
+    : state === 'listening'
       ? '[ recording — release to send ]'
       : state === 'thinking'
         ? '[ thinking… ]'
@@ -1359,7 +1423,7 @@ export default function StudioScreen() {
             </ThemedText>
             <ThemedText type="small" style={[styles.introBody, { color: p.dim, textAlign: 'left' }]}>
               On the next screen, {aiName} talks with you to design your brand — a quick back-and-forth.
-              Hold the mark to talk, release to send (or tap the keyboard to type). Have a rough idea of:
+              Just talk — Venus listens as you speak (or tap the keyboard to type). Have a rough idea of:
             </ThemedText>
             {[
               'Your brand name + what it stands for',
@@ -1401,9 +1465,9 @@ export default function StudioScreen() {
                 p={p}
                 level={level}
                 state={state}
-                onPressIn={keyboardMode ? undefined : beginHold}
-                onPressOut={keyboardMode ? undefined : endHold}
-                onPress={keyboardMode ? () => setKeyboardMode(false) : undefined}
+                onPressIn={USE_LIVE || keyboardMode ? undefined : beginHold}
+                onPressOut={USE_LIVE || keyboardMode ? undefined : endHold}
+                onPress={keyboardMode ? () => setKeyboardMode(false) : USE_LIVE ? togglePause : undefined}
               />
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
                 {keyboardMode ? '[ keyboard mode — tap the mark for voice ]' : hint}

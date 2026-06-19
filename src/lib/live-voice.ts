@@ -292,6 +292,19 @@ export class LiveVoiceSession {
     }
   }
 
+  /** Keyboard fallback — send a typed answer into the same Live session (she replies with audio). */
+  sendText(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    try {
+      this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
+      this.cb.onUserTranscript?.(t);
+      this.cb.onState?.('thinking');
+    } catch (e) {
+      console.warn('[live] sendText failed', e instanceof Error ? e.message : e);
+    }
+  }
+
   private fail(msg: string) {
     this.cb.onError?.(msg);
     this.cb.onState?.('error');
