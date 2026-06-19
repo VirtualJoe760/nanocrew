@@ -56,6 +56,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [siteAction, setSiteAction] = useState<'idle' | 'building'>('idle');
   const [publishing, setPublishing] = useState(false); // open/close shop in the marketplace in flight
   const [revisions, setRevisions] = useState<Revision[]>([]);
+  const [reviewDismissed, setReviewDismissed] = useState<Set<string>>(new Set()); // "keep editing" hides a ready review
   const [products, setProducts] = useState<Product[]>([]);
   const [credits, setCredits] = useState<number | null>(null);
   const [voiceoverCost, setVoiceoverCost] = useState(25);
@@ -81,6 +82,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   // local flag — so reopening the console mid-build still shows "building", and the view flips to
   // the live site on its own when the forge worker finishes (we poll while building).
   const provisionRev = revisions.find((r) => r.requestMd.includes('"kind":"provision"'));
+  // The forge edit awaiting the creator (building/ready/failed) — drives the in-Console review bar
+  // and is where a "Go to review" notification lands. Provision (initial build) is shown separately.
+  const pendingRev = revisions.find(
+    (r) => !r.requestMd.includes('"kind":"provision"') && ['building', 'ready', 'failed'].includes(r.status) && !reviewDismissed.has(r.id),
+  );
   // Durable signals ONLY — a local flag can get stuck "building" forever if the server-side build
   // fails before it ever flips the store status back. The store goes 'building' the instant
   // build-site is called, and the forge worker flips it to 'ready' (+ deploymentUrl) or records a
@@ -669,6 +675,38 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                 </View>
               ) : (
                 <>
+                  {/* Review bar — a forge edit from the live-site editor is building/ready. This is where
+                      a "Go to review" notification lands: Review the preview → Publish, or keep editing. */}
+                  {pendingRev ? (
+                    <View style={styles.reviewCard}>
+                      {pendingRev.status === 'building' ? (
+                        <View style={styles.reviewRow}>
+                          <ActivityIndicator size="small" color={pal.accent} />
+                          <ThemedText type="small" style={[styles.white, { flex: 1 }]}>A change is building a preview…</ThemedText>
+                        </View>
+                      ) : pendingRev.status === 'ready' ? (
+                        <>
+                          <ThemedText type="smallBold" style={styles.white}>A change is ready to review</ThemedText>
+                          <View style={styles.reviewRow}>
+                            {pendingRev.previewUrl ? (
+                              <Pressable onPress={() => { setPreviewTarget(pendingRev.previewUrl); setCritiquePreview(false); }} style={styles.reviewBtn}>
+                                <ThemedText type="code" style={styles.white}>Review</ThemedText>
+                              </Pressable>
+                            ) : null}
+                            <Pressable onPress={() => approve(pendingRev)} style={[styles.reviewBtn, { backgroundColor: pal.accent, borderColor: pal.accent }]}>
+                              <ThemedText type="code" style={{ color: pal.onAccent }}>Publish →</ThemedText>
+                            </Pressable>
+                            <Pressable onPress={() => setReviewDismissed((s) => new Set(s).add(pendingRev.id))} hitSlop={8}>
+                              <ThemedText type="code" style={styles.dim}>keep editing</ThemedText>
+                            </Pressable>
+                          </View>
+                        </>
+                      ) : (
+                        <ThemedText type="small" style={styles.dim}>That change didn’t take — open the editor and try rewording it.</ThemedText>
+                      )}
+                    </View>
+                  ) : null}
+
                   <Pressable onPress={() => setEditor(true)} style={styles.primaryBtn}>
                     <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Customize — text, colors &amp; fonts</ThemedText>
                   </Pressable>
@@ -992,6 +1030,9 @@ function makeStyles(pal: StudioPalette) {
     change: { minHeight: 90, textAlignVertical: 'top' },
     row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginTop: Spacing.one },
     primaryBtn: { backgroundColor: pal.accent, borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.four, alignItems: 'center', marginTop: Spacing.one },
+    reviewCard: { borderWidth: 1, borderColor: pal.accent, borderRadius: 12, padding: Spacing.three, gap: Spacing.two, marginBottom: Spacing.three },
+    reviewRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+    reviewBtn: { borderWidth: 1, borderColor: pal.line, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
     postRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
     postTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
     postExcerpt: { color: pal.dim, fontSize: 11, marginTop: 2 },
