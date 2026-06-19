@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { LiveVoiceSession, type LiveState } from '@/lib/live-voice';
 import type { BrandResult } from '@/lib/interview';
+import { apiUrl } from '@/lib/api';
 
 export interface UseLiveVoice {
   state: LiveState;
@@ -10,9 +11,13 @@ export interface UseLiveVoice {
   /** Running transcript of what the user just said. */
   userText: string;
   error: string | null;
+  /** Extracting the brand from the transcript (the "build my brand" step). */
+  finalizing: boolean;
   start: () => void;
   stop: () => void;
   sendText: (text: string) => void;
+  /** End the interview: extract the BrandResult from the transcript via /api/extract-brand. */
+  finalize: () => void;
 }
 
 /**
@@ -69,8 +74,37 @@ export function useLiveVoice(opts: {
     sessionRef.current?.sendText(text);
   }, []);
 
+  const [finalizing, setFinalizing] = useState(false);
+  const finalize = useCallback(async () => {
+    const s = sessionRef.current;
+    if (!s || finalizing || !opts.accessToken) return;
+    const messages = s.getTranscript();
+    if (!messages.length) { setError('Talk to Venus a bit first, then build your brand.'); return; }
+    setFinalizing(true);
+    setError(null);
+    try {
+      const r = await fetch(apiUrl('/api/extract-brand'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opts.accessToken}` },
+        body: JSON.stringify({ messages }),
+      });
+      const d = (await r.json()) as { brand?: BrandResult; error?: string };
+      if (d.brand) {
+        s.stop();
+        sessionRef.current = null;
+        onBrandRef.current(d.brand);
+      } else {
+        setError(d.error || 'Could not build the brand yet — keep chatting and try again.');
+      }
+    } catch {
+      setError('Could not build the brand — try again.');
+    } finally {
+      setFinalizing(false);
+    }
+  }, [finalizing, opts.accessToken]);
+
   // Always tear down on unmount.
   useEffect(() => () => { sessionRef.current?.stop(); sessionRef.current = null; }, []);
 
-  return { state, venusText, userText, error, start, stop, sendText };
+  return { state, venusText, userText, error, finalizing, start, stop, sendText, finalize };
 }

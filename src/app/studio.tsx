@@ -1479,6 +1479,21 @@ export default function StudioScreen() {
                   </ThemedText>
                 </Pressable>
               ) : null}
+              {/* Live path: explicit finalize — native-audio won't reliably call save_brand, so we
+                  extract the brand from the transcript on demand. */}
+              {USE_LIVE ? (
+                <Pressable
+                  onPress={live.finalize}
+                  disabled={live.finalizing}
+                  hitSlop={10}
+                  style={[styles.finalizePill, { backgroundColor: p.accent, opacity: live.finalizing ? 0.6 : 1 }]}>
+                  {live.finalizing ? (
+                    <ActivityIndicator color={BG} />
+                  ) : (
+                    <ThemedText type="smallBold" style={{ color: BG }}>✓ Build my brand</ThemedText>
+                  )}
+                </Pressable>
+              ) : null}
             </View>
             {keyboardMode ? (
               <View style={styles.typeRow}>
@@ -1574,6 +1589,7 @@ const styles = StyleSheet.create({
   hint: { color: '#9396a0', letterSpacing: 1 },
   pausePill: { marginTop: Spacing.three, borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two, alignSelf: 'center' },
   stagedBanner: { borderWidth: 1, borderRadius: 12, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three, marginBottom: Spacing.three },
+  finalizePill: { marginTop: Spacing.two, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.three, alignSelf: 'center', minWidth: 180, alignItems: 'center' },
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },

@@ -131,6 +131,12 @@ export class LiveVoiceSession {
   private curUser = '';
   private curVenus = '';
   private userTurnActive = false;
+  private transcript: { role: 'user' | 'assistant'; text: string }[] = [];
+
+  /** The full conversation so far — used to extract the brand (native audio won't call the tool). */
+  getTranscript() {
+    return this.transcript.slice();
+  }
   private cb: LiveCallbacks;
   private token: string;
   private accessToken: string;
@@ -290,13 +296,22 @@ export class LiveVoiceSession {
       this.curUser += sc.inputTranscription.text;
       this.cb.onUserTranscript?.(this.curUser);
     }
-    // Venus replying → the user's turn is over; accumulate her current reply.
+    // Venus replying → the user's turn is over; record it, then accumulate her reply.
     if (sc?.outputTranscription?.text) {
+      if (this.userTurnActive && this.curUser.trim()) {
+        this.transcript.push({ role: 'user', text: this.curUser.trim() });
+      }
       this.userTurnActive = false;
       this.curVenus += sc.outputTranscription.text;
       this.cb.onVenusTranscript?.(this.curVenus);
     }
-    if (sc?.turnComplete) this.cb.onState?.('listening');
+    if (sc?.turnComplete) {
+      if (this.curVenus.trim()) {
+        this.transcript.push({ role: 'assistant', text: this.curVenus.trim() });
+        this.curVenus = '';
+      }
+      this.cb.onState?.('listening');
+    }
 
     // tool call → finalize the brand
     const calls = m.toolCall?.functionCalls ?? [];
@@ -318,9 +333,10 @@ export class LiveVoiceSession {
     if (!t) return;
     try {
       this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
-      this.curUser = t;
+      this.curUser = '';
       this.curVenus = '';
       this.userTurnActive = false; // typed turn submitted → her reply accumulates next
+      this.transcript.push({ role: 'user', text: t });
       this.cb.onUserTranscript?.(t);
       this.cb.onVenusTranscript?.('');
       this.cb.onState?.('thinking');
