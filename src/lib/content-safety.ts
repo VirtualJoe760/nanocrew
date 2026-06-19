@@ -18,13 +18,15 @@ export class ContentSafetyError extends Error {
   }
 }
 
-// Block sexual-explicit + dangerous (violence/gore) on both the text and image harm axes.
-// BLOCK_MEDIUM_AND_ABOVE: catch clear cases without nuking borderline edgy-but-fine fashion art.
+// Block sexual-explicit + dangerous (violence/gore). BLOCK_MEDIUM_AND_ABOVE: catch clear cases
+// without nuking borderline edgy-but-fine fashion art.
+// NOTE: only the standard HARM_CATEGORY_* values are accepted by gemini-2.5-flash-image. The
+// HARM_CATEGORY_IMAGE_* variants exist in the enum but the image endpoint rejects them with a 400
+// ("Invalid value at safety_settings[].category"), which silently failed EVERY image generation —
+// do not re-add them. (Found 2026-06-20 via the editPlan error trace.)
 export const IMAGE_SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-  { category: HarmCategory.HARM_CATEGORY_IMAGE_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-  { category: HarmCategory.HARM_CATEGORY_IMAGE_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 ];
 
 // Word-boundary patterns for the two prohibited buckets. Kept intentionally tight to avoid false
