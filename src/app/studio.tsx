@@ -612,11 +612,17 @@ export default function StudioScreen() {
         if (!alive) return;
         if (saved) {
           setVoiceId(saved);
-          // Returning creator — confirm a store exists so the Manage panel shows.
-          fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } })
-            .then((r) => r.json())
-            .then((d: { stores?: unknown[] }) => alive && setHasStore((d.stores?.length ?? 0) > 0))
-            .catch(() => {});
+          // Returning creator — AWAIT the store check so hasStore is known BEFORE voiceResolved fires.
+          // (If we don't await, the landing runs while hasStore is still false and lands a creator
+          //  WITH brands on the primer instead of their brand dashboard.)
+          try {
+            const r = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } });
+            const d = (await r.json()) as { stores?: unknown[] };
+            if (!alive) return;
+            setHasStore((d.stores?.length ?? 0) > 0);
+          } catch {
+            /* leave hasStore false — lands on the primer, which is the safe default */
+          }
         } else {
           const r = await fetch(apiUrl('/api/me'), {
             headers: { Authorization: `Bearer ${session.access_token}` },
