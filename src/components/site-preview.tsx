@@ -333,18 +333,49 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     if (!critique || !edits.length) return;
     setSending(true);
     setNote(null);
-    const body = edits
-      .map((e, i) => `${i + 1}. ${e.note}${e.regions.length ? `\n   (circled: ${e.regions.join('; ')})` : ''}`)
-      .join('\n\n');
-    const md = `The creator requested these changes to their live storefront, in their own words:\n\n${body}\n\n(About the page: ${url})`;
+    const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${critique.token}` };
     const annotations = edits.filter((e) => e.strokes.length).map((e) => ({ url: e.url, width: e.width, strokes: e.strokes }));
+    const rawMd = () => {
+      const body = edits.map((e, i) => `${i + 1}. ${e.note}${e.regions.length ? `\n   (circled: ${e.regions.join('; ')})` : ''}`).join('\n\n');
+      return `The creator requested these changes to their live storefront, in their own words:\n\n${body}\n\n(About the page: ${url})`;
+    };
     try {
-      const res = await fetch(apiUrl('/api/creator/revise'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${critique.token}` },
-        body: JSON.stringify({ storeSlug: critique.slug, requestMd: md, annotations }),
-      });
-      if (!res.ok) throw new Error();
+      // 1. Distill the conversation into image-generations (hero/logo/og) + other edits.
+      let images: { slot: 'hero' | 'logo' | 'og'; prompt: string }[] = [];
+      let editTexts: string[] = [];
+      try {
+        const msgs = venus.messages.length ? venus.messages : edits.map((e) => ({ role: 'user' as const, text: e.note }));
+        const pr = await fetch(apiUrl('/api/creator/plan-site-edits'), { method: 'POST', headers: auth, body: JSON.stringify({ messages: msgs }) });
+        if (pr.ok) {
+          const pd = (await pr.json()) as { images?: typeof images; edits?: string[] };
+          images = pd.images ?? [];
+          editTexts = pd.edits ?? [];
+        }
+      } catch {
+        /* planning unavailable → fall back to forging the raw notes below */
+      }
+
+      // 2. Generate + place each new image straight onto the site (no forge — that can't make images).
+      for (const img of images) {
+        setNote(`Generating the ${img.slot} image…`);
+        const gr = await fetch(apiUrl('/api/generate'), { method: 'POST', headers: auth, body: JSON.stringify({ prompt: img.prompt, background: 'filled', aspectRatio: img.slot === 'logo' ? '1:1' : '16:9' }) });
+        const gd = (await gr.json().catch(() => ({}))) as { image?: string };
+        if (!gr.ok || !gd.image) continue; // skip a failed one; the rest still go through
+        await fetch(apiUrl('/api/creator/site-assets'), { method: 'POST', headers: auth, body: JSON.stringify({ storeSlug: critique.slug, slot: img.slot, url: gd.image }) }).catch(() => {});
+      }
+
+      // 3. The remaining (non-image) edits go to the forge. If planning failed entirely, forge the raw notes.
+      const md = editTexts.length
+        ? `The creator requested these changes to their live storefront:\n\n${editTexts.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\n(About the page: ${url})`
+        : images.length
+          ? ''
+          : rawMd();
+      if (md) {
+        setNote('Sending your edits…');
+        const res = await fetch(apiUrl('/api/creator/revise'), { method: 'POST', headers: auth, body: JSON.stringify({ storeSlug: critique.slug, requestMd: md, annotations }) });
+        if (!res.ok) throw new Error();
+      }
+
       setEdits([]);
       setReviewing(false);
       critique.onSent?.();
