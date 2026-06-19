@@ -19,7 +19,7 @@ const SYSTEM = `You read a short conversation in which a creator described chang
 {"images":[{"slot":"hero|logo|og","prompt":"<vivid description of the image to generate>"}],"edits":["<other change as a short imperative>"]}
 
 Rules:
-- "images" = ONLY requests to GENERATE brand-NEW artwork for a known slot: the hero image (slot "hero"), the logo (slot "logo"), or the social/share card (slot "og"). The prompt must be a clear, vivid image description (combine the whole conversation so a fragmented ask like "change the hero" + "a beach at sunset" becomes one prompt). Only include an image when the creator clearly wants it generated.
+- "images" = ONLY requests to GENERATE brand-NEW artwork for a known slot: the HERO image (slot "hero"), the logo (slot "logo"), or the social/share card (slot "og"). IMPORTANT: the hero image IS the big full-bleed background image at the top of the site, so map ALL of these to slot "hero": "hero", "background", "background image", "the background", "the photo/image at the top", "the image behind the headline/text", "the banner image". The prompt must be a clear, vivid image description (combine the whole conversation so a fragmented ask like "change the background" + "a beach at sunset" becomes one prompt). Only include an image when the creator clearly wants it generated.
 - "edits" = EVERY other change in plain imperative words: text/headlines, colors, layout, moving or resizing things, rounder buttons, swapping to a photo they already have, adding sections, etc.
 - IGNORE greetings, acknowledgements, confirmations ("yes", "do it", "that's it"), and anything that isn't an actual change.
 - If you're unsure whether something is a new-image generation, put it in "edits", not "images".
