@@ -143,6 +143,7 @@ export class LiveVoiceSession {
   private userName?: string;
   private voiceName: string;
   private closed = false;
+  private watchdog: ReturnType<typeof setTimeout> | null = null;
 
   constructor(opts: { accessToken: string; userName?: string; voiceName?: string; callbacks: LiveCallbacks }) {
     this.accessToken = opts.accessToken;
@@ -154,6 +155,9 @@ export class LiveVoiceSession {
 
   async start() {
     this.cb.onState?.('connecting');
+    // Watchdog: if we never reach "ws open" (audio session wedged, token expiry, network), surface a
+    // retry instead of sitting on "thinking…" forever. Cleared in onopen; re-armed each start().
+    this.armWatchdog();
     // 1. mint the ephemeral token
     const r = await fetch(apiUrl('/api/voice-live-token'), {
       method: 'POST',
@@ -178,7 +182,12 @@ export class LiveVoiceSession {
 
     console.warn('[live] A: new AudioContext');
     this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
-    await this.outCtx.resume();
+    // resume() can hang on a contended iOS audio session (e.g. one leaked by a previous JS reload).
+    // RN audio contexts usually start 'running', so resume is a formality — don't let it wedge us.
+    await Promise.race([
+      this.outCtx.resume().catch(() => {}),
+      new Promise<void>((res) => setTimeout(res, 2500)),
+    ]);
     console.warn('[live] B: createBufferQueueSource');
     this.queue = this.outCtx.createBufferQueueSource();
     console.warn('[live] C: connect to destination');
@@ -194,6 +203,7 @@ export class LiveVoiceSession {
       callbacks: {
         onopen: () => {
           console.warn('[live] ws open → starting mic');
+          this.clearWatchdog();
           this.startMic();
         },
         onmessage: (m) => this.onMessage(m),
@@ -346,12 +356,31 @@ export class LiveVoiceSession {
   }
 
   private fail(msg: string) {
+    this.clearWatchdog();
     this.cb.onError?.(msg);
     this.cb.onState?.('error');
   }
 
+  private armWatchdog() {
+    this.clearWatchdog();
+    this.watchdog = setTimeout(() => {
+      if (this.closed) return;
+      console.warn('[live] watchdog: never connected (15s) — failing for retry');
+      this.fail("Venus couldn't connect — tap to try again.");
+      this.stop();
+    }, 15000);
+  }
+
+  private clearWatchdog() {
+    if (this.watchdog) {
+      clearTimeout(this.watchdog);
+      this.watchdog = null;
+    }
+  }
+
   async stop() {
     this.closed = true;
+    this.clearWatchdog();
     try {
       this.recorder?.stop();
     } catch {}
@@ -361,6 +390,11 @@ export class LiveVoiceSession {
     } catch {}
     try {
       this.session?.close();
+    } catch {}
+    // Release the iOS audio session so the NEXT start() isn't contended (a leaked active session is
+    // the most likely cause of resume() hanging on reconnect).
+    try {
+      AudioManager.setAudioSessionActivity(false);
     } catch {}
     this.recorder = null;
     this.queue = null;

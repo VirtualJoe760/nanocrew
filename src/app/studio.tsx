@@ -925,6 +925,18 @@ export default function StudioScreen() {
     });
   }, [player, recorder]);
 
+  // Orb tap on the Live path: if the last connect failed (watchdog tripped), a single tap retries;
+  // otherwise it's the pause/resume toggle.
+  const onOrbPress = useCallback(() => {
+    if (USE_LIVE && live.error) {
+      setError(null);
+      if (paused) { pausedRef.current = false; setPaused(false); }
+      live.start();
+      return;
+    }
+    togglePause();
+  }, [live.error, live.start, paused, togglePause]);
+
   // Returning creator wants another brand — reset the interview and start fresh.
   const onNewBrand = useCallback(() => {
     started.current = false;
@@ -1467,7 +1479,7 @@ export default function StudioScreen() {
                 state={state}
                 onPressIn={USE_LIVE || keyboardMode ? undefined : beginHold}
                 onPressOut={USE_LIVE || keyboardMode ? undefined : endHold}
-                onPress={keyboardMode ? () => setKeyboardMode(false) : USE_LIVE ? togglePause : undefined}
+                onPress={keyboardMode ? () => setKeyboardMode(false) : USE_LIVE ? onOrbPress : undefined}
               />
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
                 {keyboardMode ? '[ keyboard mode — tap the mark for voice ]' : hint}
