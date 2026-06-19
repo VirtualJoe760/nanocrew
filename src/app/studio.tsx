@@ -891,6 +891,9 @@ export default function StudioScreen() {
   // New creator pressed Get started — show the primer first (what Venus will ask), so the AI
   // never starts talking before the user knows what's coming.
   const onGetStarted = useCallback(() => setMode('primer'), []);
+  // Not ready yet — back out of the primer to wherever they came from (the voice picker for a new
+  // creator, the brand dashboard for a returning one).
+  const onPrimerBack = useCallback(() => setMode(hasStore ? 'dashboard' : 'cta'), [hasStore]);
 
   // Primer choices. Voice (recommended) requests the mic HERE — the only place we prompt — then
   // starts the spoken interview. Text starts the same interview in keyboard mode (no mic needed);
@@ -1370,6 +1373,9 @@ export default function StudioScreen() {
           </ScrollView>
         ) : mode === 'primer' ? (
           <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
+            <Pressable onPress={onPrimerBack} hitSlop={10} style={{ alignSelf: 'flex-start', marginBottom: Spacing.two }}>
+              <ThemedText type="code" style={{ color: p.dim }}>‹ Back</ThemedText>
+            </Pressable>
             <ThemedText type="code" style={styles.brandEyebrow}>
               {'// BEFORE WE START'}
             </ThemedText>
