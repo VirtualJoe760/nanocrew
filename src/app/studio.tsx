@@ -710,6 +710,19 @@ export default function StudioScreen() {
   useEffect(() => { if (USE_LIVE) setLine(live.venusText); }, [live.venusText]);
   useEffect(() => { if (USE_LIVE) setHeard(live.userText); }, [live.userText]);
   useEffect(() => { if (USE_LIVE && live.error) setError(live.error); }, [live.error]);
+  // Build is GATED: Venus gathers the essentials first, then invites them to build — that's when the
+  // button appears. We latch "ready" when she signals it (she's prompted to say "ready to build your
+  // brand" once she has a name, products, and a style), floored at 3 answers; a 6-answer safety net
+  // ensures the button always eventually appears. Resets when a fresh interview clears the transcript.
+  const [buildReady, setBuildReady] = useState(false);
+  useEffect(() => {
+    if (!live.messages.length) { setBuildReady(false); return; }
+    if (buildReady) return;
+    const userTurns = live.messages.filter((m) => m.role === 'user').length;
+    const lastVenus = [...live.messages].reverse().find((m) => m.role === 'assistant')?.text ?? '';
+    const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we)\s+need|got everything|let'?s build|time to build|shall we build)\b/i;
+    if (userTurns >= 6 || (userTurns >= 3 && cue.test(lastVenus))) setBuildReady(true);
+  }, [live.messages, buildReady]);
   // The ONE rule for when Venus is live: her view is on screen (interview, focused, app foregrounded)
   // and not paused / already done. Anything else → stop, so she's never vocal outside her view.
   // start()/stop() are idempotent.
@@ -1372,9 +1385,9 @@ export default function StudioScreen() {
                   {paused ? '▶  Resume' : '❚❚  Pause'}
                 </ThemedText>
               </Pressable>
-              {/* Live path: explicit finalize — native-audio won't reliably call save_brand, so we
-                  extract the brand from the transcript on demand. */}
-              {USE_LIVE ? (
+              {/* Build only appears once Venus has gathered the essentials (buildReady) — she leads
+                  the interview first. Then we extract the brand from the transcript on demand. */}
+              {USE_LIVE && buildReady ? (
                 <Pressable
                   onPress={live.finalize}
                   disabled={live.finalizing}
@@ -1435,6 +1448,7 @@ export default function StudioScreen() {
           onVoice={() => setKeyboardMode(false)}
           onFinalize={live.finalize}
           finalizing={live.finalizing}
+          canBuild={buildReady}
           p={p}
           bg={BG}
         />

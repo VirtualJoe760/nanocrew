@@ -119,6 +119,12 @@ models are simply unreliable at tool use.
 So we finalize **deterministically** instead of waiting on the tool:
 - `LiveVoiceSession` accumulates the spoken conversation (`transcript[]`, `getTranscript()`) from the
   input/output transcription events.
+- **Build is gated — Venus leads first.** The button is hidden until she's gathered the essentials
+  (name + products + design style). The prompt tells her not to wrap early and to say "ready to build
+  your brand" only once she has them; the studio latches `buildReady` when that cue lands (regex on her
+  committed turns, floored at 3 creator answers, with a 6-answer safety net so it always eventually
+  appears). Both the orb's finalize pill and the chat header's "✓ Build" respect `buildReady` /
+  `canBuild`. This stops a creator from building from an empty/thin conversation.
 - A **"✓ Build my brand"** button in the interview calls `useLiveVoice.finalize()`, which POSTs the
   transcript to **`POST /api/extract-brand`** — a **text** model (`gemini-2.5-flash`) running the same
   `interviewSystem` + `parseTurn` as `/api/interview`, which reliably returns the structured

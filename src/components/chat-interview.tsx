@@ -23,6 +23,7 @@ export function ChatInterview({
   onVoice,
   onFinalize,
   finalizing,
+  canBuild,
   p,
   bg,
 }: {
@@ -35,6 +36,8 @@ export function ChatInterview({
   onVoice: () => void;
   onFinalize: () => void;
   finalizing: boolean;
+  /** Build only appears once Venus has gathered the essentials. */
+  canBuild: boolean;
   p: Palette;
   bg: string;
 }) {
@@ -79,9 +82,14 @@ export function ChatInterview({
           <ThemedText type="code" style={{ color: p.dim }}>🎙 Voice</ThemedText>
         </Pressable>
         <ThemedText type="smallBold" style={{ color: p.ink }}>{aiName}</ThemedText>
-        <Pressable onPress={onFinalize} disabled={finalizing} hitSlop={10} style={[s.buildBtn, { backgroundColor: p.accent, opacity: finalizing ? 0.5 : 1 }]}>
-          {finalizing ? <ActivityIndicator size="small" color={bg} /> : <ThemedText type="code" style={{ color: bg }}>✓ Build</ThemedText>}
-        </Pressable>
+        {canBuild ? (
+          <Pressable onPress={onFinalize} disabled={finalizing} hitSlop={10} style={[s.buildBtn, { backgroundColor: p.accent, opacity: finalizing ? 0.5 : 1 }]}>
+            {finalizing ? <ActivityIndicator size="small" color={bg} /> : <ThemedText type="code" style={{ color: bg }}>✓ Build</ThemedText>}
+          </Pressable>
+        ) : (
+          // Keep the title centered before Build unlocks.
+          <View style={s.voiceBtn} />
+        )}
       </View>
 
       {/* Messages */}
