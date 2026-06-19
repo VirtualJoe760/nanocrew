@@ -69,7 +69,8 @@ export default function Terms() {
         <p style={styles.p}>You agree not to use the Service to:</p>
         <ul style={styles.ul}>
           <li style={styles.li}>infringe intellectual-property, privacy, or publicity rights;</li>
-          <li style={styles.li}>create, generate, or sell <b>sexually explicit content or graphic violence/gore</b> — these are prohibited on the Service and on any product, and our generation tools are configured to block them;</li>
+          <li style={styles.li}>create, generate, or sell content that is unlawful where you make or sell it — and, without exception, <b>never any sexual content involving minors</b>, which we hard-block and report as required by law;</li>
+          <li style={styles.li}>You own and are responsible for your designs. Mature or artistic content, including nudity, is permitted by Nano Crew, but you remain responsible for all applicable rights, age restrictions, and laws — and our AI provider, our print manufacturer, payment processors, and the app stores each enforce their own content policies and may decline to generate, print, or sell a given design. We block only pornographic content (explicit sexual acts) and high-severity graphic gore;</li>
           <li style={styles.li}>create or sell unlawful, hateful, harassing, deceptive, or infringing products or content;</li>
           <li style={styles.li}>impersonate others or misrepresent your affiliation;</li>
           <li style={styles.li}>abuse, reverse-engineer, overload, or attempt to disrupt or gain unauthorized access to the Service;</li>

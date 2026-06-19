@@ -92,7 +92,8 @@ export async function POST(req: Request) {
     return Response.json({ error: 'prompt or image is required' }, { status: 400 });
   }
 
-  // Reject sexual / graphic-violence prompts before spending credits (Terms §5).
+  // Pre-screen only the narrow prohibited set — CSAM, pornographic acts, high-severity gore — before
+  // spending credits (Terms §5). Nudity, seductive/edgy, weapons, and action imagery are allowed.
   try {
     assertSafePrompt(prompt);
   } catch (e) {

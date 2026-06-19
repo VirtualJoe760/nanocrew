@@ -44,9 +44,13 @@ assets. Generation is credit-gated and Nano-Banana-backed.
 
 **Content safety (`src/lib/content-safety.ts`).** Every image route that takes a creator's free-text
 prompt screens it through `assertSafePrompt()` **before charging credits or hitting the model**, and
-spreads `IMAGE_SAFETY_SETTINGS` into the Gemini `config` (defense in depth). Two categories are
-hard-prohibited — **sexual/explicit content** and **graphic violence/gore** — matching Terms §5; a
-blocked prompt returns HTTP 422 with a friendly message and costs no credits. Wired into
+spreads `IMAGE_SAFETY_SETTINGS` into the Gemini `config` (`BLOCK_ONLY_HIGH`, defense in depth). The
+policy is deliberately PERMISSIVE — creators own their designs, so nudity, seductive/edgy imagery,
+weapons, and action scenes all generate. Only three things are blocked: **CSAM** (any sexual/nude
+context involving a minor — a hard block, never a policy toggle, also blocked server-side by Google),
+**genuinely pornographic** prompts (explicit sex acts), and **high-severity graphic gore** (a person
+being killed/mutilated — not action-hero imagery). Matches Terms §5; a blocked prompt returns HTTP
+422 with a message and costs no credits. Wired into
 `/api/generate`, `/api/merge`, `/api/composite`, `/api/tryon`, and `/api/enhance` (the prompt
 expander). `composite`/`tryon` carry only the safetySettings since their inputs are an already-vetted
 design + a garment/selfie (no free-text prompt). This is deliberately narrow — we keep the print
