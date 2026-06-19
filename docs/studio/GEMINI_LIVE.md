@@ -101,6 +101,13 @@ The studio passes `userName` (from `user_metadata.name`/`full_name`) and `firstT
 (who she is + that she'll build their brand and store). There is **no AI/voice picker** — Venus on
 Gemini is the only consultant, so a new creator lands straight on the interview primer.
 
+**She's only vocal in her view.** One declarative rule drives the session lifecycle: it runs *iff*
+`mode === 'interview' && !brand && !paused && focused && appActive`. `focused` comes from
+`useFocusEffect` (nav focus — leaving the Studio tab stops her) and `appActive` from an `AppState`
+listener (backgrounding via home button / app switcher stops her, even though nav focus hasn't
+changed). Keyboard mode keeps the session but mutes it. So Venus never speaks on another tab, in the
+background, on the dashboard, or once a brand is compiled.
+
 ## Finalize: extract from the transcript, NOT the `save_brand` tool call
 
 **The native-audio Live model does not reliably emit function calls.** The `scripts/live-flow-test.mjs`

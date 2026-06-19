@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
+  AppState,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
@@ -678,6 +679,10 @@ export default function StudioScreen() {
   // Venus never talks over another tab, and so an unprepared user can stop her mid-question.
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
+  // Venus is vocal ONLY when her view is on screen AND the app is foregrounded. These two flags are
+  // the single source of truth the lifecycle effect uses to start/stop the Live session.
+  const [focused, setFocused] = useState(false);
+  const [appActive, setAppActive] = useState(true);
 
   // ---- Gemini Live wiring (replaces the turn-based voice machine when USE_LIVE; GEMINI_LIVE.md) ----
   // Name from the auth provider / signup form (first name only is used in her greeting); on a brand's
@@ -705,15 +710,24 @@ export default function StudioScreen() {
   useEffect(() => { if (USE_LIVE) setLine(live.venusText); }, [live.venusText]);
   useEffect(() => { if (USE_LIVE) setHeard(live.userText); }, [live.userText]);
   useEffect(() => { if (USE_LIVE && live.error) setError(live.error); }, [live.error]);
-  // Start the session in the interview; stop on leaving / pause / brand-ready. start() is idempotent.
+  // The ONE rule for when Venus is live: her view is on screen (interview, focused, app foregrounded)
+  // and not paused / already done. Anything else → stop, so she's never vocal outside her view.
+  // start()/stop() are idempotent.
   useEffect(() => {
     if (!USE_LIVE) return;
-    if (mode === 'interview' && !brand && !paused) live.start();
+    if (mode === 'interview' && !brand && !paused && focused && appActive) live.start();
     else live.stop();
-  }, [mode, brand, paused, live.start, live.stop]);
+  }, [mode, brand, paused, focused, appActive, live.start, live.stop]);
   // Keyboard/chat mode mutes the mic so Venus doesn't react to the room while you type. Re-applied on
   // state changes too, so it sticks even if the session (re)connects after the mode flips.
   useEffect(() => { if (USE_LIVE) live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
+  // App foreground state feeds the lifecycle rule above — backgrounding (home button / app switcher)
+  // silences her even though nav focus hasn't changed.
+  useEffect(() => {
+    setAppActive(AppState.currentState === 'active');
+    const sub = AppState.addEventListener('change', (st) => setAppActive(st === 'active'));
+    return () => sub.remove();
+  }, []);
   // Orb amplitude: no expo-audio metering on the Live path — drive a gentle state-based pulse.
   useEffect(() => {
     if (!USE_LIVE) return;
@@ -866,27 +880,24 @@ export default function StudioScreen() {
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
-      if (USE_LIVE) {
-        // Resume the Live session when returning to a focused interview.
-        if (mode === 'interview' && !brand && !paused) live.start();
-      } else if (session && voiceId && mode === 'interview' && !started.current) {
+      setFocused(true); // drives the Live lifecycle rule — she resumes only on her focused view
+      if (!USE_LIVE && session && voiceId && mode === 'interview' && !started.current) {
         started.current = true;
         void turn({ init: true });
       }
       return () => {
         focusedRef.current = false;
-        if (USE_LIVE) {
-          live.stop(); // never let Venus keep talking on a tab the user left
-          return;
+        setFocused(false); // leaving the screen stops the Live session via the lifecycle effect
+        if (!USE_LIVE) {
+          try {
+            player.pause();
+          } catch {}
+          recorder.stop().catch(() => {});
+          busyRef.current = false;
+          setState('idle');
         }
-        try {
-          player.pause();
-        } catch {}
-        recorder.stop().catch(() => {});
-        busyRef.current = false;
-        setState('idle');
       };
-    }, [session, voiceId, mode, turn, player, recorder, brand, paused, live.start, live.stop]),
+    }, [session, voiceId, mode, turn, player, recorder]),
   );
 
   // Not ready yet — back out of the primer to the brand dashboard (a returning creator). A brand-new
