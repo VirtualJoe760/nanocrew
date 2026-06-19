@@ -1,10 +1,13 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
+
+import LiveTest from './live-test';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -111,6 +114,7 @@ export default function AccountScreen() {
   const [phone, setPhone] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [isSignup, setIsSignup] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false); // TEMP: Gemini Live spike modal
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -284,6 +288,12 @@ export default function AccountScreen() {
                   <NCMark size={22} color={theme.text} />
                   <ThemedText type="code" themeColor="textSecondary" style={styles.eyebrow}>ACCOUNT</ThemedText>
                 </View>
+
+                {/* TEMP dev-only entry to the Gemini Live spike (gemini-live branch) — modal, since
+                    the root layout is tabs-only and a /live-test route can't be pushed. */}
+                <Pressable onPress={() => setLiveOpen(true)} style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: theme.tint, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }}>
+                  <ThemedText type="code" themeColor="tint">🎙 Live voice test (dev)</ThemedText>
+                </Pressable>
 
                 {/* Profile header */}
                 <View style={styles.profile}>
@@ -516,6 +526,14 @@ export default function AccountScreen() {
       {session ? <EarningsCockpit visible={showEarnings} onClose={() => setShowEarnings(false)} token={session.access_token} /> : null}
       {session ? <Paywall visible={showPaywall} onClose={() => setShowPaywall(false)} token={session.access_token} reason="manage" /> : null}
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
+      <Modal visible={liveOpen} animationType="slide" onRequestClose={() => setLiveOpen(false)} presentationStyle="fullScreen">
+        <View style={{ flex: 1, backgroundColor: '#08080a' }}>
+          <Pressable onPress={() => setLiveOpen(false)} style={{ position: 'absolute', top: 56, right: 20, zIndex: 10 }} hitSlop={16}>
+            <ThemedText type="code" style={{ color: '#9396a0' }}>close ✕</ThemedText>
+          </Pressable>
+          {liveOpen ? <LiveTest /> : null}
+        </View>
+      </Modal>
     </View>
   );
 }

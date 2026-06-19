@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
+import { GradientSlider } from '@/components/gradient-slider';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
+import { HEX, HUE_STOPS, hexToHsl, hslToHex } from '@/lib/color';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // The mini-CMS: change a brand site's words, colors, and fonts directly — instant, no forge run and
@@ -45,107 +46,7 @@ const FONTS: { key: string; label: string }[] = [
   { key: 'mono', label: 'Mono' },
 ];
 
-const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-
-// The full rainbow, for the hue track.
-const HUE_STOPS = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000'];
-
-// Hex ⇄ HSL so the picker is a continuous SCALE (drag anywhere on the spectrum → a true hex code),
-// not a fixed set of swatches. The hex text field stays the precise readout / entry.
-function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
-  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return null;
-  let h = m[1];
-  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
-  const r = parseInt(h.slice(0, 2), 16) / 255;
-  const g = parseInt(h.slice(2, 4), 16) / 255;
-  const b = parseInt(h.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const d = max - min;
-  let hue = 0;
-  let sat = 0;
-  if (d !== 0) {
-    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    if (max === r) hue = (g - b) / d + (g < b ? 6 : 0);
-    else if (max === g) hue = (b - r) / d + 2;
-    else hue = (r - g) / d + 4;
-    hue *= 60;
-  }
-  return { h: Math.round(hue), s: Math.round(sat * 100), l: Math.round(l * 100) };
-}
-
-function hslToHex(h: number, s: number, l: number): string {
-  const sl = s / 100;
-  const ll = l / 100;
-  const c = (1 - Math.abs(2 * ll - 1)) * sl;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = ll - c / 2;
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  if (h < 60) { r = c; g = x; }
-  else if (h < 120) { r = x; g = c; }
-  else if (h < 180) { g = c; b = x; }
-  else if (h < 240) { g = x; b = c; }
-  else if (h < 300) { r = x; b = c; }
-  else { r = c; b = x; }
-  const to = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, '0');
-  return `#${to(r)}${to(g)}${to(b)}`;
-}
-
-// One draggable gradient bar. `stops` paints the spectrum; dragging maps the touch x → 0..1 → value.
-function GradientSlider({
-  id,
-  stops,
-  value,
-  onChange,
-  pal,
-}: {
-  id: string;
-  stops: string[];
-  value: number; // 0..1
-  onChange: (t: number) => void;
-  pal: StudioPalette;
-}) {
-  const [w, setW] = useState(0);
-  const wRef = useRef(0);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-  wRef.current = w;
-  const responder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: (e) => {
-        const width = wRef.current;
-        if (width > 0) onChangeRef.current(Math.max(0, Math.min(1, e.nativeEvent.locationX / width)));
-      },
-      onPanResponderMove: (e) => {
-        const width = wRef.current;
-        if (width > 0) onChangeRef.current(Math.max(0, Math.min(1, e.nativeEvent.locationX / width)));
-      },
-    }),
-  ).current;
-  const thumbX = Math.max(0, Math.min(1, value)) * w;
-  return (
-    <View style={{ height: 26, justifyContent: 'center' }} onLayout={(e) => setW(e.nativeEvent.layout.width)} {...responder.panHandlers}>
-      <Svg width="100%" height={22} style={{ borderRadius: 11 }}>
-        <Defs>
-          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="0">
-            {stops.map((c, i) => (
-              <Stop key={i} offset={stops.length === 1 ? 0 : i / (stops.length - 1)} stopColor={c} />
-            ))}
-          </LinearGradient>
-        </Defs>
-        <Rect x={0} y={0} width="100%" height={22} rx={11} fill={`url(#${id})`} />
-      </Svg>
-      <View pointerEvents="none" style={{ position: 'absolute', left: thumbX - 9, width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#fff', backgroundColor: 'transparent', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } }} />
-    </View>
-  );
-}
+// Color helpers + the draggable gradient bar are shared with the brand-review picker.
 
 export function SiteEditor({
   visible,
@@ -329,11 +230,11 @@ export function SiteEditor({
                       return (
                         <View style={styles.pickerBox}>
                           <ThemedText type="code" style={styles.pickerCue}>Hue</ThemedText>
-                          <GradientSlider id={`${f.key}-h`} pal={pal} stops={HUE_STOPS} value={hsl.h / 360} onChange={(t) => set({ h: Math.round(t * 360) })} />
+                          <GradientSlider id={`${f.key}-h`} stops={HUE_STOPS} value={hsl.h / 360} onChange={(t) => set({ h: Math.round(t * 360) })} />
                           <ThemedText type="code" style={styles.pickerCue}>Saturation</ThemedText>
-                          <GradientSlider id={`${f.key}-s`} pal={pal} stops={[hslToHex(hsl.h, 0, hsl.l), hslToHex(hsl.h, 100, hsl.l)]} value={hsl.s / 100} onChange={(t) => set({ s: Math.round(t * 100) })} />
+                          <GradientSlider id={`${f.key}-s`} stops={[hslToHex(hsl.h, 0, hsl.l), hslToHex(hsl.h, 100, hsl.l)]} value={hsl.s / 100} onChange={(t) => set({ s: Math.round(t * 100) })} />
                           <ThemedText type="code" style={styles.pickerCue}>Brightness</ThemedText>
-                          <GradientSlider id={`${f.key}-l`} pal={pal} stops={['#000000', hslToHex(hsl.h, hsl.s, 50), '#ffffff']} value={hsl.l / 100} onChange={(t) => set({ l: Math.round(t * 100) })} />
+                          <GradientSlider id={`${f.key}-l`} stops={['#000000', hslToHex(hsl.h, hsl.s, 50), '#ffffff']} value={hsl.l / 100} onChange={(t) => set({ l: Math.round(t * 100) })} />
                         </View>
                       );
                     })() : null}

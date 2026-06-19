@@ -53,13 +53,20 @@ She ends by emitting a `BrandResult` (and a spoken closing). The shape that ever
 consumes (`src/lib/interview.ts`):
 
 - identity: `name`, `tagline`, `mission`, `audience`, `voice`, `story`, `vibeKeywords`
-- `designStyle`: `minimalist | bold | elegant | extravagant` → **picks the template**
+- `designStyle`: `minimalist | bold | elegant | extravagant | street` → **picks the template**
 - `designSystem`: `palette` (exactly 5 roled hexes), `typography`, `texture`, `motion`
 - `products` and `logo.direction`
 - **`siteNotes`** — the creator's site wishes kept **verbatim** ("a slideshow up top", "a video
   behind the logo"). These are the only freeform layout intent that survives into the build. **Venus
   translates them to concrete blocks** via the template's `VOCABULARY.md` when she authors the build
   brief (`authorBrandBrief`) — the forge receives named blocks, not the creator's loose words.
+
+**The creator reviews before committing.** The `BrandResult` lands on the editable **BRAND COMPILED**
+screen (`src/components/brand-review.tsx`), where they can tweak the **name, tagline, story, and full
+palette** (tap a swatch → the shared gradient hex picker) and **switch website templates** from a
+horizontal picker that renders all 5 templates as live mini-mockups painted in the brand's own colors.
+Edits mutate the `BrandResult` in place, so whatever they approve is exactly what `createStore` sends.
+Only on **Create my store** is the row created.
 
 The store row is created and `provisionStorefront()` is fired. (A brand that launched shop-only on
 Starter can add a website later via `POST /api/creator/build-site` — a Pro+ feature — which rebuilds

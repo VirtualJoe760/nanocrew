@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
@@ -216,7 +216,7 @@ export function StudioDashboard({
 // Static (theme-independent) layout bits.
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  scroll: { paddingBottom: Spacing.six, gap: Spacing.four },
+  scroll: { paddingBottom: BottomTabInset + Spacing.six, gap: Spacing.four },
   venusRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingTop: Spacing.two },
   thumbFallback: { alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
   dots: { position: 'absolute', bottom: Spacing.three, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 5 },

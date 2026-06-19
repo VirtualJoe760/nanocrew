@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
+  AppState,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   useColorScheme,
   View,
 } from 'react-native';
@@ -41,17 +41,25 @@ import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
 
+import { BrandReview } from '@/components/brand-review';
+import { ChatInterview } from '@/components/chat-interview';
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
+import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
 import type { BrandResult, ChatMessage, TimedWord } from '@/lib/interview';
-import { AI_VOICES, DEFAULT_VOICE, type AiVoice } from '@/lib/voices';
+import { DEFAULT_VOICE } from '@/lib/voices';
 
 const VOICE_KEY = 'nanocrew.voiceId';
+
+// Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
+// Flip to false to fall back to the legacy turn-based /api/voice flow.
+const USE_LIVE = true;
+const LIVE_VOICE = 'Aoede'; // warm Gemini voice — Venus's single voice (no picker)
 
 // The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
 // counter-rotating rings, digital rain behind — talks you through building your brand.
@@ -573,8 +581,6 @@ export default function StudioScreen() {
   // else goes straight to their consultant.
   const [voiceId, setVoiceId] = useState<string | null>(null);
   const [voiceResolved, setVoiceResolved] = useState(false);
-  const [needsSelection, setNeedsSelection] = useState(false);
-  const [previewing, setPreviewing] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
@@ -583,7 +589,7 @@ export default function StudioScreen() {
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
   // get started), returning creators see their dashboard, and the AI entity only
   // runs in 'interview'. 'loading' until we know which.
-  const [mode, setMode] = useState<'loading' | 'cta' | 'primer' | 'interview' | 'dashboard'>('loading');
+  const [mode, setMode] = useState<'loading' | 'primer' | 'interview' | 'dashboard'>('loading');
 
   useEffect(() => {
     if (!session) return;
@@ -605,10 +611,9 @@ export default function StudioScreen() {
           });
           const d = (await r.json()) as { stores?: unknown[] };
           if (!alive) return;
-          if ((d.stores?.length ?? 0) > 0) {
-            setVoiceId(DEFAULT_VOICE.id);
-            setHasStore(true);
-          } else setNeedsSelection(true);
+          // Venus (Gemini) is the only consultant now — no voice picker. Always use the default.
+          setVoiceId(DEFAULT_VOICE.id);
+          setHasStore((d.stores?.length ?? 0) > 0);
         }
       } catch {
         if (alive) setVoiceId(DEFAULT_VOICE.id); // never block the studio on a lookup
@@ -669,12 +674,88 @@ export default function StudioScreen() {
 
   // Keyboard mode: type instead of talk (noisy environments). Her voice still replies.
   const [keyboardMode, setKeyboardMode] = useState(false);
-  const [typed, setTyped] = useState('');
 
   // Paused = the user explicitly paused (or the tab blurred). Gates ALL playback + listening so
   // Venus never talks over another tab, and so an unprepared user can stop her mid-question.
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
+  // Venus is vocal ONLY when her view is on screen AND the app is foregrounded. These two flags are
+  // the single source of truth the lifecycle effect uses to start/stop the Live session.
+  const [focused, setFocused] = useState(false);
+  const [appActive, setAppActive] = useState(true);
+
+  // ---- Gemini Live wiring (replaces the turn-based voice machine when USE_LIVE; GEMINI_LIVE.md) ----
+  // Name from the auth provider / signup form (first name only is used in her greeting); on a brand's
+  // very first creation (no stores yet) Venus introduces herself.
+  const creatorName =
+    (session?.user?.user_metadata?.name as string | undefined) ??
+    (session?.user?.user_metadata?.full_name as string | undefined) ??
+    undefined;
+  const live = useLiveVoice({
+    accessToken: session?.access_token,
+    userName: creatorName,
+    firstTime: !hasStore,
+    voiceName: LIVE_VOICE,
+    onBrand: (b, transcript) => { setBrand(b); if (transcript?.length) messages.current = transcript; },
+  });
+  // Mirror the Live session into the existing orb/caption state so the render is unchanged.
+  useEffect(() => {
+    if (!USE_LIVE) return;
+    const m: Record<string, EntityState> = {
+      connecting: 'thinking', thinking: 'thinking', listening: 'listening',
+      speaking: 'speaking', idle: 'idle', error: 'idle',
+    };
+    setState(m[live.state] ?? 'idle');
+  }, [live.state]);
+  useEffect(() => { if (USE_LIVE) setLine(live.venusText); }, [live.venusText]);
+  useEffect(() => { if (USE_LIVE) setHeard(live.userText); }, [live.userText]);
+  useEffect(() => { if (USE_LIVE && live.error) setError(live.error); }, [live.error]);
+  // Build is GATED: Venus gathers the essentials first, then invites them to build — that's when the
+  // button appears. We latch "ready" when she signals it (she's prompted to say "ready to build your
+  // brand" once she has a name, products, and a style), floored at 3 answers; a 6-answer safety net
+  // ensures the button always eventually appears. Resets when a fresh interview clears the transcript.
+  const [buildReady, setBuildReady] = useState(false);
+  useEffect(() => {
+    if (!live.messages.length) { setBuildReady(false); return; }
+    if (buildReady) return;
+    const userTurns = live.messages.filter((m) => m.role === 'user').length;
+    const lastVenus = [...live.messages].reverse().find((m) => m.role === 'assistant')?.text ?? '';
+    const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we)\s+need|got everything|let'?s build|time to build|shall we build)\b/i;
+    if (userTurns >= 6 || (userTurns >= 3 && cue.test(lastVenus))) setBuildReady(true);
+  }, [live.messages, buildReady]);
+  // The ONE rule for when Venus is live: her view is on screen (interview, focused, app foregrounded)
+  // and not paused / already done. Anything else → stop, so she's never vocal outside her view.
+  // start()/stop() are idempotent.
+  useEffect(() => {
+    if (!USE_LIVE) return;
+    // Pause is a VOICE concept (stop her talking over you). In text/chat mode it must NOT gate the
+    // session, or typed turns get no reply ("chat not completing"). So: run when not paused, OR when
+    // in keyboard mode regardless of pause.
+    const inHerView = mode === 'interview' && !brand && focused && appActive;
+    if (inHerView && (keyboardMode || !paused)) live.start();
+    else live.stop();
+  }, [mode, brand, paused, keyboardMode, focused, appActive, live.start, live.stop]);
+  // Keyboard/chat mode mutes the mic so Venus doesn't react to the room while you type. Re-applied on
+  // state changes too, so it sticks even if the session (re)connects after the mode flips.
+  useEffect(() => { if (USE_LIVE) live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
+  // App foreground state feeds the lifecycle rule above — backgrounding (home button / app switcher)
+  // silences her even though nav focus hasn't changed.
+  useEffect(() => {
+    setAppActive(AppState.currentState === 'active');
+    const sub = AppState.addEventListener('change', (st) => setAppActive(st === 'active'));
+    return () => sub.remove();
+  }, []);
+  // Orb amplitude: no expo-audio metering on the Live path — drive a gentle state-based pulse.
+  useEffect(() => {
+    if (!USE_LIVE) return;
+    if (state === 'speaking' || state === 'listening') {
+      level.value = withRepeat(withSequence(withTiming(0.6, { duration: 480 }), withTiming(0.18, { duration: 480 })), -1, true);
+    } else {
+      cancelAnimation(level);
+      level.value = withTiming(0, { duration: 400 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   const busyRef = useRef(false);
   const lastTurnEmptyRef = useRef(false);
@@ -798,13 +879,15 @@ export default function StudioScreen() {
     setMode((m) => {
       if (m === 'interview' || m === 'primer') return m; // never yank the user out of an in-progress flow
       if (hasStore) return 'dashboard';
-      if (m === 'loading') return 'cta';
+      if (m === 'loading') return 'primer';
       return m;
     });
   }, [voiceResolved, hasStore]);
 
   // The greeting only fires in interview mode (after Get started / Build a new brand).
+  // On the Live path, Venus greets via the session's setupComplete — skip the turn-based init.
   useEffect(() => {
+    if (USE_LIVE) return;
     if (mode === 'interview' && session && voiceId && focusedRef.current && !started.current) {
       started.current = true;
       void turn({ init: true });
@@ -814,31 +897,29 @@ export default function StudioScreen() {
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
-      if (session && voiceId && mode === 'interview' && !started.current) {
+      setFocused(true); // drives the Live lifecycle rule — she resumes only on her focused view
+      if (!USE_LIVE && session && voiceId && mode === 'interview' && !started.current) {
         started.current = true;
         void turn({ init: true });
       }
       return () => {
         focusedRef.current = false;
-        try {
-          player.pause();
-        } catch {}
-        recorder.stop().catch(() => {});
-        busyRef.current = false;
-        setState('idle');
+        setFocused(false); // leaving the screen stops the Live session via the lifecycle effect
+        if (!USE_LIVE) {
+          try {
+            player.pause();
+          } catch {}
+          recorder.stop().catch(() => {});
+          busyRef.current = false;
+          setState('idle');
+        }
       };
     }, [session, voiceId, mode, turn, player, recorder]),
   );
 
-  const chooseVoice = useCallback((v: AiVoice) => {
-    AsyncStorage.setItem(VOICE_KEY, v.id).catch(() => {});
-    setNeedsSelection(false);
-    setVoiceId(v.id); // just the pick — the interview waits for "Get started"
-  }, []);
-
-  // New creator pressed Get started — show the primer first (what Venus will ask), so the AI
-  // never starts talking before the user knows what's coming.
-  const onGetStarted = useCallback(() => setMode('primer'), []);
+  // Not ready yet — back out of the primer to the brand dashboard (a returning creator). A brand-new
+  // creator lands directly on the primer, so the Back link only shows when there's a dashboard.
+  const onPrimerBack = useCallback(() => setMode('dashboard'), []);
 
   // Primer choices. Voice (recommended) requests the mic HERE — the only place we prompt — then
   // starts the spoken interview. Text starts the same interview in keyboard mode (no mic needed);
@@ -855,6 +936,8 @@ export default function StudioScreen() {
   }, []);
   const startText = useCallback(() => {
     setKeyboardMode(true);
+    setPaused(false); // entering the chat always resumes — pause is a voice-only concept
+    pausedRef.current = false;
     setMode('interview');
   }, []);
 
@@ -874,6 +957,18 @@ export default function StudioScreen() {
     });
   }, [player, recorder]);
 
+  // Orb tap on the Live path: if the last connect failed (watchdog tripped), a single tap retries;
+  // otherwise it's the pause/resume toggle.
+  const onOrbPress = useCallback(() => {
+    if (USE_LIVE && live.error) {
+      setError(null);
+      if (paused) { pausedRef.current = false; setPaused(false); }
+      live.start();
+      return;
+    }
+    togglePause();
+  }, [live.error, live.start, paused, togglePause]);
+
   // Returning creator wants another brand — reset the interview and start fresh.
   const onNewBrand = useCallback(() => {
     started.current = false;
@@ -882,8 +977,8 @@ export default function StudioScreen() {
     setCreated(null);
     setHeard('');
     setLine('');
-    setMode(voiceId ? 'primer' : 'cta');
-  }, [voiceId]);
+    setMode('primer');
+  }, []);
 
   // Just finished creating a brand — graduate from the compiled/created screen back to the brand
   // picker (dashboard). Bump dashKey so the freshly created brand shows up in the list.
@@ -898,27 +993,6 @@ export default function StudioScreen() {
     setDashKey((k) => k + 1);
     setMode('dashboard');
   }, []);
-
-  const previewVoice = useCallback(
-    async (v: AiVoice) => {
-      if (!session || previewing) return;
-      setPreviewing(v.id);
-      try {
-        const r = await fetch(apiUrl('/api/voice'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ say: `Hi, I'm ${v.name}. Let's build your brand together.`, voiceId: v.id }),
-        });
-        const d = (await r.json()) as { speech?: string };
-        if (d.speech) await playSpeech(d.speech);
-      } catch {
-        // preview is best-effort
-      } finally {
-        setPreviewing(null);
-      }
-    },
-    [session, previewing, playSpeech],
-  );
 
   const sendRecording = useCallback(async () => {
     if (busyRef.current) return;
@@ -1019,24 +1093,21 @@ export default function StudioScreen() {
   }, [playerStatus.didJustFinish]);
 
   const toggleKeyboard = useCallback(() => {
-    setKeyboardMode((k) => {
-      const next = !k;
-      if (next && state === 'listening') {
-        recorder.stop().catch(() => {});
-        setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-        setState('idle');
-      }
-      return next;
-    });
-  }, [state, recorder]);
+    const entering = !keyboardMode;
+    setKeyboardMode(entering);
+    if (entering) {
+      // Entering the chat always resumes the session — a pause set in voice must not leave the chat
+      // dead (no replies). Pause is voice-only.
+      setPaused(false);
+      pausedRef.current = false;
+    }
+    if (!USE_LIVE && entering && state === 'listening') {
+      recorder.stop().catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      setState('idle');
+    }
+  }, [keyboardMode, state, recorder]);
 
-  const sendTyped = useCallback(() => {
-    const t = typed.trim();
-    if (!t || state === 'thinking') return;
-    if (state === 'speaking') player.pause();
-    setTyped('');
-    void turn({ text: t });
-  }, [typed, state, player, turn]);
 
 
   // Word-by-word subtitles synced to the speech itself: ElevenLabs character timestamps
@@ -1111,8 +1182,17 @@ export default function StudioScreen() {
     }
   }, [session, brand, playSpeech]);
 
-  const hint =
-    state === 'listening'
+  const hint = USE_LIVE
+    ? state === 'listening'
+      ? '[ listening — just talk ]'
+      : state === 'thinking'
+        ? '[ thinking… ]'
+        : state === 'speaking'
+          ? '[ Venus is speaking — tap to pause ]'
+          : paused
+            ? '[ paused — tap the mark to resume ]'
+            : '[ connecting… ]'
+    : state === 'listening'
       ? '[ recording — release to send ]'
       : state === 'thinking'
         ? '[ thinking… ]'
@@ -1127,7 +1207,7 @@ export default function StudioScreen() {
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
   // comfortable gap so the karaoke captions never dip under it.
   const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
-  const aiName = AI_VOICES.find((v) => v.id === voiceId)?.name ?? 'Venus';
+  const aiName = 'Venus'; // the only consultant — no picker
 
   return (
     <View style={[styles.container, { backgroundColor: p.bg }]}>
@@ -1154,14 +1234,14 @@ export default function StudioScreen() {
                   <BrandsIcon />
                 </Pressable>
               ) : null}
-              {mode === 'interview' ? (
+              {mode === 'interview' && !keyboardMode ? (
                 <Pressable onPress={togglePause} hitSlop={10} accessibilityLabel={paused ? 'Resume' : 'Pause'}>
                   <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 16 }}>
                     {paused ? '▶' : '❚❚'}
                   </ThemedText>
                 </Pressable>
               ) : null}
-              {mode === 'interview' ? (
+              {mode === 'interview' && !keyboardMode ? (
                 <Pressable onPress={toggleKeyboard} hitSlop={10}>
                   <KeyboardIcon active={keyboardMode} />
                 </Pressable>
@@ -1232,125 +1312,24 @@ export default function StudioScreen() {
             />
           </>
         ) : brand ? (
-          <ScrollView
-            style={styles.fill}
-            contentContainerStyle={styles.brandScroll}
-            showsVerticalScrollIndicator={false}
-          >
-            <ThemedText type="code" style={styles.brandEyebrow}>
-              {'// BRAND COMPILED'}
-            </ThemedText>
-            {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="cover" /> : null}
-            <ThemedText type="subtitle" style={[styles.white, { color: p.ink }]}>
-              {brand.name}
-            </ThemedText>
-            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-              {brand.tagline}
-            </ThemedText>
-            <View style={styles.paletteRow}>
-              {brand.designSystem.palette.map((p) => (
-                <View key={p.role} style={styles.swatchCol}>
-                  <View style={[styles.swatch, { backgroundColor: p.hex }]} />
-                  <ThemedText type="code" style={styles.swatchLabel}>
-                    {p.role}
-                  </ThemedText>
-                </View>
-              ))}
-            </View>
-            <View style={styles.chipsRow}>
-              {brand.vibeKeywords.map((k) => (
-                <View key={k} style={styles.chip}>
-                  <ThemedText type="code" style={styles.chipText}>
-                    {k}
-                  </ThemedText>
-                </View>
-              ))}
-            </View>
-            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-              {brand.story}
-            </ThemedText>
-            {created ? (
-              <>
-                <View style={[styles.createBtn, styles.createdBox]}>
-                  <ThemedText type="code" style={styles.green}>
-                    {'> store online · @' + created}
-                  </ThemedText>
-                  <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-                    Head to Design to start your first drop.
-                  </ThemedText>
-                </View>
-                <Pressable onPress={onFinishedBrand}>
-                  <View style={styles.createBtn}>
-                    <ThemedText type="smallBold" style={{ color: BG }}>
-                      Finished — view my brands
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              </>
-            ) : (
-              <Pressable onPress={createStore} disabled={creating}>
-                <View style={[styles.createBtn, { opacity: creating ? 0.5 : 1 }]}>
-                  {creating ? (
-                    <ActivityIndicator color={BG} />
-                  ) : (
-                    <ThemedText type="smallBold" style={{ color: BG }}>
-                      Create my store
-                    </ThemedText>
-                  )}
-                </View>
-              </Pressable>
-            )}
-          </ScrollView>
-        ) : mode === 'cta' ? (
-          <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
-            <ThemedText type="code" style={styles.brandEyebrow}>
-              {'// CHOOSE YOUR AI'}
-            </ThemedText>
-            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-              Your consultant guides the whole journey — hear them first, then get started.
-            </ThemedText>
-            {AI_VOICES.map((v) => (
-              <View key={v.id} style={[styles.voiceCard, voiceId === v.id && styles.voiceCardOn]}>
-                <View style={styles.voiceMeta}>
-                  <ThemedText type="subtitle" style={[styles.white, { color: p.ink }]}>
-                    {v.name}
-                  </ThemedText>
-                  <ThemedText type="code" style={styles.voiceVibe}>
-                    {v.vibe}
-                  </ThemedText>
-                </View>
-                <View style={styles.voiceActions}>
-                  <Pressable onPress={() => previewVoice(v)} disabled={!!previewing} hitSlop={6}>
-                    <View style={styles.voiceBtn}>
-                      {previewing === v.id ? (
-                        <ActivityIndicator size="small" color="#cdd1d9" />
-                      ) : (
-                        <ThemedText type="code" style={styles.green}>
-                          ▶ hear
-                        </ThemedText>
-                      )}
-                    </View>
-                  </Pressable>
-                  <Pressable onPress={() => chooseVoice(v)} hitSlop={6}>
-                    <View style={[styles.voiceBtn, styles.voiceSelect]}>
-                      <ThemedText type="code" style={{ color: BG }}>
-                        {voiceId === v.id ? '✓ picked' : 'select →'}
-                      </ThemedText>
-                    </View>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-            <Pressable onPress={onGetStarted} disabled={!voiceId}>
-              <View style={[styles.getStarted, { opacity: voiceId ? 1 : 0.4 }]}>
-                <ThemedText type="smallBold" style={{ color: BG }}>
-                  Get started →
-                </ThemedText>
-              </View>
-            </Pressable>
-          </ScrollView>
+          <BrandReview
+            brand={brand}
+            onChange={setBrand}
+            onCreate={createStore}
+            creating={creating}
+            created={created}
+            onFinished={onFinishedBrand}
+            logoUrl={logoUrl}
+            p={p}
+            bg={BG}
+          />
         ) : mode === 'primer' ? (
           <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
+            {hasStore ? (
+              <Pressable onPress={onPrimerBack} hitSlop={10} style={{ alignSelf: 'flex-start', marginBottom: Spacing.two }}>
+                <ThemedText type="code" style={{ color: p.dim }}>‹ Back</ThemedText>
+              </Pressable>
+            ) : null}
             <ThemedText type="code" style={styles.brandEyebrow}>
               {'// BEFORE WE START'}
             </ThemedText>
@@ -1359,7 +1338,7 @@ export default function StudioScreen() {
             </ThemedText>
             <ThemedText type="small" style={[styles.introBody, { color: p.dim, textAlign: 'left' }]}>
               On the next screen, {aiName} talks with you to design your brand — a quick back-and-forth.
-              Hold the mark to talk, release to send (or tap the keyboard to type). Have a rough idea of:
+              Just talk — Venus listens as you speak (or tap the keyboard to type). Have a rough idea of:
             </ThemedText>
             {[
               'Your brand name + what it stands for',
@@ -1393,6 +1372,9 @@ export default function StudioScreen() {
               </ThemedText>
             </Pressable>
           </ScrollView>
+        ) : keyboardMode ? (
+          // Keyboard mode renders as a full-screen overlay (below) — outside this KeyboardAvoidingView.
+          null
         ) : (
           <>
             <View style={styles.entityArea}>
@@ -1401,43 +1383,36 @@ export default function StudioScreen() {
                 p={p}
                 level={level}
                 state={state}
-                onPressIn={keyboardMode ? undefined : beginHold}
-                onPressOut={keyboardMode ? undefined : endHold}
-                onPress={keyboardMode ? () => setKeyboardMode(false) : undefined}
+                onPressIn={USE_LIVE ? undefined : beginHold}
+                onPressOut={USE_LIVE ? undefined : endHold}
+                onPress={USE_LIVE ? onOrbPress : undefined}
               />
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
-                {keyboardMode ? '[ keyboard mode — tap the mark for voice ]' : hint}
+                {hint}
               </ThemedText>
-              {!keyboardMode ? (
-                <Pressable onPress={togglePause} hitSlop={12} style={[styles.pausePill, { borderColor: paused ? p.accent : `${p.dim}66` }]}>
-                  <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 13, letterSpacing: 1 }}>
-                    {paused ? '▶  Resume' : '❚❚  Pause'}
-                  </ThemedText>
+              <Pressable onPress={togglePause} hitSlop={12} style={[styles.pausePill, { borderColor: paused ? p.accent : `${p.dim}66` }]}>
+                <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 13, letterSpacing: 1 }}>
+                  {paused ? '▶  Resume' : '❚❚  Pause'}
+                </ThemedText>
+              </Pressable>
+              {/* Build only appears once Venus has gathered the essentials (buildReady) — she leads
+                  the interview first. Then we extract the brand from the transcript on demand. */}
+              {USE_LIVE && buildReady ? (
+                <Pressable
+                  onPress={live.finalize}
+                  disabled={live.finalizing}
+                  hitSlop={10}
+                  style={[styles.finalizePill, { backgroundColor: p.accent, opacity: live.finalizing ? 0.6 : 1 }]}>
+                  {live.finalizing ? (
+                    <ActivityIndicator color={BG} />
+                  ) : (
+                    <ThemedText type="smallBold" style={{ color: BG }}>✓ Build my brand</ThemedText>
+                  )}
                 </Pressable>
               ) : null}
             </View>
-            {keyboardMode ? (
-              <View style={styles.typeRow}>
-                <TextInput
-                  value={typed}
-                  onChangeText={setTyped}
-                  placeholder="type your answer…"
-                  placeholderTextColor="#56575e"
-                  multiline
-                  style={styles.typeInput}
-                  onSubmitEditing={sendTyped}
-                />
-                <Pressable onPress={sendTyped} disabled={!typed.trim() || state === 'thinking'} hitSlop={8}>
-                  <View style={[styles.typeSend, { opacity: !typed.trim() || state === 'thinking' ? 0.4 : 1 }]}>
-                    <ThemedText type="code" style={{ color: BG }}>
-                      send
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              </View>
-            ) : null}
             <View style={styles.captions}>
-              {state === 'speaking' && words.length ? (
+              {!USE_LIVE && state === 'speaking' && words.length ? (
                 <ThemedText style={[styles.bigWord, { color: p.ink }]}>{words[wordIdx]}</ThemedText>
               ) : (
                 <>
@@ -1470,6 +1445,25 @@ export default function StudioScreen() {
           </Pressable>
         ) : null}
       </KeyboardAvoidingView>
+
+      {/* Keyboard mode = a full-screen chat window OVER the studio (its own keyboard/tab-bar insets,
+          text-only — her voice is muted). Rendered outside the KeyboardAvoidingView on purpose. */}
+      {session && mode === 'interview' && !brand && keyboardMode ? (
+        <ChatInterview
+          messages={live.messages}
+          streaming={live.venusText}
+          thinking={live.state === 'thinking' || live.state === 'connecting'}
+          aiName={aiName}
+          onSend={(t) => live.sendText(t)}
+          onVoice={() => setKeyboardMode(false)}
+          onExit={() => { setKeyboardMode(false); setMode(hasStore ? 'dashboard' : 'primer'); }}
+          onFinalize={live.finalize}
+          finalizing={live.finalizing}
+          canBuild={buildReady}
+          p={p}
+          bg={BG}
+        />
+      ) : null}
     </View>
   );
 }
@@ -1510,28 +1504,9 @@ const styles = StyleSheet.create({
   hint: { color: '#9396a0', letterSpacing: 1 },
   pausePill: { marginTop: Spacing.three, borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two, alignSelf: 'center' },
   stagedBanner: { borderWidth: 1, borderRadius: 12, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three, marginBottom: Spacing.three },
+  finalizePill: { marginTop: Spacing.two, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.three, alignSelf: 'center', minWidth: 180, alignItems: 'center' },
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },
-  typeInput: {
-    flex: 1,
-    minHeight: 42,
-    maxHeight: 110,
-    borderWidth: 1,
-    borderColor: '#26282d',
-    borderRadius: 4,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    color: '#dfe2e8',
-    fontFamily: MONO,
-    fontSize: 14,
-  },
-  typeSend: {
-    backgroundColor: '#cdd1d9',
-    borderRadius: 4,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
-  },
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.four, marginBottom: Spacing.six, minHeight: 96 },
   heard: { color: '#56575e', textAlign: 'center' },
@@ -1564,27 +1539,6 @@ const styles = StyleSheet.create({
   // Get started) is fully tappable and not intercepted by the bar.
   brandScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: BottomTabInset + Spacing.six },
   selectScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: BottomTabInset + Spacing.six },
-  voiceCard: {
-    borderWidth: 1,
-    borderColor: '#26282d',
-    borderRadius: 6,
-    padding: Spacing.three,
-    gap: Spacing.three,
-  },
-  voiceMeta: { gap: 2 },
-  voiceVibe: { color: '#9396a0' },
-  voiceActions: { flexDirection: 'row', gap: Spacing.two },
-  voiceBtn: {
-    borderWidth: 1,
-    borderColor: '#3a3d44',
-    borderRadius: 4,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    minWidth: 96,
-    alignItems: 'center',
-  },
-  voiceSelect: { backgroundColor: '#cdd1d9', borderColor: '#cdd1d9' },
-  voiceCardOn: { borderColor: '#cdd1d9' },
   getStarted: { backgroundColor: '#cdd1d9', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
   logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#26282d' },
   brandEyebrow: { color: '#9396a0' },
