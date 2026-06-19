@@ -51,7 +51,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
 import type { BrandResult, ChatMessage, TimedWord } from '@/lib/interview';
-import { AI_VOICES, DEFAULT_VOICE, type AiVoice } from '@/lib/voices';
+import { AI_VOICES, DEFAULT_VOICE } from '@/lib/voices';
 
 const VOICE_KEY = 'nanocrew.voiceId';
 
@@ -580,8 +580,6 @@ export default function StudioScreen() {
   // else goes straight to their consultant.
   const [voiceId, setVoiceId] = useState<string | null>(null);
   const [voiceResolved, setVoiceResolved] = useState(false);
-  const [needsSelection, setNeedsSelection] = useState(false);
-  const [previewing, setPreviewing] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
@@ -590,7 +588,7 @@ export default function StudioScreen() {
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
   // get started), returning creators see their dashboard, and the AI entity only
   // runs in 'interview'. 'loading' until we know which.
-  const [mode, setMode] = useState<'loading' | 'cta' | 'primer' | 'interview' | 'dashboard'>('loading');
+  const [mode, setMode] = useState<'loading' | 'primer' | 'interview' | 'dashboard'>('loading');
 
   useEffect(() => {
     if (!session) return;
@@ -612,10 +610,9 @@ export default function StudioScreen() {
           });
           const d = (await r.json()) as { stores?: unknown[] };
           if (!alive) return;
-          if ((d.stores?.length ?? 0) > 0) {
-            setVoiceId(DEFAULT_VOICE.id);
-            setHasStore(true);
-          } else setNeedsSelection(true);
+          // Venus (Gemini) is the only consultant now — no voice picker. Always use the default.
+          setVoiceId(DEFAULT_VOICE.id);
+          setHasStore((d.stores?.length ?? 0) > 0);
         }
       } catch {
         if (alive) setVoiceId(DEFAULT_VOICE.id); // never block the studio on a lookup
@@ -841,7 +838,7 @@ export default function StudioScreen() {
     setMode((m) => {
       if (m === 'interview' || m === 'primer') return m; // never yank the user out of an in-progress flow
       if (hasStore) return 'dashboard';
-      if (m === 'loading') return 'cta';
+      if (m === 'loading') return 'primer';
       return m;
     });
   }, [voiceResolved, hasStore]);
@@ -882,18 +879,9 @@ export default function StudioScreen() {
     }, [session, voiceId, mode, turn, player, recorder, brand, paused, live.start, live.stop]),
   );
 
-  const chooseVoice = useCallback((v: AiVoice) => {
-    AsyncStorage.setItem(VOICE_KEY, v.id).catch(() => {});
-    setNeedsSelection(false);
-    setVoiceId(v.id); // just the pick — the interview waits for "Get started"
-  }, []);
-
-  // New creator pressed Get started — show the primer first (what Venus will ask), so the AI
-  // never starts talking before the user knows what's coming.
-  const onGetStarted = useCallback(() => setMode('primer'), []);
-  // Not ready yet — back out of the primer to wherever they came from (the voice picker for a new
-  // creator, the brand dashboard for a returning one).
-  const onPrimerBack = useCallback(() => setMode(hasStore ? 'dashboard' : 'cta'), [hasStore]);
+  // Not ready yet — back out of the primer to the brand dashboard (a returning creator). A brand-new
+  // creator lands directly on the primer, so the Back link only shows when there's a dashboard.
+  const onPrimerBack = useCallback(() => setMode('dashboard'), []);
 
   // Primer choices. Voice (recommended) requests the mic HERE — the only place we prompt — then
   // starts the spoken interview. Text starts the same interview in keyboard mode (no mic needed);
@@ -949,8 +937,8 @@ export default function StudioScreen() {
     setCreated(null);
     setHeard('');
     setLine('');
-    setMode(voiceId ? 'primer' : 'cta');
-  }, [voiceId]);
+    setMode('primer');
+  }, []);
 
   // Just finished creating a brand — graduate from the compiled/created screen back to the brand
   // picker (dashboard). Bump dashKey so the freshly created brand shows up in the list.
@@ -965,27 +953,6 @@ export default function StudioScreen() {
     setDashKey((k) => k + 1);
     setMode('dashboard');
   }, []);
-
-  const previewVoice = useCallback(
-    async (v: AiVoice) => {
-      if (!session || previewing) return;
-      setPreviewing(v.id);
-      try {
-        const r = await fetch(apiUrl('/api/voice'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ say: `Hi, I'm ${v.name}. Let's build your brand together.`, voiceId: v.id }),
-        });
-        const d = (await r.json()) as { speech?: string };
-        if (d.speech) await playSpeech(d.speech);
-      } catch {
-        // preview is best-effort
-      } finally {
-        setPreviewing(null);
-      }
-    },
-    [session, previewing, playSpeech],
-  );
 
   const sendRecording = useCallback(async () => {
     if (busyRef.current) return;
@@ -1323,59 +1290,13 @@ export default function StudioScreen() {
             p={p}
             bg={BG}
           />
-        ) : mode === 'cta' ? (
-          <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
-            <ThemedText type="code" style={styles.brandEyebrow}>
-              {'// CHOOSE YOUR AI'}
-            </ThemedText>
-            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-              Your consultant guides the whole journey — hear them first, then get started.
-            </ThemedText>
-            {AI_VOICES.map((v) => (
-              <View key={v.id} style={[styles.voiceCard, voiceId === v.id && styles.voiceCardOn]}>
-                <View style={styles.voiceMeta}>
-                  <ThemedText type="subtitle" style={[styles.white, { color: p.ink }]}>
-                    {v.name}
-                  </ThemedText>
-                  <ThemedText type="code" style={styles.voiceVibe}>
-                    {v.vibe}
-                  </ThemedText>
-                </View>
-                <View style={styles.voiceActions}>
-                  <Pressable onPress={() => previewVoice(v)} disabled={!!previewing} hitSlop={6}>
-                    <View style={styles.voiceBtn}>
-                      {previewing === v.id ? (
-                        <ActivityIndicator size="small" color="#cdd1d9" />
-                      ) : (
-                        <ThemedText type="code" style={styles.green}>
-                          ▶ hear
-                        </ThemedText>
-                      )}
-                    </View>
-                  </Pressable>
-                  <Pressable onPress={() => chooseVoice(v)} hitSlop={6}>
-                    <View style={[styles.voiceBtn, styles.voiceSelect]}>
-                      <ThemedText type="code" style={{ color: BG }}>
-                        {voiceId === v.id ? '✓ picked' : 'select →'}
-                      </ThemedText>
-                    </View>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-            <Pressable onPress={onGetStarted} disabled={!voiceId}>
-              <View style={[styles.getStarted, { opacity: voiceId ? 1 : 0.4 }]}>
-                <ThemedText type="smallBold" style={{ color: BG }}>
-                  Get started →
-                </ThemedText>
-              </View>
-            </Pressable>
-          </ScrollView>
         ) : mode === 'primer' ? (
           <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
-            <Pressable onPress={onPrimerBack} hitSlop={10} style={{ alignSelf: 'flex-start', marginBottom: Spacing.two }}>
-              <ThemedText type="code" style={{ color: p.dim }}>‹ Back</ThemedText>
-            </Pressable>
+            {hasStore ? (
+              <Pressable onPress={onPrimerBack} hitSlop={10} style={{ alignSelf: 'flex-start', marginBottom: Spacing.two }}>
+                <ThemedText type="code" style={{ color: p.dim }}>‹ Back</ThemedText>
+              </Pressable>
+            ) : null}
             <ThemedText type="code" style={styles.brandEyebrow}>
               {'// BEFORE WE START'}
             </ThemedText>
@@ -1605,27 +1526,6 @@ const styles = StyleSheet.create({
   // Get started) is fully tappable and not intercepted by the bar.
   brandScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: BottomTabInset + Spacing.six },
   selectScroll: { gap: Spacing.three, paddingTop: Spacing.four, paddingBottom: BottomTabInset + Spacing.six },
-  voiceCard: {
-    borderWidth: 1,
-    borderColor: '#26282d',
-    borderRadius: 6,
-    padding: Spacing.three,
-    gap: Spacing.three,
-  },
-  voiceMeta: { gap: 2 },
-  voiceVibe: { color: '#9396a0' },
-  voiceActions: { flexDirection: 'row', gap: Spacing.two },
-  voiceBtn: {
-    borderWidth: 1,
-    borderColor: '#3a3d44',
-    borderRadius: 4,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    minWidth: 96,
-    alignItems: 'center',
-  },
-  voiceSelect: { backgroundColor: '#cdd1d9', borderColor: '#cdd1d9' },
-  voiceCardOn: { borderColor: '#cdd1d9' },
   getStarted: { backgroundColor: '#cdd1d9', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center', marginTop: Spacing.three },
   logo: { width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: '#26282d' },
   brandEyebrow: { color: '#9396a0' },
