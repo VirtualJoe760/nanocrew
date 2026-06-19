@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
+import { attachReviewDeepLink } from '@/lib/push';
 
 // Hold the native splash until General Sans (the brand sans) is loaded, so text never
 // flashes in the system font first.
@@ -21,6 +22,9 @@ export default function TabLayout() {
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded]);
+
+  // Route a tapped "changes ready" push to the store's Edit/review.
+  useEffect(() => attachReviewDeepLink(), []);
 
   if (!fontsLoaded) return null;
 

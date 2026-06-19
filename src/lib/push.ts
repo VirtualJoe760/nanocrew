@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 
 import { apiUrl } from '@/lib/api';
 
@@ -41,4 +42,29 @@ export async function registerForPush(authToken: string): Promise<void> {
   } catch {
     /* push is best-effort — never block the app on it */
   }
+}
+
+/** Deep-link a tapped "changes ready" push straight to that store's Edit/review in Studio.
+ *  Handles both a cold start (app launched from the tap) and warm taps. Returns a cleanup. */
+export function attachReviewDeepLink(): () => void {
+  if (Platform.OS === 'web') return () => {};
+  let sub: { remove: () => void } | undefined;
+  let cancelled = false;
+  (async () => {
+    try {
+      const Notifications = await import('expo-notifications');
+      const route = (data: unknown) => {
+        const d = data as { kind?: string; slug?: string; name?: string } | null;
+        if (d?.kind === 'revision_ready' && d.slug) {
+          router.navigate({ pathname: '/studio', params: { reviewSlug: String(d.slug), reviewName: String(d.name ?? '') } });
+        }
+      };
+      const last = await Notifications.getLastNotificationResponseAsync();
+      if (!cancelled && last) route(last.notification.request.content.data);
+      sub = Notifications.addNotificationResponseReceivedListener((resp) => route(resp.notification.request.content.data));
+    } catch {
+      /* best-effort */
+    }
+  })();
+  return () => { cancelled = true; sub?.remove(); };
 }

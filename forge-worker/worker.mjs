@@ -319,7 +319,8 @@ async function processOne() {
     const previewUrl = await deployPreview(fullRepo, repo, row.branch);
     await sql`update store_revisions set status = 'ready', preview_url = ${previewUrl} where id = ${row.id}`;
     log(`✓ revision ${row.id} ready — ${previewUrl ?? 'no preview url'}`);
-    await notifyCreator(row.storeId, `${row.storeName} — changes ready`, 'Your update is on a preview. Open Studio to review and publish it.', { kind: 'revision_ready', storeId: row.storeId });
+    // slug + name let the tapped push deep-link straight to that store's Edit/review in the app.
+    await notifyCreator(row.storeId, `${row.storeName} — changes ready`, 'Your update is on a preview. Tap to review and publish it.', { kind: 'revision_ready', storeId: row.storeId, slug: row.slug, name: row.storeName });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'revise failed';
     log(`✗ revision ${row.id} failed — ${msg}`);

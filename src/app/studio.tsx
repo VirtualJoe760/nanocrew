@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   AppState,
@@ -585,6 +585,18 @@ export default function StudioScreen() {
   const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
   const [hasStore, setHasStore] = useState(false);
+
+  // Deep-link from a tapped "changes ready" push → open that store's Console on the Edit tab (review).
+  const reviewParams = useLocalSearchParams<{ reviewSlug?: string; reviewName?: string }>();
+  const reviewHandled = useRef<string | null>(null);
+  useEffect(() => {
+    const slug = reviewParams.reviewSlug;
+    if (slug && reviewHandled.current !== slug) {
+      reviewHandled.current = slug;
+      setConsoleBrand({ slug, name: reviewParams.reviewName || slug });
+      setShowComposer(true);
+    }
+  }, [reviewParams.reviewSlug, reviewParams.reviewName]);
   const [paywall, setPaywall] = useState<'subscription_required' | 'brand_limit' | 'manage' | null>(null);
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
   // get started), returning creators see their dashboard, and the AI entity only
