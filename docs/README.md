@@ -48,6 +48,7 @@ The docs are organized into divisions. Start here, then open the division you ne
 | [accounts/AUTH_IDENTITY.md](accounts/AUTH_IDENTITY.md) | One Supabase identity mirrored by `creators`; app (local) vs platform-api (remote) token verify; store ownership + collaborators; the TARGET unified account |
 | [accounts/ORDERS.md](accounts/ORDERS.md) | Orders keyed by `customerEmail` only; creator order views; the TARGET shopper "my orders" by email match |
 | [accounts/BILLING_CREDITS.md](accounts/BILLING_CREDITS.md) | Plans/subscriptions, AI credits (accounts + ledger + costs), Stripe Connect payouts |
+| [accounts/POD_POLICY.md](accounts/POD_POLICY.md) | Per-provider fulfillment content policy (`src/lib/pod-policy.ts`) — catch a print-provider rejection (Printful, future suppliers) at publish, before an order is placed. Separate from generation safety. |
 
 ## 📱 App (`app/`)
 
