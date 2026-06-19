@@ -1664,6 +1664,7 @@ function GenerateModal({
   const [busy, setBusy] = useState(false);
   const [editText, setEditText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showMore, setShowMore] = useState(false); // advanced options (effort, aspect ratio) collapsed by default
   const canGo = prompt.trim().length > 0 || !!refImage;
 
   const reset = () => {
@@ -1781,29 +1782,22 @@ function GenerateModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalBackdrop}>
         <ThemedView type="background" style={styles.sheet}>
-          {/* Preview pane (top). Tapping it dismisses the keyboard — a big, obvious target. */}
-          <Pressable style={styles.previewPane} onPress={() => Keyboard.dismiss()}>
-            {busy ? (
+          {/* Preview appears ONLY while generating / reviewing — no dead placeholder eating space
+              before there's anything to show, so the form gets the room and never needs scrolling. */}
+          {busy ? (
+            <View style={styles.previewPane}>
               <View style={styles.previewCenter}>
                 <ActivityIndicator color={theme.text} />
                 <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
                   Generating…
                 </ThemedText>
               </View>
-            ) : staged ? (
+            </View>
+          ) : staged ? (
+            <View style={styles.previewPane}>
               <Image source={{ uri: staged.url }} style={styles.previewImg} contentFit="contain" />
-            ) : (
-              <View style={styles.previewCenter}>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
-                  {modality === 'video'
-                    ? 'Video generation lands here soon — scene videos for products and a motion hero for your site.'
-                    : modality === 'graphics'
-                      ? 'Your web graphic will appear here.'
-                      : 'Your design will appear here.'}
-                </ThemedText>
-              </View>
-            )}
-          </Pressable>
+            </View>
+          ) : null}
 
           <View style={styles.sheetHeader}>
             <ThemedText type="code" themeColor="textSecondary">
@@ -1975,36 +1969,42 @@ function GenerateModal({
                 </Pressable>
               </View>
 
-              <EffortSlider value={effort} onChange={setEffort} />
-
-              {modality === 'graphics' ? (
-                <View style={styles.optionRow}>
-                  {WEB_RATIOS.map((r) => (
-                    <Pressable key={r} onPress={() => setWebRatio(r)}>
-                      <ThemedView
-                        type={webRatio === r ? 'backgroundSelected' : 'backgroundElement'}
-                        style={styles.chip}>
-                        <ThemedText type="small" themeColor={webRatio === r ? 'text' : 'textSecondary'}>
-                          {r}
-                        </ThemedText>
-                      </ThemedView>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : background === 'filled' && !isText ? (
-                <View style={styles.optionRow}>
-                  {RATIOS.map((r) => (
-                    <Pressable key={r} onPress={() => setRatio(r)}>
-                      <ThemedView
-                        type={ratio === r ? 'backgroundSelected' : 'backgroundElement'}
-                        style={styles.chip}>
-                        <ThemedText type="small" themeColor={ratio === r ? 'text' : 'textSecondary'}>
-                          {r}
-                        </ThemedText>
-                      </ThemedView>
-                    </Pressable>
-                  ))}
-                </View>
+              <Pressable onPress={() => setShowMore((m) => !m)} hitSlop={6} style={styles.moreToggle}>
+                <ThemedText type="small" themeColor="textSecondary">{showMore ? 'Fewer options ▴' : 'More options ▾'}</ThemedText>
+              </Pressable>
+              {showMore ? (
+                <>
+                  <EffortSlider value={effort} onChange={setEffort} />
+                  {modality === 'graphics' ? (
+                    <View style={styles.optionRow}>
+                      {WEB_RATIOS.map((r) => (
+                        <Pressable key={r} onPress={() => setWebRatio(r)}>
+                          <ThemedView
+                            type={webRatio === r ? 'backgroundSelected' : 'backgroundElement'}
+                            style={styles.chip}>
+                            <ThemedText type="small" themeColor={webRatio === r ? 'text' : 'textSecondary'}>
+                              {r}
+                            </ThemedText>
+                          </ThemedView>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : background === 'filled' && !isText ? (
+                    <View style={styles.optionRow}>
+                      {RATIOS.map((r) => (
+                        <Pressable key={r} onPress={() => setRatio(r)}>
+                          <ThemedView
+                            type={ratio === r ? 'backgroundSelected' : 'backgroundElement'}
+                            style={styles.chip}>
+                            <ThemedText type="small" themeColor={ratio === r ? 'text' : 'textSecondary'}>
+                              {r}
+                            </ThemedText>
+                          </ThemedView>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </>
               ) : null}
             </>
           )}
@@ -2233,6 +2233,7 @@ const styles = StyleSheet.create({
   effortLabels: { flexDirection: 'row' },
   effortLabelCell: { flex: 1, alignItems: 'center' },
   generate: { borderRadius: 999, paddingVertical: Spacing.three, alignItems: 'center' },
+  moreToggle: { alignSelf: 'flex-start', paddingVertical: Spacing.one },
   reviewBackdrop: {
     flex: 1,
     alignItems: 'center',
