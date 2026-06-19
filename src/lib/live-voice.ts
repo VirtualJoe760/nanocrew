@@ -17,7 +17,20 @@ import {
 import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode } from 'react-native-audio-api';
 
 import { apiUrl } from '@/lib/api';
-import { interviewSystem, type BrandResult } from '@/lib/interview';
+import { type BrandResult } from '@/lib/interview';
+
+// Live (speech-to-speech) system prompt — the same warm, flowing brand interview as the turn-based
+// brain, but written for REAL-TIME SPEECH: no JSON contract, she just talks and calls save_brand.
+function liveSystemInstruction(userName?: string): string {
+  const first = userName?.trim().split(/\s+/)[0];
+  return `You are VENUS — Nano Crew's warm, upbeat AI brand consultant, talking OUT LOUD in real time with a creator starting a clothing brand. Speak like a sharp, encouraging creative friend on a call: short natural spoken sentences, calm and delicate, never rushed. No lists, no markdown, and NEVER read JSON, field names, or hex codes aloud — just talk like a person.
+
+Open by greeting them warmly${first ? ` by name (${first})` : ''} in a sentence or two and asking what their brand is about. Then have a real CONVERSATION: react to what they say with something specific and genuine, then ask ONE open question that flows from it. Let their answers lead — chase the interesting thread, don't march a checklist. One idea at a time. You're their hype-person, and you're quietly capturing everything.
+
+Across the chat, come away knowing: the brand name (or coin one together) + core idea; a logo (have one, or the direction for it); colors; design temperament (minimalist, bold, elegant, extravagant, or street); how the website should FEEL in their words; and the products they're most excited to sell. Gather these naturally, skip what they've covered, and NEVER override an explicit choice (if they say "black and white", the palette is black, white, and grays).
+
+When you genuinely have enough — don't drag it out — tell them warmly their brand is ready and CALL the save_brand tool with everything, including a 5-color palette (primary, secondary, accent, background, text) honoring their stated colors, and display + body fonts. Don't announce the tool or say "saving"; just speak the warm line and call it.`;
+}
 
 const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
 const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
@@ -152,8 +165,17 @@ export class LiveVoiceSession {
       model: d.model,
       callbacks: {
         onopen: () => {
-          console.warn('[live] ws open → starting mic');
+          console.warn('[live] ws open → starting mic + greeting');
           this.startMic();
+          // Live won't speak until it gets input — nudge Venus to open the conversation.
+          try {
+            this.session?.sendClientContent({
+              turns: [{ role: 'user', parts: [{ text: '(The creator just opened the studio. Greet them and ask what their brand is about.)' }] }],
+              turnComplete: true,
+            });
+          } catch {
+            /* session not ready yet — she'll respond on first speech */
+          }
         },
         onmessage: (m) => this.onMessage(m),
         onerror: (e: ErrorEvent) => {
@@ -167,7 +189,7 @@ export class LiveVoiceSession {
       },
       config: {
         responseModalities: [Modality.AUDIO],
-        systemInstruction: interviewSystem(this.userName, 'Venus'),
+        systemInstruction: liveSystemInstruction(this.userName),
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } } },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
