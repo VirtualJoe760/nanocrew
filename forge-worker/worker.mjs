@@ -71,7 +71,7 @@ The creator requested this change to their live storefront, in their own words:
 
 ${requestMd}
 
-${anns.length ? `Annotated screenshots are in briefs/screenshots/ — the gold circles mark exactly which areas to change. Look at them.` : ''}
+${anns.length ? `Annotated screenshots are in briefs/screenshots/ — the gold marks (a circle, arrow, underline, or scribble) show what the creator is pointing at. LOOK at them and discern what they mean before editing.` : ''}
 
 Read TEMPLATE.md and VOCABULARY.md first (VOCABULARY.md maps everyday phrases to blocks
 and files). Apply ONLY the requested change. Stay inside the allowed edit surface:
