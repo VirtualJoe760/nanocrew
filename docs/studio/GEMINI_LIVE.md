@@ -80,11 +80,32 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
 1. Enter interview (focused, not keyboard, not paused) → `live.start()`; blur/pause → `live.stop()`.
 2. Map `LiveState` → the orb's `EntityState` (listening/speaking/thinking/idle/error).
 3. `venusText`/`userText` transcripts → the existing captions + heard line.
-4. `save_brand` → `setBrand(...)` → the existing compiled-brand → **Create my store** screen (unchanged).
+4. Finalize → `setBrand(...)` → the existing compiled-brand → **Create my store** screen (unchanged).
 5. Keep the **typed keyboard fallback** (`/api/interview`) for no-mic/noisy use.
 6. Pause pill stays (stops the mic + her audio). The primer's "hold to talk" copy reverts to "just talk."
 7. **Rollout:** gate behind a flag; if Live (preview) misbehaves we flip back to turn-based. Remove
    turn-based once Live is proven in the wild.
+
+## Finalize: extract from the transcript, NOT the `save_brand` tool call
+
+**The native-audio Live model does not reliably emit function calls.** The `scripts/live-flow-test.mjs`
+harness drove the full scripted interview against the real model + `save_brand` tool and proved it:
+Venus says *"I'm creating the brand now"* but **never invokes the tool** — no `toolCall` ever
+arrives. Forcing it in the system prompt ("you MUST call save_brand") didn't fix it; native-audio
+models are simply unreliable at tool use.
+
+So we finalize **deterministically** instead of waiting on the tool:
+- `LiveVoiceSession` accumulates the spoken conversation (`transcript[]`, `getTranscript()`) from the
+  input/output transcription events.
+- A **"✓ Build my brand"** button in the interview calls `useLiveVoice.finalize()`, which POSTs the
+  transcript to **`POST /api/extract-brand`** — a **text** model (`gemini-2.5-flash`) running the same
+  `interviewSystem` + `parseTurn` as `/api/interview`, which reliably returns the structured
+  `BrandResult`. Proven by `scripts/extract-brand-test.ts` (full brand from a transcript).
+- `onBrand(brand, transcript)` → `setBrand(...)` **and** stashes the transcript in `messages.current`
+  so **Create my store** sends `{ brand, transcript }` to `/api/store` (provisioning/forge context),
+  exactly like the old turn-based path.
+- The `save_brand` tool declaration + `toBrandResult` are kept as a no-cost bonus path: if the model
+  ever *does* call the tool, `onBrand` still fires. We just no longer depend on it.
 
 ## Session lifecycle / failure modes
 
@@ -98,8 +119,8 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
 ## Test plan
 
 1. **Spike (`/live-test`):** Start → mic permission → talk → hear Venus → transcripts update →
-   say "I'm done" → `save_brand` fires with a populated `BrandResult`. Watch Metro logs for the WS
-   lifecycle. **This validates the audio bridge before touching Studio.**
+   tap **Build my brand** → `/api/extract-brand` returns a populated `BrandResult`. Watch Metro logs
+   for the WS lifecycle. **This validates the audio bridge before touching Studio.**
 2. **Studio:** full interview → brand compiles → Create my store → live storefront. Interruption,
    pause/resume, keyboard fallback, backgrounding mid-session.
 3. Costs sanity-check against a real session in the Google console.
@@ -164,5 +185,5 @@ supplementary context for provisioning.
 2. Gate the turn-based effects/handlers behind `!USE_LIVE`.
 3. Orb → pause/resume; pause pill → stop/start; primer copy.
 4. Keyboard → `sendClientContent`. Transcript accumulation for `createStore`.
-5. Voice mapping (AI_VOICES → Gemini). tsc + on-device verify a full interview → `save_brand` → store.
+5. Voice mapping (AI_VOICES → Gemini). tsc + on-device verify a full interview → Build my brand → store.
 6. Once solid: remove the dead turn-based code + `/api/voice` client calls, drop the `USE_LIVE` flag.
