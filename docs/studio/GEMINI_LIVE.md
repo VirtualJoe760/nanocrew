@@ -218,3 +218,15 @@ supplementary context for provisioning.
 4. Keyboard → `sendClientContent`. Transcript accumulation for `createStore`.
 5. Voice mapping (AI_VOICES → Gemini). tsc + on-device verify a full interview → Build my brand → store.
 6. Once solid: remove the dead turn-based code + `/api/voice` client calls, drop the `USE_LIVE` flag.
+
+## Reused for "Edit site" (talk-to-edit)
+
+The same Live session powers the Console's **Edit site** composer (`studio-composer.tsx`). The session
+is parameterized — `useLiveVoice({ instruction, greeting, enableBrandTool })` — so it can drop the
+`save_brand` tool and swap in `editSiteInstruction(brandName)` + `EDIT_SITE_GREETING` (live-voice.ts).
+Venus becomes a concise edit assistant: the creator taps the mic, says the change ("full-screen hero",
+"headline to …"), she reflects it back and asks "anything else?", and her captured request fills the
+composer. Tapping **send** hits the existing `POST /api/creator/revise` (forge revision) — no API
+change. The session runs only while the mic is on AND the Edit tab is open; it stops on send / tab
+change / Console close. Round-trip verified by `scripts/edit-voice-test.mjs` (concise replies, no tool
+call).
