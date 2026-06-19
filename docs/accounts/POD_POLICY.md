@@ -24,7 +24,7 @@ The gap between them is the whole point: we happily generate a design the **prin
 ## Where it's enforced
 
 - **Publish (primary gate):** `POST /api/publish` ([publish+api.ts](../../src/app/api/publish+api.ts)) screens name + description + design prompts before `createSyncProduct`. A `block` returns **HTTP 422 `{ error:'provider_policy', message, blocks }`** and the product is never created on Printful or mirrored locally. `warnings` ride along in the success response for the UI to show.
-- **Fulfillment:** only **published** (already-screened) products can be ordered, so the publish gate transitively protects fulfillment. For defense-in-depth against *legacy* products published before the gate, `submitOrderToPrintful` (`platform-api/lib/fulfill.ts`) can call the same `checkProviderPolicy` — this needs a `pod-policy.ts` copy in `platform-api` (like the schema copy). **Not yet wired** — tracked as a follow-up.
+- **Fulfillment (safety-net):** `submitOrderToPrintful` (`platform-api/lib/fulfill.ts`) re-screens a paid order's products (name + description + design prompts, joined order→variant→product→composition→design) **before** sending to Printful. A block sets the order to **`on_hold`** and skips submission — the order is **never auto-refunded** (money stays put; a human reviews/refunds). The publish gate already screens new products, so this only catches *legacy* products published before the gate. Uses `platform-api/lib/pod-policy.ts` — a **copy** of `src/lib/pod-policy.ts` that must be kept in sync (same as the schema copy).
 
 ## Verified
 `checkProviderPolicy('printful', …)` — 9/9 example cases: flags / tasteful nudity / "Trump + guns like Terminator" → allow; porn / hate / terror / self-harm → block; Disney / cocaine → warn.
