@@ -10,9 +10,7 @@ import { SiteEditor } from '@/components/site-editor';
 import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
-import { EDIT_SITE_GREETING, editSiteInstruction } from '@/lib/live-voice';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // Venus's management surface for a returning creator: request site changes in plain
@@ -52,9 +50,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [active, setActive] = useState<string | null>(slug ?? null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [change, setChange] = useState('');
-  const [changeState, setChangeState] = useState<'idle' | 'sending' | 'queued'>('idle');
-  const [hiddenRevIds, setHiddenRevIds] = useState<Set<string>>(new Set()); // "reset chat" hides past revisions
   const [refreshing, setRefreshing] = useState(false);
   const [previewTarget, setPreviewTarget] = useState<string | null>(null);
   const [critiquePreview, setCritiquePreview] = useState(false);
@@ -77,32 +72,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [note, setNote] = useState<string | null>(null);
   const [buildElapsed, setBuildElapsed] = useState(0); // seconds since we first saw this build running
   const progressAnim = useRef(new Animated.Value(0)).current; // indeterminate build-progress sweep
-
-  // ---- Talk-to-edit: the same Gemini Live voice flow, but for revising an EXISTING site. Venus
-  // listens to the change the creator describes; their words fill the composer; they tap send → forge.
-  const [voiceOn, setVoiceOn] = useState(false);
-  const editInstruction = useMemo(() => editSiteInstruction(brandName), [brandName]);
-  const editVoice = useLiveVoice({
-    accessToken: token,
-    instruction: editInstruction,
-    greeting: EDIT_SITE_GREETING,
-    enableBrandTool: false,
-    onBrand: () => {},
-  });
-  // Run the session only while the mic is on AND the edit tab is open in the Console.
-  useEffect(() => {
-    if (voiceOn && visible && tab === 'edit') editVoice.start();
-    else editVoice.stop();
-  }, [voiceOn, visible, tab, editVoice.start, editVoice.stop]);
-  // Pipe the creator's spoken request into the composer (they review + send). Voice owns the field.
-  useEffect(() => {
-    if (!voiceOn) return;
-    const said = editVoice.messages.filter((m) => m.role === 'user').map((m) => m.text);
-    const all = [...said, editVoice.userText].map((s) => s.trim()).filter(Boolean).join('. ');
-    if (all) { setChange(all); setChangeState('idle'); }
-  }, [voiceOn, editVoice.messages, editVoice.userText]);
-  // Never leave the mic live when the Console closes or you leave the Edit tab.
-  useEffect(() => { if (!visible || tab !== 'edit') setVoiceOn(false); }, [visible, tab]);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const activeStore = stores.find((s) => s.slug === active);
@@ -555,22 +524,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     await loadPosts();
   };
 
-  const sendChange = async () => {
-    if (!change.trim() || !active) return;
-    setVoiceOn(false); // stop the mic — the request is captured
-    setChangeState('sending');
-    try {
-      const res = await fetch(apiUrl('/api/creator/revise'), { method: 'POST', headers, body: JSON.stringify({ storeSlug: active, requestMd: change.trim() }) });
-      if (!res.ok) throw new Error();
-      setChange('');
-      setChangeState('queued');
-      await loadRevisions();
-    } catch {
-      setChangeState('idle');
-      setNote('Could not send your change.');
-    }
-  };
-
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
@@ -719,72 +672,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                   <Pressable onPress={() => setEditor(true)} style={styles.primaryBtn}>
                     <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Customize — text, colors &amp; fonts</ThemedText>
                   </Pressable>
-                  <ThemedText type="code" style={styles.dim}>Exact edits, applied instantly. For a bigger redesign, ask Venus below.</ThemedText>
-
-                  <View style={[styles.sectionRow, { marginTop: Spacing.three }]}>
-                    <ThemedText type="code" style={styles.sectionLabel}>CHAT WITH VENUS</ThemedText>
-                    {revisions.some((r) => !hiddenRevIds.has(r.id) && !r.requestMd.includes('"kind":"provision"')) ? (
-                      <Pressable onPress={() => { setHiddenRevIds(new Set(revisions.map((r) => r.id))); setChange(''); setChangeState('idle'); }} hitSlop={6}>
-                        <ThemedText type="code" style={styles.dim}>reset</ThemedText>
-                      </Pressable>
-                    ) : null}
-                  </View>
-
-                  {/* The conversation scrolls INSIDE this box — independent of the console's scroll. */}
-                  <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatScrollContent} nestedScrollEnabled showsVerticalScrollIndicator>
-                    <View style={styles.venusBubble}>
-                      <ThemedText type="small" style={styles.bubbleVenusText}>Tell me what to change about your site — &ldquo;add a slideshow up top,&rdquo; &ldquo;make the buttons rounder.&rdquo; I build it on a preview first; nothing goes live until you approve.</ThemedText>
-                    </View>
-
-                    {revisions.filter((r) => !hiddenRevIds.has(r.id) && !r.requestMd.includes('"kind":"provision"')).slice(0, 8).reverse().map((rev) => (
-                      <View key={rev.id}>
-                        <View style={styles.youBubble}>
-                          <ThemedText type="small" style={styles.bubbleYouText} numberOfLines={4}>{rev.requestMd}</ThemedText>
-                        </View>
-                        <View style={styles.venusBubble}>
-                          <ThemedText type="small" style={styles.bubbleVenusText}>
-                            {rev.status === 'building' ? 'On it — building a preview…' : rev.status === 'ready' ? 'Ready to review.' : rev.status === 'approved' ? 'Published — it’s live.' : 'That one didn’t take — try rewording it.'}
-                          </ThemedText>
-                          {rev.status === 'ready' ? (
-                            <View style={styles.revActions}>
-                              {rev.previewUrl ? (
-                                <Pressable onPress={() => { setPreviewTarget(rev.previewUrl); setCritiquePreview(false); }} hitSlop={6}>
-                                  <ThemedText type="code" style={styles.dim}>review</ThemedText>
-                                </Pressable>
-                              ) : null}
-                              <Pressable onPress={() => approve(rev)} hitSlop={6}>
-                                <ThemedText type="code" style={styles.green}>publish →</ThemedText>
-                              </Pressable>
-                            </View>
-                          ) : rev.status === 'building' ? (
-                            <ActivityIndicator size="small" color={pal.accent} style={{ alignSelf: 'flex-start', marginTop: 4 }} />
-                          ) : null}
-                        </View>
-                      </View>
-                    ))}
-                  </ScrollView>
-
-                  {/* Talk-to-edit: tap the mic and just say what to change — Venus fills the box. */}
-                  {voiceOn ? (
-                    <View style={styles.voiceCaption}>
-                      <ThemedText type="code" style={styles.green}>
-                        {editVoice.state === 'listening' ? '● listening — say what to change' : editVoice.state === 'connecting' ? '○ connecting…' : '◗ Venus is talking'}
-                      </ThemedText>
-                      {editVoice.venusText ? <ThemedText type="small" style={styles.bubbleVenusText} numberOfLines={2}>{editVoice.venusText}</ThemedText> : null}
-                    </View>
-                  ) : null}
-                  <View style={styles.composerRow}>
-                    <Pressable onPress={() => setVoiceOn((v) => !v)} hitSlop={6} style={[styles.micBtn, voiceOn && { backgroundColor: pal.accent, borderColor: pal.accent }]}>
-                      <ThemedText type="code" style={{ color: voiceOn ? pal.onAccent : pal.dim }}>{voiceOn ? '◼' : '🎙'}</ThemedText>
-                    </Pressable>
-                    <TextInput style={styles.composerInput} placeholder="Message Venus… or tap the mic" placeholderTextColor={pal.dim} value={change} onChangeText={(t) => { setChange(t); setChangeState('idle'); }} multiline />
-                    <Pressable onPress={sendChange} disabled={changeState === 'sending' || !change.trim()} hitSlop={6} style={[styles.composerSend, (!change.trim() || changeState === 'sending') && { opacity: 0.4 }]}>
-                      <ThemedText type="code" style={{ color: pal.onAccent }}>{changeState === 'sending' ? '…' : 'send'}</ThemedText>
-                    </Pressable>
-                  </View>
-                  {changeState === 'queued' ? (
-                    <ThemedText type="code" style={styles.green}>Sent — I’ll notify you when the preview’s ready.</ThemedText>
-                  ) : null}
+                  <ThemedText type="code" style={styles.dim}>Exact edits, applied instantly. For a bigger redesign, tap your site above and talk to Venus.</ThemedText>
                 </>
               )}
                 </>

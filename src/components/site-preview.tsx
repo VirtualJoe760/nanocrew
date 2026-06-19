@@ -219,14 +219,20 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
           tick((n) => n + 1);
         },
         onPanResponderRelease: () => {
-          // Keep the stroke; STAY armed (toggle) so a fumbled gesture doesn't silently turn the pen
-          // off — the user circles as many spots as they want, then taps ✎ to finish.
-          if (cur.current.length > 1) setDraftStrokes((s) => [...s, cur.current]);
+          // One-shot: after a real circle, DISARM the pen so you can scroll/navigate the site again.
+          // (A fumbled tap — too few points — leaves the pen armed so it isn't silently lost.)
+          if (cur.current.length > 1) {
+            setDraftStrokes((s) => [...s, cur.current]);
+            arm(false);
+          }
           cur.current = [];
           tick((n) => n + 1);
         },
         onPanResponderTerminate: () => {
-          if (cur.current.length > 1) setDraftStrokes((s) => [...s, cur.current]);
+          if (cur.current.length > 1) {
+            setDraftStrokes((s) => [...s, cur.current]);
+            arm(false);
+          }
           cur.current = [];
           tick((n) => n + 1);
         },

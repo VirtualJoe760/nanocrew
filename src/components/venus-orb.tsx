@@ -3,9 +3,11 @@ import { Pressable, StyleSheet } from 'react-native';
 import Animated, { Easing, type SharedValue, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
-// Venus's voice orb for the site-critique flow — a self-contained, audio-reactive bloom.
-// Calm when idle; breathes and swells with the live audio `level` while `active` — her voice
-// while she speaks, yours while she listens. Deliberately lighter than the Studio nucleus.
+import { NCMark } from '@/components/nc-screen';
+
+// Venus's mark for the site-critique flow — the NC logo with a self-contained, audio-reactive halo.
+// Calm when idle; the halo breathes and swells with the live audio `level` while `active` — her voice
+// while she speaks, yours while she listens.
 // `level` is a reanimated SharedValue (0..1) so it follows audio with no per-frame re-renders.
 
 const GOLD = '#cdd1d9';
@@ -75,16 +77,7 @@ export function VenusOrb({
         </Svg>
       </Animated.View>
       <Animated.View pointerEvents="none" style={coreStyle}>
-        <Svg width={coreSize} height={coreSize}>
-          <Defs>
-            <RadialGradient id="vorb-core" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#fff7e8" stopOpacity={1} />
-              <Stop offset="38%" stopColor={GOLD} stopOpacity={0.95} />
-              <Stop offset="100%" stopColor={GOLD} stopOpacity={0.08} />
-            </RadialGradient>
-          </Defs>
-          <Circle cx={coreSize / 2} cy={coreSize / 2} r={coreSize / 2} fill="url(#vorb-core)" />
-        </Svg>
+        <NCMark size={coreSize} color={GOLD} />
       </Animated.View>
     </Pressable>
   );
