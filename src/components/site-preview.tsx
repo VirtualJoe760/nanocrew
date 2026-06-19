@@ -381,7 +381,10 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
           : rawMd();
       if (md) {
         setNote('Sending your edits…');
-        const res = await fetch(apiUrl('/api/creator/revise'), { method: 'POST', headers: auth, body: JSON.stringify({ storeSlug: critique.slug, requestMd: md, annotations }) });
+        // Send the raw conversation alongside the distilled note so the backend can keep
+        // a "said vs captured" record (troubleshooting) — see docs/studio/EDIT_PIPELINE.md.
+        const transcript = venus.messages.map((m) => ({ role: m.role, text: m.text }));
+        const res = await fetch(apiUrl('/api/creator/revise'), { method: 'POST', headers: auth, body: JSON.stringify({ storeSlug: critique.slug, requestMd: md, transcript, annotations }) });
         if (!res.ok) throw new Error();
       }
 

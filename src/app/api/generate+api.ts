@@ -166,6 +166,7 @@ export async function POST(req: Request) {
               // Persistence failure shouldn't kill generation — the image still returns.
             }
           }
+          console.log(`[pipeline:generate] ok prompt=${JSON.stringify((prompt || '').slice(0, 120))} → ${image.slice(0, 60)}…`);
           return Response.json({ image, id });
         }
       }

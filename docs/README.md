@@ -38,6 +38,7 @@ The docs are organized into divisions. Start here, then open the division you ne
 | [studio/BUILD_FLOW.md](studio/BUILD_FLOW.md) | Talk to Venus → forge builds a presentable site → refine with real assets → publish. **Honest about CURRENT vs TARGET.** |
 | [studio/FORGE_AI.md](studio/FORGE_AI.md) | How our AI talks to the forge robot — Venus now authors the brief + a Master `CLAUDE.md` conditions the robot (both shipped); the remaining gap is eyes + a real quality gate. |
 | [studio/DESIGN_GENERATOR.md](studio/DESIGN_GENERATOR.md) | The Design tab: products (Printful publish), model shots, scene video — the asset pipeline that replaces the forge's temporary placeholders |
+| [studio/EDIT_PIPELINE.md](studio/EDIT_PIPELINE.md) | The live-site edit flow (voice → plan → generate → place → forge), its 5 checkpoints, and how to trace a failed edit in logs + DB. |
 
 ## 👤 Accounts (`accounts/`) — identity, orders, money
 

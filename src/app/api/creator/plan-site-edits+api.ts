@@ -80,6 +80,10 @@ export async function POST(req: Request) {
       .map((i) => ({ slot: i.slot as 'hero' | 'logo' | 'og', prompt: i.prompt!.trim() }))
       .slice(0, 6);
     const edits = (parsed.edits ?? []).filter((e) => typeof e === 'string' && e.trim()).map((e) => e.trim()).slice(0, 20);
+    // Trace the classification: the most recent creator turn in → the plan out. When a request
+    // like "make the hero an american flag" yields images=0, the subject was lost upstream (capture).
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.text ?? '';
+    console.log(`[pipeline:plan] turns=${messages.length} lastSaid=${JSON.stringify(lastUser.slice(0, 160))} → images=${images.length}[${images.map((i) => i.slot).join(',')}] edits=${edits.length}`);
     return Response.json({ images, edits });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';

@@ -71,6 +71,7 @@ export async function POST(req: Request) {
     }
 
     void revalidateStorefront(store.slug);
+    console.log(`[pipeline:site-assets] slug=${store.slug} slot=${slot} url=${String(url).slice(0, 60)}… (revalidating)`);
     return Response.json({ ok: true, slot });
   } catch (e) {
     const status = e instanceof TenantError ? e.status : 500;
