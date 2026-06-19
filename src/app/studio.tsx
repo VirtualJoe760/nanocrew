@@ -697,8 +697,8 @@ export default function StudioScreen() {
     };
     setState(m[live.state] ?? 'idle');
   }, [live.state]);
-  useEffect(() => { if (USE_LIVE && live.venusText) setLine(live.venusText); }, [live.venusText]);
-  useEffect(() => { if (USE_LIVE && live.userText) setHeard(live.userText); }, [live.userText]);
+  useEffect(() => { if (USE_LIVE) setLine(live.venusText); }, [live.venusText]);
+  useEffect(() => { if (USE_LIVE) setHeard(live.userText); }, [live.userText]);
   useEffect(() => { if (USE_LIVE && live.error) setError(live.error); }, [live.error]);
   // Start the session in the interview; stop on leaving / pause / brand-ready. start() is idempotent.
   useEffect(() => {
@@ -1501,7 +1501,7 @@ export default function StudioScreen() {
               </View>
             ) : null}
             <View style={styles.captions}>
-              {state === 'speaking' && words.length ? (
+              {!USE_LIVE && state === 'speaking' && words.length ? (
                 <ThemedText style={[styles.bigWord, { color: p.ink }]}>{words[wordIdx]}</ThemedText>
               ) : (
                 <>

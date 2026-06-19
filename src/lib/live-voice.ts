@@ -127,6 +127,10 @@ export class LiveVoiceSession {
   private outCtx: AudioContext | null = null;
   private queue: AudioBufferQueueSourceNode | null = null;
   private playEndsAt = 0; // wall-clock ms when her queued audio finishes — mic is gated until then
+  // Per-exchange caption segmentation (transcripts arrive as fragments; reset each new turn).
+  private curUser = '';
+  private curVenus = '';
+  private userTurnActive = false;
   private cb: LiveCallbacks;
   private token: string;
   private accessToken: string;
@@ -274,8 +278,24 @@ export class LiveVoiceSession {
         console.warn('[live] audio enqueue failed', e instanceof Error ? e.message : e);
       }
     }
-    if (sc?.inputTranscription?.text) this.cb.onUserTranscript?.(sc.inputTranscription.text);
-    if (sc?.outputTranscription?.text) this.cb.onVenusTranscript?.(sc.outputTranscription.text);
+    // Your speech: first fragment of a NEW user turn clears the old exchange (her last reply + your
+    // last line); subsequent fragments accumulate within the turn. Emit the full current utterance.
+    if (sc?.inputTranscription?.text) {
+      if (!this.userTurnActive) {
+        this.userTurnActive = true;
+        this.curUser = '';
+        this.curVenus = '';
+        this.cb.onVenusTranscript?.('');
+      }
+      this.curUser += sc.inputTranscription.text;
+      this.cb.onUserTranscript?.(this.curUser);
+    }
+    // Venus replying → the user's turn is over; accumulate her current reply.
+    if (sc?.outputTranscription?.text) {
+      this.userTurnActive = false;
+      this.curVenus += sc.outputTranscription.text;
+      this.cb.onVenusTranscript?.(this.curVenus);
+    }
     if (sc?.turnComplete) this.cb.onState?.('listening');
 
     // tool call → finalize the brand
@@ -298,7 +318,11 @@ export class LiveVoiceSession {
     if (!t) return;
     try {
       this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
+      this.curUser = t;
+      this.curVenus = '';
+      this.userTurnActive = false; // typed turn submitted → her reply accumulates next
       this.cb.onUserTranscript?.(t);
+      this.cb.onVenusTranscript?.('');
       this.cb.onState?.('thinking');
     } catch (e) {
       console.warn('[live] sendText failed', e instanceof Error ? e.message : e);

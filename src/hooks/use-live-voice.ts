@@ -50,9 +50,9 @@ export function useLiveVoice(opts: {
       voiceName: opts.voiceName,
       callbacks: {
         onState: setState,
-        // transcripts arrive in fragments — append within a turn, reset when she starts a new one
-        onVenusTranscript: (t) => setVenusText((prev) => prev + t),
-        onUserTranscript: (t) => setUserText((prev) => prev + t),
+        // session emits the FULL current utterance (with per-turn resets), so just replace.
+        onVenusTranscript: (t) => setVenusText(t),
+        onUserTranscript: (t) => setUserText(t),
         onBrand: (b) => onBrandRef.current(b),
         onError: (m) => setError(m),
       },
