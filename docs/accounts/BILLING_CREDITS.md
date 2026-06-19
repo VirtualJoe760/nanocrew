@@ -85,7 +85,7 @@ on first use.
 
 | Op | Credits | Charged at |
 |---|---|---|
-| `design_generate` | 5 | `POST /api/generate` (default) — every image generation: Design tab + the voice critique loop's hero/og. **Flag: 5 is below the stated 2× floor for one Nano Banana image (~$0.039 → ~8cr); confirm or bump to 8.** |
+| `design_generate` | 8 | `POST /api/generate` (default) — every image generation: Design tab + the voice critique loop's hero/og. Sized at ~2× one Nano Banana image (~$0.039) at the $0.01/cr floor. |
 | `tryon` | 6 | NOT debited — rate-limited instead (shopper-facing conversion feature) |
 | `logo_generate` | 8 | `POST /api/generate` when `purpose:'logo'` (the critique loop sends it for the logo slot) |
 | `model_shots` | 25 | `POST /api/creator/model-shots` |

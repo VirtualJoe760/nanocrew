@@ -12,7 +12,7 @@ import { isCompCreator } from '@/lib/comp';
 export const CREDIT_COSTS = {
   video_voiceover: 25, // ~$0.01 real → huge margin (content floor)
   video_veo: 400, // Veo 3 Fast 8s ~$1.20 real → ~3.3× (premium tier, kept generous)
-  design_generate: 5,
+  design_generate: 8, // 1 Nano Banana image ~$0.039 → ~2× at the $0.01/cr floor
   logo_generate: 8,
   tryon: 6, // shopper-facing conversion feature — NOT currently debited (rate-limited instead)
   model_shots: 25, // 3 Nano Banana renders ~$0.12 → ~2×
