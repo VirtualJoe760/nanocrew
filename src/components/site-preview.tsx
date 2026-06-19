@@ -59,7 +59,7 @@ function regionLabel(stroke: Pt[], w: number, h: number): string {
   return `the ${v}-${hpos} of the page`;
 }
 
-type Hit = { __nanoHit?: boolean; i?: number; block?: string; tag?: string; btnTag?: string; btnText?: string; heading?: string; text?: string };
+type Hit = { __nanoHit?: boolean; i?: number; block?: string; tag?: string; btnTag?: string; btnText?: string; heading?: string; text?: string; img?: boolean; nanoImage?: string; imgSrc?: string };
 
 // Injected on every load: report the page's scroll position so native marks can stay anchored
 // to the content as it scrolls (rAF-throttled).
@@ -73,15 +73,22 @@ var t=false;window.addEventListener('scroll',function(){if(t)return;t=true;reque
 function hitScript(i: number, x: number, y: number): string {
   return `(function(){function P(o){o.__nanoHit=true;o.i=${i};window.ReactNativeWebView.postMessage(JSON.stringify(o));}
 try{var el=document.elementFromPoint(${x},${y});if(!el){P({});return;}
-var n=el,blk=null,sec=null,btn=null;
+var n=el,blk=null,sec=null,btn=null,img=null;
 while(n&&n!==document.body){
   if(!btn){var tg=(n.tagName||'').toLowerCase();var role=n.getAttribute&&n.getAttribute('role');
     if(tg==='button'||tg==='a'||role==='button'||(tg==='input'&&['submit','button'].indexOf(n.getAttribute('type')||'')>=0))btn=n;}
+  if(!img){var tgi=(n.tagName||'').toLowerCase();var bg='';try{bg=n.nodeType===1?getComputedStyle(n).backgroundImage:'';}catch(e2){}
+    if(tgi==='img'||tgi==='picture'||(bg&&bg!=='none'&&bg.indexOf('url(')>=0))img=n;}
   if(n.getAttribute&&n.getAttribute('data-block')){blk=n;break;}
   var t=(n.tagName||'').toLowerCase();if(!sec&&['section','header','footer','nav','main','article','form'].indexOf(t)>=0)sec=n;
   n=n.parentElement;}
+var nano='',isrc='';
+if(img){var ix=img;while(ix&&ix!==document.body){if(ix.getAttribute&&ix.getAttribute('data-nano-image')){nano=ix.getAttribute('data-nano-image');break;}ix=ix.parentElement;}
+  isrc=img.currentSrc||img.src||'';
+  if(!isrc){try{var bg2=getComputedStyle(img).backgroundImage;var m=bg2&&bg2.match(/url\\(["']?([^"')]+)/);if(m)isrc=m[1];}catch(e3){}}}
 var ctx=blk||sec||el;var h=ctx.querySelector?ctx.querySelector('h1,h2,h3'):null;
 P({block:blk?blk.getAttribute('data-block'):'',tag:(ctx.tagName||'').toLowerCase(),
+img:img?true:false,nanoImage:nano,imgSrc:(isrc||'').slice(0,300),
 btnTag:btn?(btn.tagName||'').toLowerCase():'',btnText:btn?((btn.textContent||btn.value||'').replace(/\\s+/g,' ').trim().slice(0,40)):'',
 heading:h?(h.textContent||'').replace(/\\s+/g,' ').trim().slice(0,80):'',
 text:(el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,60)});
@@ -92,6 +99,16 @@ text:(el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,60)});
  *  null → fall back to a positional label. */
 function describeHit(d: Hit): string | null {
   const kind = (t?: string) => (t === 'a' ? 'link' : 'button');
+  // An actual image is the most specific target for image edits — name it from its identity.
+  if (d.img && !d.btnText) {
+    const ni = d.nanoImage || '';
+    if (ni === 'hero') return 'the hero (main background) image';
+    if (ni === 'logo') return 'the logo';
+    if (ni === 'og') return 'the social share image';
+    if (ni.startsWith('section:')) return `the ${ni.slice(8).replace(/[-_]/g, ' ')} section image`;
+    if (ni.startsWith('product:')) return 'a product photo';
+    return 'the image they circled';
+  }
   if (d.btnText) return `the "${d.btnText}" ${kind(d.btnTag)}`;
   if (d.btnTag) return `a ${kind(d.btnTag)}`;
   if (d.block) return `the "${d.block}" section${d.heading ? ` ("${d.heading}")` : ''}`;

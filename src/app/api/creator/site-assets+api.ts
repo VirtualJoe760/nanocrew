@@ -16,8 +16,11 @@ import { TenantError, assertCatalogueOwner, storeForMember } from '@/lib/tenant'
 //   cover                     → catalogues.cover_image_url (the given catalogue)
 //   og                        → stores.site_assets.og (the social-share image; overrides the
 //                               generated opengraph-image card on the storefront)
+//   section:<key>             → stores.site_assets.sections[key] (a named in-page image the
+//                               template renders, e.g. 'section:about' — the data-nano-image contract)
 type Slot = 'hero' | 'heroVideo' | 'heroPoster' | 'logo' | 'cover' | 'og';
 const SLOTS: Slot[] = ['hero', 'heroVideo', 'heroPoster', 'logo', 'cover', 'og'];
+const isSection = (s: string) => /^section:[a-z0-9_-]{1,40}$/i.test(s);
 
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
@@ -25,13 +28,13 @@ export async function POST(req: Request) {
 
   const b = (await req.json().catch(() => null)) as { catalogueId?: string; storeSlug?: string; slot?: string; url?: string } | null;
   const url = b?.url;
-  if (!b?.slot || !SLOTS.includes(b.slot as Slot) || (!b.catalogueId && !b.storeSlug)) {
+  if (!b?.slot || (!SLOTS.includes(b.slot as Slot) && !isSection(b.slot)) || (!b.catalogueId && !b.storeSlug)) {
     return Response.json({ error: 'a valid slot and either catalogueId or storeSlug are required' }, { status: 400 });
   }
   if (typeof url !== 'string' || !/^https:\/\//.test(url)) {
     return Response.json({ error: 'a hosted https url is required' }, { status: 400 });
   }
-  const slot = b.slot as Slot;
+  const slot = b.slot;
   if (slot === 'cover' && !b.catalogueId) {
     return Response.json({ error: 'cover needs a catalogueId' }, { status: 400 });
   }
@@ -60,6 +63,12 @@ export async function POST(req: Request) {
     } else if (slot === 'og') {
       const current = (store.siteAssets ?? {}) as Record<string, unknown>;
       await db.update(schema.stores).set({ siteAssets: { ...current, og: url } }).where(eq(schema.stores.id, storeId));
+    } else if (isSection(slot)) {
+      // section:<key> → merge into site_assets.sections without clobbering the hero/og fields.
+      const key = slot.slice('section:'.length);
+      const current = (store.siteAssets ?? {}) as { sections?: Record<string, string> };
+      const sections = { ...(current.sections ?? {}), [key]: url };
+      await db.update(schema.stores).set({ siteAssets: { ...current, sections } }).where(eq(schema.stores.id, storeId));
     } else {
       // Merge into site_assets.hero so we don't clobber the other hero fields.
       const current = (store.siteAssets ?? {}) as { hero?: Record<string, string | null>; sections?: Record<string, string> };
