@@ -1,8 +1,9 @@
 import { getUserFromRequest } from '@/lib/auth';
+import { uploadImage } from '@/lib/cloudinary';
 import { db, schema } from '@/lib/db';
 import { storeForMember } from '@/lib/tenant';
 
-type Annotation = { url: string; width: number; strokes: { x: number; y: number }[][] };
+type Annotation = { url: string; width: number; strokes: { x: number; y: number }[][]; shots?: string[]; shotUrls?: string[] };
 type Turn = { role: 'user' | 'assistant'; text: string };
 type ImageOutcome = { slot: string; prompt: string; generated?: boolean; placed?: boolean; error?: string | null };
 type EditPlan = { images?: ImageOutcome[]; edits?: string[] };
@@ -36,9 +37,28 @@ export async function POST(req: Request) {
     const store = await storeForMember(b.storeSlug, user.id);
     if (!store) return Response.json({ error: 'not found' }, { status: 404 });
 
-    const annotations = (Array.isArray(b.annotations) ? b.annotations : [])
+    const rawAnnotations = (Array.isArray(b.annotations) ? b.annotations : [])
       .filter((a) => a && typeof a.url === 'string' && Array.isArray(a.strokes) && a.strokes.length > 0)
       .slice(0, 8);
+    // The client captures a REAL screenshot (page + the drawn mark) per annotation — the proof we
+    // hand Claude, who reads a marked-up image far more reliably than coordinates. Host each on
+    // Cloudinary now and store only the URLs; the forge downloads them into briefs/screenshots/.
+    // Best-effort: a hosting failure just falls back to the forge's server-side stroke render.
+    const annotations = await Promise.all(
+      rawAnnotations.map(async (a) => {
+        const dataUris = (Array.isArray(a.shots) ? a.shots : []).filter((s) => typeof s === 'string' && s.startsWith('data:')).slice(0, 3);
+        const shotUrls: string[] = [];
+        for (const uri of dataUris) {
+          try {
+            const buf = Buffer.from(uri.slice(uri.indexOf(',') + 1), 'base64');
+            if (buf.length && buf.length < 8 * 1024 * 1024) shotUrls.push(await uploadImage(buf, { folder: 'nanocrew/critique-shots' }));
+          } catch {
+            /* skip a bad/oversized shot — strokes still render on the forge */
+          }
+        }
+        return { url: a.url, width: a.width, strokes: a.strokes, ...(shotUrls.length ? { shotUrls } : {}) };
+      }),
+    );
     // Raw Venus↔creator turns kept alongside the distilled requestMd — lets us trace
     // "what the creator said" vs "what was captured/forged" when a request goes wrong.
     const transcript = (Array.isArray(b.transcript) ? b.transcript : [])

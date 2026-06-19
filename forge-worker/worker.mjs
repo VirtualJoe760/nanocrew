@@ -61,10 +61,18 @@ async function resolvePreviewUrl(app, branch) {
 /** The local forge pipeline for one revision (mirror of src/lib/revise.ts). */
 function buildScript({ repo, fullRepo, branch, requestMd, annotations }) {
   const anns = (annotations ?? []).filter((a) => a?.url && Array.isArray(a.strokes) && a.strokes.length > 0).slice(0, 8);
-  const annB64 = anns.length ? Buffer.from(JSON.stringify(anns)).toString('base64') : '';
-  const renderShots = annB64
-    ? `ANN=$(mktemp); printf '%s' '${annB64}' | base64 -d > "$ANN"; node ~/critique-shot/render.mjs "$ANN" briefs/screenshots > /tmp/${repo}-shots.log 2>&1 || true; rm -f "$ANN"`
-    : '';
+  // Prefer the REAL on-device screenshots (page + the creator's mark) when the app sent them —
+  // Claude reads an actual marked-up screenshot far more reliably than a server re-render. Fall
+  // back to rendering the strokes onto a fresh Playwright capture only when no shot was provided.
+  const shotUrls = anns.flatMap((a) => (Array.isArray(a.shotUrls) ? a.shotUrls : [])).filter((u) => typeof u === 'string' && /^https?:\/\//.test(u)).slice(0, 12);
+  let renderShots = '';
+  if (shotUrls.length) {
+    const dl = shotUrls.map((u, n) => `curl -fsSL ${JSON.stringify(u)} -o briefs/screenshots/shot-${n + 1}.png || true`).join('; ');
+    renderShots = `mkdir -p briefs/screenshots; ${dl}`;
+  } else if (anns.length) {
+    const annB64 = Buffer.from(JSON.stringify(anns)).toString('base64');
+    renderShots = `ANN=$(mktemp); printf '%s' '${annB64}' | base64 -d > "$ANN"; node ~/critique-shot/render.mjs "$ANN" briefs/screenshots > /tmp/${repo}-shots.log 2>&1 || true; rm -f "$ANN"`;
+  }
   const brief = `# REVISION — ${repo}
 
 The creator requested this change to their live storefront, in their own words:

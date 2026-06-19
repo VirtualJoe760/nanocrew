@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, type LayoutChangeEvent, Linking, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path, Polyline } from 'react-native-svg';
+import { captureRef } from 'react-native-view-shot';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
@@ -32,7 +33,7 @@ const CRITIQUE_INSTRUCTION = critiqueInstruction();
 
 type Pt = { x: number; y: number };
 type Critique = { slug: string; token: string; onSent?: () => void };
-type EditItem = { id: string; note: string; regions: string[]; strokes: Pt[][]; url: string; width: number };
+type EditItem = { id: string; note: string; regions: string[]; strokes: Pt[][]; url: string; width: number; shots?: string[] };
 
 function host(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -157,6 +158,11 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   // The edit currently being composed (strokes in DOCUMENT coordinates).
   const [draftStrokes, setDraftStrokes] = useState<Pt[][]>([]);
   const [draftHits, setDraftHits] = useState<Record<number, string | null>>({});
+  // A real screenshot (page + the drawn mark) captured the instant each mark lands — this is the
+  // "proof" fed to Claude on the backend, who reads a marked-up screenshot far more reliably than
+  // coordinates. Best-effort: capture failures fall back to the forge's server-side stroke render.
+  const [draftShots, setDraftShots] = useState<string[]>([]);
+  const shotRef = useRef<View>(null);
   const cur = useRef<Pt[]>([]);
   const [, tick] = useState(0);
 
@@ -288,6 +294,12 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     const cyDoc = (Math.min(...ys) + Math.max(...ys)) / 2;
     const vy = Math.round(cyDoc - scrollYRef.current); // back to viewport coords for elementFromPoint
     ref.current?.injectJavaScript(hitScript(i, cx, vy));
+    // Capture the page + this fresh mark while it's on screen — the proof we send to Claude.
+    if (!IS_WEB) {
+      captureRef(shotRef, { format: 'jpg', quality: 0.6, result: 'data-uri' })
+        .then((uri) => setDraftShots((prev) => { const next = prev.slice(); next[i] = uri; return next; }))
+        .catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftStrokes.length]);
 
@@ -302,10 +314,11 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       return;
     }
     const regions = draftStrokes.map((s, i) => draftHits[i] || regionLabel(s, size.w, size.h));
-    const item: EditItem = { id: String(editSeq.current++), note: text || '(no description)', regions, strokes: draftStrokes, url: currentUrl, width: size.w || 390 };
+    const item: EditItem = { id: String(editSeq.current++), note: text || '(no description)', regions, strokes: draftStrokes, url: currentUrl, width: size.w || 390, shots: draftShots.filter(Boolean) };
     setEdits((e) => [...e, item]);
     setDraftStrokes([]);
     setDraftHits({});
+    setDraftShots([]);
   };
   const commitRef = useRef(commitEdit);
   commitRef.current = commitEdit;
@@ -345,6 +358,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   // Undo the last circle drawn in the current (un-committed) turn — for stray/accidental marks.
   const undoStroke = () => {
     setDraftStrokes((s) => s.slice(0, -1));
+    setDraftShots((s) => s.slice(0, -1));
     setDraftHits((h) => {
       const keys = Object.keys(h).map(Number);
       if (!keys.length) return h;
@@ -360,7 +374,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     setSending(true);
     setNote(null);
     const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${critique.token}` };
-    const annotations = edits.filter((e) => e.strokes.length).map((e) => ({ url: e.url, width: e.width, strokes: e.strokes }));
+    const annotations = edits.filter((e) => e.strokes.length).map((e) => ({ url: e.url, width: e.width, strokes: e.strokes, shots: e.shots ?? [] }));
     const rawMd = () => {
       const body = edits.map((e, i) => `${i + 1}. ${e.note}${e.regions.length ? `\n   (circled: ${e.regions.join('; ')})` : ''}`).join('\n\n');
       return `The creator requested these changes to their live storefront, in their own words:\n\n${body}\n\n(About the page: ${url})`;
@@ -487,7 +501,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
           </Pressable>
         </View>
 
-        <View style={styles.webWrap} onLayout={onLayout}>
+        <View ref={shotRef} collapsable={false} style={styles.webWrap} onLayout={onLayout}>
           {IS_WEB ? (
             // react-native-webview has no web build → use a real <iframe> so the site actually loads.
             <WebFrame url={url} reloadKey={reloadKey} onLoad={() => setLoading(false)} blocked={armed} />

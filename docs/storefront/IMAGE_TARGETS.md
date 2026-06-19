@@ -41,8 +41,19 @@ A circled target feeds **both** edit paths — the intent decides which:
   that element's code, handed the target identity + any images generated for it. See
   [studio/EDIT_PIPELINE.md](../studio/EDIT_PIPELINE.md).
 
+## The screenshot is the primary proof
+
+Discernment of *which* element a creator means is driven by a **real screenshot of the page + their
+mark** (circle, arrow, underline — whatever they drew), captured on-device (`react-native-view-shot`,
+in `site-preview.tsx`) the instant the mark lands, hosted on Cloudinary by `/api/creator/revise`, and
+handed to Claude on the forge (downloaded into `briefs/screenshots/`). Claude reads a marked-up
+screenshot far more reliably than coordinates. The `data-nano-image` attribute and the DOM hit-test
+are **hints layered on top** — useful for an instant direct swap — not the primary mechanism. If
+capture fails, the forge falls back to re-rendering the strokes onto a fresh Playwright screenshot.
+
 ## Status
 - ✅ `site-assets` write path supports `hero/logo/og/cover/section:<key>`.
 - ✅ hit-test detects images + reads `data-nano-image`.
-- ⏳ tag all 5 templates (`minimal/bold/elegant/extravagant/street`).
+- ✅ real screenshot capture → host → forge (with stroke-render fallback). **Needs a build (native lib) + a worker redeploy.**
+- ⏳ tag all 5 templates (`minimal/bold/elegant/extravagant/street`) — now optional (hint only).
 - ⏳ plan→forge target plumbing for structural edits; `product:<id>` generation route.
