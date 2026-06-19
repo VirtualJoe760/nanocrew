@@ -8,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   useColorScheme,
   View,
 } from 'react-native';
@@ -42,6 +41,7 @@ import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, St
 import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
 
 import { BrandReview } from '@/components/brand-review';
+import { ChatInterview } from '@/components/chat-interview';
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
@@ -673,7 +673,6 @@ export default function StudioScreen() {
 
   // Keyboard mode: type instead of talk (noisy environments). Her voice still replies.
   const [keyboardMode, setKeyboardMode] = useState(false);
-  const [typed, setTyped] = useState('');
 
   // Paused = the user explicitly paused (or the tab blurred). Gates ALL playback + listening so
   // Venus never talks over another tab, and so an unprepared user can stop her mid-question.
@@ -712,6 +711,9 @@ export default function StudioScreen() {
     if (mode === 'interview' && !brand && !paused) live.start();
     else live.stop();
   }, [mode, brand, paused, live.start, live.stop]);
+  // Keyboard/chat mode mutes the mic so Venus doesn't react to the room while you type. Re-applied on
+  // state changes too, so it sticks even if the session (re)connects after the mode flips.
+  useEffect(() => { if (USE_LIVE) live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
   // Orb amplitude: no expo-audio metering on the Live path — drive a gentle state-based pulse.
   useEffect(() => {
     if (!USE_LIVE) return;
@@ -1072,17 +1074,6 @@ export default function StudioScreen() {
     });
   }, [state, recorder]);
 
-  const sendTyped = useCallback(() => {
-    const t = typed.trim();
-    if (!t || state === 'thinking') return;
-    setTyped('');
-    if (USE_LIVE) {
-      live.sendText(t); // keyboard fallback routes into the same Live session
-      return;
-    }
-    if (state === 'speaking') player.pause();
-    void turn({ text: t });
-  }, [typed, state, player, turn, live.sendText]);
 
 
   // Word-by-word subtitles synced to the speech itself: ElevenLabs character timestamps
@@ -1209,14 +1200,14 @@ export default function StudioScreen() {
                   <BrandsIcon />
                 </Pressable>
               ) : null}
-              {mode === 'interview' ? (
+              {mode === 'interview' && !keyboardMode ? (
                 <Pressable onPress={togglePause} hitSlop={10} accessibilityLabel={paused ? 'Resume' : 'Pause'}>
                   <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 16 }}>
                     {paused ? '▶' : '❚❚'}
                   </ThemedText>
                 </Pressable>
               ) : null}
-              {mode === 'interview' ? (
+              {mode === 'interview' && !keyboardMode ? (
                 <Pressable onPress={toggleKeyboard} hitSlop={10}>
                   <KeyboardIcon active={keyboardMode} />
                 </Pressable>
@@ -1347,6 +1338,20 @@ export default function StudioScreen() {
               </ThemedText>
             </Pressable>
           </ScrollView>
+        ) : keyboardMode ? (
+          // Keyboard mode is its own chat window — message bubbles + composer, not the orb layout.
+          <ChatInterview
+            messages={live.messages}
+            streaming={live.venusText}
+            thinking={live.state === 'thinking' || live.state === 'connecting'}
+            aiName={aiName}
+            onSend={(t) => live.sendText(t)}
+            onVoice={() => setKeyboardMode(false)}
+            onFinalize={live.finalize}
+            finalizing={live.finalizing}
+            p={p}
+            bg={BG}
+          />
         ) : (
           <>
             <View style={styles.entityArea}>
@@ -1355,20 +1360,18 @@ export default function StudioScreen() {
                 p={p}
                 level={level}
                 state={state}
-                onPressIn={USE_LIVE || keyboardMode ? undefined : beginHold}
-                onPressOut={USE_LIVE || keyboardMode ? undefined : endHold}
-                onPress={keyboardMode ? () => setKeyboardMode(false) : USE_LIVE ? onOrbPress : undefined}
+                onPressIn={USE_LIVE ? undefined : beginHold}
+                onPressOut={USE_LIVE ? undefined : endHold}
+                onPress={USE_LIVE ? onOrbPress : undefined}
               />
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
-                {keyboardMode ? '[ keyboard mode — tap the mark for voice ]' : hint}
+                {hint}
               </ThemedText>
-              {!keyboardMode ? (
-                <Pressable onPress={togglePause} hitSlop={12} style={[styles.pausePill, { borderColor: paused ? p.accent : `${p.dim}66` }]}>
-                  <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 13, letterSpacing: 1 }}>
-                    {paused ? '▶  Resume' : '❚❚  Pause'}
-                  </ThemedText>
-                </Pressable>
-              ) : null}
+              <Pressable onPress={togglePause} hitSlop={12} style={[styles.pausePill, { borderColor: paused ? p.accent : `${p.dim}66` }]}>
+                <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 13, letterSpacing: 1 }}>
+                  {paused ? '▶  Resume' : '❚❚  Pause'}
+                </ThemedText>
+              </Pressable>
               {/* Live path: explicit finalize — native-audio won't reliably call save_brand, so we
                   extract the brand from the transcript on demand. */}
               {USE_LIVE ? (
@@ -1385,26 +1388,6 @@ export default function StudioScreen() {
                 </Pressable>
               ) : null}
             </View>
-            {keyboardMode ? (
-              <View style={styles.typeRow}>
-                <TextInput
-                  value={typed}
-                  onChangeText={setTyped}
-                  placeholder="type your answer…"
-                  placeholderTextColor="#56575e"
-                  multiline
-                  style={styles.typeInput}
-                  onSubmitEditing={sendTyped}
-                />
-                <Pressable onPress={sendTyped} disabled={!typed.trim() || state === 'thinking'} hitSlop={8}>
-                  <View style={[styles.typeSend, { opacity: !typed.trim() || state === 'thinking' ? 0.4 : 1 }]}>
-                    <ThemedText type="code" style={{ color: BG }}>
-                      send
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              </View>
-            ) : null}
             <View style={styles.captions}>
               {!USE_LIVE && state === 'speaking' && words.length ? (
                 <ThemedText style={[styles.bigWord, { color: p.ink }]}>{words[wordIdx]}</ThemedText>
@@ -1482,26 +1465,6 @@ const styles = StyleSheet.create({
   finalizePill: { marginTop: Spacing.two, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.three, alignSelf: 'center', minWidth: 180, alignItems: 'center' },
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, paddingBottom: Spacing.two },
-  typeInput: {
-    flex: 1,
-    minHeight: 42,
-    maxHeight: 110,
-    borderWidth: 1,
-    borderColor: '#26282d',
-    borderRadius: 4,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    color: '#dfe2e8',
-    fontFamily: MONO,
-    fontSize: 14,
-  },
-  typeSend: {
-    backgroundColor: '#cdd1d9',
-    borderRadius: 4,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
-  },
 
   captions: { gap: Spacing.two, paddingBottom: Spacing.four, marginBottom: Spacing.six, minHeight: 96 },
   heard: { color: '#56575e', textAlign: 'center' },

@@ -17,7 +17,7 @@ import {
 import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode, AudioManager } from 'react-native-audio-api';
 
 import { apiUrl } from '@/lib/api';
-import { type BrandResult } from '@/lib/interview';
+import { type BrandResult, type ChatMessage } from '@/lib/interview';
 
 // Live (speech-to-speech) system prompt — the same warm, flowing brand interview as the turn-based
 // brain, but written for REAL-TIME SPEECH: no JSON contract, she just talks and calls save_brand.
@@ -45,6 +45,7 @@ export interface LiveCallbacks {
   onState?: (s: LiveState) => void;
   onUserTranscript?: (text: string) => void; // running input transcription
   onVenusTranscript?: (text: string) => void; // running output transcription
+  onTranscript?: (messages: ChatMessage[]) => void; // full committed conversation (for the chat view)
   onBrand?: (brand: BrandResult) => void; // she called save_brand
   onError?: (msg: string) => void;
 }
@@ -149,6 +150,12 @@ export class LiveVoiceSession {
   private voiceName: string;
   private closed = false;
   private watchdog: ReturnType<typeof setTimeout> | null = null;
+  private micMuted = false;
+
+  /** Keyboard/chat mode mutes the mic so Venus doesn't react to ambient noise while you type. */
+  setMicMuted(m: boolean) {
+    this.micMuted = m;
+  }
 
   constructor(opts: { accessToken: string; userName?: string; firstTime?: boolean; voiceName?: string; callbacks: LiveCallbacks }) {
     this.accessToken = opts.accessToken;
@@ -238,6 +245,7 @@ export class LiveVoiceSession {
     this.recorder = new AudioRecorder();
     this.recorder.onAudioReady({ sampleRate: IN_RATE, bufferLength: 1600, channelCount: 1 }, (ev) => {
       if (!this.session) return;
+      if (this.micMuted) return; // keyboard/chat mode — type only, don't pick up the room
       // Half-duplex: don't stream the mic while Venus's audio is still playing (+250ms tail),
       // otherwise her voice loops back through the speaker as "user speech" and she interrupts
       // herself. She finishes, then the mic opens for your turn.
@@ -321,6 +329,7 @@ export class LiveVoiceSession {
     if (sc?.outputTranscription?.text) {
       if (this.userTurnActive && this.curUser.trim()) {
         this.transcript.push({ role: 'user', text: this.curUser.trim() });
+        this.cb.onTranscript?.(this.getTranscript());
       }
       this.userTurnActive = false;
       this.curVenus += sc.outputTranscription.text;
@@ -329,6 +338,7 @@ export class LiveVoiceSession {
     if (sc?.turnComplete) {
       if (this.curVenus.trim()) {
         this.transcript.push({ role: 'assistant', text: this.curVenus.trim() });
+        this.cb.onTranscript?.(this.getTranscript());
         this.curVenus = '';
       }
       this.cb.onState?.('listening');
@@ -358,6 +368,7 @@ export class LiveVoiceSession {
       this.curVenus = '';
       this.userTurnActive = false; // typed turn submitted → her reply accumulates next
       this.transcript.push({ role: 'user', text: t });
+      this.cb.onTranscript?.(this.getTranscript());
       this.cb.onUserTranscript?.(t);
       this.cb.onVenusTranscript?.('');
       this.cb.onState?.('thinking');

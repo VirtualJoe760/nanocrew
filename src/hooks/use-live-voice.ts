@@ -10,12 +10,16 @@ export interface UseLiveVoice {
   venusText: string;
   /** Running transcript of what the user just said. */
   userText: string;
+  /** The full committed conversation (completed turns) — for the keyboard chat view. */
+  messages: ChatMessage[];
   error: string | null;
   /** Extracting the brand from the transcript (the "build my brand" step). */
   finalizing: boolean;
   start: () => void;
   stop: () => void;
   sendText: (text: string) => void;
+  /** Mute the mic (keyboard/chat mode) so Venus doesn't react to ambient noise. */
+  mute: (m: boolean) => void;
   /** End the interview: extract the BrandResult from the transcript via /api/extract-brand. */
   finalize: () => void;
 }
@@ -37,6 +41,7 @@ export function useLiveVoice(opts: {
   const [state, setState] = useState<LiveState>('idle');
   const [venusText, setVenusText] = useState('');
   const [userText, setUserText] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const sessionRef = useRef<LiveVoiceSession | null>(null);
   const onBrandRef = useRef(opts.onBrand);
@@ -52,6 +57,7 @@ export function useLiveVoice(opts: {
     setError(null);
     setVenusText('');
     setUserText('');
+    setMessages([]);
     const s = new LiveVoiceSession({
       accessToken: opts.accessToken,
       userName: opts.userName,
@@ -62,6 +68,7 @@ export function useLiveVoice(opts: {
         // session emits the FULL current utterance (with per-turn resets), so just replace.
         onVenusTranscript: (t) => setVenusText(t),
         onUserTranscript: (t) => setUserText(t),
+        onTranscript: (msgs) => setMessages(msgs),
         onBrand: (b) => onBrandRef.current(b),
         onError: (m) => setError(m),
       },
@@ -76,6 +83,10 @@ export function useLiveVoice(opts: {
 
   const sendText = useCallback((text: string) => {
     sessionRef.current?.sendText(text);
+  }, []);
+
+  const mute = useCallback((m: boolean) => {
+    sessionRef.current?.setMicMuted(m);
   }, []);
 
   const [finalizing, setFinalizing] = useState(false);
@@ -110,5 +121,5 @@ export function useLiveVoice(opts: {
   // Always tear down on unmount.
   useEffect(() => () => { sessionRef.current?.stop(); sessionRef.current = null; }, []);
 
-  return { state, venusText, userText, error, finalizing, start, stop, sendText, finalize };
+  return { state, venusText, userText, messages, error, finalizing, start, stop, sendText, mute, finalize };
 }
