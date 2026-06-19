@@ -458,6 +458,7 @@ export const revisionStatus = pgEnum('revision_status', [
   'ready', // branch pushed, preview deployed, awaiting creator review
   'approved', // merged to main → production
   'failed',
+  'declined', // creator rejected the preview → branch discarded, never merged (production untouched)
 ]);
 
 export const storeRevisions = pgTable(

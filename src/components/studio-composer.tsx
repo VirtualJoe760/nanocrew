@@ -514,6 +514,14 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     await loadRevisions();
   };
 
+  // ✕ on the review card — the creator declined this preview. Tell the server to discard the change
+  // (it only ever lived on a working branch, never merged), then refresh so the card disappears.
+  const decline = async (rev: Revision) => {
+    setReviewDismissed((s) => new Set(s).add(rev.id)); // hide immediately; server confirms below
+    await fetch(apiUrl(`/api/creator/revisions/${rev.id}/decline`), { method: 'POST', headers }).catch(() => {});
+    await loadRevisions();
+  };
+
   const savePost = async (publish: boolean) => {
     if (!draft?.title.trim() || !active) {
       setNote('A title is required.');
@@ -675,6 +683,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                       a "Go to review" notification lands: Review the preview → Publish, or keep editing. */}
                   {pendingRev ? (
                     <View style={styles.reviewCard}>
+                      {/* ✕ declines this change — discards it server-side (it never reached production). */}
+                      <Pressable onPress={() => decline(pendingRev)} hitSlop={10} style={styles.reviewClose}>
+                        <ThemedText type="code" style={styles.reviewCloseX}>✕</ThemedText>
+                      </Pressable>
                       {pendingRev.status === 'building' ? (
                         <>
                           <View style={styles.reviewRow}>
@@ -690,7 +702,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                         </>
                       ) : pendingRev.status === 'ready' ? (
                         <>
-                          <ThemedText type="smallBold" style={styles.white}>A change is ready to review</ThemedText>
+                          <ThemedText type="smallBold" style={styles.white}>A change is ready</ThemedText>
                           <View style={styles.reviewRow}>
                             {pendingRev.previewUrl ? (
                               <Pressable onPress={() => { setPreviewTarget(pendingRev.previewUrl); setCritiquePreview(false); }} style={styles.reviewBtn}>
@@ -698,15 +710,12 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                               </Pressable>
                             ) : null}
                             <Pressable onPress={() => approve(pendingRev)} style={[styles.reviewBtn, { backgroundColor: pal.accent, borderColor: pal.accent }]}>
-                              <ThemedText type="code" style={{ color: pal.onAccent }}>Publish →</ThemedText>
-                            </Pressable>
-                            <Pressable onPress={() => setReviewDismissed((s) => new Set(s).add(pendingRev.id))} hitSlop={8}>
-                              <ThemedText type="code" style={styles.dim}>keep editing</ThemedText>
+                              <ThemedText type="code" style={{ color: pal.onAccent }}>Publish</ThemedText>
                             </Pressable>
                           </View>
                         </>
                       ) : (
-                        <ThemedText type="small" style={styles.dim}>That change didn’t take — open the editor and try rewording it.</ThemedText>
+                        <ThemedText type="small" style={styles.dim}>That change didn’t take — tap ✕ to dismiss, or talk to Venus to try again.</ThemedText>
                       )}
                     </View>
                   ) : null}
@@ -1034,7 +1043,9 @@ function makeStyles(pal: StudioPalette) {
     change: { minHeight: 90, textAlignVertical: 'top' },
     row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginTop: Spacing.one },
     primaryBtn: { backgroundColor: pal.accent, borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.four, alignItems: 'center', marginTop: Spacing.one },
-    reviewCard: { borderWidth: 1, borderColor: pal.accent, borderRadius: 12, padding: Spacing.three, gap: Spacing.two, marginBottom: Spacing.three },
+    reviewCard: { position: 'relative', borderWidth: 1, borderColor: pal.accent, borderRadius: 12, padding: Spacing.three, paddingRight: Spacing.five, gap: Spacing.two, marginBottom: Spacing.three },
+    reviewClose: { position: 'absolute', top: 6, right: 8, zIndex: 1, padding: 4 },
+    reviewCloseX: { color: pal.dim, fontSize: 15 },
     reviewRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
     reviewBtn: { borderWidth: 1, borderColor: pal.line, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
     postRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },

@@ -205,3 +205,28 @@ echo MERGE_DONE
     return false;
   }
 }
+
+// The creator declined the preview. Production was never touched (the change lived on a working
+// branch only), so "reverting" = discarding that branch and marking the revision declined. Always
+// mark it declined even if the branch delete hiccups — the row must leave the review bar.
+export async function declineRevision(input: { revisionId: string; slug: string; branch: string }): Promise<boolean> {
+  await db.update(schema.storeRevisions).set({ status: 'declined' }).where(eq(schema.storeRevisions.id, input.revisionId));
+  const cfg = config();
+  if (cfg && input.branch && input.branch.startsWith('revision/')) {
+    const repo = `store-${input.slug}`;
+    const fullRepo = `${cfg.GITHUB_OWNER}/${repo}`;
+    try {
+      await ssh(
+        cfg,
+        `cd ~/stores/${repo}-merge 2>/dev/null && git push -q origin --delete ${input.branch} || ` +
+          `git -c credential.helper= ls-remote https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git >/dev/null 2>&1 && ` +
+          `git push -q https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git --delete ${input.branch} || true`,
+        60 * 1000,
+      );
+      console.log(`[revise decline] ${fullRepo} branch ${input.branch} discarded`);
+    } catch (e) {
+      console.error(`[revise decline] ${repo}: branch cleanup failed (non-fatal): ${e instanceof Error ? e.message : 'failed'}`);
+    }
+  }
+  return true;
+}

@@ -295,10 +295,17 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     const vy = Math.round(cyDoc - scrollYRef.current); // back to viewport coords for elementFromPoint
     ref.current?.injectJavaScript(hitScript(i, cx, vy));
     // Capture the page + this fresh mark while it's on screen — the proof we send to Claude.
+    // Guard SYNCHRONOUSLY: if the native module isn't in the binary (e.g. a dev build made before
+    // react-native-view-shot was added), captureRef throws before returning a promise. Swallow it —
+    // the forge falls back to re-rendering the strokes, so circling must never crash.
     if (!IS_WEB) {
-      captureRef(shotRef, { format: 'jpg', quality: 0.6, result: 'data-uri' })
-        .then((uri) => setDraftShots((prev) => { const next = prev.slice(); next[i] = uri; return next; }))
-        .catch(() => {});
+      try {
+        captureRef(shotRef, { format: 'jpg', quality: 0.6, result: 'data-uri' })
+          .then((uri) => setDraftShots((prev) => { const next = prev.slice(); next[i] = uri; return next; }))
+          .catch(() => {});
+      } catch {
+        /* native module absent — stroke-render fallback covers it */
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftStrokes.length]);
@@ -607,8 +614,8 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
                 <View style={styles.controlsRow}>
                   <Pressable onPress={() => arm(!armed)} hitSlop={12} style={[styles.sideBtn, armed && styles.sideBtnOn]}>
                     <Svg width={22} height={22}>
-                      <Path d="M4 18 L14 8 L16 10 L6 20 Z" fill="none" stroke={armed ? BG : GOLD} strokeWidth={1.7} strokeLinejoin="round" />
-                      <Line x1={14} y1={8} x2={17} y2={5} stroke={armed ? BG : GOLD} strokeWidth={1.7} strokeLinecap="round" />
+                      {/* draw a squiggly line — what marking the page actually feels like */}
+                      <Path d="M3 13 Q 6 7 9 13 T 15 13 T 21 13" fill="none" stroke={armed ? BG : GOLD} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
                   </Pressable>
                   <VenusOrb active={recording || speaking} level={level} size={86} onPress={toggleTalk} />
@@ -627,7 +634,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
                   {paused ? 'Paused — tap the orb to resume' : venus.venusText || (venus.userText ? `you: ${venus.userText}` : subtitle)}
                 </ThemedText>
                 <ThemedText type="code" style={styles.hint} numberOfLines={1}>
-                  {armed ? 'circle any spots, then tap ✎ to finish' : 'tap ✎ to circle · just speak · orb to pause · ⌨ to type'}
+                  {armed ? 'mark any spot (circle or arrow), then tap 〰 to finish' : 'tap 〰 to mark · just speak · orb to pause · ⌨ to type'}
                 </ThemedText>
               </>
             )}

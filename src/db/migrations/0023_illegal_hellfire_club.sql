@@ -1,0 +1,1 @@
+ALTER TYPE "public"."revision_status" ADD VALUE 'declined';
