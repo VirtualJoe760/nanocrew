@@ -50,6 +50,7 @@ export function ChatInterview({
   const [text, setText] = useState('');
   const [kb, setKb] = useState(0);
   const scroller = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -71,6 +72,7 @@ export function ChatInterview({
   const send = () => {
     const t = text.trim();
     if (!t || thinking) return;
+    inputRef.current?.clear(); // controlled multiline doesn't always re-sync to '' — clear natively too
     setText('');
     onSend(t);
   };
@@ -122,6 +124,7 @@ export function ChatInterview({
       {/* Composer */}
       <View style={s.composer}>
         <TextInput
+          ref={inputRef}
           value={text}
           onChangeText={setText}
           placeholder={`Message ${aiName}…`}
