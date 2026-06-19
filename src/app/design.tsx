@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -1780,8 +1781,8 @@ function GenerateModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalBackdrop}>
         <ThemedView type="background" style={styles.sheet}>
-          {/* Preview pane FIRST (top) — viewing area up high, tappable controls kept lower/reachable. */}
-          <View style={styles.previewPane}>
+          {/* Preview pane (top). Tapping it dismisses the keyboard — a big, obvious target. */}
+          <Pressable style={styles.previewPane} onPress={() => Keyboard.dismiss()}>
             {busy ? (
               <View style={styles.previewCenter}>
                 <ActivityIndicator color={theme.text} />
@@ -1802,7 +1803,7 @@ function GenerateModal({
                 </ThemedText>
               </View>
             )}
-          </View>
+          </Pressable>
 
           <View style={styles.sheetHeader}>
             <ThemedText type="code" themeColor="textSecondary">
@@ -1846,6 +1847,7 @@ function GenerateModal({
             style={styles.sheetScroll}
             contentContainerStyle={styles.sheetScrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}>
           {error ? (
             <ThemedText type="small" themeColor="textSecondary" style={styles.genError}>
@@ -1892,13 +1894,6 @@ function GenerateModal({
                   </ThemedView>
                 </Pressable>
               </View>
-              <Pressable onPress={approve} disabled={busy}>
-                <View style={[styles.generate, { backgroundColor: theme.text, opacity: busy ? 0.4 : 1 }]}>
-                  <ThemedText type="smallBold" style={{ color: theme.background }}>
-                    Use this
-                  </ThemedText>
-                </View>
-              </Pressable>
             </>
           ) : modality === 'video' ? null : (
             <>
@@ -2011,17 +2006,26 @@ function GenerateModal({
                   ))}
                 </View>
               ) : null}
-
-              <Pressable onPress={onGeneratePress} disabled={!canGo || busy}>
-                <View style={[styles.generate, { backgroundColor: theme.text, opacity: !canGo || busy ? 0.4 : 1 }]}>
-                  <ThemedText type="smallBold" style={{ color: theme.background }}>
-                    {busy ? 'Generating…' : 'Generate'}
-                  </ThemedText>
-                </View>
-              </Pressable>
             </>
           )}
           </ScrollView>
+
+          {/* Primary action is PINNED below the scroll so it's always tappable above the keyboard. */}
+          {modality === 'video' ? null : staged ? (
+            <Pressable onPress={approve} disabled={busy}>
+              <View style={[styles.generate, { backgroundColor: theme.text, opacity: busy ? 0.4 : 1 }]}>
+                <ThemedText type="smallBold" style={{ color: theme.background }}>Use this</ThemedText>
+              </View>
+            </Pressable>
+          ) : (
+            <Pressable onPress={onGeneratePress} disabled={!canGo || busy}>
+              <View style={[styles.generate, { backgroundColor: theme.text, opacity: !canGo || busy ? 0.4 : 1 }]}>
+                <ThemedText type="smallBold" style={{ color: theme.background }}>
+                  {busy ? 'Generating…' : 'Generate'}
+                </ThemedText>
+              </View>
+            </Pressable>
+          )}
         </ThemedView>
       </KeyboardAvoidingView>
     </Modal>
