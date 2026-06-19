@@ -5,24 +5,31 @@ import type { ChatMessage } from '@/lib/interview';
 import { guardRate } from '@/lib/rate-limit';
 
 // POST /api/creator/plan-site-edits { messages: ChatMessage[] }
-//   → { images: [{ slot:'hero'|'logo'|'og', prompt }], edits: string[] }
+//   → { images: [{ slot:'hero'|'logo'|'og', prompt }], edits: [{ instruction, assets?:[{ prompt }] }] }
 //
 // The live-site voice editor (site-preview critique) captures a free-form conversation. Native-audio
-// Live can't reliably call tools, so a TEXT model distills the talk into a plan: which requests are
-// "generate NEW artwork for a known slot" (→ generate + place via /api/creator/site-assets) vs. every
-// other change (→ the forge). Closers/greetings/clarifying confirmations are dropped. Same brain
-// pattern as /api/extract-brand.
+// Live can't reliably call tools, so a TEXT model distills the talk into a plan:
+//   • images = a pure picture SWAP into a known slot → generate + place via /api/creator/site-assets (direct, instant).
+//   • edits  = every other change → the forge. Each edit may carry `assets`: NEW images the forge
+//              needs to carry out a STRUCTURAL change (a carousel, a gallery, "add 2 more images").
+//              The app generates those, then hands the URLs to the forge alongside the marked screenshot.
+// Closers/greetings/confirmations are dropped. Same brain pattern as /api/extract-brand.
 const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 const TRANSIENT = /unavailable|overloaded|try again|503|429|rate.?limit|deadline|temporar/i;
 
-const SYSTEM = `You read a short conversation in which a creator described changes to their EXISTING brand website (they were circling parts of the page and talking). Output ONLY JSON of the shape:
-{"images":[{"slot":"hero|logo|og","prompt":"<vivid description of the image to generate>"}],"edits":["<other change as a short imperative>"]}
+const SYSTEM = `You read a short conversation in which a creator described changes to their EXISTING brand website (they were marking up the page — a circle, arrow, or scribble — and talking). Output ONLY JSON of the shape:
+{"images":[{"slot":"hero|logo|og","prompt":"<vivid image description>"}],"edits":[{"instruction":"<the change as a short imperative>","assets":[{"prompt":"<a NEW image the forge must generate to do this edit>"}]}]}
+
+Decide each request into ONE of two buckets:
+- "images" = a pure PICTURE SWAP into a known slot — just replace the picture, nothing structural. Slots: the HERO image (slot "hero"), the logo (slot "logo"), the social/share card (slot "og"). The hero IS the big full-bleed image at the top, so map ALL of these to "hero": "hero", "background", "background image", "the photo/image at the top", "the image behind the headline", "the banner image". The prompt must be a vivid image description (combine the whole conversation so "change the background" + "a beach at sunset" becomes one prompt). Use this bucket ONLY for "make this image a different picture".
+- "edits" = EVERY other change, as {"instruction","assets"}. Includes text, colors, layout, moving/resizing, AND structural/behavioral changes to images (add a parallax effect, turn an image into a sliding carousel, make a section a photo gallery, animate it, add more images to it).
+  • "assets" = ONLY the NEW images the forge will need to GENERATE to perform that edit. Most edits need none → "assets":[]. Add assets when the edit clearly needs new pictures (e.g. "turn the hero into a carousel and add 2 more images" → 2 assets; "make the about section a 3-photo gallery" → up to 3 assets). Each asset prompt is a vivid, ON-BRAND description; if the creator didn't say what the new images should be, describe something that fits the surrounding section/brand.
+  • The instruction should name WHAT element ("the hero", "the about section image") and the structural change, and note that the forge will be handed the generated images to use.
 
 Rules:
-- "images" = ONLY requests to GENERATE brand-NEW artwork for a known slot: the HERO image (slot "hero"), the logo (slot "logo"), or the social/share card (slot "og"). IMPORTANT: the hero image IS the big full-bleed background image at the top of the site, so map ALL of these to slot "hero": "hero", "background", "background image", "the background", "the photo/image at the top", "the image behind the headline/text", "the banner image". The prompt must be a clear, vivid image description (combine the whole conversation so a fragmented ask like "change the background" + "a beach at sunset" becomes one prompt). Only include an image when the creator clearly wants it generated.
-- "edits" = EVERY other change in plain imperative words: text/headlines, colors, layout, moving or resizing things, rounder buttons, swapping to a photo they already have, adding sections, etc.
 - IGNORE greetings, acknowledgements, confirmations ("yes", "do it", "that's it"), and anything that isn't an actual change.
-- If you're unsure whether something is a new-image generation, put it in "edits", not "images".
+- A plain "make this a different picture" → images. A change to how an image BEHAVES or is STRUCTURED (carousel, parallax, gallery, +more images) → edits (with assets if it needs new pictures).
+- If unsure whether something is a pure swap, put it in "edits".
 - Never invent changes that weren't asked for. Empty arrays are fine.`;
 
 async function generate(ai: GoogleGenAI, params: Parameters<GoogleGenAI['models']['generateContent']>[0], attempts = 2) {
@@ -73,17 +80,35 @@ export async function POST(req: Request) {
     if (!raw) throw new Error('empty');
     const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '')) as {
       images?: { slot?: string; prompt?: string }[];
-      edits?: string[];
+      edits?: (string | { instruction?: string; assets?: { prompt?: string }[] })[];
     };
     const images = (parsed.images ?? [])
       .filter((i) => i && typeof i.prompt === 'string' && i.prompt.trim() && VALID_SLOTS.has(String(i.slot)))
       .map((i) => ({ slot: i.slot as 'hero' | 'logo' | 'og', prompt: i.prompt!.trim() }))
       .slice(0, 6);
-    const edits = (parsed.edits ?? []).filter((e) => typeof e === 'string' && e.trim()).map((e) => e.trim()).slice(0, 20);
+    // Normalize edits: a string is a plain forge change; an object may carry `assets` — NEW images the
+    // forge needs (carousel/gallery/"add more images"). Cap assets so a single edit can't run up spend.
+    let assetBudget = 8; // total new forge images allowed across all edits in one submit
+    const edits = (parsed.edits ?? [])
+      .map((e) => {
+        if (typeof e === 'string') return e.trim() ? { instruction: e.trim(), assets: [] as { prompt: string }[] } : null;
+        const instruction = typeof e?.instruction === 'string' ? e.instruction.trim() : '';
+        if (!instruction) return null;
+        const assets = (Array.isArray(e?.assets) ? e.assets : [])
+          .filter((a) => a && typeof a.prompt === 'string' && a.prompt.trim())
+          .map((a) => ({ prompt: a.prompt!.trim() }))
+          .slice(0, 4);
+        const capped = assets.slice(0, Math.max(0, assetBudget));
+        assetBudget -= capped.length;
+        return { instruction, assets: capped };
+      })
+      .filter((e): e is { instruction: string; assets: { prompt: string }[] } => !!e)
+      .slice(0, 20);
     // Trace the classification: the most recent creator turn in → the plan out. When a request
     // like "make the hero an american flag" yields images=0, the subject was lost upstream (capture).
     const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.text ?? '';
-    console.log(`[pipeline:plan] turns=${messages.length} lastSaid=${JSON.stringify(lastUser.slice(0, 160))} → images=${images.length}[${images.map((i) => i.slot).join(',')}] edits=${edits.length}`);
+    const assetCount = edits.reduce((n, e) => n + e.assets.length, 0);
+    console.log(`[pipeline:plan] turns=${messages.length} lastSaid=${JSON.stringify(lastUser.slice(0, 160))} → images=${images.length}[${images.map((i) => i.slot).join(',')}] edits=${edits.length} forgeAssets=${assetCount}`);
     return Response.json({ images, edits });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';

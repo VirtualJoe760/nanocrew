@@ -19,9 +19,14 @@ failure localizes to exactly one hop.
    revision row          images/edits          prompt → url         slot + url             transcript persisted
 ```
 
-- **images** (hero / logo / og) are generated and placed **directly** — the forge can't make images.
-- **edits** (text, color, layout, structure) go to the **forge** on a working branch.
+- **images** (hero / logo / og) are a pure picture **swap** — generated and placed **directly**.
+- **edits** (text, color, layout, **structural image changes** — parallax, carousel, gallery) go to the
+  **forge** on a working branch. An edit may carry **`assets`**: NEW images the forge needs (e.g.
+  "turn the hero into a carousel + add 2 images"). The app generates those (metered) and weaves the
+  hosted URLs into the forge brief — the forge can't make images, so it's handed them.
 - The two run independently in one `submit()`; either side can be empty.
+- Claude also receives the **real annotated screenshot** (page + the creator's mark, any shape) as the
+  primary proof of *which* element is meant — see [../storefront/IMAGE_TARGETS.md](../storefront/IMAGE_TARGETS.md).
 
 ## Checkpoints — what to look at, in order
 
