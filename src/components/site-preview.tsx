@@ -3,15 +3,15 @@ import { ActivityIndicator, KeyboardAvoidingView, type LayoutChangeEvent, Linkin
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path, Polyline } from 'react-native-svg';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState, useAudioSampleListener } from 'expo-audio';
-import { useSharedValue, withTiming } from 'react-native-reanimated';
-import * as FileSystem from 'expo-file-system/legacy';
+import { useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { VenusOrb } from '@/components/venus-orb';
 import { WebFrame } from '@/components/web-frame';
 import { Spacing } from '@/constants/theme';
+import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
+import { CRITIQUE_GREETING, critiqueInstruction } from '@/lib/live-voice';
 
 const IS_WEB = Platform.OS === 'web';
 
@@ -27,7 +27,8 @@ const INK = '#f4f4f6';
 const DIM = 'rgba(243,241,236,0.6)';
 const FAINT = 'rgba(243,241,236,0.28)';
 
-const COACHING = 'Tap me to talk, circle what you want to change, tell me the adjustment, then tap me to stop. Submit when you’re done.';
+const COACHING = 'Circle anything you want to change and just say the adjustment — I’ll note each one. Tap me to pause. Submit when you’re done.';
+const CRITIQUE_INSTRUCTION = critiqueInstruction();
 
 type Pt = { x: number; y: number };
 type Critique = { slug: string; token: string; onSent?: () => void };
@@ -35,6 +36,15 @@ type EditItem = { id: string; note: string; regions: string[]; strokes: Pt[][]; 
 
 function host(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+// In continuous capture, skip obvious conversational closers so "no, that's it" doesn't become an
+// edit. (Anything missed is still removable in the review list.)
+function isCloser(raw: string): boolean {
+  let t = raw.trim().toLowerCase().replace(/[.!?,]+/g, ' ').replace(/'/g, '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/^(no|nope|nah|ok|okay|yeah|yep|cool|um|uh)\s+/, '');
+  if (!t || /^(no|nope|nah|ok|okay|yeah|yep)$/.test(t)) return true;
+  return /^(that(s| is)?\s*)?(it|all|everything)$|^(im good|all good|were good|all set|good to go|done|submit|finished|nothing( else)?|stop|thats it|thats all|thats everything)$/.test(t);
 }
 
 /** Rough human label for where a stroke sits — the fallback when the DOM hit-test can't resolve. */
@@ -48,9 +58,6 @@ function regionLabel(stroke: Pt[], w: number, h: number): string {
   const hpos = cx < 0.34 ? 'left' : cx > 0.66 ? 'right' : 'centre';
   return `the ${v}-${hpos} of the page`;
 }
-
-// Enable the mic meter so Venus's orb can ride the live audio level while she listens.
-const REC_OPTS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
 
 type Hit = { __nanoHit?: boolean; i?: number; block?: string; tag?: string; btnTag?: string; btnText?: string; heading?: string; text?: string };
 
@@ -136,45 +143,40 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
   const cur = useRef<Pt[]>([]);
   const [, tick] = useState(0);
 
-  // Talk + Venus's voice
-  const recorder = useAudioRecorder(REC_OPTS);
-  const recState = useAudioRecorderState(recorder, 100);
-  const [recording, setRecording] = useState(false);
-  const player = useAudioPlayer();
-  const playerStatus = useAudioPlayerStatus(player);
-  const [speaking, setSpeaking] = useState(false);
-  const playSeq = useRef(0);
-
-  // One shared audio level drives the orb: her voice (PCM RMS) while speaking, yours
-  // (dBFS metering) while listening, decaying to calm when idle.
-  const level = useSharedValue(0);
-  useAudioSampleListener(player, (sample) => {
-    const frames = sample.channels?.[0]?.frames;
-    if (!frames?.length) return;
-    const step = Math.max(1, Math.floor(frames.length / 64));
-    let sum = 0;
-    let n = 0;
-    for (let i = 0; i < frames.length; i += step) {
-      sum += frames[i] * frames[i];
-      n++;
-    }
-    level.value = withTiming(Math.min(1, Math.sqrt(sum / n) * 4.5), { duration: 90 });
+  // Talk + Venus's voice — continuous Gemini Live (no more record→transcribe→TTS). The session
+  // listens the whole time this view is open; whatever the creator says becomes an edit (below),
+  // and Venus converses in real time. Tap the orb to pause/resume listening.
+  const [paused, setPaused] = useState(false);
+  const venus = useLiveVoice({
+    accessToken: critique?.token,
+    instruction: CRITIQUE_INSTRUCTION,
+    greeting: CRITIQUE_GREETING,
+    enableBrandTool: false,
+    onBrand: () => {},
   });
+  const speaking = venus.state === 'speaking';
+  const recording = venus.state === 'listening' && !paused; // orb "active" while she's hearing you
+
+  // No raw audio meter on the Live path — drive a gentle state-based pulse for the orb.
+  const level = useSharedValue(0);
   useEffect(() => {
-    if (!recording) return;
-    const db = recState.metering;
-    if (typeof db !== 'number') return;
-    level.value = withTiming(Math.min(1, Math.max(0, (db + 50) / 50)), { duration: 110 });
+    if (venus.state === 'speaking' || venus.state === 'listening') {
+      level.value = withRepeat(withSequence(withTiming(0.6, { duration: 460 }), withTiming(0.18, { duration: 460 })), -1, true);
+    } else {
+      level.value = withTiming(0, { duration: 400 });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recState.metering, recording]);
+  }, [venus.state]);
+
+  // Run the session while the critique view is open (native only — mic needs the dev build).
   useEffect(() => {
-    if (!recording && !speaking) level.value = withTiming(0, { duration: 400 });
+    if (!critique || IS_WEB) return;
+    venus.start();
+    return () => venus.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recording, speaking]);
-  useEffect(() => {
-    if (speaking && playerStatus.didJustFinish) setSpeaking(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerStatus.didJustFinish]);
+  }, [critique]);
+  // Tap-to-pause mutes the mic + her voice; re-applied on state changes so it sticks on reconnect.
+  useEffect(() => { venus.mute(paused); }, [paused, venus.state, venus.mute]);
 
   // Type instead of talk
   const [typing, setTyping] = useState(false);
@@ -263,80 +265,14 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftStrokes.length]);
 
-  const startRec = async () => {
-    try {
-      const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) {
-        setNote('Microphone access is needed to talk to Venus.');
-        return;
-      }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      setRecording(true);
-      setNote(null);
-      setSubtitle('Listening… tell me the change, then tap me to stop.');
-    } catch {
-      setNote('Could not start recording.');
-    }
-  };
+  // Surface Venus's connection errors as the on-screen note.
+  useEffect(() => { if (venus.error) setNote(venus.error); }, [venus.error]);
 
-  const transcribe = async (): Promise<string> => {
-    try {
-      const uri = recorder.uri;
-      if (!uri || !critique) return '';
-      const audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-      const r = await fetch(apiUrl('/api/transcribe'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${critique.token}` },
-        body: JSON.stringify({ audio }),
-      });
-      return ((await r.json()) as { text?: string }).text?.trim() ?? '';
-    } catch {
-      return '';
-    }
-  };
-
-  // Venus speaks: TTS the line (default consultant voice) and play it; the orb rides her voice.
-  const speak = async (line: string) => {
-    if (!critique) return;
-    setSubtitle(line);
-    // Voice (TTS + expo-audio + FileSystem) is native-only; on web we just show the subtitle.
-    if (IS_WEB) return;
-    try {
-      const r = await fetch(apiUrl('/api/voice'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${critique.token}` },
-        body: JSON.stringify({ say: line }),
-      });
-      const d = (await r.json()) as { speech?: string };
-      if (!d.speech) return;
-      const file = `${FileSystem.cacheDirectory}venus-${playSeq.current++}.mp3`;
-      await FileSystem.writeAsStringAsync(file, d.speech, { encoding: FileSystem.EncodingType.Base64 });
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      player.replace({ uri: file });
-      setSpeaking(true);
-      player.play();
-    } catch {
-      /* speech is best-effort — the subtitle still shows the line */
-    }
-  };
-
-  // Venus greets + coaches the creator the first time the editor opens.
-  const greeted = useRef(false);
-  useEffect(() => {
-    if (!critique || greeted.current) return;
-    greeted.current = true;
-    void speak(COACHING);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [critique]);
-
-  // Close the current turn into one itemised edit (note = what was said / typed).
+  // Close one itemised edit (note = what was said / typed) anchored to the circled regions.
   const commitEdit = (note: string) => {
     const text = note.trim();
     if (!text && !draftStrokes.length) {
-      setNote('Talk or circle something first.');
-      setSubtitle(COACHING);
+      setNote('Circle something or say a change first.');
       return;
     }
     const regions = draftStrokes.map((s, i) => draftHits[i] || regionLabel(s, size.w, size.h));
@@ -344,43 +280,38 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     setEdits((e) => [...e, item]);
     setDraftStrokes([]);
     setDraftHits({});
-    void speak('Got it — added. Circle your next change, or tap submit when you’re done.');
   };
+  const commitRef = useRef(commitEdit);
+  commitRef.current = commitEdit;
 
-  const toggleTalk = async () => {
-    // No mic recording on web — steer to the keyboard, which works everywhere.
-    if (IS_WEB) {
-      setTyping(true);
-      setNote('Voice editing is in the app — here, tap ⌨ to type your change.');
-      return;
+  // Continuous capture: each substantive thing the creator SAYS becomes an edit (anchored to whatever
+  // they've circled). We skip obvious closers ("no, that's it") and they can remove any in review.
+  const committedUsers = useRef(0);
+  useEffect(() => {
+    const said = venus.messages.filter((m) => m.role === 'user');
+    if (said.length < committedUsers.current) committedUsers.current = said.length; // session reset
+    for (let i = committedUsers.current; i < said.length; i++) {
+      const t = said[i].text.trim();
+      if (t && !isCloser(t)) commitRef.current(t);
     }
-    if (recording) {
-      setRecording(false);
-      try {
-        await recorder.stop();
-      } catch {
-        /* ignore */
-      }
-      setSubtitle('One sec — writing that down…');
-      const said = await transcribe();
-      commitEdit(said);
-    } else {
-      if (speaking) {
-        try {
-          player.pause();
-        } catch {
-          /* ignore */
-        }
-        setSpeaking(false);
-      }
-      void startRec();
-    }
-  };
+    committedUsers.current = said.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venus.messages]);
 
   const addTyped = () => {
     commitEdit(draftText);
     setDraftText('');
     setTyping(false);
+  };
+
+  // Orb tap: type on web (no mic); otherwise pause/resume the live conversation.
+  const toggleTalk = () => {
+    if (IS_WEB) {
+      setTyping(true);
+      setNote('Voice editing is in the app — here, tap ⌨ to type your change.');
+      return;
+    }
+    setPaused((p) => !p);
   };
 
   const removeEdit = (id: string) => setEdits((e) => e.filter((x) => x.id !== id));
@@ -560,10 +491,10 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
                   </Pressable>
                 </View>
                 <ThemedText type="small" style={styles.subtitle} numberOfLines={3}>
-                  {recording ? `Listening… ${Math.round((recState.durationMillis ?? 0) / 1000)}s` : subtitle}
+                  {paused ? 'Paused — tap the orb to resume' : venus.venusText || (venus.userText ? `you: ${venus.userText}` : subtitle)}
                 </ThemedText>
                 <ThemedText type="code" style={styles.hint} numberOfLines={1}>
-                  {armed ? 'circle any spots, then tap ✎ to finish' : 'tap ✎ to circle · orb to talk · ⌨ to type'}
+                  {armed ? 'circle any spots, then tap ✎ to finish' : 'tap ✎ to circle · just speak · orb to pause · ⌨ to type'}
                 </ThemedText>
               </>
             )}

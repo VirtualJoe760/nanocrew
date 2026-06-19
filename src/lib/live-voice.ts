@@ -50,6 +50,19 @@ Keep it SHORT and practical. When they describe a change ("make the hero full-sc
 export const EDIT_SITE_GREETING =
   "(The creator just opened the site editor. In one short sentence, greet them and ask what they'd like to change about their site.)";
 
+/** Voice persona for the live-site CRITIQUE view: the creator is LOOKING at their site, circling
+ *  parts of it and saying what to change, in a continuous open-mic conversation. */
+export function critiqueInstruction(brandName?: string): string {
+  const b = brandName?.trim() ? ` "${brandName.trim()}"` : '';
+  return `You are VENUS — Nano Crew's warm AI site assistant, on a live call with a creator who is LOOKING at their existing storefront${b} and wants to change things. This is NOT a new brand. They circle a spot on the page and tell you the change they want; the app logs each change as they go and builds a preview when they submit.
+
+Be brief and natural — this is a back-and-forth while they point at things. When they describe a change ("make this full-width", "this headline should say …", "move this up", "rounder buttons here"), confirm it in ONE short sentence so they know you caught it, and invite the next one ("got it — what else?"). Don't lecture, don't ask for a brand name or products, don't recite style options, and don't read code or hex codes aloud. When they say that's everything, tell them to tap Submit and you'll build a preview to review.`;
+}
+
+/** Greeting nudge for the critique view. */
+export const CRITIQUE_GREETING =
+  "(The creator just opened the live view of their site to edit it. In ONE short sentence, greet them and tell them to circle anything they want to change and just say the adjustment — you'll note each one.)";
+
 const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
 const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
 
