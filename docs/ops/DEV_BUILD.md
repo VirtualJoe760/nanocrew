@@ -1,9 +1,10 @@
 # Dev Build Runbook (EAS)
 
-Three features are built end-to-end **except** their native module, which can't run in Expo Go:
-**Apple IAP**, **push notifications**, and **critique screenshots**. They all light up with one
-dev build. Until you run this, keep using Expo Go (don't install the native deps below, or Expo
-Go bundling breaks).
+Several features need a native module that can't run in Expo Go: **Apple IAP**, **push
+notifications**, and **critique screenshots** (`react-native-view-shot`). All the native deps are
+now **installed** (so the project requires a dev/standalone build, not Expo Go); each light up once
+you ship a build that bundles them. The critique-screenshot capture is guarded — without the module
+it falls back to the forge's server-side stroke re-render, so it degrades rather than crashing.
 
 `eas.json` (build profiles) and the iOS `bundleIdentifier` (`com.nanocrew.app`) are already in.
 Change the bundle id **before** your first build if you want a different one — it ties to the App
@@ -57,11 +58,14 @@ manages the key during `eas build`.
   `APPLE_IAP_KEY_ID / APPLE_IAP_ISSUER_ID / APPLE_IAP_PRIVATE_KEY / APPLE_BUNDLE_ID` on Railway. IAP
   stays dormant (web Stripe) until those exist.
 
-## 4. Critique screenshots
-In `src/components/site-preview.tsx` (critique `send()`): capture the WebView+overlay with
-`captureRef` (react-native-view-shot) → upload via `/api/creator/upload` → pass the URL in the
-`revise` call's `screenshots[]`. The forge already downloads those into `briefs/screenshots/` and
-tells Claude to look at them.
+## 4. Critique screenshots — WIRED (needs a build with the native module)
+In `src/components/site-preview.tsx` the critique editor captures the WebView+overlay (page + the
+creator's mark) with `captureRef` (`react-native-view-shot` 4.0.3) the instant a mark lands, sends the
+data-URIs in the `revise` call's `annotations[].shots`; `/api/creator/revise` hosts them on Cloudinary
+→ `annotations[].shotUrls`; the droplet worker downloads those into `briefs/screenshots/` and Claude
+reads the real marked-up image. `captureRef` is guarded — on a build WITHOUT the native module it
+throws synchronously and we fall back to the worker's stroke re-render, so circling never crashes.
+See `docs/storefront/IMAGE_TARGETS.md`.
 
 ## 5. Build + run
 ```bash
@@ -115,6 +119,7 @@ npx eas submit --platform ios --profile production  # uploads the build to App S
 - **External testing** (≤10,000, needs a brief Beta App Review): add a public link or emails.
 - Testers install the **TestFlight** app + accept the invite.
 
-Notes: **push** (`PUSH_ENABLED=true`) and **IAP** (StoreKit 2, `react-native-iap` v15) now ship in
-the binary; IAP stays dormant until the `APPLE_IAP_*` env + App Store Connect products exist.
-**view-shot** (critique screenshots) is still off and not installed.
+Notes: **push** (`PUSH_ENABLED=true`), **IAP** (StoreKit 2, `react-native-iap` v15), and
+**view-shot** (critique screenshots, `react-native-view-shot` 4.0.3) now all ship in the binary; IAP
+stays dormant until the `APPLE_IAP_*` env + App Store Connect products exist, and view-shot capture
+falls back to the forge stroke-render if a given build predates the module.

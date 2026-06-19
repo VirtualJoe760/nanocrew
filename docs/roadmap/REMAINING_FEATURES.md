@@ -44,16 +44,16 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 - 🔒 **Push notifications** — `device_tokens` table, registration endpoint, and `notify.ts` delivery
   are live (revision "ready to review" fires once a token exists). Needs: `expo-notifications` + dev
   build + mint the token (`src/lib/push.ts`, `PUSH_ENABLED`). (Task #35)
-- 🟢 **Critique screenshots** — done (Task #34). The site editor is a turn-based, Venus-driven flow:
-  tap the orb to talk (she speaks back via TTS, the orb rides the live audio), tap the pen to circle
-  (one circle per tap; marks anchor to the page in document coords and scroll with their section),
-  type instead via the keyboard icon, then Submit a reviewable, itemised batch. Each circle is
-  resolved via a WebView DOM hit-test (`data-block` / heading / text) **and** re-rendered into a real
-  **annotated screenshot on the forge**: Playwright/Chromium (`~/critique-shot/render.mjs` on the
-  droplet, source: `scripts/forge-critique-render.mjs`) reloads the live page, overlays the gold
-  circles at their document coords, crops to the region → `briefs/screenshots/` for Claude, then
-  deletes them before commit so they never land in the brand repo. No dev build / `react-native-view-shot`
-  needed. (Branch-for-review + "ready" push notification were already in `revise.ts`.)
+- 🟢 **Critique screenshots** — done, then upgraded (2026-06-20). The live-site editor is Venus-driven:
+  talk via Gemini Live, tap the squiggle to mark a spot (circle/arrow/any shape; marks anchor to the
+  page in document coords), type via the keyboard icon, then Submit. **The primary proof fed to Claude
+  is now a REAL on-device annotated screenshot** (page + the mark), captured with `captureRef`
+  (`react-native-view-shot` 4.0.3 — so it DOES need a dev build that bundles the native module), hosted
+  by `/api/creator/revise`, downloaded by the droplet worker into `briefs/screenshots/`. If a build
+  lacks the module, `captureRef` is guarded and the forge falls back to re-rendering the strokes via
+  `~/critique-shot/render.mjs` (Playwright/Chromium; source `scripts/forge-critique-render.mjs`). The
+  WebView DOM hit-test (`data-block`/heading/text/`data-nano-image`) rides along as a hint. See
+  `docs/storefront/IMAGE_TARGETS.md` + `docs/studio/EDIT_PIPELINE.md`.
 
 ## 2. Blocked on your account / config (no code)
 - ⚪ **Stripe go-live** — create 3 recurring Prices (`STRIPE_PRICE_{STARTER,PRO,ADVANCED}`); add the

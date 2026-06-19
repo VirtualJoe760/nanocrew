@@ -149,11 +149,12 @@ In-app browser (back / reload / open-in-browser). On **web** the site loads in a
 live site: mark up the page + record a spoken critique → posts to `/api/creator/revise`
 (branch-based). The pen is a **toggle** (claims the gesture at capture phase + refuses termination so
 the WebView/iframe can't steal the stroke); an **undo** removes the last accidental circle. The
-hit-test resolves the most SPECIFIC thing circled — a **button/link + its label** first (e.g. *the
-"Shop the drop" button*), then the block/section/heading — so the brief says *what* was circled, not
-just where. Annotated screenshots are rendered **on the forge** (Playwright/Chromium re-renders the
-page and overlays the circles at their document coords → `briefs/screenshots/` for Claude, then
-deletes them before commit), so no `react-native-view-shot` dev-build dependency is needed.
+hit-test resolves the most SPECIFIC thing marked — a **button/link + its label** first (e.g. *the
+"Shop the drop" button*), an **image** (+ its `data-nano-image` id), then the block/section/heading —
+so the brief says *what* was marked, not just where. The primary proof fed to Claude is a **real
+on-device annotated screenshot** (`react-native-view-shot` `captureRef` → hosted by `/revise` →
+downloaded into `briefs/screenshots/`); if a build lacks that native module, the forge falls back to
+re-rendering the strokes (Playwright/Chromium). The mark can be any shape (circle, arrow, scribble).
 
 **Preview-ready push:** the forge **worker** (which marks revisions/provisions ready on the box)
 push-notifies the creator on **ready** and on **failed** (Expo push to their `device_tokens`) — so

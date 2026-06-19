@@ -66,12 +66,12 @@ The division is organized into subdirectories — open the one you need:
 - `account.tsx` — **Account** (auth, billing portal, account deletion, platform admin)
 
 ## Constraints / gotchas
-- **Dev build only (Expo Go retired as of build #12)**: `expo-notifications` (push, `PUSH_ENABLED=true`), `expo-apple-authentication` (native Sign in with Apple, `src/lib/oauth.ts`), and `react-native-iap` (v15, **Apple IAP / StoreKit 2** — client `src/lib/iap.ios.ts`, dormant until `APPLE_IAP_*` env) are installed, so the project requires an EAS dev/standalone build — Expo Go can't load it. Still NOT installed (server side done, seam off): critique screenshots (`react-native-view-shot`). See `docs/ops/DEV_BUILD.md`.
+- **Dev build only (Expo Go retired as of build #12)**: `expo-notifications` (push, `PUSH_ENABLED=true`), `expo-apple-authentication` (native Sign in with Apple, `src/lib/oauth.ts`), `react-native-iap` (v15, **Apple IAP / StoreKit 2** — client `src/lib/iap.ios.ts`, dormant until `APPLE_IAP_*` env), and `react-native-view-shot` (4.0.3 — the live-site editor's **annotated-screenshot capture**, `src/components/site-preview.tsx`) are installed, so the project requires an EAS dev/standalone build — Expo Go can't load it. The screenshot capture only works on a build that bundles the native module; without it, `captureRef` is guarded and the forge falls back to its server-side stroke re-render. See `docs/ops/DEV_BUILD.md`.
 - **Expo Go stale bundle**: only `xcrun simctl terminate booted host.exp.Exponent` + relaunch forces a fresh rebundle.
 - Nano Banana can't emit alpha → magenta chroma-key (`src/lib/transparency.ts`).
 - `AUTO_FIRST_DROP=1` enables server-side first-drop generation (real spend) — uses `INTERNAL_API_KEY` to call the now-authed designer routes.
 
-## Status (2026-06-18)
+## Status (2026-06-20)
 The product is now **Nano Crew** (spaced in prose; the `nanocrew` slug/URLs/repo names are unchanged).
 The app lands on **Studio** — the **social feed is hidden for v1** (code preserved at the `/feed`
 route, no tab; returns in v2), so the tab bar is **Studio · Design · Market · Account**.
@@ -122,6 +122,25 @@ the "responds in text but not voice" / "no response" races, `studio.tsx` `beginH
 conversational interview prompt + prominent Pause pill + branded join screen; **nanocrew.app mobile
 pass** (hamburger, `padding-inline` gutter fix, serif NC logo) + **OG/Twitter share images** (site card
 + per-product/per-brand photos). **Android `.aab` built** (ready for Play internal testing).
+
+**Shipped 2026-06-20 — the live-site image-edit capability + observability (committed locally; ships
+as ONE coordinated release: EAS build + `git push` + forge-worker redeploy — pushing the server alone
+would break the deployed client, see the `image-edit-architecture` memory).** **Edit observability:**
+every site edit writes ONE durable `store_revisions` row — raw `transcript` (migration 0021) + a
+structured `edit_plan` (migration 0022: per-image generated/placed/error + counts) + `[pipeline:*]`
+stage logs (plan → generate → site-assets → submit), so a failed edit traces to one hop
+(`docs/studio/EDIT_PIPELINE.md`). **Credit gate:** closed an unmetered-spend leak — `/api/generate`
+now debits (`design_generate`/`logo_generate` = 8cr, ~2× one Nano Banana image), refunds on failure,
+skips the internal first-drop identity (`docs/accounts/BILLING_CREDITS.md`). **"Circle/arrow ANY image
+→ change it":** the annotated screenshot (any mark) is the proof fed to Claude — captured on-device
+(`react-native-view-shot`), hosted by `/revise`, handed to the forge (stroke-render fallback); the
+planner splits a request into a pure picture SWAP (→ direct `site-assets` place, incl. the new
+`section:<key>` slot) vs a STRUCTURAL edit (parallax/carousel/"add N images" → forge, with app-generated
+image URLs handed over); hit-test reads `data-nano-image` as a hint (`docs/storefront/IMAGE_TARGETS.md`).
+**Review/decline:** the in-Console review card is now **[Review] [Publish] + ✕**; ✕ → `declineRevision`
+(status `declined`, migration 0023, discards the working branch — production was never merged). **Cleanup:**
+removed the dead app-side forge runner `reviseStorefront`/`buildScript` from `src/lib/revise.ts` (the
+droplet `forge-worker/worker.mjs` is the sole executor; `revise.ts` now only does approve/decline).
 
 Remaining is mostly Joe's config — see `docs/ops/PRODUCTION_CHECKLIST.md`. Top open: **Apple App Store
 review** (build 23 submitted, awaiting); **Google Play public launch is gated by the 20-tester /
