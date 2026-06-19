@@ -88,8 +88,11 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
    when closed). It routes typed turns into the SAME Live session (`live.sendText`) and renders
    `live.messages` (the committed transcript, emitted via `onTranscript`). It's a **text-only**
    experience: entering chat calls `live.mute(true)`, which mutes the mic AND her audio playback (and
-   flushes any in-flight audio); "🎙 Voice" returns to the orb and unmutes. (The `/api/interview` text
-   path remains only for the dormant non-Live fallback.)
+   flushes any in-flight audio). Header: **‹ Back** exits the interview (→ dashboard / primer), **🎙 Voice**
+   switches to the orb, **✓ Build** appears once ready. **Pause is voice-only** — it does NOT gate text
+   mode (the lifecycle rule runs the session when `keyboardMode || !paused`), and entering chat clears a
+   stale pause, so a pause set in voice can't leave the chat dead ("not completing"). (The
+   `/api/interview` text path remains only for the dormant non-Live fallback.)
 6. Pause pill stays (stops the mic + her audio). The primer's "hold to talk" copy reverts to "just talk."
 7. **Rollout:** gate behind a flag; if Live (preview) misbehaves we flip back to turn-based. Remove
    turn-based once Live is proven in the wild.

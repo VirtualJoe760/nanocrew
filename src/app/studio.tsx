@@ -728,9 +728,13 @@ export default function StudioScreen() {
   // start()/stop() are idempotent.
   useEffect(() => {
     if (!USE_LIVE) return;
-    if (mode === 'interview' && !brand && !paused && focused && appActive) live.start();
+    // Pause is a VOICE concept (stop her talking over you). In text/chat mode it must NOT gate the
+    // session, or typed turns get no reply ("chat not completing"). So: run when not paused, OR when
+    // in keyboard mode regardless of pause.
+    const inHerView = mode === 'interview' && !brand && focused && appActive;
+    if (inHerView && (keyboardMode || !paused)) live.start();
     else live.stop();
-  }, [mode, brand, paused, focused, appActive, live.start, live.stop]);
+  }, [mode, brand, paused, keyboardMode, focused, appActive, live.start, live.stop]);
   // Keyboard/chat mode mutes the mic so Venus doesn't react to the room while you type. Re-applied on
   // state changes too, so it sticks even if the session (re)connects after the mode flips.
   useEffect(() => { if (USE_LIVE) live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
@@ -932,6 +936,8 @@ export default function StudioScreen() {
   }, []);
   const startText = useCallback(() => {
     setKeyboardMode(true);
+    setPaused(false); // entering the chat always resumes — pause is a voice-only concept
+    pausedRef.current = false;
     setMode('interview');
   }, []);
 
@@ -1087,16 +1093,20 @@ export default function StudioScreen() {
   }, [playerStatus.didJustFinish]);
 
   const toggleKeyboard = useCallback(() => {
-    setKeyboardMode((k) => {
-      const next = !k;
-      if (next && state === 'listening') {
-        recorder.stop().catch(() => {});
-        setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-        setState('idle');
-      }
-      return next;
-    });
-  }, [state, recorder]);
+    const entering = !keyboardMode;
+    setKeyboardMode(entering);
+    if (entering) {
+      // Entering the chat always resumes the session — a pause set in voice must not leave the chat
+      // dead (no replies). Pause is voice-only.
+      setPaused(false);
+      pausedRef.current = false;
+    }
+    if (!USE_LIVE && entering && state === 'listening') {
+      recorder.stop().catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      setState('idle');
+    }
+  }, [keyboardMode, state, recorder]);
 
 
 
@@ -1446,6 +1456,7 @@ export default function StudioScreen() {
           aiName={aiName}
           onSend={(t) => live.sendText(t)}
           onVoice={() => setKeyboardMode(false)}
+          onExit={() => { setKeyboardMode(false); setMode(hasStore ? 'dashboard' : 'primer'); }}
           onFinalize={live.finalize}
           finalizing={live.finalizing}
           canBuild={buildReady}

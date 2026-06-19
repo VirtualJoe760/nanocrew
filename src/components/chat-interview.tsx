@@ -21,6 +21,7 @@ export function ChatInterview({
   aiName,
   onSend,
   onVoice,
+  onExit,
   onFinalize,
   finalizing,
   canBuild,
@@ -33,7 +34,10 @@ export function ChatInterview({
   thinking: boolean;
   aiName: string;
   onSend: (text: string) => void;
+  /** Switch to the voice orb (stay in the interview). */
   onVoice: () => void;
+  /** Leave the interview entirely (back out of text mode). */
+  onExit: () => void;
   onFinalize: () => void;
   finalizing: boolean;
   /** Build only appears once Venus has gathered the essentials. */
@@ -76,10 +80,10 @@ export function ChatInterview({
 
   return (
     <View style={[s.root, { backgroundColor: bg, paddingTop: insets.top + Spacing.two, paddingBottom: bottomInset }]}>
-      {/* Header */}
+      {/* Header: back out · Venus · (switch to voice / build once ready) */}
       <View style={s.header}>
-        <Pressable onPress={onVoice} hitSlop={10} style={s.voiceBtn}>
-          <ThemedText type="code" style={{ color: p.dim }}>🎙 Voice</ThemedText>
+        <Pressable onPress={onExit} hitSlop={10} style={s.leftBtn}>
+          <ThemedText type="code" style={{ color: p.dim }}>‹ Back</ThemedText>
         </Pressable>
         <ThemedText type="smallBold" style={{ color: p.ink }}>{aiName}</ThemedText>
         {canBuild ? (
@@ -87,8 +91,9 @@ export function ChatInterview({
             {finalizing ? <ActivityIndicator size="small" color={bg} /> : <ThemedText type="code" style={{ color: bg }}>✓ Build</ThemedText>}
           </Pressable>
         ) : (
-          // Keep the title centered before Build unlocks.
-          <View style={s.voiceBtn} />
+          <Pressable onPress={onVoice} hitSlop={10} style={s.rightBtn}>
+            <ThemedText type="code" style={{ color: p.dim }}>🎙 Voice</ThemedText>
+          </Pressable>
         )}
       </View>
 
@@ -156,8 +161,9 @@ function makeStyles(p: Palette) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: p.line,
     },
-    voiceBtn: { paddingVertical: 4, paddingHorizontal: 4, minWidth: 64 },
-    buildBtn: { borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 6, minWidth: 64, alignItems: 'center' },
+    leftBtn: { paddingVertical: 4, paddingHorizontal: 4, minWidth: 72 },
+    rightBtn: { paddingVertical: 4, paddingHorizontal: 4, minWidth: 72, alignItems: 'flex-end' },
+    buildBtn: { borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 6, minWidth: 72, alignItems: 'center' },
     scroll: { paddingVertical: Spacing.three, gap: Spacing.two, paddingBottom: Spacing.four },
     empty: { color: p.faint, textAlign: 'center', marginTop: Spacing.six },
     bubble: { maxWidth: '82%', borderRadius: 16, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
