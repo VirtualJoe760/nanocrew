@@ -681,8 +681,16 @@ export default function StudioScreen() {
   const pausedRef = useRef(false);
 
   // ---- Gemini Live wiring (replaces the turn-based voice machine when USE_LIVE; GEMINI_LIVE.md) ----
+  // Name from the auth provider / signup form (first name only is used in her greeting); on a brand's
+  // very first creation (no stores yet) Venus introduces herself.
+  const creatorName =
+    (session?.user?.user_metadata?.name as string | undefined) ??
+    (session?.user?.user_metadata?.full_name as string | undefined) ??
+    undefined;
   const live = useLiveVoice({
     accessToken: session?.access_token,
+    userName: creatorName,
+    firstTime: !hasStore,
     voiceName: LIVE_VOICE,
     onBrand: (b, transcript) => { setBrand(b); if (transcript?.length) messages.current = transcript; },
   });

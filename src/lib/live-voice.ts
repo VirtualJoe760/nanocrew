@@ -21,11 +21,15 @@ import { type BrandResult } from '@/lib/interview';
 
 // Live (speech-to-speech) system prompt — the same warm, flowing brand interview as the turn-based
 // brain, but written for REAL-TIME SPEECH: no JSON contract, she just talks and calls save_brand.
-function liveSystemInstruction(userName?: string): string {
+function liveSystemInstruction(userName?: string, firstTime?: boolean): string {
   const first = userName?.trim().split(/\s+/)[0];
+  const hi = first ? `"Hi ${first}"` : `"Hi"`;
+  const opening = firstTime
+    ? `This is their very FIRST time here, so open by briefly introducing yourself: you're Venus, their AI brand consultant, and you'll help them design their clothing brand and spin up their whole store and website — just by talking it through together. Keep that to one warm sentence. Then greet them: say ${hi}, ask how their day is going, and ask if they want to talk branding their store.`
+    : `Open by greeting them warmly: say ${hi}, ask how their day is going, and ask if they want to talk branding their store.`;
   return `You are VENUS — Nano Crew's warm, upbeat AI brand consultant, talking OUT LOUD in real time with a creator starting a clothing brand. Speak like a sharp, encouraging creative friend on a call: short natural spoken sentences, calm and delicate, never rushed. No lists, no markdown, and NEVER read JSON, field names, or hex codes aloud — just talk like a person.
 
-Open by greeting them warmly${first ? ` by name (${first})` : ''} in a sentence or two and asking what their brand is about. Then have a real CONVERSATION: react to what they say with something specific and genuine, then ask ONE open question that flows from it. Let their answers lead — chase the interesting thread, don't march a checklist. One idea at a time. You're their hype-person, and you're quietly capturing everything.
+${opening} Keep the open to a sentence or two — don't dump questions. Then have a real CONVERSATION: react to what they say with something specific and genuine, then ask ONE open question that flows from it. Let their answers lead — chase the interesting thread, don't march a checklist. One idea at a time. You're their hype-person, and you're quietly capturing everything.
 
 Across the chat, come away knowing: the brand name (or coin one together) + core idea; a logo (have one, or the direction for it); colors; design temperament (minimalist, bold, elegant, extravagant, or street); how the website should FEEL in their words; and the products they're most excited to sell. Gather these naturally, skip what they've covered, and NEVER override an explicit choice (if they say "black and white", the palette is black, white, and grays).
 
@@ -141,13 +145,15 @@ export class LiveVoiceSession {
   private token: string;
   private accessToken: string;
   private userName?: string;
+  private firstTime?: boolean;
   private voiceName: string;
   private closed = false;
   private watchdog: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(opts: { accessToken: string; userName?: string; voiceName?: string; callbacks: LiveCallbacks }) {
+  constructor(opts: { accessToken: string; userName?: string; firstTime?: boolean; voiceName?: string; callbacks: LiveCallbacks }) {
     this.accessToken = opts.accessToken;
     this.userName = opts.userName;
+    this.firstTime = opts.firstTime;
     this.voiceName = opts.voiceName ?? 'Aoede'; // warm Gemini voice
     this.cb = opts.callbacks;
     this.token = '';
@@ -218,7 +224,7 @@ export class LiveVoiceSession {
       },
       config: {
         responseModalities: [Modality.AUDIO],
-        systemInstruction: liveSystemInstruction(this.userName),
+        systemInstruction: liveSystemInstruction(this.userName, this.firstTime),
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } } },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
@@ -255,9 +261,14 @@ export class LiveVoiceSession {
     // Setup is done — NOW it's safe to nudge Venus to open the conversation.
     if (m.setupComplete) {
       console.warn('[live] setupComplete → greeting');
+      const first = this.userName?.trim().split(/\s+/)[0];
+      const hi = first ? `Hi ${first}` : 'Hi';
+      const nudge = this.firstTime
+        ? `(The creator just opened the studio for the FIRST time. In one warm sentence introduce yourself — you're Venus and you'll help them build their brand and store by talking it through — then greet them: "${hi}, how's your day going? Want to talk branding your store?")`
+        : `(The creator just opened the studio. Greet them warmly: "${hi}, how's your day going? Want to talk branding your store?")`;
       try {
         this.session?.sendClientContent({
-          turns: [{ role: 'user', parts: [{ text: '(The creator just opened the studio. Greet them warmly and ask what their brand is about.)' }] }],
+          turns: [{ role: 'user', parts: [{ text: nudge }] }],
           turnComplete: true,
         });
       } catch (e) {

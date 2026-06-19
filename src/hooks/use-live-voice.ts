@@ -28,6 +28,8 @@ export interface UseLiveVoice {
 export function useLiveVoice(opts: {
   accessToken: string | undefined;
   userName?: string;
+  /** No stores yet → Venus introduces herself on her first line. */
+  firstTime?: boolean;
   voiceName?: string;
   /** transcript is the full spoken conversation — pass it to /api/store so provisioning gets context. */
   onBrand: (b: BrandResult, transcript?: ChatMessage[]) => void;
@@ -53,6 +55,7 @@ export function useLiveVoice(opts: {
     const s = new LiveVoiceSession({
       accessToken: opts.accessToken,
       userName: opts.userName,
+      firstTime: opts.firstTime,
       voiceName: opts.voiceName,
       callbacks: {
         onState: setState,
@@ -69,7 +72,7 @@ export function useLiveVoice(opts: {
       setState('error');
       sessionRef.current = null;
     });
-  }, [opts.accessToken, opts.userName, opts.voiceName]);
+  }, [opts.accessToken, opts.userName, opts.firstTime, opts.voiceName]);
 
   const sendText = useCallback((text: string) => {
     sessionRef.current?.sendText(text);

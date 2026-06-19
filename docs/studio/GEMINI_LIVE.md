@@ -86,6 +86,13 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
 7. **Rollout:** gate behind a flag; if Live (preview) misbehaves we flip back to turn-based. Remove
    turn-based once Live is proven in the wild.
 
+**Greeting.** On `setupComplete` the session nudges Venus to open. Her first line is a casual
+*"Hi {first name}, how's your day going? Want to talk branding your store?"* (no name → just "Hi").
+The studio passes `userName` (from `user_metadata.name`/`full_name`) and `firstTime` (`!hasStore`) into
+`useLiveVoice` → `liveSystemInstruction`. When `firstTime`, she first introduces herself in one sentence
+(who she is + that she'll build their brand and store). There is **no AI/voice picker** — Venus on
+Gemini is the only consultant, so a new creator lands straight on the interview primer.
+
 ## Finalize: extract from the transcript, NOT the `save_brand` tool call
 
 **The native-audio Live model does not reliably emit function calls.** The `scripts/live-flow-test.mjs`
