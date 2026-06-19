@@ -41,6 +41,7 @@ import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
 
+import { BrandReview } from '@/components/brand-review';
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
@@ -1308,75 +1309,17 @@ export default function StudioScreen() {
             />
           </>
         ) : brand ? (
-          <ScrollView
-            style={styles.fill}
-            contentContainerStyle={styles.brandScroll}
-            showsVerticalScrollIndicator={false}
-          >
-            <ThemedText type="code" style={styles.brandEyebrow}>
-              {'// BRAND COMPILED'}
-            </ThemedText>
-            {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="cover" /> : null}
-            <ThemedText type="subtitle" style={[styles.white, { color: p.ink }]}>
-              {brand.name}
-            </ThemedText>
-            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-              {brand.tagline}
-            </ThemedText>
-            <View style={styles.paletteRow}>
-              {brand.designSystem.palette.map((p) => (
-                <View key={p.role} style={styles.swatchCol}>
-                  <View style={[styles.swatch, { backgroundColor: p.hex }]} />
-                  <ThemedText type="code" style={styles.swatchLabel}>
-                    {p.role}
-                  </ThemedText>
-                </View>
-              ))}
-            </View>
-            <View style={styles.chipsRow}>
-              {brand.vibeKeywords.map((k) => (
-                <View key={k} style={styles.chip}>
-                  <ThemedText type="code" style={styles.chipText}>
-                    {k}
-                  </ThemedText>
-                </View>
-              ))}
-            </View>
-            <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-              {brand.story}
-            </ThemedText>
-            {created ? (
-              <>
-                <View style={[styles.createBtn, styles.createdBox]}>
-                  <ThemedText type="code" style={styles.green}>
-                    {'> store online · @' + created}
-                  </ThemedText>
-                  <ThemedText type="small" style={[styles.dim, { color: p.dim }]}>
-                    Head to Design to start your first drop.
-                  </ThemedText>
-                </View>
-                <Pressable onPress={onFinishedBrand}>
-                  <View style={styles.createBtn}>
-                    <ThemedText type="smallBold" style={{ color: BG }}>
-                      Finished — view my brands
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              </>
-            ) : (
-              <Pressable onPress={createStore} disabled={creating}>
-                <View style={[styles.createBtn, { opacity: creating ? 0.5 : 1 }]}>
-                  {creating ? (
-                    <ActivityIndicator color={BG} />
-                  ) : (
-                    <ThemedText type="smallBold" style={{ color: BG }}>
-                      Create my store
-                    </ThemedText>
-                  )}
-                </View>
-              </Pressable>
-            )}
-          </ScrollView>
+          <BrandReview
+            brand={brand}
+            onChange={setBrand}
+            onCreate={createStore}
+            creating={creating}
+            created={created}
+            onFinished={onFinishedBrand}
+            logoUrl={logoUrl}
+            p={p}
+            bg={BG}
+          />
         ) : mode === 'cta' ? (
           <ScrollView style={styles.fill} contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
             <ThemedText type="code" style={styles.brandEyebrow}>
