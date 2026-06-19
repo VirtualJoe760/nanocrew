@@ -18,7 +18,7 @@ export interface UseLiveVoice {
   start: () => void;
   stop: () => void;
   sendText: (text: string) => void;
-  /** Mute the mic (keyboard/chat mode) so Venus doesn't react to ambient noise. */
+  /** Text-only (keyboard chat) mode: mute the mic AND her voice playback. */
   mute: (m: boolean) => void;
   /** End the interview: extract the BrandResult from the transcript via /api/extract-brand. */
   finalize: () => void;
@@ -86,7 +86,7 @@ export function useLiveVoice(opts: {
   }, []);
 
   const mute = useCallback((m: boolean) => {
-    sessionRef.current?.setMicMuted(m);
+    sessionRef.current?.setMuted(m);
   }, []);
 
   const [finalizing, setFinalizing] = useState(false);

@@ -150,11 +150,16 @@ export class LiveVoiceSession {
   private voiceName: string;
   private closed = false;
   private watchdog: ReturnType<typeof setTimeout> | null = null;
-  private micMuted = false;
+  private muted = false;
 
-  /** Keyboard/chat mode mutes the mic so Venus doesn't react to ambient noise while you type. */
-  setMicMuted(m: boolean) {
-    this.micMuted = m;
+  /** Text-only (keyboard chat) mode: mute the mic AND her audio playback — it's a text experience.
+   *  Muting mid-reply also flushes any queued audio so she goes quiet immediately. */
+  setMuted(m: boolean) {
+    this.muted = m;
+    if (m) {
+      try { this.queue?.clearBuffers(); } catch {}
+      this.playEndsAt = 0;
+    }
   }
 
   constructor(opts: { accessToken: string; userName?: string; firstTime?: boolean; voiceName?: string; callbacks: LiveCallbacks }) {
@@ -245,7 +250,7 @@ export class LiveVoiceSession {
     this.recorder = new AudioRecorder();
     this.recorder.onAudioReady({ sampleRate: IN_RATE, bufferLength: 1600, channelCount: 1 }, (ev) => {
       if (!this.session) return;
-      if (this.micMuted) return; // keyboard/chat mode — type only, don't pick up the room
+      if (this.muted) return; // text-only (keyboard) mode — don't pick up the room
       // Half-duplex: don't stream the mic while Venus's audio is still playing (+250ms tail),
       // otherwise her voice loops back through the speaker as "user speech" and she interrupts
       // herself. She finishes, then the mic opens for your turn.
@@ -291,8 +296,9 @@ export class LiveVoiceSession {
       this.playEndsAt = 0; // her audio is gone — reopen the mic
       this.cb.onState?.('listening');
     }
-    // streamed audio out → it lives in modelTurn.parts[].inlineData.data (base64 PCM 24k), not m.data
-    const parts = sc?.modelTurn?.parts ?? [];
+    // streamed audio out → it lives in modelTurn.parts[].inlineData.data (base64 PCM 24k), not m.data.
+    // In text-only (keyboard) mode we skip playback entirely — the transcript below still streams.
+    const parts = this.muted ? [] : sc?.modelTurn?.parts ?? [];
     for (const part of parts) {
       const b64 = part.inlineData?.data;
       if (!b64 || !this.outCtx || !this.queue) continue;

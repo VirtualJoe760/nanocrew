@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { type Palette } from '@/components/nc-screen';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import type { ChatMessage } from '@/lib/interview';
 
-// Keyboard mode = a full chat window (its own screen), not the orb layout with a cramped input.
-// Venus's turns + the creator's typed turns render as message bubbles; she still replies in voice,
-// the text just streams into the chat. Switching to voice (the mark) returns to the orb.
+// Keyboard mode = a full-screen chat window (its own surface, rendered OVER the studio), not the orb
+// layout with a cramped input. Venus's turns + the creator's typed turns render as message bubbles;
+// it's a TEXT experience (her voice is muted in this mode). Switching to voice returns to the orb.
+//
+// It manages its own bottom inset off the live keyboard height so the composer sits above the
+// keyboard when open and above the native tab bar when closed — it does NOT live inside the studio's
+// KeyboardAvoidingView (that zeroed the bottom padding and dropped the composer under the tab bar).
 export function ChatInterview({
   messages,
   streaming,
@@ -22,7 +27,7 @@ export function ChatInterview({
   bg,
 }: {
   messages: ChatMessage[];
-  /** The in-progress Venus reply (streams in as she speaks); empty between turns. */
+  /** The in-progress Venus reply (streams in as she replies); empty between turns. */
   streaming: string;
   thinking: boolean;
   aiName: string;
@@ -33,9 +38,19 @@ export function ChatInterview({
   p: Palette;
   bg: string;
 }) {
+  const insets = useSafeAreaInsets();
   const s = makeStyles(p);
   const [text, setText] = useState('');
+  const [kb, setKb] = useState(0);
   const scroller = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvt, (e) => setKb(e.endCoordinates?.height ?? 0));
+    const hide = Keyboard.addListener(hideEvt, () => setKb(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   // Show the streaming bubble unless it's already been committed as the last message.
   const last = messages[messages.length - 1];
@@ -44,7 +59,7 @@ export function ChatInterview({
   useEffect(() => {
     const t = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 50);
     return () => clearTimeout(t);
-  }, [messages.length, streaming, thinking]);
+  }, [messages.length, streaming, thinking, kb]);
 
   const send = () => {
     const t = text.trim();
@@ -53,10 +68,11 @@ export function ChatInterview({
     onSend(t);
   };
 
+  // Above the keyboard when open; above the native tab bar + home indicator when closed.
+  const bottomInset = kb > 0 ? kb + Spacing.two : BottomTabInset + insets.bottom + Spacing.two;
+
   return (
-    // The studio screen already wraps content in a KeyboardAvoidingView — don't nest another (it
-    // double-offsets). This is just a flex column: header · messages · composer.
-    <View style={s.fill}>
+    <View style={[s.root, { backgroundColor: bg, paddingTop: insets.top + Spacing.two, paddingBottom: bottomInset }]}>
       {/* Header */}
       <View style={s.header}>
         <Pressable onPress={onVoice} hitSlop={10} style={s.voiceBtn}>
@@ -74,7 +90,8 @@ export function ChatInterview({
         style={s.fill}
         contentContainerStyle={s.scroll}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive">
         {messages.length === 0 && !showStreaming && !thinking ? (
           <ThemedText type="code" style={s.empty}>{aiName} is connecting…</ThemedText>
         ) : null}
@@ -121,6 +138,7 @@ function Bubble({ role, text, s }: { role: 'user' | 'assistant'; text: string; s
 
 function makeStyles(p: Palette) {
   return StyleSheet.create({
+    root: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, paddingHorizontal: Spacing.four },
     fill: { flex: 1 },
     header: {
       flexDirection: 'row',
@@ -144,22 +162,21 @@ function makeStyles(p: Palette) {
       alignItems: 'flex-end',
       gap: Spacing.two,
       paddingTop: Spacing.two,
-      paddingBottom: Spacing.two,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: p.line,
     },
     input: {
       flex: 1,
       maxHeight: 120,
-      minHeight: 40,
+      minHeight: 44,
       borderWidth: 1,
       borderColor: p.line,
-      borderRadius: 20,
+      borderRadius: 22,
       paddingHorizontal: Spacing.three,
-      paddingTop: Platform.OS === 'ios' ? 10 : 6,
-      paddingBottom: Platform.OS === 'ios' ? 10 : 6,
+      paddingTop: Platform.OS === 'ios' ? 12 : 8,
+      paddingBottom: Platform.OS === 'ios' ? 12 : 8,
       fontSize: 15,
     },
-    send: { borderRadius: 20, paddingHorizontal: Spacing.four, height: 40, alignItems: 'center', justifyContent: 'center' },
+    send: { borderRadius: 22, paddingHorizontal: Spacing.four, height: 44, alignItems: 'center', justifyContent: 'center' },
   });
 }

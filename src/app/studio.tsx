@@ -1339,19 +1339,8 @@ export default function StudioScreen() {
             </Pressable>
           </ScrollView>
         ) : keyboardMode ? (
-          // Keyboard mode is its own chat window — message bubbles + composer, not the orb layout.
-          <ChatInterview
-            messages={live.messages}
-            streaming={live.venusText}
-            thinking={live.state === 'thinking' || live.state === 'connecting'}
-            aiName={aiName}
-            onSend={(t) => live.sendText(t)}
-            onVoice={() => setKeyboardMode(false)}
-            onFinalize={live.finalize}
-            finalizing={live.finalizing}
-            p={p}
-            bg={BG}
-          />
+          // Keyboard mode renders as a full-screen overlay (below) — outside this KeyboardAvoidingView.
+          null
         ) : (
           <>
             <View style={styles.entityArea}>
@@ -1422,6 +1411,23 @@ export default function StudioScreen() {
           </Pressable>
         ) : null}
       </KeyboardAvoidingView>
+
+      {/* Keyboard mode = a full-screen chat window OVER the studio (its own keyboard/tab-bar insets,
+          text-only — her voice is muted). Rendered outside the KeyboardAvoidingView on purpose. */}
+      {session && mode === 'interview' && !brand && keyboardMode ? (
+        <ChatInterview
+          messages={live.messages}
+          streaming={live.venusText}
+          thinking={live.state === 'thinking' || live.state === 'connecting'}
+          aiName={aiName}
+          onSend={(t) => live.sendText(t)}
+          onVoice={() => setKeyboardMode(false)}
+          onFinalize={live.finalize}
+          finalizing={live.finalizing}
+          p={p}
+          bg={BG}
+        />
+      ) : null}
     </View>
   );
 }
