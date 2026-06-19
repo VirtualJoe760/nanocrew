@@ -51,14 +51,14 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
 import type { BrandResult, ChatMessage, TimedWord } from '@/lib/interview';
-import { AI_VOICES, DEFAULT_VOICE } from '@/lib/voices';
+import { DEFAULT_VOICE } from '@/lib/voices';
 
 const VOICE_KEY = 'nanocrew.voiceId';
 
 // Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
 // Flip to false to fall back to the legacy turn-based /api/voice flow.
 const USE_LIVE = true;
-const LIVE_VOICE = 'Aoede'; // warm Gemini voice (picker is cosmetic until AI_VOICES→Gemini mapping)
+const LIVE_VOICE = 'Aoede'; // warm Gemini voice — Venus's single voice (no picker)
 
 // The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
 // counter-rotating rings, digital rain behind — talks you through building your brand.
@@ -1173,7 +1173,7 @@ export default function StudioScreen() {
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
   // comfortable gap so the karaoke captions never dip under it.
   const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
-  const aiName = AI_VOICES.find((v) => v.id === voiceId)?.name ?? 'Venus';
+  const aiName = 'Venus'; // the only consultant — no picker
 
   return (
     <View style={[styles.container, { backgroundColor: p.bg }]}>
