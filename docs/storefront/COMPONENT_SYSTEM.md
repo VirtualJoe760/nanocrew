@@ -70,9 +70,17 @@ selection** (JSON) → Venus authors a precise brief from it, **validated agains
 No guessing; each component is defined once in `_shared`, not 5×.
 
 ## Migration plan (phased, build-gated, reversible)
-- **5a — prove the vendoring (lowest risk):** create `_shared`; move **pure-logic libs first**
-  (`platform-auth`, `site-config`, `seo`, `api`, `contracts`). Wire the `@shared/*` alias + the forge
-  vendoring. Verify **one fresh provision builds** before touching UI.
+- **5a — single source of truth for the client layer ✅ DONE (2026-06-20, low-risk copy+sync form).**
+  `templates/_shared/lib/*` is now the canonical thin-client layer (`platform-auth`, `seo`,
+  `site-config`, `api`, `content` — the 5 files byte-identical across the 4 standard templates), with
+  **`scripts/sync-shared.mjs`** (+ `--check` for drift) copying it into each template's `lib/`. We
+  deliberately chose **copy+sync over a tsconfig-alias + forge vendoring**: imports stay `@/lib/…`, so
+  there is **no path magic, no `worker.mjs` change, no droplet redeploy, and zero production-coupling**
+  — provisioning is untouched; only how WE maintain the layer changes (edit `_shared`, run sync,
+  commit). street is excluded (its data layer diverges). See `nanocrew-templates/templates/_shared/README.md`.
+  - The heavier **tsconfig-alias + forge-vendoring** approach (below) remains the option IF we later
+    want a literal single physical file + automatic vendoring; it's higher-risk (dual path resolution +
+    a forge redeploy) and unnecessary for the maintenance win 5a already delivers.
 - **5b — UI dedup (this IS Batch 4):** extract `Base{Header,Footer,Hero,Button,ProductCard}` to
   `_shared`; templates become thin theme wrappers.
 - **5c — declarative install:** add `components.json` + make the forge read it.
