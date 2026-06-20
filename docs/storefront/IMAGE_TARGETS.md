@@ -63,3 +63,25 @@ capture fails, the forge falls back to re-rendering the strokes onto a fresh Pla
   header → no `logo`) tags `hero` + `section:about`. Product/collection imagery is left untagged
   (it routes via `product:<id>`).
 - ⏳ plan→forge target plumbing for structural edits; `product:<id>` generation route.
+
+## Venus explains components (the site vocabulary)
+
+The hit-test resolves *any* circle (not just images) to a section, and Venus uses that to **teach**:
+a creator circles something and asks "what's this? / I don't know what it's called / help me with
+this part," and Venus names it in OUR vocabulary, explains it in a sentence, and offers a few concrete
+adjustments.
+
+- **The vocabulary** lives in [`src/lib/site-vocabulary.ts`](../../src/lib/site-vocabulary.ts):
+  `SITE_VOCABULARY` (one `{ key, name, what, adjust[] }` per part — Hero, Header/nav, Logo,
+  Announcement bar, Story/About, Product grid, Product card, Collection, Button/CTA, Footer, Social
+  share image). `vocabForHit(hit)` resolves a hit → an entry (block → image slot → button → heading
+  keywords); `VOCABULARY_BRIEF` is the prompt-embeddable rundown.
+- **Venus's persona** ([`live-voice.ts`](../../src/lib/live-voice.ts) `critiqueInstruction`) embeds
+  `VOCABULARY_BRIEF` + an explain/guide mode, so she uses the same names everywhere.
+- **Context feed:** when a circle closes, `site-preview.tsx`'s `onWebMessage` calls
+  `venus.sendContext(venusContextForHit(...))` — a SILENT `turnComplete:false` turn
+  (`LiveVoiceSession.sendContext`) that tells Venus which section was circled *before* the creator
+  finishes asking, so "what's this?" is answered correctly. Native-only (Venus-live is `IS_WEB`-skipped).
+- **Keep in sync:** as templates tag more sections with `data-block` (today: `header`/`hero` only) or
+  add image slots, add/align the matching `site-vocabulary.ts` keys. Inference from headings/buttons
+  covers untagged sections until then.

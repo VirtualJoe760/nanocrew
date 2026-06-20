@@ -18,6 +18,7 @@ import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode, AudioManager }
 
 import { apiUrl } from '@/lib/api';
 import { type BrandResult, type ChatMessage } from '@/lib/interview';
+import { VOCABULARY_BRIEF } from '@/lib/site-vocabulary';
 
 // Live (speech-to-speech) system prompt — the same warm, flowing brand interview as the turn-based
 // brain, but written for REAL-TIME SPEECH: no JSON contract, she just talks and calls save_brand.
@@ -58,6 +59,10 @@ export function critiqueInstruction(brandName?: string): string {
 
 Be brief and natural — this is a back-and-forth while they point at things. When they describe a change ("make this full-width", "this headline should say …", "move this up", "rounder buttons here"), confirm it in ONE short sentence so they know you caught it, and invite the next one ("got it — what else?"). Don't lecture, don't ask for a brand name or products, don't recite style options, and don't read code or hex codes aloud.
 
+EXPLAIN + GUIDE: a lot of creators don't know what the parts of a site are called — that's fine, it's your job to teach them. When they circle something and ask what it is, say they don't know what it's called, or just ask for help with a section ("what's this?", "I want to change this but I don't know what it's called", "Venus, help me with this part"), do this: NAME it in our vocabulary, explain in ONE friendly sentence what that part of the site is, then offer two or three concrete things they could change about it — and ask which they'd like. Keep it conversational, never a lecture or a list read aloud. The app tells you which part they circled in a "(The creator just circled …)" note — trust that; if it's missing or vague, ask them to describe what they're pointing at. Our parts of a site and how each can be adjusted:
+${VOCABULARY_BRIEF}
+Use exactly these names so every creator learns the same vocabulary. Once they pick an adjustment, capture it as a change like any other.
+
 IMAGES: if they want NEW artwork (a new hero/background image, logo, or social/share card), offer the choice clearly: "Want me to generate that for you, or you might get better results in the Design center?" If they pick the Design center, tell them that's where they have full control over web assets. If they want you to make it, ask in one line what it should look like, confirm the description back, and let them know it'll be generated and placed when they submit. NOTE: the "background image" / "the image at the top" / "the photo behind the headline" IS the hero — treat those as a generatable hero image, not a vague forge edit. (Only the hero/background, logo, and the share card can be generated this way — for any other image, point them to the Design center.) Swapping to a photo they already have, restyling, or moving things doesn't need generation — just log those.
 
 When they say that's everything, tell them to tap Submit and you'll build the preview to review.`;
@@ -65,7 +70,7 @@ When they say that's everything, tell them to tap Submit and you'll build the pr
 
 /** Greeting nudge for the critique view. */
 export const CRITIQUE_GREETING =
-  "(The creator just opened the live view of their site to edit it. In ONE short sentence, greet them and tell them to circle anything they want to change and just say the adjustment — you'll note each one.)";
+  "(The creator just opened the live view of their site to edit it. In ONE short sentence, greet them and tell them to circle anything they want to change and say the adjustment — OR, if they don't know what a part is called, circle it and ask and you'll explain it and suggest changes.)";
 
 const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
 const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
@@ -448,6 +453,20 @@ export class LiveVoiceSession {
       this.cb.onState?.('thinking');
     } catch (e) {
       console.warn('[live] sendText failed', e instanceof Error ? e.message : e);
+    }
+  }
+
+  /** Push SILENT context into the session — `turnComplete:false` appends to the pending turn WITHOUT
+   *  triggering a reply, so the next thing the creator says/types is answered with this context in
+   *  hand. The critique view uses it to tell Venus which section was just circled (so "what's this?"
+   *  is answered correctly). No transcript/state churn — it's invisible to the creator. */
+  sendContext(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    try {
+      this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: false });
+    } catch {
+      /* socket closing — context is best-effort */
     }
   }
 

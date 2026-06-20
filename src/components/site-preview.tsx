@@ -12,6 +12,7 @@ import { Spacing } from '@/constants/theme';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
 import { CRITIQUE_GREETING, critiqueInstruction } from '@/lib/live-voice';
+import { venusContextForHit } from '@/lib/site-vocabulary';
 
 const IS_WEB = Platform.OS === 'web';
 
@@ -304,7 +305,11 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
         return;
       }
       if (d?.__nanoHit === true && typeof d.i === 'number') {
-        setDraftHits((h) => ({ ...h, [d.i as number]: describeHit(d) }));
+        const label = describeHit(d);
+        setDraftHits((h) => ({ ...h, [d.i as number]: label }));
+        // Tell Venus (live) WHAT was just circled, silently, so "what's this?" / "help me with this
+        // part" is answered with the section in hand. No-ops on web (no live session there).
+        if (!IS_WEB) venus.sendContext(venusContextForHit(d, label));
       }
     } catch {
       /* not one of ours */
