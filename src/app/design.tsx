@@ -71,12 +71,9 @@ const WEB_ASSETS_COLLECTION = 'Web Assets';
 // The Generate sheet's three modes — each picks the model + the options shown. (Video is wired
 // in a later phase; Graphics generates web-shaped images.) Adding more image models / ComfyUI
 // workflows later is just extending the per-mode model list.
-type Modality = 'design' | 'graphics' | 'video';
-const MODALITIES: { key: Modality; label: string }[] = [
-  { key: 'design', label: 'Design' },
-  { key: 'graphics', label: 'Graphics' },
-  { key: 'video', label: 'Video' },
-];
+// What the Generate panel produces. NOT a user-chosen tab anymore — it's derived from the brand+
+// collection screen: "Site assets" → 'graphics' (web), a product collection → 'design'.
+type Modality = 'design' | 'graphics';
 
 // Every node shares the same footprint, so overlap is a simple AABB test.
 const overlaps = (a: { x: number; y: number }, b: { x: number; y: number }) =>
@@ -1327,6 +1324,7 @@ export default function DesignScreen() {
 
       <GenerateModal
         open={generateOpen}
+        webMode={assetMode}
         onClose={() => setGenerateOpen(false)}
         onCommit={(staged) => {
           void commitDesign(staged);
@@ -1742,14 +1740,18 @@ function GenerateModal({
   open,
   onClose,
   onCommit,
+  webMode,
 }: {
   open: boolean;
   onClose: () => void;
   // Called when the creator APPROVES a staged graphic — the parent lands it on the canvas + persists.
   onCommit: (staged: { url: string; prompt: string }) => void;
+  // True when the active collection is "Site assets" → generate web graphics; else product designs.
+  // Replaces the old Design/Web-assets/Video tab picker: the brand+collection screen decides this.
+  webMode: boolean;
 }) {
   const theme = useTheme();
-  const [modality, setModality] = useState<Modality>('design');
+  const modality: Modality = webMode ? 'graphics' : 'design';
   const [prompt, setPrompt] = useState('');
   const [background, setBackground] = useState<'transparent' | 'filled'>('transparent');
   const [ratio, setRatio] = useState('1:1');
@@ -1904,40 +1906,13 @@ function GenerateModal({
 
           <View style={styles.sheetHeader}>
             <ThemedText type="code" themeColor="textSecondary">
-              {staged
-                ? 'Review'
-                : modality === 'graphics'
-                  ? 'Generate a web graphic'
-                  : modality === 'video'
-                    ? 'Generate a video'
-                    : 'Generate a design'}
+              {staged ? 'Review' : modality === 'graphics' ? 'Generate a web graphic' : 'Generate a design'}
             </ThemedText>
             <Pressable onPress={close}>
               <ThemedText type="small" themeColor="textSecondary">
                 Close
               </ThemedText>
             </Pressable>
-          </View>
-
-          <View style={styles.tabsRow}>
-            {MODALITIES.map((m) => (
-              <Pressable
-                key={m.key}
-                style={styles.flex}
-                onPress={() => {
-                  setModality(m.key);
-                  setStaged(null);
-                  setError(null);
-                }}>
-                <ThemedView
-                  type={modality === m.key ? 'backgroundSelected' : 'backgroundElement'}
-                  style={styles.tab}>
-                  <ThemedText type="small" themeColor={modality === m.key ? 'text' : 'textSecondary'}>
-                    {m.label}
-                  </ThemedText>
-                </ThemedView>
-              </Pressable>
-            ))}
           </View>
 
           <ScrollView
@@ -1992,7 +1967,7 @@ function GenerateModal({
                 </Pressable>
               </View>
             </>
-          ) : modality === 'video' ? null : (
+          ) : (
             <>
               <TextInput
                 autoFocus
@@ -2030,11 +2005,10 @@ function GenerateModal({
                     </ThemedText>
                   </ThemedView>
                 </Pressable>
-                {modality === 'design' || modality === 'graphics' ? (
-                  <>
-                    {/* Transparent vs filled background — for product designs AND web graphics
-                        (a transparent PNG logo, a filled hero/banner). Hidden when Aa Text is on
-                        (lettering is always cut out). */}
+                {/* Transparent vs filled background — for product designs AND web graphics
+                    (a transparent PNG logo, a filled hero/banner). Hidden when Aa Text is on
+                    (lettering is always cut out). */}
+                <>
                     {!isText
                       ? (['transparent', 'filled'] as const).map((b) => (
                           <Pressable key={b} onPress={() => setBackground(b)}>
@@ -2059,8 +2033,7 @@ function GenerateModal({
                         </ThemedView>
                       </Pressable>
                     ) : null}
-                  </>
-                ) : null}
+                </>
                 <Pressable onPress={rollIdea} disabled={rolling}>
                   <ThemedView type="backgroundElement" style={[styles.chip, { opacity: rolling ? 0.5 : 1 }]}>
                     <ThemedText type="small" themeColor="textSecondary">
@@ -2121,7 +2094,7 @@ function GenerateModal({
           </ScrollView>
 
           {/* Primary action is PINNED below the scroll so it's always tappable above the keyboard. */}
-          {modality === 'video' ? null : staged ? (
+          {staged ? (
             <Pressable onPress={approve} disabled={busy}>
               <View style={[styles.generate, { backgroundColor: theme.text, opacity: busy ? 0.4 : 1 }]}>
                 <ThemedText type="smallBold" style={{ color: theme.background }}>Use this</ThemedText>

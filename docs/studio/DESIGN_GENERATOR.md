@@ -73,10 +73,14 @@ third-party IP at publish time — that reflects the fulfillment partner's real 
 
 ## Web graphics — generate → stage → assign to the site
 
-The Generate sheet has three modes (pill tabs): **Design** (printable artwork, today's behavior),
-**Graphics** (web-shaped images — hero/banner), and **Video** (wired later). Every generation is
-**staged for review** first — Apply change / Regenerate / Discard → **Use this** — before it lands
-on the canvas (generation happens in the sheet; `commitDesign()` persists on approve).
+The Generate sheet has **no mode tabs** — what it produces is derived from the **brand + collection
+screen**: pick **🌐 Site assets** → it generates **web graphics** (`modality='graphics'` — hero /
+banner / logo at a web ratio); pick a **product collection** → it generates **printable designs**
+(`modality='design'`). (`GenerateModal` takes a `webMode={assetMode}` prop and sets
+`modality = webMode ? 'graphics' : 'design'`; the old Design/Graphics/Video pill tabs were removed,
+and Video generation lives in the brand Console, not here.) Every generation is **staged for review**
+first — Apply change / Regenerate / Discard → **Use this** — before it lands on the canvas (generation
+happens in the sheet; `commitDesign()` persists on approve).
 
 A graphic on the canvas can then be **assigned to the site**: long-press it → *Set as website hero
 / collection cover / logo*. That posts to **`POST /api/creator/site-assets { catalogueId, slot, url }`**
