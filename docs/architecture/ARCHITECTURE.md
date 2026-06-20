@@ -225,7 +225,7 @@ contract every template must ship, and registration across `src/lib/interview.ts
 | `db.ts` | Supabase Postgres via Drizzle + postgres-js (server-only; persistent pool, `prepare: false`). |
 | `auth.ts` | `getUserFromRequest()` — local ES256 JWKS verify + constant-time internal-key bypass. |
 | `tenant.ts` / `api.ts` | Per-creator scoping helpers · authed client `apiFetch()`. |
-| `interview.ts` | The brand-interview brain (`/api/voice` + `/api/interview`) → `BrandResult`; `live-voice.ts` is the Venus tool/voice schema. |
+| `interview.ts` | The brand-interview brain — `interviewSystem`/`parseTurn` now reused by `/api/extract-brand` to turn the live transcript → `BrandResult`. `live-voice.ts` runs the realtime Gemini Live interview (the old turn-based `/api/voice` + `/api/interview` routes were removed). |
 | `provision.ts` | Storefront provisioning — repo + `brand.json` + `authorBrandBrief` (AI brief, mail-merge fallback), then **enqueues** a `'__provision__'` job. |
 | `revise.ts` | Post-review revision actions only — `approveRevision` (merge) / `declineRevision` (discard) via the GitHub API. |
 | `brand-identity.ts` | `buildBrandPatch()` — the identity-edit cascade (the single source of truth). |

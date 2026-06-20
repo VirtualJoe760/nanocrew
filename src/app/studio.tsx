@@ -27,15 +27,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import {
   AudioModule,
-  RecordingPresets,
   setAudioModeAsync,
   useAudioPlayer,
-  useAudioPlayerStatus,
-  useAudioRecorder,
-  useAudioRecorderState,
   useAudioSampleListener,
 } from 'expo-audio';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
@@ -51,19 +46,14 @@ import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
-import type { BrandResult, ChatMessage, TimedWord } from '@/lib/interview';
-import { DEFAULT_VOICE } from '@/lib/voices';
-
-const VOICE_KEY = 'nanocrew.voiceId';
+import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
-// Flip to false to fall back to the legacy turn-based /api/voice flow.
-const USE_LIVE = true;
 const LIVE_VOICE = 'Aoede'; // warm Gemini voice — Venus's single voice (no picker)
 
 // The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
-// counter-rotating rings, digital rain behind — talks you through building your brand.
-// Hold it to speak (push-to-talk); Gemini hears the audio, ElevenLabs gives the reply a voice.
+// counter-rotating rings, digital rain behind — talks you through building your brand. Venus
+// listens + replies in realtime over Gemini Live (open-mic); tap the orb to pause.
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -573,14 +563,10 @@ export default function StudioScreen() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   const messages = useRef<ChatMessage[]>([]);
-  const started = useRef(false);
   const playCount = useRef(0);
   const playGenRef = useRef(0); // bumps each playSpeech so a stale playback watchdog bails
 
-  // Which AI they chose. First-time creators (no store, no saved pick) choose; everyone
-  // else goes straight to their consultant.
-  const [voiceId, setVoiceId] = useState<string | null>(null);
-  const [voiceResolved, setVoiceResolved] = useState(false);
+  const [voiceResolved, setVoiceResolved] = useState(false); // /api/me landing check done
   const [showComposer, setShowComposer] = useState(false);
   const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
@@ -607,34 +593,14 @@ export default function StudioScreen() {
     if (!session) return;
     let alive = true;
     (async () => {
+      // Resolve the landing: a creator who already has brands lands on the dashboard, everyone else
+      // on the primer. AWAIT so hasStore is known before voiceResolved gates the landing decision.
       try {
-        const saved = await AsyncStorage.getItem(VOICE_KEY);
-        if (!alive) return;
-        if (saved) {
-          setVoiceId(saved);
-          // Returning creator — AWAIT the store check so hasStore is known BEFORE voiceResolved fires.
-          // (If we don't await, the landing runs while hasStore is still false and lands a creator
-          //  WITH brands on the primer instead of their brand dashboard.)
-          try {
-            const r = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } });
-            const d = await readJson<{ stores?: unknown[] }>(r);
-            if (!alive) return;
-            setHasStore((d.stores?.length ?? 0) > 0);
-          } catch {
-            /* leave hasStore false — lands on the primer, which is the safe default */
-          }
-        } else {
-          const r = await fetch(apiUrl('/api/me'), {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          });
-          const d = await readJson<{ stores?: unknown[] }>(r);
-          if (!alive) return;
-          // Venus (Gemini) is the only consultant now — no voice picker. Always use the default.
-          setVoiceId(DEFAULT_VOICE.id);
-          setHasStore((d.stores?.length ?? 0) > 0);
-        }
+        const r = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const d = await readJson<{ stores?: unknown[] }>(r);
+        if (alive) setHasStore((d.stores?.length ?? 0) > 0);
       } catch {
-        if (alive) setVoiceId(DEFAULT_VOICE.id); // never block the studio on a lookup
+        /* leave hasStore false — lands on the primer, the safe default */
       } finally {
         if (alive) setVoiceResolved(true);
       }
@@ -644,12 +610,10 @@ export default function StudioScreen() {
     };
   }, [session]);
 
-  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const player = useAudioPlayer();
-  const playerStatus = useAudioPlayerStatus(player);
 
-  // Live audio level (0..1) driving the nucleus: her voice while speaking, yours while
-  // listening. PCM RMS from the player; dBFS metering from the recorder.
+  // Live audio level (0..1) driving the nucleus from her voice while she speaks (the /api/say
+  // launch line): PCM RMS sampled off the player. The Live session drives a state pulse below.
   const level = useSharedValue(0);
   useAudioSampleListener(player, (sample) => {
     const frames = sample.channels?.[0]?.frames;
@@ -664,31 +628,10 @@ export default function StudioScreen() {
     const rms = Math.sqrt(sum / n);
     level.value = withTiming(Math.min(1, rms * 4.5), { duration: 90 });
   });
-  const recState = useAudioRecorderState(recorder, 120);
-  useEffect(() => {
-    if (state !== 'listening') return;
-    const db = recState.metering;
-    if (typeof db !== 'number') return;
-    const amp = Math.min(1, Math.max(0, (db + 50) / 50)); // -50dB..0dB → 0..1
-    level.value = withTiming(amp, { duration: 110 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recState.metering, state]);
   useEffect(() => {
     if (state === 'idle' || state === 'thinking') level.value = withTiming(0, { duration: 500 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
-
-  // Push-to-talk: ask for the mic once (on the primer), then the user HOLDS the mark to record
-  // and releases to send — deterministic turns, no silence detection.
-  const [micGranted, setMicGranted] = useState(false);
-  useEffect(() => {
-    if (!session) return;
-    // Only CHECK on load (no prompt) — we ask for the mic on the primer when the user picks voice,
-    // so Venus never pops a permission dialog before the user has chosen to talk.
-    AudioModule.getRecordingPermissionsAsync()
-      .then((p) => setMicGranted(p.granted))
-      .catch(() => {});
-  }, [session]);
 
   // Keyboard mode: type instead of talk (noisy environments). Her voice still replies.
   const [keyboardMode, setKeyboardMode] = useState(false);
@@ -702,7 +645,7 @@ export default function StudioScreen() {
   const [focused, setFocused] = useState(false);
   const [appActive, setAppActive] = useState(true);
 
-  // ---- Gemini Live wiring (replaces the turn-based voice machine when USE_LIVE; GEMINI_LIVE.md) ----
+  // ---- Gemini Live wiring (the realtime speech-to-speech interview; GEMINI_LIVE.md) ----
   // Name from the auth provider / signup form (first name only is used in her greeting); on a brand's
   // very first creation (no stores yet) Venus introduces herself.
   const creatorName =
@@ -718,16 +661,15 @@ export default function StudioScreen() {
   });
   // Mirror the Live session into the existing orb/caption state so the render is unchanged.
   useEffect(() => {
-    if (!USE_LIVE) return;
     const m: Record<string, EntityState> = {
       connecting: 'thinking', thinking: 'thinking', listening: 'listening',
       speaking: 'speaking', idle: 'idle', error: 'idle',
     };
     setState(m[live.state] ?? 'idle');
   }, [live.state]);
-  useEffect(() => { if (USE_LIVE) setLine(live.venusText); }, [live.venusText]);
-  useEffect(() => { if (USE_LIVE) setHeard(live.userText); }, [live.userText]);
-  useEffect(() => { if (USE_LIVE && live.error) setError(live.error); }, [live.error]);
+  useEffect(() => { setLine(live.venusText); }, [live.venusText]);
+  useEffect(() => { setHeard(live.userText); }, [live.userText]);
+  useEffect(() => { if (live.error) setError(live.error); }, [live.error]);
   // Build is GATED: Venus gathers the essentials first, then invites them to build — that's when the
   // button appears. We latch "ready" when she signals it (she's prompted to say "ready to build your
   // brand" once she has a name, products, and a style), floored at 3 answers; a 6-answer safety net
@@ -745,7 +687,6 @@ export default function StudioScreen() {
   // and not paused / already done. Anything else → stop, so she's never vocal outside her view.
   // start()/stop() are idempotent.
   useEffect(() => {
-    if (!USE_LIVE) return;
     // Pause is a VOICE concept (stop her talking over you). In text/chat mode it must NOT gate the
     // session, or typed turns get no reply ("chat not completing"). So: run when not paused, OR when
     // in keyboard mode regardless of pause.
@@ -755,7 +696,7 @@ export default function StudioScreen() {
   }, [mode, brand, paused, keyboardMode, focused, appActive, live.start, live.stop]);
   // Keyboard/chat mode mutes the mic so Venus doesn't react to the room while you type. Re-applied on
   // state changes too, so it sticks even if the session (re)connects after the mode flips.
-  useEffect(() => { if (USE_LIVE) live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
+  useEffect(() => { live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
   // App foreground state feeds the lifecycle rule above — backgrounding (home button / app switcher)
   // silences her even though nav focus hasn't changed.
   useEffect(() => {
@@ -763,9 +704,8 @@ export default function StudioScreen() {
     const sub = AppState.addEventListener('change', (st) => setAppActive(st === 'active'));
     return () => sub.remove();
   }, []);
-  // Orb amplitude: no expo-audio metering on the Live path — drive a gentle state-based pulse.
+  // Orb amplitude: the Live session has no expo-audio metering — drive a gentle state-based pulse.
   useEffect(() => {
-    if (!USE_LIVE) return;
     if (state === 'speaking' || state === 'listening') {
       level.value = withRepeat(withSequence(withTiming(0.6, { duration: 480 }), withTiming(0.18, { duration: 480 })), -1, true);
     } else {
@@ -774,9 +714,6 @@ export default function StudioScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
-
-  const busyRef = useRef(false);
-  const lastTurnEmptyRef = useRef(false);
 
   const playSpeech = useCallback(
     async (b64: string, ext: 'mp3' | 'wav' = 'mp3') => {
@@ -833,59 +770,6 @@ export default function StudioScreen() {
     [player],
   );
 
-  const turn = useCallback(
-    async (body: { init?: boolean; audio?: string; text?: string }) => {
-      if (!session) return;
-      setState('thinking');
-      setError(null);
-      try {
-        const r = await fetch(apiUrl('/api/voice'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ ...body, voiceId, messages: messages.current }),
-        });
-        const d = (await r.json()) as {
-          userText?: string;
-          done?: boolean;
-          brand?: BrandResult;
-          line?: string;
-          speech?: string;
-          words?: TimedWord[];
-          empty?: boolean;
-          error?: string;
-        };
-        if (d.error) throw new Error(d.error);
-        lastTurnEmptyRef.current = !!d.empty;
-        setTimedWords(d.words ?? []);
-        if (d.empty) {
-          // Nothing was actually said — she acknowledges and parks (no history written).
-          if (d.line) setLine(d.line);
-          if (d.speech) await playSpeech(d.speech);
-          else setState('idle');
-          return;
-        }
-        if (d.userText) {
-          messages.current.push({ role: 'user', text: d.userText });
-          setHeard(d.userText);
-        }
-        if (d.line) {
-          messages.current.push({ role: 'assistant', text: d.line });
-          setLine(d.line);
-        }
-        if (d.done && d.brand) setBrand(d.brand);
-        if (d.speech) await playSpeech(d.speech);
-        else setState('idle');
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Something went wrong');
-        setState('idle');
-      }
-    },
-    [session, playSpeech, voiceId],
-  );
-
   // The AI only speaks on its own stage: the conversation starts when the Studio tab is
   // actually focused AND an AI has been chosen; everything goes quiet on blur.
   const focusedRef = useRef(false);
@@ -902,50 +786,29 @@ export default function StudioScreen() {
     });
   }, [voiceResolved, hasStore]);
 
-  // The greeting only fires in interview mode (after Get started / Build a new brand).
-  // On the Live path, Venus greets via the session's setupComplete — skip the turn-based init.
-  useEffect(() => {
-    if (USE_LIVE) return;
-    if (mode === 'interview' && session && voiceId && focusedRef.current && !started.current) {
-      started.current = true;
-      void turn({ init: true });
-    }
-  }, [mode, session, voiceId, turn]);
-
+  // Venus greets via the Live session's setupComplete; nothing to kick off here. We only track focus,
+  // which drives the Live lifecycle rule (she resumes only on her focused view).
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
-      setFocused(true); // drives the Live lifecycle rule — she resumes only on her focused view
-      if (!USE_LIVE && session && voiceId && mode === 'interview' && !started.current) {
-        started.current = true;
-        void turn({ init: true });
-      }
+      setFocused(true);
       return () => {
         focusedRef.current = false;
         setFocused(false); // leaving the screen stops the Live session via the lifecycle effect
-        if (!USE_LIVE) {
-          try {
-            player.pause();
-          } catch {}
-          recorder.stop().catch(() => {});
-          busyRef.current = false;
-          setState('idle');
-        }
       };
-    }, [session, voiceId, mode, turn, player, recorder]),
+    }, []),
   );
 
   // Not ready yet — back out of the primer to the brand dashboard (a returning creator). A brand-new
   // creator lands directly on the primer, so the Back link only shows when there's a dashboard.
   const onPrimerBack = useCallback(() => setMode('dashboard'), []);
 
-  // Primer choices. Voice (recommended) requests the mic HERE — the only place we prompt — then
-  // starts the spoken interview. Text starts the same interview in keyboard mode (no mic needed);
-  // if mic is denied we also fall back to text so the user is never stranded.
+  // Primer choices. Voice (recommended) requests the mic HERE — the only place we prompt — so the
+  // OS dialog appears when the user chooses to talk, before the Live session opens its recorder.
+  // Text starts the same interview in keyboard mode (no mic); on denial we fall back to text too.
   const startVoice = useCallback(async () => {
     setKeyboardMode(false);
     const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
-    setMicGranted(!!perm?.granted);
     if (!perm?.granted) {
       setKeyboardMode(true);
       setError('No microphone access — you can type your answers, or enable the mic in Settings.');
@@ -959,26 +822,24 @@ export default function StudioScreen() {
     setMode('interview');
   }, []);
 
-  // Pause/resume the whole experience: stops her voice + the mic. Resume leaves it idle so the
-  // user taps the mark to continue (the question text stays on screen).
+  // Pause/resume the whole experience. Setting `paused` stops the Live session via the lifecycle
+  // effect; we also pause the player so the launch fanfare goes quiet. Resume leaves it idle.
   const togglePause = useCallback(() => {
     setPaused((prev) => {
       const next = !prev;
       pausedRef.current = next;
       if (next) {
         try { player.pause(); } catch {}
-        recorder.stop().catch(() => {});
-        busyRef.current = false;
       }
       setState('idle');
       return next;
     });
-  }, [player, recorder]);
+  }, [player]);
 
-  // Orb tap on the Live path: if the last connect failed (watchdog tripped), a single tap retries;
-  // otherwise it's the pause/resume toggle.
+  // Orb tap: if the last connect failed (watchdog tripped), a single tap retries; otherwise it's the
+  // pause/resume toggle.
   const onOrbPress = useCallback(() => {
-    if (USE_LIVE && live.error) {
+    if (live.error) {
       setError(null);
       if (paused) { pausedRef.current = false; setPaused(false); }
       live.start();
@@ -989,7 +850,6 @@ export default function StudioScreen() {
 
   // Returning creator wants another brand — reset the interview and start fresh.
   const onNewBrand = useCallback(() => {
-    started.current = false;
     messages.current = [];
     setBrand(null);
     setCreated(null);
@@ -1001,7 +861,6 @@ export default function StudioScreen() {
   // Just finished creating a brand — graduate from the compiled/created screen back to the brand
   // picker (dashboard). Bump dashKey so the freshly created brand shows up in the list.
   const onFinishedBrand = useCallback(() => {
-    started.current = false;
     messages.current = [];
     setBrand(null);
     setCreated(null);
@@ -1012,104 +871,6 @@ export default function StudioScreen() {
     setMode('dashboard');
   }, []);
 
-  const sendRecording = useCallback(async () => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    let audio: string;
-    try {
-      await recorder.stop();
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      const uri = recorder.uri;
-      if (!uri) throw new Error('No recording captured');
-      audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Recording failed');
-      setState('idle');
-      busyRef.current = false;
-      return;
-    }
-    // Release the send-lock BEFORE the model turn + playback, so a reply that's thinking/speaking
-    // never blocks the next hold (lets you interrupt). turn() runs its own state machine.
-    busyRef.current = false;
-    try {
-      await turn({ audio });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
-      setState('idle');
-    }
-  }, [recorder, turn]);
-
-  // Push-to-talk. holdingRef tracks whether the finger is currently down so we can abort cleanly
-  // if the user releases while the recorder is still preparing (the audio session can take a beat
-  // to hand off from the player, especially in the simulator).
-  const holdingRef = useRef(false);
-  const holdStartRef = useRef(0);
-
-  // Finger DOWN on the orb → start recording. Interrupts Venus if she's speaking; resumes if paused.
-  const beginHold = useCallback(async () => {
-    if (!session || brand || busyRef.current) return;
-    if (state === 'thinking') return; // can't talk over her thinking
-    if (pausedRef.current) { pausedRef.current = false; setPaused(false); } // holding resumes
-    setKeyboardMode(false); // touching the orb always means voice
-    if (state === 'speaking') { try { player.pause(); } catch {} } // hold interrupts her
-
-    if (!micGranted) {
-      const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
-      if (!perm?.granted) {
-        setError('Microphone needed — enable it in Settings, or tap the keyboard to type.');
-        return;
-      }
-      setMicGranted(true);
-    }
-
-    holdingRef.current = true;
-    holdStartRef.current = Date.now();
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-        await recorder.prepareToRecordAsync();
-        if (!holdingRef.current) {
-          // released before we were ready — abort without sending
-          await recorder.stop().catch(() => {});
-          await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-          setState('idle');
-          return;
-        }
-        recorder.record();
-        setState('listening');
-        return;
-      } catch {
-        await new Promise((r) => setTimeout(r, 400));
-      }
-    }
-    holdingRef.current = false;
-    setError('mic hiccup — hold the mark again');
-    setState('idle');
-  }, [session, brand, state, micGranted, player, recorder]);
-
-  // Finger UP → send the held recording. Too-short holds are treated as accidental taps and
-  // discarded (no empty turn). If recording hadn't started yet, beginHold's guard handles abort.
-  const endHold = useCallback(() => {
-    if (!holdingRef.current) return;
-    holdingRef.current = false;
-    const held = Date.now() - holdStartRef.current;
-    if (held < 400 || state !== 'listening') {
-      recorder.stop().catch(() => {});
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-      setState('idle');
-      return;
-    }
-    void sendRecording();
-  }, [state, recorder, sendRecording]);
-
-  // Push-to-talk: when she finishes speaking, just go idle and wait for the user to HOLD the mark
-  // to reply. No auto-opening the mic — deterministic turn-taking, no silence-detection races.
-  useEffect(() => {
-    if (!playerStatus.didJustFinish) return;
-    lastTurnEmptyRef.current = false;
-    setState('idle');
-  }, [playerStatus.didJustFinish]);
-
   const toggleKeyboard = useCallback(() => {
     const entering = !keyboardMode;
     setKeyboardMode(entering);
@@ -1119,43 +880,7 @@ export default function StudioScreen() {
       setPaused(false);
       pausedRef.current = false;
     }
-    if (!USE_LIVE && entering && state === 'listening') {
-      recorder.stop().catch(() => {});
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-      setState('idle');
-    }
-  }, [keyboardMode, state, recorder]);
-
-
-
-  // Word-by-word subtitles synced to the speech itself: ElevenLabs character timestamps
-  // give each word its true start time (tempo-adjusted server-side). Linear fallback if
-  // alignment is missing.
-  const [wordIdx, setWordIdx] = useState(0);
-  const [timedWords, setTimedWords] = useState<TimedWord[]>([]);
-  const words = useMemo(
-    () => (timedWords.length ? timedWords.map((x) => x.w) : line.split(/\s+/).filter(Boolean)),
-    [timedWords, line],
-  );
-  useEffect(() => {
-    if (state !== 'speaking' || !words.length) return;
-    setWordIdx(0);
-    // Highlight a hair AHEAD of the audio cursor — perceptually the word should appear as it's
-    // spoken, and a small lead absorbs playback/poll latency so it never reads as lagging.
-    const LEAD = 0.12;
-    const id = setInterval(() => {
-      const ct = player.currentTime + LEAD;
-      if (timedWords.length) {
-        let i = 0;
-        while (i + 1 < timedWords.length && timedWords[i + 1].t <= ct) i++;
-        setWordIdx(i);
-      } else {
-        const dur = player.duration;
-        if (dur > 0) setWordIdx(Math.min(words.length - 1, Math.floor((ct / dur) * words.length)));
-      }
-    }, 40);
-    return () => clearInterval(id);
-  }, [state, words, timedWords, player]);
+  }, [keyboardMode]);
 
   const createStore = useCallback(async () => {
     if (!session || !brand) return;
@@ -1202,8 +927,8 @@ export default function StudioScreen() {
     }
   }, [session, brand, playSpeech]);
 
-  const hint = USE_LIVE
-    ? state === 'listening'
+  const hint =
+    state === 'listening'
       ? '[ listening — just talk ]'
       : state === 'thinking'
         ? '[ thinking… ]'
@@ -1211,18 +936,7 @@ export default function StudioScreen() {
           ? '[ Venus is speaking — tap to pause ]'
           : paused
             ? '[ paused — tap the mark to resume ]'
-            : '[ connecting… ]'
-    : state === 'listening'
-      ? '[ recording — release to send ]'
-      : state === 'thinking'
-        ? '[ thinking… ]'
-        : state === 'speaking'
-          ? '[ hold to reply ]'
-          : paused
-            ? '[ paused — hold the mark to resume ]'
-            : micGranted
-              ? '[ hold the mark to talk ]'
-              : '[ hold the mark to enable the mic ]';
+            : '[ connecting… ]';
 
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
   // comfortable gap so the karaoke captions never dip under it.
@@ -1398,15 +1112,7 @@ export default function StudioScreen() {
         ) : (
           <>
             <View style={styles.entityArea}>
-              <NCNucleus
-                size={232}
-                p={p}
-                level={level}
-                state={state}
-                onPressIn={USE_LIVE ? undefined : beginHold}
-                onPressOut={USE_LIVE ? undefined : endHold}
-                onPress={USE_LIVE ? onOrbPress : undefined}
-              />
+              <NCNucleus size={232} p={p} level={level} state={state} onPress={onOrbPress} />
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
                 {hint}
               </ThemedText>
@@ -1417,7 +1123,7 @@ export default function StudioScreen() {
               </Pressable>
               {/* Build only appears once Venus has gathered the essentials (buildReady) — she leads
                   the interview first. Then we extract the brand from the transcript on demand. */}
-              {USE_LIVE && buildReady ? (
+              {buildReady ? (
                 <Pressable
                   onPress={live.finalize}
                   disabled={live.finalizing}
@@ -1432,22 +1138,16 @@ export default function StudioScreen() {
               ) : null}
             </View>
             <View style={styles.captions}>
-              {!USE_LIVE && state === 'speaking' && words.length ? (
-                <ThemedText style={[styles.bigWord, { color: p.ink }]}>{words[wordIdx]}</ThemedText>
-              ) : (
-                <>
-                  {heard ? (
-                    <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
-                      {'you > ' + heard}
-                    </ThemedText>
-                  ) : null}
-                  {line ? (
-                    <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
-                      {line}
-                    </ThemedText>
-                  ) : null}
-                </>
-              )}
+              {heard ? (
+                <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
+                  {'you > ' + heard}
+                </ThemedText>
+              ) : null}
+              {line ? (
+                <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
+                  {line}
+                </ThemedText>
+              ) : null}
             </View>
           </>
         )}

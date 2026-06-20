@@ -87,19 +87,19 @@ context icons (manage pencil / brands hamburger / keyboard toggle). Routes by `m
 - **Signed-out (intro):** NC nucleus, "INTELLIGENCE IS THE NEW FABRIC", **"Meet Venus"** title +
   blurb, **Create an account** / **log in** CTAs (→ Account tab). "Free to explore. You only need a
   plan to launch a store."
-- **New creator — voice pick + CTA:** first-time creators choose an AI voice (preview each via
-  `POST /api/voice` TTS) → **Get started** wakes the interview.
-- **Interview:** the orb reacts to live audio (idle → listening → thinking → speaking). Tap it to
-  talk (auto-listens after each reply; silence ends your turn), or toggle the **keyboard** for typed
-  chat. Karaoke word-by-word subtitles sync to Venus's speech. Each turn → `POST /api/voice`
-  (`audio`/`text` in → reply speech + word timings + heard text). On `done`, a **brand summary**
-  appears (logo, palette swatches, vibe chips, story) → **Create my store** → `POST /api/store`. A
-  `402` opens the **Paywall** (`subscription_required` or `brand_limit`); on success Venus announces
-  the launch and points you to Design.
+- **New creator — primer + CTA:** first-time creators see a primer (no voice picker — Venus has one
+  Gemini voice) → **Talk with Venus** (asks for mic) or **I'd rather type** wakes the interview.
+- **Interview:** a realtime **Gemini Live** session — open-mic, Venus listens + replies continuously
+  (idle → listening → thinking → speaking on the orb); tap the orb to pause/resume, or toggle the
+  **keyboard** to type into the same session. The streaming transcript drives the captions. When she's
+  gathered enough, **✓ Build my brand** extracts the `BrandResult` (`/api/extract-brand`) → a **brand
+  summary** → **Create my store** → `POST /api/store`. A `402` opens the **Paywall**
+  (`subscription_required` or `brand_limit`); on success Venus announces the launch in her Gemini voice
+  (`/api/say`) and points you to Design.
 - **Dashboard (returning creator, `src/components/studio-dashboard.tsx`):** a card per brand with
   revenue/orders; **Build a new brand** relaunches the interview; **credits/plan** opens the Paywall
   in `manage` mode. Tapping a brand opens its **Console**.
-- **Calls:** `/api/me`, `/api/voice`, `/api/store`, `/api/creator/{stats,credits,subscription}`.
+- **Calls:** `/api/me`, `/api/voice-live-token`, `/api/extract-brand`, `/api/say`, `/api/store`, `/api/creator/{stats,credits,subscription}`.
 
 ### Brand Console (`src/components/studio-composer.tsx`)
 Per-brand management sheet (opened from the dashboard or the header manage icon). Pills switch brands

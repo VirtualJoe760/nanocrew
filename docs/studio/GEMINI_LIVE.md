@@ -1,7 +1,16 @@
-# Venus on Gemini Live — realtime voice migration plan
+# Venus on Gemini Live — realtime voice
 
-**Status: in progress (branch `gemini-live`).** This replaces the turn-based voice interview
-(`/api/voice` → Gemini multimodal → ElevenLabs TTS) with **Gemini Live** realtime speech-to-speech.
+**Status: SHIPPED — migration complete; the legacy turn-based system is fully removed.** Venus runs on
+**Gemini Live** realtime speech-to-speech (`lib/live-voice.ts` + `hooks/use-live-voice.ts`,
+ephemeral token from `/api/voice-live-token`). The old turn-based pipeline (`/api/voice` → Gemini
+multimodal → ElevenLabs TTS) and its text fallback (`/api/interview`) have been **deleted**, along with
+all the client push-to-talk machinery in `studio.tsx` (`turn`/`beginHold`/`endHold`/`sendRecording`,
+the expo-audio recorder + metering, the word-timed karaoke, the `voiceId` picker, the `USE_LIVE` flag).
+The only post-interview voice line — the "your store is online" launch fanfare — is now Venus's same
+Gemini voice via `/api/say` (see below), so ElevenLabs is gone from the interview path entirely. The
+brand brain (`lib/interview.ts` `interviewSystem`/`parseTurn`) survives, reused by `/api/extract-brand`
+to turn the spoken transcript into a `BrandResult`. The migration plan below is kept as history.
+
 Grounded in the Live API docs (live-guide, live-session, ephemeral-tokens) + our shipped code.
 
 ## Why we're moving

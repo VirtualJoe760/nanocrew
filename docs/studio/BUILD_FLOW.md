@@ -42,9 +42,11 @@ finishes a reply the orb just goes **idle** and waits for the next hold. The con
 **auto-pauses when the Studio tab loses focus** (a `playSpeech` focus/pause guard), and there's a
 prominent **Pause/Resume pill** beneath the orb (plus the header control); holding the orb resumes.
 
-**Venus** is the brand consultant (`src/lib/interview.ts`, `interviewSystem()`). She runs voice-first
-(`/api/voice` — Gemini hears the audio, ElevenLabs voices the reply) with a typed fallback
-(`/api/interview`). She's a warm, ≤18-word-per-turn cheerleader who also collects data: name + core
+**Venus** is the brand consultant. She runs as a realtime **Gemini Live** speech-to-speech session
+(`src/lib/live-voice.ts` + `hooks/use-live-voice.ts`; persona prompt in `live-voice.ts`), open-mic with
+a typed fallback into the same session. When she's gathered enough she calls/extracts the brand via
+`/api/extract-brand` (which reuses `interview.ts` `interviewSystem`/`parseTurn`). She's a warm,
+≤18-word-per-turn cheerleader who also collects data: name + core
 idea, logo direction, palette, design temperament, **how the site should feel/manifest**, and the
 products they're excited to sell. A **hard rule** binds her — *never override an explicit choice*
 (if they say "black and white", the palette is exactly that; she fills only the gaps they leave).

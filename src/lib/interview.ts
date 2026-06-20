@@ -1,6 +1,8 @@
-// The Studio brand-interview brain, shared by the text (/api/interview) and voice
-// (/api/voice) routes. A guided question set → final brand profile + design system that
-// the storefront templates consume (template + brand tokens, not generated-from-scratch).
+// The Studio brand-interview brain. The live interview now runs on Gemini Live (lib/live-voice.ts);
+// this module's `interviewSystem`/`parseTurn` are reused by /api/extract-brand to turn the spoken
+// transcript into a final brand profile + design system that the storefront templates consume
+// (template + brand tokens, not generated-from-scratch). `ChatMessage`/`BrandResult` are the shared
+// types across the live session, extract-brand, and store provisioning.
 
 export type ChatMessage = { role: 'user' | 'assistant'; text: string };
 
