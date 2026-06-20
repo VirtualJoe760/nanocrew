@@ -405,20 +405,21 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       return `The creator requested these changes to their live storefront, in their own words:\n\n${body}\n\n(About the page: ${url})`;
     };
     try {
-      // 1. Distill the conversation into image-generations (hero/logo/og) + forge edits. A forge edit
-      //    may carry `assets`: NEW images the forge needs (carousel/gallery/"add images") that the app
-      //    generates and hands over as URLs.
-      type ForgeEdit = { instruction: string; assets?: { prompt: string }[] };
+      // 1. Distill the conversation into image-generations (hero/logo/og), forge edits (imperative
+      //    strings), and `assets` — NEW images a structural edit (carousel/gallery/"add images")
+      //    needs the app to generate and hand to the forge as URLs.
       let images: { slot: 'hero' | 'logo' | 'og'; prompt: string }[] = [];
-      let editItems: ForgeEdit[] = [];
+      let editTexts: string[] = [];
+      let assets: string[] = [];
       let planned = false;
       try {
         const msgs = venus.messages.length ? venus.messages : edits.map((e) => ({ role: 'user' as const, text: e.note }));
         const pr = await fetch(apiUrl('/api/creator/plan-site-edits'), { method: 'POST', headers: auth, body: JSON.stringify({ messages: msgs }) });
         if (pr.ok) {
-          const pd = (await pr.json()) as { images?: typeof images; edits?: ForgeEdit[] };
+          const pd = (await pr.json()) as { images?: typeof images; edits?: string[]; assets?: string[] };
           images = pd.images ?? [];
-          editItems = pd.edits ?? [];
+          editTexts = pd.edits ?? [];
+          assets = pd.assets ?? [];
           planned = true;
         }
       } catch {
@@ -452,29 +453,24 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       // 2b. Generate the NEW images a STRUCTURAL edit needs (carousel/gallery/"add images") and hand
       //     the URLs to the forge — the forge can't make images, so the app generates (metered) and
       //     the forge builds the structure with them. Partial failures are noted, not blocking.
-      const forgeEdits: { instruction: string; urls: string[]; failed: number }[] = [];
-      for (const ed of editItems) {
-        const urls: string[] = [];
-        let failed = 0;
-        for (const a of ed.assets ?? []) {
-          setNote('Generating images for your change…');
-          try {
-            const gr = await fetch(apiUrl('/api/generate'), { method: 'POST', headers: auth, body: JSON.stringify({ prompt: a.prompt, background: 'filled', aspectRatio: '16:9', purpose: 'design' }) });
-            const gd = (await gr.json().catch(() => ({}))) as { image?: string };
-            if (gr.ok && gd.image) urls.push(gd.image);
-            else failed++;
-          } catch {
-            failed++;
-          }
+      const forgeAssetUrls: string[] = [];
+      for (const prompt of assets) {
+        setNote('Generating images for your change…');
+        try {
+          const gr = await fetch(apiUrl('/api/generate'), { method: 'POST', headers: auth, body: JSON.stringify({ prompt, background: 'filled', aspectRatio: '16:9', purpose: 'design' }) });
+          const gd = (await gr.json().catch(() => ({}))) as { image?: string };
+          if (gr.ok && gd.image) forgeAssetUrls.push(gd.image);
+        } catch {
+          /* skip a failed asset — the forge proceeds with whatever generated */
         }
-        forgeEdits.push({ instruction: ed.instruction, urls, failed });
       }
 
-      // 3. The forge edits (with any generated image URLs woven in). If planning failed, forge raw notes.
-      const md = forgeEdits.length
-        ? `The creator requested these changes to their live storefront:\n\n${forgeEdits
-            .map((e, i) => `${i + 1}. ${e.instruction}${e.urls.length ? `\n   Use these generated images (already hosted): ${e.urls.join(', ')}` : ''}`)
-            .join('\n')}\n\n(About the page: ${url})`
+      // 3. The forge edits, with any generated image URLs appended for structural changes. If planning
+      //    failed entirely, forge the raw notes.
+      const md = editTexts.length
+        ? `The creator requested these changes to their live storefront:\n\n${editTexts.map((t, i) => `${i + 1}. ${t}`).join('\n')}${
+            forgeAssetUrls.length ? `\n\nUse these generated images (already hosted) where the changes call for new pictures: ${forgeAssetUrls.join(', ')}` : ''
+          }\n\n(About the page: ${url})`
         : images.length
           ? ''
           : rawMd();
@@ -485,7 +481,7 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
       const editPlan = {
         images: imageOutcomes,
         // When planning failed we still forged the raw notes; surface that as the edit list.
-        edits: forgeEdits.length ? forgeEdits.map((e) => e.instruction) : md && !planned ? edits.map((e) => e.note) : [],
+        edits: editTexts.length ? editTexts : md && !planned ? edits.map((e) => e.note) : [],
       };
       setNote('Saving your changes…');
       const res = await fetch(apiUrl('/api/creator/revise'), {

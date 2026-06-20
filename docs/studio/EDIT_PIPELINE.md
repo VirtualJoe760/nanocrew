@@ -21,9 +21,11 @@ failure localizes to exactly one hop.
 
 - **images** (hero / logo / og) are a pure picture **swap** — generated and placed **directly**.
 - **edits** (text, color, layout, **structural image changes** — parallax, carousel, gallery) go to the
-  **forge** on a working branch. An edit may carry **`assets`**: NEW images the forge needs (e.g.
-  "turn the hero into a carousel + add 2 images"). The app generates those (metered) and weaves the
-  hosted URLs into the forge brief — the forge can't make images, so it's handed them.
+  **forge** on a working branch, as a plain **string array** (kept string-shaped so older app builds
+  that read `edits` directly still work). Alongside them the planner returns **`assets`**: NEW image
+  prompts a structural edit needs (e.g. "turn the hero into a carousel + add 2 images" → 2 assets).
+  The app generates those (metered) and appends the hosted URLs to the forge brief — the forge can't
+  make images, so it's handed them.
 - The two run independently in one `submit()`; either side can be empty.
 - Claude also receives the **real annotated screenshot** (page + the creator's mark, any shape) as the
   primary proof of *which* element is meant — see [../storefront/IMAGE_TARGETS.md](../storefront/IMAGE_TARGETS.md).

@@ -18,17 +18,16 @@ const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 const TRANSIENT = /unavailable|overloaded|try again|503|429|rate.?limit|deadline|temporar/i;
 
 const SYSTEM = `You read a short conversation in which a creator described changes to their EXISTING brand website (they were marking up the page — a circle, arrow, or scribble — and talking). Output ONLY JSON of the shape:
-{"images":[{"slot":"hero|logo|og","prompt":"<vivid image description>"}],"edits":[{"instruction":"<the change as a short imperative>","assets":[{"prompt":"<a NEW image the forge must generate to do this edit>"}]}]}
+{"images":[{"slot":"hero|logo|og","prompt":"<vivid image description>"}],"edits":["<the change as a short imperative>"],"assets":["<a NEW image (vivid description) the forge needs to GENERATE for a structural edit>"]}
 
-Decide each request into ONE of two buckets:
+Three buckets:
 - "images" = a pure PICTURE SWAP into a known slot — just replace the picture, nothing structural. Slots: the HERO image (slot "hero"), the logo (slot "logo"), the social/share card (slot "og"). The hero IS the big full-bleed image at the top, so map ALL of these to "hero": "hero", "background", "background image", "the photo/image at the top", "the image behind the headline", "the banner image". The prompt must be a vivid image description (combine the whole conversation so "change the background" + "a beach at sunset" becomes one prompt). Use this bucket ONLY for "make this image a different picture".
-- "edits" = EVERY other change, as {"instruction","assets"}. Includes text, colors, layout, moving/resizing, AND structural/behavioral changes to images (add a parallax effect, turn an image into a sliding carousel, make a section a photo gallery, animate it, add more images to it).
-  • "assets" = ONLY the NEW images the forge will need to GENERATE to perform that edit. Most edits need none → "assets":[]. Add assets when the edit clearly needs new pictures (e.g. "turn the hero into a carousel and add 2 more images" → 2 assets; "make the about section a 3-photo gallery" → up to 3 assets). Each asset prompt is a vivid, ON-BRAND description; if the creator didn't say what the new images should be, describe something that fits the surrounding section/brand.
-  • The instruction should name WHAT element ("the hero", "the about section image") and the structural change, and note that the forge will be handed the generated images to use.
+- "edits" = EVERY other change, each a short imperative STRING. Includes text, colors, layout, moving/resizing, AND structural/behavioral changes to images (add a parallax effect, turn an image into a sliding carousel, make a section a photo gallery, animate it, add more images). Name the element ("the hero", "the about section image").
+- "assets" = NEW images (vivid descriptions) the forge must GENERATE to carry out a structural edit — usually EMPTY. Add one per new picture a structural edit needs (e.g. "turn the hero into a carousel and add 2 more images" → 2 assets; "make the about section a 3-photo gallery" → up to 3). If the creator didn't say what they should look like, describe something on-brand that fits the section. The app generates these and hands their URLs to the forge.
 
 Rules:
 - IGNORE greetings, acknowledgements, confirmations ("yes", "do it", "that's it"), and anything that isn't an actual change.
-- A plain "make this a different picture" → images. A change to how an image BEHAVES or is STRUCTURED (carousel, parallax, gallery, +more images) → edits (with assets if it needs new pictures).
+- A plain "make this a different picture" → images. A change to how an image BEHAVES or is STRUCTURED (carousel, parallax, gallery, +more images) → edits, plus assets if it needs new pictures.
 - If unsure whether something is a pure swap, put it in "edits".
 - Never invent changes that weren't asked for. Empty arrays are fine.`;
 
@@ -78,38 +77,35 @@ export async function POST(req: Request) {
     });
     const raw = res.text?.trim();
     if (!raw) throw new Error('empty');
+    // Tolerate both shapes: the new `edits: string[]` + `assets: string[]`, and (defensively) an
+    // older `edits: [{instruction, assets}]` if the model echoes it.
     const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '')) as {
       images?: { slot?: string; prompt?: string }[];
-      edits?: (string | { instruction?: string; assets?: { prompt?: string }[] })[];
+      edits?: (string | { instruction?: string; assets?: ({ prompt?: string } | string)[] })[];
+      assets?: ({ prompt?: string } | string)[];
     };
     const images = (parsed.images ?? [])
       .filter((i) => i && typeof i.prompt === 'string' && i.prompt.trim() && VALID_SLOTS.has(String(i.slot)))
       .map((i) => ({ slot: i.slot as 'hero' | 'logo' | 'og', prompt: i.prompt!.trim() }))
       .slice(0, 6);
-    // Normalize edits: a string is a plain forge change; an object may carry `assets` — NEW images the
-    // forge needs (carousel/gallery/"add more images"). Cap assets so a single edit can't run up spend.
-    let assetBudget = 8; // total new forge images allowed across all edits in one submit
+    const asPrompt = (a: { prompt?: string } | string): string => (typeof a === 'string' ? a : (a?.prompt ?? '')).trim();
+    // `edits` is a back-compatible STRING array (the OLD client renders these directly). If the model
+    // returns objects, flatten to the instruction string and lift any nested asset prompts out.
+    const liftedAssets: string[] = [];
     const edits = (parsed.edits ?? [])
       .map((e) => {
-        if (typeof e === 'string') return e.trim() ? { instruction: e.trim(), assets: [] as { prompt: string }[] } : null;
-        const instruction = typeof e?.instruction === 'string' ? e.instruction.trim() : '';
-        if (!instruction) return null;
-        const assets = (Array.isArray(e?.assets) ? e.assets : [])
-          .filter((a) => a && typeof a.prompt === 'string' && a.prompt.trim())
-          .map((a) => ({ prompt: a.prompt!.trim() }))
-          .slice(0, 4);
-        const capped = assets.slice(0, Math.max(0, assetBudget));
-        assetBudget -= capped.length;
-        return { instruction, assets: capped };
+        if (typeof e === 'string') return e.trim();
+        if (Array.isArray(e?.assets)) liftedAssets.push(...e.assets.map(asPrompt).filter(Boolean));
+        return typeof e?.instruction === 'string' ? e.instruction.trim() : '';
       })
-      .filter((e): e is { instruction: string; assets: { prompt: string }[] } => !!e)
+      .filter(Boolean)
       .slice(0, 20);
-    // Trace the classification: the most recent creator turn in → the plan out. When a request
-    // like "make the hero an american flag" yields images=0, the subject was lost upstream (capture).
+    // `assets` = NEW images a structural edit needs the forge to use (the NEW client reads this; the
+    // OLD client ignores it). Capped to bound generation spend per submit.
+    const assets = [...(parsed.assets ?? []).map(asPrompt), ...liftedAssets].filter(Boolean).slice(0, 8);
     const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.text ?? '';
-    const assetCount = edits.reduce((n, e) => n + e.assets.length, 0);
-    console.log(`[pipeline:plan] turns=${messages.length} lastSaid=${JSON.stringify(lastUser.slice(0, 160))} → images=${images.length}[${images.map((i) => i.slot).join(',')}] edits=${edits.length} forgeAssets=${assetCount}`);
-    return Response.json({ images, edits });
+    console.log(`[pipeline:plan] turns=${messages.length} lastSaid=${JSON.stringify(lastUser.slice(0, 160))} → images=${images.length}[${images.map((i) => i.slot).join(',')}] edits=${edits.length} forgeAssets=${assets.length}`);
+    return Response.json({ images, edits, assets });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
     return Response.json({ error: TRANSIENT.test(msg) ? 'Busy — try again in a moment.' : 'Could not plan the edits.' }, { status: 502 });
