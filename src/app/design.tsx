@@ -1845,9 +1845,10 @@ function GenerateModal({
     setBusy(true);
     setError(null);
     try {
-      // Memes are filled (a complete captioned image). Text lettering is always cut out; otherwise
-      // honor the creator's transparent/filled choice (a logo wants transparent, a hero wants filled).
-      const bg = meme ? 'filled' : isText ? 'transparent' : background;
+      // Text lettering is always cut out; otherwise honor the creator's transparent/filled choice
+      // (a logo wants transparent, a hero wants filled). Meme pre-sets Filled when toggled on, but
+      // the creator can still switch — so we just follow the selected background here.
+      const bg = isText ? 'transparent' : background;
       const aspectRatio = isGraphics ? webRatio : ratio;
       const res = await apiFetch('/api/generate', {
         method: 'POST',
@@ -2013,11 +2014,11 @@ function GenerateModal({
                     </ThemedText>
                   </ThemedView>
                 </Pressable>
-                {/* Transparent vs filled background — for product designs AND web graphics
-                    (a transparent PNG logo, a filled hero/banner). Hidden when Aa Text or Meme is on
-                    (lettering is cut out; a meme is a complete filled image). */}
+                {/* Transparent vs filled background — for product designs AND web graphics (a
+                    transparent PNG logo, a filled hero/banner). Always available; only hidden when
+                    Aa Text is on (lettering is always cut out). Meme just defaults this to Filled. */}
                 <>
-                    {!isText && !meme
+                    {!isText
                       ? (['transparent', 'filled'] as const).map((b) => (
                           <Pressable key={b} onPress={() => setBackground(b)}>
                             <ThemedView
@@ -2030,8 +2031,8 @@ function GenerateModal({
                           </Pressable>
                         ))
                       : null}
-                    {modality === 'design' && !meme ? (
-                      <Pressable onPress={() => setIsText((t) => !t)}>
+                    {modality === 'design' ? (
+                      <Pressable onPress={() => { const next = !isText; setIsText(next); if (next) setMeme(false); }}>
                         <ThemedView
                           type={isText ? 'backgroundSelected' : 'backgroundElement'}
                           style={styles.chip}>
@@ -2041,32 +2042,25 @@ function GenerateModal({
                         </ThemedView>
                       </Pressable>
                     ) : null}
-                    {/* Meme — steer generation into the classic meme format (caption text + image).
-                        For web assets AND t-shirt designs. Mutually exclusive with Aa Text. */}
-                    <Pressable onPress={() => { setMeme((m) => !m); setIsText(false); }}>
-                      <ThemedView
-                        type={meme ? 'backgroundSelected' : 'backgroundElement'}
-                        style={styles.chip}>
-                        <ThemedText type="small" themeColor={meme ? 'text' : 'textSecondary'}>
-                          😂 Meme
-                        </ThemedText>
+                    {/* Meme (icon-only) — steer into the classic meme format (caption + image), web
+                        assets AND t-shirt designs. Defaults the background to Filled; off → restores
+                        the prior background choice. Mutually exclusive with Aa Text. */}
+                    <Pressable onPress={() => { const next = !meme; setMeme(next); if (next) { setIsText(false); setBackground('filled'); } }}>
+                      <ThemedView type={meme ? 'backgroundSelected' : 'backgroundElement'} style={styles.chip}>
+                        <ThemedText type="small" themeColor={meme ? 'text' : 'textSecondary'}>😂</ThemedText>
                       </ThemedView>
                     </Pressable>
                 </>
                 <Pressable onPress={rollIdea} disabled={rolling}>
                   <ThemedView type="backgroundElement" style={[styles.chip, { opacity: rolling ? 0.5 : 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {rolling ? '🎲 …' : '🎲 Random'}
-                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">🎲</ThemedText>
                   </ThemedView>
                 </Pressable>
                 <Pressable onPress={enhancePrompt} disabled={enhancing || !prompt.trim()}>
                   <ThemedView
                     type="backgroundElement"
                     style={[styles.chip, { opacity: enhancing || !prompt.trim() ? 0.5 : 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {enhancing ? '✨ …' : '✨ Enhance'}
-                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">✨</ThemedText>
                   </ThemedView>
                 </Pressable>
               </View>
