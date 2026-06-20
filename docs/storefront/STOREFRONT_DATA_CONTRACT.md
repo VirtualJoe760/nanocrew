@@ -77,11 +77,17 @@ missing is template rendering + app UI (see `docs/COLLECTIONS_LOOKBOOK.md`).
 
 ### `GET /api/public/stores/:slug/site-assets`
 
-Creator-generated **website graphics** (made in the Design tab → Graphics), used to OVERRIDE the
-template's `content/placeholders.json`. Stored on `stores.site_assets` (jsonb).
+Creator-generated **website graphics** (made in the Design tab), used to OVERRIDE the template's
+baked `brand.json` / `content/placeholders.json`. `hero`/`sections`/`og` live on `stores.site_assets`
+(jsonb); `logo` is the top-level `stores.logo_url` column (also set by brand creation). This is what
+lets **every asset assigned in the Design tab connect to the live site with no rebuild**.
 
 ```jsonc
 {
+  "logo": "https://… | null",            // the brand logo (Design tab → "Set as logo"). The header
+                                          // reads this LIVE via getSiteLogo() and prefers it over the
+                                          // baked brand.json logoUrl — so a newly assigned logo
+                                          // applies by default. (street is wordmark-only, no logo.)
   "hero": { "imageUrl": "https://… | null", "videoUrl": "https://… | null", "poster": "https://… | null" },
   "sections": { "<key>": "https://…" },  // reserved for section/banner graphics
   "og": "https://… | null"               // creator-assigned social-share image (the "Social image"
@@ -91,9 +97,9 @@ template's `content/placeholders.json`. Stored on `stores.site_assets` (jsonb).
 }
 ```
 
-The template's `getHeroMedia()` merges this **per-field over the placeholder** (`live ?? placeholder`),
-so a hero set here replaces the brand-tinted placeholder with no re-layout — the same override model
-as products. `hero` is `null` and `sections` is `{}` until the creator generates one.
+The template's `getHeroMedia()` / `getSiteLogo()` merge this **per-field over the baked value**
+(`live ?? baked`), so an asset set here replaces the placeholder/baked one with no re-layout — the
+same override model as products. Fields are `null`/`{}` until the creator assigns one.
 
 ### `GET /api/public/stores/:slug/site-config`
 
