@@ -60,8 +60,10 @@ type Design = {
 };
 
 const RATIOS = ['1:1', '4:5', '3:4', '16:9'];
-// Web graphics want wide/site shapes (hero, banner) rather than print-on-garment ratios.
-const WEB_RATIOS = ['16:9', '4:3', '1:1', '9:16'];
+// Site-asset shapes. 1:1 first because it's the DEFAULT — the common site asset is a logo/mark
+// (a centered square), so a logo generated without touching the ratio comes out square + centered
+// rather than wide + off-to-one-side. Heroes/banners/social just tap a wider ratio.
+const WEB_RATIOS = ['1:1', '16:9', '4:3', '9:16'];
 // Site-assets mode is backed by ONE per-brand "Web Assets" collection so generated web graphics
 // (heroes, logos, social cards) are stored + reappear, instead of being ephemeral. It holds only
 // design graphics (no published products), so it never shows as a shop collection on the storefront
@@ -1755,7 +1757,7 @@ function GenerateModal({
   const [prompt, setPrompt] = useState('');
   const [background, setBackground] = useState<'transparent' | 'filled'>('transparent');
   const [ratio, setRatio] = useState('1:1');
-  const [webRatio, setWebRatio] = useState('16:9');
+  const [webRatio, setWebRatio] = useState('1:1'); // site assets default to a centered square (logo/mark)
   const [refImage, setRefImage] = useState<string | null>(null);
   const [isText, setIsText] = useState(false);
   const [rolling, setRolling] = useState(false);
