@@ -55,5 +55,11 @@ capture fails, the forge falls back to re-rendering the strokes onto a fresh Pla
 - ✅ `site-assets` write path supports `hero/logo/og/cover/section:<key>`.
 - ✅ hit-test detects images + reads `data-nano-image`.
 - ✅ real screenshot capture → host → forge (with stroke-render fallback). **Needs a build (native lib) + a worker redeploy.**
-- ⏳ tag all 5 templates (`minimal/bold/elegant/extravagant/street`) — now optional (hint only).
+- ✅ tagged all 5 templates (`minimal/bold/elegant/extravagant/street`) — hint only.
+  Standard four tag: `hero` (Hero / HeroVideo wrappers, carousel slide 0), `logo` (header img), and
+  `section:*` for standalone in-page images — carousel slides 2+ (`section:hero-slide-N`), parallax
+  (`section:<navKey>`, default `parallax`), lookbook (`section:<navKey>-N`), category tiles
+  (`section:category-<label-slug>`), and story/gallery tiles where present. `street` (text-wordmark
+  header → no `logo`) tags `hero` + `section:about`. Product/collection imagery is left untagged
+  (it routes via `product:<id>`).
 - ⏳ plan→forge target plumbing for structural edits; `product:<id>` generation route.

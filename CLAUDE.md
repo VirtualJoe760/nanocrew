@@ -72,6 +72,22 @@ The division is organized into subdirectories — open the one you need:
 - `account.tsx` — **Account** (auth, billing portal, account deletion, platform admin)
 
 ## Constraints / gotchas
+- **Core invariants (footguns — full map: `docs/architecture/ARCHITECTURE.md`):**
+  - **Thin-client storefronts.** Templates carry NO commerce backend and NO secrets — checkout proxies
+    to platform-api's central POS; POD providers live only in `src/lib/pod-policy.ts` (`POD_PROVIDERS`).
+    Adding a provider/our own API is a platform-api change, **zero template edits**. ("let's create a
+    template" → `docs/storefront/TEMPLATE_AUTHORING.md`.)
+  - **Brand identity = one cascade.** Editing a brand's name/tagline/story goes through
+    `src/lib/brand-identity.ts` `buildBrandPatch()` — the single source of truth that syncs `stores`
+    columns + `brand_profile` + `site_config.copy` + baked `brand.json`. Never hand-edit one surface
+    (that caused the "Alpha Master" SEO-drift bug).
+  - **Live-read vs rebuild.** `site-config` (copy/colors/fonts **and** SEO) + `site-assets`
+    (logo via `stores.logo_url`, hero/og) apply with **NO rebuild** (`live ?? baked`); anything baked
+    in `brand.json` (header/SEO) needs a `brand.json` push + `revalidateStorefront`.
+  - **Forge worker is a hand-kept mirror.** `forge-worker/worker.mjs` (the droplet) mirrors
+    `provision.ts`/`revise.ts` and needs a **separate redeploy (re-scp)** — edits there don't ship by
+    pushing the repo, and a drift breaks builds silently.
+  - **Authed routes: no `fetch()` before the first DB query** (the Railway/postgres-js constraint).
 - **Dev build only (Expo Go retired as of build #12)**: `expo-notifications` (push, `PUSH_ENABLED=true`), `expo-apple-authentication` (native Sign in with Apple, `src/lib/oauth.ts`), `react-native-iap` (v15, **Apple IAP / StoreKit 2** — client `src/lib/iap.ios.ts`, dormant until `APPLE_IAP_*` env), and `react-native-view-shot` (4.0.3 — the live-site editor's **annotated-screenshot capture**, `src/components/site-preview.tsx`) are installed, so the project requires an EAS dev/standalone build — Expo Go can't load it. The screenshot capture only works on a build that bundles the native module; without it, `captureRef` is guarded and the forge falls back to its server-side stroke re-render. See `docs/ops/DEV_BUILD.md`.
 - **Expo Go stale bundle**: only `xcrun simctl terminate booted host.exp.Exponent` + relaunch forces a fresh rebundle.
 - Nano Banana can't emit alpha → magenta chroma-key (`src/lib/transparency.ts`).
