@@ -62,6 +62,11 @@ type Design = {
 const RATIOS = ['1:1', '4:5', '3:4', '16:9'];
 // Web graphics want wide/site shapes (hero, banner) rather than print-on-garment ratios.
 const WEB_RATIOS = ['16:9', '4:3', '1:1', '9:16'];
+// Site-assets mode is backed by ONE per-brand "Web Assets" collection so generated web graphics
+// (heroes, logos, social cards) are stored + reappear, instead of being ephemeral. It holds only
+// design graphics (no published products), so it never shows as a shop collection on the storefront
+// (the public collections endpoint inner-joins published products).
+const WEB_ASSETS_COLLECTION = 'Web Assets';
 
 // The Generate sheet's three modes — each picks the model + the options shown. (Video is wired
 // in a later phase; Graphics generates web-shaped images.) Adding more image models / ComfyUI
@@ -534,8 +539,9 @@ export default function DesignScreen() {
     const catId = catalogueRef.current?.id;
     const slug = brandRef.current?.slug;
     if (!url || !url.startsWith('http')) return;
-    // cover is a COLLECTION cover → it needs an active catalogue, even in Site assets mode.
-    if (slot === 'cover' && !catId) {
+    // cover is a COLLECTION cover → it needs a real product collection. In Site assets mode the
+    // backing catalogue is the "Web Assets" bucket, so cover doesn't apply there either.
+    if (slot === 'cover' && (assetModeRef.current || !catId)) {
       Alert.alert('Pick a collection', 'A cover image belongs to a collection — switch to a collection to set one.');
       return;
     }
@@ -580,8 +586,8 @@ export default function DesignScreen() {
         ...(canAssign
           ? [
               { text: 'Set as website hero', onPress: () => void assignDesign(d, 'hero') },
-              // Cover belongs to a collection — only offer it when one is active.
-              ...(catalogueRef.current ? [{ text: 'Set as collection cover', onPress: () => void assignDesign(d, 'cover') }] : []),
+              // Cover belongs to a product collection — only offer it in a real collection (not Site assets).
+              ...(catalogueRef.current && !assetModeRef.current ? [{ text: 'Set as collection cover', onPress: () => void assignDesign(d, 'cover') }] : []),
               { text: 'Set as logo', onPress: () => void assignDesign(d, 'logo') },
               { text: 'Set as social image', onPress: () => void assignDesign(d, 'og') },
             ]
@@ -933,17 +939,43 @@ export default function DesignScreen() {
       .catch(() => {});
   };
 
-  // Setup: design the brand's WEBSITE assets — no collection. Clears the canvas, drops any active
-  // catalogue, and opens the dock straight to the Web assets panel (hero / logo / social).
-  const chooseAssetsMode = () => {
+  // Setup: design the brand's WEBSITE assets. Opens the dock to Web assets and backs the session
+  // with the brand's persistent "Web Assets" collection (found or created) so every graphic
+  // generated here is STORED + reappears — while the UI stays in asset mode (chip "· Site assets",
+  // cover hidden). assetMode is the UI flag; the catalogue underneath is just the storage bucket.
+  const chooseAssetsMode = async () => {
+    const slug = brandRef.current?.slug;
     setAssetMode(true);
     assetModeRef.current = true;
-    setCatalogue(null);
-    catalogueRef.current = null;
-    setDesigns([]);
-    setNodes([]);
     setDockPanel('web');
     setCatSheetOpen(false);
+    setDesigns([]);
+    setNodes([]);
+    let cat = catalogues.find((c) => c.name.toLowerCase() === WEB_ASSETS_COLLECTION.toLowerCase()) ?? null;
+    if (!cat && slug) {
+      try {
+        const r = await apiFetch('/api/catalogues', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: WEB_ASSETS_COLLECTION, storeSlug: slug }),
+        });
+        const d = (await r.json()) as { catalogue?: { id: string; name: string } };
+        if (d.catalogue) {
+          cat = d.catalogue;
+          setCatalogues((c) => [...c, d.catalogue!]);
+        }
+      } catch {
+        // No bucket — graphics stay in-session; assets still save on the store when assigned.
+      }
+    }
+    if (cat) {
+      setCatalogue(cat);
+      catalogueRef.current = cat;
+      loadCatalogue(cat.id);
+    } else {
+      setCatalogue(null);
+      catalogueRef.current = null;
+    }
   };
 
   const switchCatalogue = (cat: { id: string; name: string }) => {
@@ -1247,6 +1279,7 @@ export default function DesignScreen() {
               />
             ) : dockPanel === 'web' ? (
               <WebAssetsDock
+                hideCover={assetMode}
                 onAddSlot={(slot) => {
                   addNode('webslot', slot);
                   setDockCollapsed(true);
@@ -1561,7 +1594,7 @@ export default function DesignScreen() {
                     </Pressable>
                   ) : null}
                   {/* Design the brand's WEBSITE assets — no collection needed. */}
-                  <Pressable onPress={chooseAssetsMode} style={styles.catRow}>
+                  <Pressable onPress={() => void chooseAssetsMode()} style={styles.catRow}>
                     <ThemedText type="small" themeColor={assetMode ? 'text' : 'textSecondary'}>
                       {assetMode ? '●  ' : '○  '}🌐 Site assets — hero · logo · social
                     </ThemedText>
@@ -1778,7 +1811,9 @@ function GenerateModal({
     setBusy(true);
     setError(null);
     try {
-      const bg = isGraphics ? 'filled' : isText ? 'transparent' : background;
+      // Text lettering is always cut out; otherwise honor the creator's transparent/filled choice
+      // (for BOTH product designs and web graphics — a logo wants transparent, a hero wants filled).
+      const bg = isText ? 'transparent' : background;
       const aspectRatio = isGraphics ? webRatio : ratio;
       const res = await apiFetch('/api/generate', {
         method: 'POST',
@@ -1969,28 +2004,35 @@ function GenerateModal({
                     </ThemedText>
                   </ThemedView>
                 </Pressable>
-                {modality === 'design' ? (
+                {modality === 'design' || modality === 'graphics' ? (
                   <>
-                    {(['transparent', 'filled'] as const).map((b) => (
-                      <Pressable key={b} onPress={() => setBackground(b)}>
+                    {/* Transparent vs filled background — for product designs AND web graphics
+                        (a transparent PNG logo, a filled hero/banner). Hidden when Aa Text is on
+                        (lettering is always cut out). */}
+                    {!isText
+                      ? (['transparent', 'filled'] as const).map((b) => (
+                          <Pressable key={b} onPress={() => setBackground(b)}>
+                            <ThemedView
+                              type={background === b ? 'backgroundSelected' : 'backgroundElement'}
+                              style={styles.chip}>
+                              <ThemedText type="small" themeColor={background === b ? 'text' : 'textSecondary'}>
+                                {b === 'transparent' ? 'Transparent' : 'Filled'}
+                              </ThemedText>
+                            </ThemedView>
+                          </Pressable>
+                        ))
+                      : null}
+                    {modality === 'design' ? (
+                      <Pressable onPress={() => setIsText((t) => !t)}>
                         <ThemedView
-                          type={background === b ? 'backgroundSelected' : 'backgroundElement'}
+                          type={isText ? 'backgroundSelected' : 'backgroundElement'}
                           style={styles.chip}>
-                          <ThemedText type="small" themeColor={background === b ? 'text' : 'textSecondary'}>
-                            {b === 'transparent' ? 'Transparent' : 'Filled'}
+                          <ThemedText type="small" themeColor={isText ? 'text' : 'textSecondary'}>
+                            Aa Text
                           </ThemedText>
                         </ThemedView>
                       </Pressable>
-                    ))}
-                    <Pressable onPress={() => setIsText((t) => !t)}>
-                      <ThemedView
-                        type={isText ? 'backgroundSelected' : 'backgroundElement'}
-                        style={styles.chip}>
-                        <ThemedText type="small" themeColor={isText ? 'text' : 'textSecondary'}>
-                          Aa Text
-                        </ThemedText>
-                      </ThemedView>
-                    </Pressable>
+                    ) : null}
                   </>
                 ) : null}
                 <Pressable onPress={rollIdea} disabled={rolling}>

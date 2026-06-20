@@ -22,11 +22,18 @@ const SLOTS: { slot: WebSlot; label: string; hint: string }[] = [
  * to it (drag a design onto the target) to assign it. Mirrors how Products work: pull up a target,
  * attach the generation. The connect + write is handled on the canvas (onAddSlot adds the node).
  */
-export function WebAssetsDock({ onAddSlot }: { onAddSlot: (slot: WebSlot) => void }) {
+export function WebAssetsDock({
+  onAddSlot,
+  hideCover,
+}: {
+  onAddSlot: (slot: WebSlot) => void;
+  hideCover?: boolean; // Site assets mode has no product collection → no cover slot.
+}) {
+  const slots = hideCover ? SLOTS.filter((s) => s.slot !== 'cover') : SLOTS;
   return (
     <View style={styles.dock}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {SLOTS.map((s) => (
+        {slots.map((s) => (
           <Pressable key={s.slot} onPress={() => onAddSlot(s.slot)}>
             <ThemedView type="backgroundElement" style={styles.card}>
               <ThemedText type="small" numberOfLines={1}>

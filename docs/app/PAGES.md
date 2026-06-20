@@ -178,17 +178,21 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   needed**) or a **collection** (products). One brand → it's pre-selected and you land on the
   second step. The top-left chip (`BRAND · Site assets` or `BRAND · COLLECTION ▾`) reopens it to
   switch. Catalogues are brand-scoped (`/api/catalogues?store=<slug>`, access-checked).
-  - **Site assets mode** (`assetMode`): brand-level, catalogue-free. Site-asset slots resolve by
-    `storeSlug` (the `/api/creator/site-assets` endpoint accepts either `catalogueId` *or*
-    `storeSlug`); `cover` is the one slot that still needs a collection (it's a collection cover).
-    The dock opens straight to **Web assets**; the canvas isn't persisted (assets save on the store
-    when assigned). Picking/creating a collection exits the mode.
+  - **Site assets mode** (`assetMode`): the dock opens straight to **Web assets** and the session is
+    backed by the brand's one persistent **"Web Assets"** collection (found or created on entry, the
+    `WEB_ASSETS_COLLECTION` const) — so every graphic generated here is **stored** and reappears. That
+    collection holds only design graphics (no published products), so it never shows as a shop
+    collection (the public collections endpoint inner-joins published products). Site-asset slots write
+    to the store (`/api/creator/site-assets` resolves the store from the catalogue); `cover` is hidden
+    (it's a product-collection cover). Picking/creating a real collection exits the mode.
 - **Top bar:** the brand·collection chip + design-history strip.
 - **Canvas:** node kinds — `design`, `template` (blank garment), `composition` (design-on-garment),
   `webslot` (a website-asset target), `group`. Pan/zoom, tap, box-select, blend. Auto-saves to
   `/api/canvas/:catalogueId`.
-- **Generate (FAB):** prompt or image, aspect ratio, transparent/filled, effort → `/api/generate`
-  (Nano Banana; magenta chroma-key for transparency).
+- **Generate (FAB):** prompt or image, aspect ratio, **transparent/filled** (offered for BOTH
+  Design and Graphics modalities — a transparent PNG logo vs a filled hero/banner; only `Aa Text`
+  lettering is force-transparent), effort → `/api/generate` (Nano Banana; magenta chroma-key for
+  transparency).
 - **Compose:** drag a design onto a blank → `/api/compositions` → `/api/composite`; **PlacementEditor**
   sizes/positions it and renders **real Printful mockups** (`/api/mockup`); **FinalizeSheet** sets
   name/collection/sizes/colors and publishes (`/api/publish`, with the cost+$5 price floor enforced).
