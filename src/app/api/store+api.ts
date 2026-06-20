@@ -21,7 +21,10 @@ interface GenResponse {
   candidates?: Array<{ content?: { parts?: InlinePart[] } }>;
 }
 
-/** Generate a logo mark from the interview's direction, honoring the stated palette. */
+/** Generate a logo mark from the interview's direction, honoring the stated palette. Logos default
+ *  to a TRANSPARENT background — a mark gets composited onto the site header, OG card, app chrome,
+ *  etc., so a solid box would look wrong. Nano Banana can't emit alpha, so (like /api/generate's
+ *  transparent path) we prompt for a pure-magenta backdrop and chroma-key it out (lib/transparency). */
 async function generateLogo(brand: BrandResult): Promise<string | null> {
   try {
     const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
@@ -31,9 +34,10 @@ async function generateLogo(brand: BrandResult): Promise<string | null> {
     const prompt =
       `Logo for the clothing brand "${brand.name}". ${brand.logo.direction}. ` +
       `${brand.designStyle} design style. Use ONLY these brand colors: ${palette}. ` +
-      'A clean, iconic mark centered on a plain solid background matching the brand ' +
-      'background color. Square 1:1. No text other than the brand name, and only if the ' +
-      'description asks for it. No watermark.';
+      'A clean, iconic mark centered on a SOLID, UNIFORM, PURE MAGENTA (#FF00FF) background ' +
+      'filling the entire frame edge to edge — the mark itself must contain NO magenta or pink ' +
+      'hues (the magenta is keyed out to a transparent PNG). Never render a checkerboard pattern. ' +
+      'Square 1:1. No text other than the brand name, and only if the description asks for it. No watermark.';
     const res = (await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -41,9 +45,16 @@ async function generateLogo(brand: BrandResult): Promise<string | null> {
     })) as GenResponse;
     const part = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
     if (!part?.inlineData?.data) return null;
-    return await uploadImage(Buffer.from(part.inlineData.data, 'base64'), {
-      folder: 'nanocrew/logos',
-    });
+    let buffer: Buffer = Buffer.from(part.inlineData.data, 'base64');
+    try {
+      // Key the magenta backdrop out to real alpha. keyOutMagenta is a no-op if the border isn't
+      // actually magenta (model ignored the instruction) → we ship the filled mark rather than fail.
+      const { keyOutMagenta } = await import('@/lib/transparency');
+      buffer = (await keyOutMagenta(buffer)) as Buffer;
+    } catch {
+      // Keying failure shouldn't kill brand creation — ship the raw image.
+    }
+    return await uploadImage(buffer, { folder: 'nanocrew/logos' });
   } catch {
     return null; // a store without a logo beats a failed creation
   }

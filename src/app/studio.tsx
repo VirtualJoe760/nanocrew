@@ -779,9 +779,9 @@ export default function StudioScreen() {
   const lastTurnEmptyRef = useRef(false);
 
   const playSpeech = useCallback(
-    async (b64: string) => {
+    async (b64: string, ext: 'mp3' | 'wav' = 'mp3') => {
       const gen = ++playGenRef.current;
-      const file = `${FileSystem.cacheDirectory}entity-${playCount.current++}.mp3`;
+      const file = `${FileSystem.cacheDirectory}entity-${playCount.current++}.${ext}`;
       await FileSystem.writeAsStringAsync(file, b64, { encoding: FileSystem.EncodingType.Base64 });
       // Switch the audio session OUT of record mode (we may have just recorded), then give iOS a
       // beat to actually apply the category switch before playing — otherwise play() no-ops silently.
@@ -1181,15 +1181,17 @@ export default function StudioScreen() {
       setCreated(d.store.slug);
       setHasStore(true);
       setLogoUrl(d.store.logoUrl ?? null);
-      // The entity announces the launch.
+      // The entity announces the launch — in Venus's OWN Gemini voice (Aoede), the same voice as the
+      // live interview, NOT the legacy ElevenLabs `/api/voice` path. The live session is already torn
+      // down by finalize() at this point, so this one-shot /api/say keeps the voice consistent.
       try {
-        const v = await fetch(apiUrl('/api/voice'), {
+        const v = await fetch(apiUrl('/api/say'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ say: `${brand.name} is online. Head to the Design tab — let's make your first drop.` }),
+          body: JSON.stringify({ text: `${brand.name} is online. Head to the Design tab — let's make your first drop.` }),
         });
-        const s = await readJson<{ speech?: string }>(v);
-        if (s.speech) await playSpeech(s.speech);
+        const s = await readJson<{ audio?: string }>(v);
+        if (s.audio) await playSpeech(s.audio, 'wav');
       } catch {
         // launch fanfare is optional
       }

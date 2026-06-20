@@ -206,6 +206,15 @@ The interview voice is now a **Gemini** voice. Map the chosen `AI_VOICES` id →
 (default `Aoede`) for the Live session. The ElevenLabs-based `previewVoice` mismatches the real voice
 now — either repoint preview to a Gemini sample or drop it (follow-up; not blocking).
 
+### Launch announcement (post-build) — `/api/say`
+After the brand is built, `createStore` plays a one-line "your store is online" fanfare. The Live
+session is already torn down by `finalize()` (`s.stop()` before hand-off), so this is a **one-shot**
+synthesized in Venus's **same Gemini voice** via [`/api/say`](../../src/app/api/say+api.ts) (model
+`gemini-2.5-flash-preview-tts`, voice **`Aoede`** — matching `LiveVoiceSession`), NOT the legacy
+ElevenLabs `/api/voice` `say` path (that switch was a jarring voice regression). Gemini TTS returns
+raw PCM16/24k mono; `/api/say` WAV-wraps it server-side and `playSpeech(audio, 'wav')` plays it. The
+fanfare stays best-effort (try/catch) — a TTS failure is silent, never blocks store creation.
+
 ### Transcript for `createStore`
 Live has no `messages.current`. Accumulate completed turns in the hook (push `userText`/`venusText`
 on `turnComplete`) and pass that as the `transcript`. `brand` is the primary input; transcript is
