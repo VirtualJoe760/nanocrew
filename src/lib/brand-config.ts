@@ -13,9 +13,14 @@ function gh() {
   return { GITHUB_TOKEN, GITHUB_OWNER };
 }
 
-type BrandPatch = { name?: string; tagline?: string | null; logoUrl?: string | null };
+export type BrandJsonPatch = {
+  name?: string;
+  tagline?: string | null;
+  story?: string | null; // drives the site's meta/og/twitter description + JSON-LD (baked → needs rebuild)
+  logoUrl?: string | null;
+};
 
-export async function updateBrandJson(slug: string, patch: BrandPatch): Promise<boolean> {
+export async function updateBrandJson(slug: string, patch: BrandJsonPatch): Promise<boolean> {
   const cfg = gh();
   if (!cfg) return false;
   const url = `https://api.github.com/repos/${cfg.GITHUB_OWNER}/store-${slug}/contents/brand.json`;
@@ -34,6 +39,7 @@ export async function updateBrandJson(slug: string, patch: BrandPatch): Promise<
     const next = { ...current };
     if (patch.name !== undefined) next.name = patch.name;
     if (patch.tagline !== undefined) next.tagline = patch.tagline ?? '';
+    if (patch.story !== undefined) next.story = patch.story ?? '';
     if (patch.logoUrl !== undefined) next.logoUrl = patch.logoUrl ?? '';
     if (JSON.stringify(next) === JSON.stringify(current)) return true; // already in sync
 
@@ -41,7 +47,7 @@ export async function updateBrandJson(slug: string, patch: BrandPatch): Promise<
       method: 'PUT',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: 'chore: update brand.json (name/logo) from Site Options',
+        message: 'chore: sync brand.json identity (name/tagline/story/logo) from Site Options',
         content: Buffer.from(JSON.stringify(next, null, 2)).toString('base64'),
         sha: file.sha,
       }),

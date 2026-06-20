@@ -111,13 +111,20 @@ when you have several. Four tabs:
   `POST /api/creator/site-config` → `stores.site_config`, read live by the template, **no rebuild**;
   each text box has a **✦ Enhance** button — AI rewrites it in the brand voice via
   `/api/creator/enhance-copy`, free + rate-limited like `/api/enhance`).
-  **Brand name** is also edited here, but it is NOT a mini-CMS field — it lives on the store record and
-  is baked into the site. Saving a new name `PATCH /api/creator/stores/:slug { name }` **cascades**:
-  it (1) updates `stores.name` (app updates instantly), (2) **clears the logo** (`stores.logoUrl=null`
-  — the old logo baked the old name; this re-surfaces the "Add your logo" bounty + the app tells the
-  creator to remake it in Design or via Venus), and (3) rewrites the site repo's **`brand.json`**
-  (`name` + cleared `logoUrl`) via the GitHub contents API (`src/lib/brand-config.ts`) → Vercel
-  **rebuilds** the site with the new name and no logo.
+  **Brand name / tagline / story** are also edited here, but they are NOT mini-CMS fields — they're the
+  brand's IDENTITY and live in multiple places. `PATCH /api/creator/stores/:slug { name?, tagline?,
+  descriptionMd? }` runs ONE unified cascade (`src/lib/brand-identity.ts` `buildBrandPatch()` — the
+  single source of truth) so an edit propagates to every surface instead of drifting:
+  - `stores` columns (name, tagline, description_md) + **`brand_profile`** jsonb (the AI ground-truth read
+    by enhance-copy / build-site) + the mini-CMS **`site_config.copy`** overrides (which WIN on the live
+    site, so they must track) + the baked **`brand.json`** (header + SEO/meta/JSON-LD) via the GitHub
+    contents API (`src/lib/brand-config.ts`) → Vercel rebuild.
+  - On a **rename**, the old name is swapped → new everywhere it's embedded in copy (story, headline,
+    subline, kicker, cta, tagline, logo.direction), and the baked **logo + OG card** (which carry the old
+    identity) are cleared (`logoUrl`/`ogImageUrl` = null) → re-surfaces the "Add your logo" bounty + the
+    app tells the creator to remake them. `brand_profile.transcript` keeps the old name (it's a record).
+  - Any identity change revalidates the storefront; story/tagline edits now cascade too (previously only
+    a name change did, which left stale "Alpha Master" SEO descriptions — fixed).
   the **Venus chat is the forge** (open-ended redesigns → preview → approve). If no site: **Build site**
   (`/api/creator/build-site`; a `402` prompts the Pro upgrade). → `/api/creator/{site-config,enhance-copy,
   revise,revisions[/:id/approve]}`.
