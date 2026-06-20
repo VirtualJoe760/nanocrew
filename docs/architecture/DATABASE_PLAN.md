@@ -41,10 +41,13 @@ Auth itself lives in **Supabase Auth** (`auth.users`); `creators.id` mirrors the
 | --- | --- |
 | `store_status` | `draft` → `building` → `ready` → `live`, plus `suspended` |
 | `composition_status` | `generating`, `draft`, `approved`, `published`, `failed` |
-| `order_status` | `pending_payment`, `paid`, `submitted_to_printful`, `in_production`, `shipped`, `delivered`, `cancelled`, `refunded`, `on_hold`, `returned`, `failed` (last three driven by Printful webhooks) |
+| `order_status` | `pending_payment`, `paid`, `submitted_to_printful`, `in_production`, `shipped`, `delivered`, `cancelled`, `refunded`, `on_hold`, `returned`, `failed`, `return_requested` (Printful webhooks drive `on_hold`/`returned`/`failed`; `return_requested` = a customer claim, distinct from `returned`) |
 | `subscription_plan` | `free`, `starter`, `pro`, `advanced` |
 | `subscription_status` | `active`, `trialing`, `past_due`, `canceled` |
 | `revision_status` | `building` → `ready` → `approved`, plus `failed` |
+| `payout_status` | `none`, `held`, `released`, `reversed`, `skipped` (the deferred-brand-payout state on `orders`; see §5 + [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md)) |
+| `return_reason` | `defective`, `wrong_item`, `damaged`, `not_received` (POD = made-to-order, so no buyer's-remorse) |
+| `return_request_status` | `requested` → `approved` / `declined`, plus `refunded` (terminal) |
 
 Store lifecycle: `draft` (interview saved) → `building` (forge provisioning) → `ready` (deployed to
 the `store-<slug>.vercel.app` preview, creator reviewing) → `live` (custom domain attached &
@@ -163,7 +166,21 @@ Design-tab canvas layout state.
 - `applicationFeeCents` (int, default 0) — the platform cut (Stripe Connect).
 - `currency` (varchar(3), default `USD`).
 - `shippingAddress` (jsonb, column `shipping_address_json`), `trackingUrl`, `trackingNumber`.
-- `createdAt`, `updatedAt`. Indexes: `storeId`; `status`.
+- **Return window + payout hold (migration `0024`):**
+  - `shippedAt` (timestamp) — stamped in the `package_shipped` webhook.
+  - `returnWindowEndsAt` (timestamp) — `shippedAt + RETURN_WINDOW_DAYS` (env, default 7); the claim
+    deadline (= `payoutReleaseAt`).
+  - `stripeChargeId` (text) — the charge id (`source_transaction` for the held transfer), captured
+    at `checkout.session.completed` from the PaymentIntent's `latest_charge`.
+  - `brandNetCents` (int, not null, default 0) — the deferred transfer amount (brand's net).
+  - `connectedAccountId` (text) — the transfer destination, snapshotted at checkout.
+  - `payoutStatus` (`payout_status`, not null, default `none`) — `none · held · released · reversed
+    · skipped` (the brand-payout state machine; see [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md) +
+    [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md)).
+  - `payoutReleaseAt` (timestamp) — when the release job may transfer (= `returnWindowEndsAt`).
+  - `payoutTransferId` (text) — the Stripe transfer id once released.
+- `createdAt`, `updatedAt`. Indexes: `storeId`; `status`; **`(payoutStatus, payoutReleaseAt)`**
+  (`orders_payout_release_idx` — the release-job scan).
 
 ### `order_items`
 - `id`, `orderId` → `orders` (**cascade**).
@@ -172,6 +189,25 @@ Design-tab canvas layout state.
 - `quantity`, `unitPriceCents`.
 - **`nameSnapshot`** (text, not null) + **`variantSnapshot`** (text, not null) — name/variant are
   snapshotted at purchase, so deleting a product later **preserves order history** intact.
+
+### `return_requests` — customer return claims (migration `0024`)
+A customer-opened defect/wrong/damaged/not-received claim against an order. Created by
+`POST /api/public/returns`, resolved from the Studio returns inbox. See
+[RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md).
+- `id` (uuid PK), `orderId` → `orders` (**cascade**).
+- `storeId` → `stores` (**cascade**) — **denormalized** from the order so the creator inbox + RLS
+  scope by store without a join.
+- `customerEmail` (text, not null).
+- `reason` (`return_reason` — `defective` | `wrong_item` | `damaged` | `not_received`).
+- `itemsJson` (jsonb, nullable) — which order_items/quantities the claim covers (null = whole order).
+- `photoUrls` (jsonb, nullable) — evidence; **required for `defective`/`damaged`** at the API layer.
+- `note` (text, nullable) — the buyer's note.
+- `status` (`return_request_status`, not null, default `requested`).
+- `resolution` (text), `refundId` (text — Stripe refund id once refunded), `rmaCode` (text, usually
+  unused — most POD claims need no physical ship-back).
+- `createdAt`, `resolvedAt`. Indexes: `orderId`; `storeId`; `status`.
+- **🔒 RLS enabled deny-all** (migration `0024`, per the RLS rule above) — the app reads it as
+  `postgres`; the anon key cannot touch it.
 
 ---
 
@@ -290,6 +326,10 @@ order/sale alerts. One row per device token; a creator can have several (phone +
 - `orderItems` → one `order`, one `variant`.
 - `storePosts` → one `store`.
 - `storeRevisions` → one `store`.
+
+`return_requests` carries FK references to `orders` + `stores` (both cascade) but has **no Drizzle
+`relations()` helper** — the returns routes read it with explicit joins (`accessibleStoreIds()` scope),
+so a relation wasn't needed.
 
 Type exports (`$inferSelect`): `Creator`, `Store`, `Catalogue`, `DesignRow`, `Composition`,
 `CanvasNodeRow`, `Product`, `Variant`, `Order`, `StorePost`, `StoreRevision`.

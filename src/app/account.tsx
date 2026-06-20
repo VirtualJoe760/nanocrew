@@ -22,6 +22,7 @@ import { ThemedView } from '@/components/themed-view';
 import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
 import { BrandStore } from '@/components/brand-store';
 import { EarningsCockpit } from '@/components/earnings-cockpit';
+import { Purchases } from '@/components/purchases';
 import { Paywall } from '@/components/paywall';
 import { PlatformAdmin } from '@/components/platform-admin';
 import { useAuth } from '@/hooks/use-auth';
@@ -119,6 +120,7 @@ export default function AccountScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showEarnings, setShowEarnings] = useState(false);
+  const [showPurchases, setShowPurchases] = useState(false);
   const [storeSlug, setStoreSlug] = useState<string | null>(null);
   const [payouts, setPayouts] = useState<{ connected: boolean; chargesEnabled: boolean } | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
@@ -330,6 +332,17 @@ export default function AccountScreen() {
                   )}
                 </Card>
 
+                <SectionLabel>Purchases</SectionLabel>
+                <Card>
+                  <Row
+                    first
+                    title="Your orders"
+                    subtitle="Track shipments & request returns"
+                    trailing="›"
+                    onPress={() => setShowPurchases(true)}
+                  />
+                </Card>
+
                 <SectionLabel>Commerce</SectionLabel>
                 <Card>
                   {stores.length ? (
@@ -519,6 +532,7 @@ export default function AccountScreen() {
       </SafeAreaView>
       {isAdmin ? <PlatformAdmin visible={showAdmin} onClose={() => setShowAdmin(false)} /> : null}
       {session ? <EarningsCockpit visible={showEarnings} onClose={() => setShowEarnings(false)} token={session.access_token} /> : null}
+      {session ? <Purchases visible={showPurchases} onClose={() => setShowPurchases(false)} /> : null}
       {session ? <Paywall visible={showPaywall} onClose={() => setShowPaywall(false)} token={session.access_token} reason="manage" /> : null}
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
     </View>

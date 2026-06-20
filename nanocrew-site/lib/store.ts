@@ -94,3 +94,20 @@ export function optionsOf(p: Product, key: 'color' | 'size'): string[] {
   }
   return seen;
 }
+
+// ---------- Returns — the guest claim flow (defect/wrong/damaged/not-received only) ----------
+// Like checkout, all the returns LOGIC (window validation, refunds, emails) lives on the central
+// platform-api; this site proxies through its own /api/{order-lookup,returns} routes so it never
+// holds commerce state. See docs/accounts/RETURNS_REFUNDS.md.
+
+export type ReturnReason = 'defective' | 'wrong_item' | 'damaged' | 'not_received';
+
+export type LookedUpOrder = {
+  id: string;
+  status: string;
+  items: { name: string; variant: string | null; quantity: number }[];
+  trackingUrl: string | null;
+  trackingNumber: string | null;
+  returnWindowEndsAt: string | null;
+  inWindow: boolean;
+};

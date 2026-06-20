@@ -33,12 +33,12 @@ buildBrandSender({ slug, name }: { slug: string; name: string }): string
 
 ## The email service — function contract · `platform-api/lib/notify.ts`
 
-This is the interface the webhook + returns hooks build against. Each takes the resolved order +
-store and is best-effort:
+This is the interface the webhook + returns hooks build against — **implemented**. Each takes the
+resolved order + store and is best-effort (wrapped in try/catch, never throws into the caller):
 
 ```ts
 sendOrderConfirmation({ to, store, items, order })        // checkout.session.completed
-sendShippedEmail({ to, store, items, trackingNumber, trackingUrl })  // EXISTS — keep, add `store`
+sendShippedEmail({ to, store, items, trackingNumber, trackingUrl })  // per-brand sender (takes `store`)
 sendDeliveredReviewRequest({ to, store, order, reviewUrl }) // delivery / review-request
 sendReturnRequested({ to, store, returnRequest })          // buyer ack on claim opened
 sendReturnApproved({ to, store, returnRequest })           // claim approved
@@ -46,15 +46,37 @@ sendReturnDeclined({ to, store, returnRequest, reason })   // claim declined
 sendRefundConfirmation({ to, store, order, amountCents })  // refund issued
 ```
 
+`store` is the live-read brand slice `EmailStore = { slug, name, logoUrl?, colors? }` — pass what the
+route already loaded (`stores.slug/name`, plus `stores.logo_url` + `stores.site_config.colors` for
+full branding); `returnRequest`/`order` are the typed row slices `ReturnRequestLike`/`OrderLike`
+(re-exported from `notify.ts` so platform-api callers get checked shapes).
+
 Each: resolve `from = buildBrandSender(store)`, render the shared branded layout, POST to Resend,
-log on `!res.ok`. Keep the raw-`fetch` core (no SDK dependency required).
+log on `!res.ok`, **env-gated no-op** when `RESEND_API_KEY` or the sending domain is unset. Keep the
+raw-`fetch` core (no SDK dependency required). The per-email bodies + the layout live in
+`platform-api/lib/email-templates.ts` (keeps `notify.ts` to senders).
+
+### App-triggered sends · `POST /api/internal/notify` (INTERNAL_API_KEY-gated)
+
+App-side creator actions (approve/decline) run on the **Railway backend**, where Resend must NOT
+live (secrets + sender stay central in platform-api). So the app posts to
+`platform-api/app/api/internal/notify` (`x-internal-key` header, constant-time compared against
+`INTERNAL_API_KEY`; rejects when the env is unset) with the minimal payload
+`{ action: 'approved' | 'declined', returnId, reason? }`. The **route resolves** the claim → store →
+buyer from `returnId` (it has DB access; the app stays dumb) and dispatches to `sendReturnApproved` /
+`sendReturnDeclined`, best-effort (a configured-and-authed call always `202`s — a failed send never
+fails the creator action). The other lifecycle emails fire directly from their platform-api hooks
+(order confirmation/refund from the Stripe webhook; shipped/delivered from the Printful webhook;
+return-requested ack from `POST /api/public/returns`), so they don't go through this route.
 
 ## Branded layout — emails mirror the Nano Crew pattern, per brand
 
-A shared HTML layout (`renderEmail({ store, heading, body, cta? })`) takes the brand's **name, logo,
-and colors** — pulled from the cascade (`stores.logo_url` + `site_config` copy/colors, **live-read,
-no rebuild**) so each brand's mail matches its storefront, with a consistent Nano Crew footer
-("Sent by Nano Crew on behalf of {brand}"). Keep it inline-styled, table-based, ≤600px (email-client
+A shared HTML layout (`renderEmail({ store, heading, body, cta? })` in `email-templates.ts`) takes
+the brand's **name, logo, and colors** — pulled from the cascade (`stores.logo_url` + `site_config`
+colors, **live-read, no rebuild**; the colors map is free-form, so the layout probes the common key
+aliases — `accent`/`primary`, `bg`/`background`, `ink`/`text` — and falls back to a clean Nano Crew
+monochrome) so each brand's mail matches its storefront, with a consistent Nano Crew footer
+("Sent by Nano Crew on behalf of {brand}"). Inline-styled, table-based, ≤600px (email-client
 reality). React-Email/MJML is optional polish; a single well-tested HTML template is the floor.
 
 ## Lifecycle catalogue — every email, its trigger, its hook point

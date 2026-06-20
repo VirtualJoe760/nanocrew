@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
 import { GoLiveComposer } from '@/components/go-live-composer';
+import { ReturnsInbox } from '@/components/returns-inbox';
 import { SceneShortComposer } from '@/components/scene-short-composer';
 import { SiteEditor } from '@/components/site-editor';
 import { SitePreview } from '@/components/site-preview';
@@ -67,6 +68,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [refundingId, setRefundingId] = useState<string | null>(null); // order currently being refunded
   const [shortComposer, setShortComposer] = useState(false); // the "make a scene short" flow
   const [goLive, setGoLive] = useState(false); // the domain / go-live flow
+  const [returnsInbox, setReturnsInbox] = useState(false); // the creator's return-claims inbox
   const [editor, setEditor] = useState(false); // the mini-CMS: text / colors / fonts (direct, instant)
   const [deleting, setDeleting] = useState(false); // brand deletion in flight
   const [uploading, setUploading] = useState(false); // post cover image upload in flight
@@ -974,6 +976,16 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                     <ThemedText type="small" style={[styles.dim, { marginTop: Spacing.three }]}>No orders yet — share your store to make the first sale.</ThemedText>
                   )}
 
+                  {/* Returns — review customer return claims (approve → refund, or decline) */}
+                  <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>RETURNS</ThemedText>
+                  <Pressable onPress={() => setReturnsInbox(true)} style={styles.settingRow}>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="smallBold" style={styles.white}>Return claims</ThemedText>
+                      <ThemedText type="code" style={styles.dim}>Review return requests — approve to refund, or decline</ThemedText>
+                    </View>
+                    <ThemedText type="code" style={styles.green}>open →</ThemedText>
+                  </Pressable>
+
                   {/* Danger zone */}
                   <ThemedText type="code" style={[styles.sectionLabel, styles.dangerLabel, { marginTop: Spacing.five }]}>DANGER ZONE</ThemedText>
                   <Pressable onPress={confirmDeleteBrand} disabled={deleting} style={[styles.deleteBrandBtn, deleting && { opacity: 0.5 }]}>
@@ -1013,6 +1025,13 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
           token={token}
           slug={active}
           onLive={() => { void loadStores(); }}
+        />
+      ) : null}
+      {returnsInbox ? (
+        <ReturnsInbox
+          visible={returnsInbox}
+          onClose={() => { setReturnsInbox(false); void loadInsights(); }}
+          token={token}
         />
       ) : null}
       {editor && active ? (

@@ -2,12 +2,13 @@ import { and, eq } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
-import { refundPayment } from '@/lib/connect';
+import { refundOrder } from '@/lib/connect';
 
 // POST /api/creator/orders/:id/refund — refund one of the creator's own orders from the app
-// (parity with the brand-site /admin). Full refund; for a Connect order it reverses the brand's
-// transfer + the platform fee. Ownership-checked. Mirrors the platform-api route.
-const REFUNDABLE = ['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered', 'on_hold', 'returned'];
+// (parity with the brand-site /admin). Full refund; the money movement is routed through
+// refundOrder(), which branches on payoutStatus (held→skip the un-sent transfer, released→reverse
+// it). Ownership-checked. Mirrors the platform-api route. See docs/accounts/RETURNS_REFUNDS.md.
+const REFUNDABLE = ['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered', 'on_hold', 'returned', 'return_requested'];
 
 export async function POST(req: Request, { id }: Record<string, string>) {
   const user = await getUserFromRequest(req);
@@ -18,7 +19,6 @@ export async function POST(req: Request, { id }: Record<string, string>) {
       id: schema.orders.id,
       status: schema.orders.status,
       paymentIntentId: schema.orders.stripePaymentIntentId,
-      applicationFeeCents: schema.orders.applicationFeeCents,
     })
     .from(schema.orders)
     .innerJoin(schema.stores, eq(schema.stores.id, schema.orders.storeId))
@@ -30,8 +30,7 @@ export async function POST(req: Request, { id }: Record<string, string>) {
   if (!order.paymentIntentId) return Response.json({ error: 'no payment to refund' }, { status: 409 });
 
   try {
-    await refundPayment(order.paymentIntentId, { reverseTransfer: order.applicationFeeCents > 0 });
-    await db.update(schema.orders).set({ status: 'refunded' }).where(eq(schema.orders.id, order.id));
+    await refundOrder(order.id);
     return Response.json({ status: 'refunded' });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : 'refund failed' }, { status: 502 });

@@ -37,10 +37,19 @@ function encode(params: Record<string, unknown>, prefix = ''): string {
   return parts.filter(Boolean).join('&');
 }
 
-async function stripePost(path: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function stripePost(
+  path: string,
+  params: Record<string, unknown>,
+  idempotencyKey?: string,
+): Promise<Record<string, unknown>> {
   const res = await fetch(`${STRIPE_BASE}${path}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${stripeKey()}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      Authorization: `Bearer ${stripeKey()}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      // A stable per-operation key makes a retried POST safe — Stripe replays the original result.
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+    },
     body: encode(params),
   });
   const json = (await res.json()) as Record<string, unknown>;
@@ -137,6 +146,104 @@ export async function refundPayment(paymentIntentId: string, opts: { reverseTran
     payment_intent: paymentIntentId,
     ...(opts.reverseTransfer ? { reverse_transfer: true, refund_application_fee: true } : {}),
   });
+}
+
+// ---------- Deferred payout (separate charges + transfers — the held-marketplace model) ----------
+// Under separate charges + transfers a sale captures 100% to the platform; the brand's net is HELD
+// (payoutStatus='held') until ship date + RETURN_WINDOW_DAYS, then transferred. A refund inside the
+// window simply cancels the un-sent transfer (no claw-back). See docs/accounts/RETURNS_REFUNDS.md.
+
+/** The order fields releasePayout needs. The release job selects exactly these. */
+export interface ReleasablePayout {
+  id: string;
+  brandNetCents: number;
+  connectedAccountId: string | null;
+  stripeChargeId: string | null;
+  currency?: string | null;
+  payoutStatus?: string | null;
+}
+
+/** Transfer a held order's net to the brand's connected account, then mark it released. Idempotent:
+ *  guarded by the caller on payoutStatus='held', and a per-order Stripe idempotency key so a retried
+ *  release can't double-pay. Sets payoutTransferId + payoutStatus='released'. */
+export async function releasePayout(order: ReleasablePayout): Promise<void> {
+  if (!order.connectedAccountId || order.brandNetCents <= 0 || !order.stripeChargeId) {
+    // Nothing transferable (no destination, zero net, or no source charge) — there's no payout to
+    // make. Settle the state so the release job stops re-scanning it.
+    await db
+      .update(schema.orders)
+      .set({ payoutStatus: 'released' })
+      .where(eq(schema.orders.id, order.id));
+    return;
+  }
+  const transfer = await stripePost(
+    '/transfers',
+    {
+      amount: order.brandNetCents,
+      currency: (order.currency ?? 'usd').toLowerCase(),
+      destination: order.connectedAccountId,
+      // Bind the transfer to the original charge so Stripe draws from those exact funds.
+      source_transaction: order.stripeChargeId,
+      transfer_group: order.id,
+    },
+    // Idempotency: a retried release for the same order returns the original transfer, never a second one.
+    `release_${order.id}`,
+  );
+  await db
+    .update(schema.orders)
+    .set({ payoutTransferId: transfer.id as string, payoutStatus: 'released' })
+    .where(eq(schema.orders.id, order.id));
+}
+
+/** Refund an order, branching on its payout state (the held-marketplace refund):
+ *   - 'held'     → refund the buyer; the brand was never paid, so cancel the un-sent transfer
+ *                  (payoutStatus='skipped'). No reverse_transfer — the common, claw-back-free case.
+ *   - 'released' → refund the buyer AND reverse the already-sent transfer (payoutStatus='reversed').
+ *   - 'none'     → plain platform refund (no Connect transfer existed).
+ *  Sets order status 'refunded'. Idempotent: a re-call on an already-refunded order is a no-op. */
+export async function refundOrder(orderId: string): Promise<{ refundId: string }> {
+  const [order] = await db
+    .select({
+      id: schema.orders.id,
+      status: schema.orders.status,
+      paymentIntentId: schema.orders.stripePaymentIntentId,
+      payoutStatus: schema.orders.payoutStatus,
+      payoutTransferId: schema.orders.payoutTransferId,
+    })
+    .from(schema.orders)
+    .where(eq(schema.orders.id, orderId))
+    .limit(1);
+  if (!order) throw new Error('order not found');
+  if (!order.paymentIntentId) throw new Error('no payment to refund');
+  // Idempotent: already refunded → don't issue a second Stripe refund.
+  if (order.status === 'refunded') return { refundId: '' };
+
+  // Refund the buyer. Under SEPARATE charges + transfers the charge has no linked transfer, so we do
+  // NOT pass reverse_transfer (that only reverses a destination charge's OWN transfer). A transfer we
+  // already SENT (payoutStatus='released') is a separate object, reversed explicitly below.
+  const refund = await stripePost(
+    '/refunds',
+    { payment_intent: order.paymentIntentId },
+    // Idempotency: a retried refund for the same order returns the original refund, never a second one.
+    `refund_${order.id}`,
+  );
+
+  // Claw back an already-released transfer by reversing the Transfer object itself (full amount). A
+  // held order's transfer was never sent (just mark it skipped); a platform-settled ('none') order
+  // never had one. The buyer is already refunded above, so a failed reversal can be retried safely
+  // (idempotency key) without double-refunding.
+  if (order.payoutStatus === 'released' && order.payoutTransferId) {
+    await stripePost(`/transfers/${order.payoutTransferId}/reversals`, {}, `reverse_${order.id}`);
+  }
+
+  // Map the payout state to its terminal: released→reversed, held→skipped, none stays none.
+  const nextPayoutStatus =
+    order.payoutStatus === 'released' ? 'reversed' : order.payoutStatus === 'held' ? 'skipped' : order.payoutStatus;
+  await db
+    .update(schema.orders)
+    .set({ status: 'refunded', payoutStatus: nextPayoutStatus })
+    .where(eq(schema.orders.id, order.id));
+  return { refundId: refund.id as string };
 }
 
 /** Go-live gate. Returns a reason string when the creator may NOT go live, or null when they can.

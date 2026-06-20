@@ -155,7 +155,29 @@ in `stripe-webhook` syncs the capability flags.
 **Helpers** (`src/lib/connect.ts`): `ensureConnectedAccount`, `createOnboardingLink`
 (account_links), `refreshConnectedAccount` (GET account → persist flags), `getConnectedAccount`,
 `refundPayment` (reverses the brand's transfer + claws back the platform fee on a destination
-charge), and `goLiveBlockReason` (the go-live gate).
+charge), and `goLiveBlockReason` (the go-live gate). Two more — `releasePayout(order)` (sends the
+held transfer) and `refundOrder(orderId)` (the single refund path, branching on `payoutStatus`) —
+serve the payout hold below.
+
+### Payout timing — funds are now HELD (ship date + 7 days)
+
+**Brands are no longer paid at checkout.** The storefront checkout moved from a Stripe **destination
+charge** (instant split — profit lands in the brand's connected balance the moment the charge clears)
+to **separate charges and transfers**: the platform captures 100% of the charge, pays Printful out of
+the funds it holds, and only **transfers the brand's net after the return window closes** (`shippedAt
++ RETURN_WINDOW_DAYS`, default 7) with no open claim. Each order carries its own payout state on the
+new `orders.payoutStatus` (`none · held · released · reversed · skipped`) +
+`brandNetCents` / `connectedAccountId` / `payoutReleaseAt` / `payoutTransferId` columns, so a
+half-migrated mix is unambiguous. The release job (`POST /api/internal/release-payouts`, Railway cron,
+`INTERNAL_API_KEY`-gated) scans `payoutStatus='held' AND payoutReleaseAt < now()` and calls
+`releasePayout(order)`. A refund inside the window is just "don't send the transfer" (`skipped`) — no
+risky claw-back; a refund after release falls back to `reverse_transfer` (`reversed`).
+
+This is why the **destination-charge note above** (`checkout/route.ts` only adds
+`transfer_data.destination` + `application_fee_amount`) describes the *old* path: under the hold the
+checkout drops `transfer_data`/`application_fee_amount` and persists the brand's net as HELD instead.
+Full mechanics — the charge-model switch, the state machine, the release job, and refund branching —
+live in **[RETURNS_REFUNDS.md](RETURNS_REFUNDS.md)**.
 
 **Inert until Joe enables it.** Account creation only works once Connect is enabled on the
 platform Stripe account (otherwise Stripe rejects `/v1/accounts` and `POST /api/creator/connect`

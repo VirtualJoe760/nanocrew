@@ -18,6 +18,8 @@ platform-api  (Vercel: nanocrew-api.vercel.app)  ── public, read-only, CORS 
    │   GET /api/public/stores/:slug/products
    │   GET /api/public/stores/:slug/collections
    │   POST /api/public/checkout
+   │   POST /api/public/order-lookup   (guest return gate)
+   │   POST /api/public/returns        (open a return claim)
    ▼
 Storefront template  (per-brand Vercel site)  ── fetches at build/ISR ──  renders the brand site
    │
@@ -143,6 +145,24 @@ The shared **POS**: prices come from the DB (client cart untrusted), an order ro
 order to Printful. The in-app store proxies this via `/api/store/:slug/checkout`. A storefront's
 "add to cart → checkout" MUST go through here — never its own Stripe — so variant IDs, pricing, and
 fulfilment are single-source.
+
+### `POST /api/public/order-lookup`  `{ email, orderNumber }` → `{ order }`
+
+The **guest return gate**: a brand-site visitor with no account confirms an order by its email +
+order id (the `orderNumber`) before opening a return. Returns a minimal view — `status`, items,
+tracking, `returnWindowEndsAt`, and an `inWindow` flag. Both must match or it's a `404` (same `404`
+whether the id or the email is wrong — no order-existence leak). Thin-client rule: the storefront
+only *calls* this; the lookup logic stays central.
+
+### `POST /api/public/returns`  `{ orderId, reason, photoUrls?, note?, items? }` → `{ returnRequest }`
+
+Opens a **return claim**. `reason` ∈ `defective` | `wrong_item` | `damaged` | `not_received` (POD is
+made-to-order — no buyer's-remorse ship-backs); a photo is required for defective/damaged. The
+platform validates the window is open, inserts the claim, flips the order to `return_requested`, and
+acks the buyer by email. A template's **"request a return"** flow (a policy page + form, wired into
+`_shared`/the footer at the template level) MUST go through here — never its own returns logic. Full
+model + mechanics: [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md); the emails:
+[EMAIL_PIPELINE.md](../accounts/EMAIL_PIPELINE.md).
 
 ## The nanocrew.app web storefronts (`./nanocrew-site`)
 

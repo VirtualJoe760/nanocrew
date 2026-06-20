@@ -41,6 +41,18 @@ So the registry stays the home of built-ins; connected manufacturers are DB-back
 - **Publish (primary gate):** `POST /api/publish` ([publish+api.ts](../../src/app/api/publish+api.ts)) screens name + description + design prompts before `createSyncProduct`. A `block` returns **HTTP 422 `{ error:'provider_policy', message, blocks }`** and the product is never created on Printful or mirrored locally. `warnings` ride along in the success response for the UI to show.
 - **Fulfillment (safety-net):** `submitOrderToPrintful` (`platform-api/lib/fulfill.ts`) re-screens a paid order's products (name + description + design prompts, joined order→variant→product→composition→design) **before** sending to Printful. A block sets the order to **`on_hold`** and skips submission — the order is **never auto-refunded** (money stays put; a human reviews/refunds). The publish gate already screens new products, so this only catches *legacy* products published before the gate. Uses `platform-api/lib/pod-policy.ts` — a **copy** of `src/lib/pod-policy.ts` that must be kept in sync (same as the schema copy).
 
+## Returns constraint — POD is made-to-order (no buyer's remorse)
+
+A second consequence of fulfilling through a POD provider: every item is **printed on demand for that
+order**, so there is **no buyer's-remorse / change-of-mind return** to give. A returned blank tee can
+be restocked; a one-off printed garment can't. The platform's returns policy therefore accepts only
+**defect / wrong-item / damaged / not-received** claims — the cases where the *fulfiller* (not the
+buyer) is at fault — and on a genuine defect Printful reprints at no cost to us. This isn't a separate
+content rule; it's the same made-to-order reality the registry exists for, applied to the post-sale
+side. The returns model, window, and refund mechanics are in
+[RETURNS_REFUNDS.md](RETURNS_REFUNDS.md), and the Merchant-of-Record question it raises is in
+[COMPLIANCE.md](COMPLIANCE.md).
+
 ## Verified
 - `checkProviderPolicy('printful', …)` — flags / tasteful nudity / "Trump + guns like Terminator" → allow; porn / hate / terror / self-harm → block; Disney / cocaine → warn.
 - `checkProviderPolicy('printify', …)` — same hard blocks; **"buy guns and ammo" / "sell cigarettes shop" → regulated-goods warn**, while "vintage rifle illustration" / "mountain trail runner" → allow (imagery isn't sale promotion); Marvel → IP warn. Confirms the per-provider divergence and the registry's multi-provider path.

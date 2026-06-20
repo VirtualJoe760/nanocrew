@@ -159,12 +159,20 @@ Printful cancel-if-unproduced are noted as follow-ups (today's refund is full-on
 ## App surface · `src/app/account.tsx`
 
 - New **"Purchases"** section (a `SectionLabel` + `Card` between "Your brands" and "Commerce"),
-  cloned from `src/components/earnings-cockpit.tsx` (Modal + status-badge rows). Lists the buyer's
-  orders (`GET /api/customer/orders`), each with status, tracking, and — when in-window — a
-  **"Request a return"** action → the returns flow.
-- **Fix buyer attribution:** in-app checkout currently writes `pending@checkout`. Pass the signed-in
-  user's email into `src/app/api/store/[slug]/checkout+api.ts` so in-app purchases attribute to the
-  account (guests/brand-site buyers still match by Stripe email; a guest `order-lookup` covers the rest).
+  the `src/components/purchases.tsx` modal cloned from `src/components/earnings-cockpit.tsx` (Modal +
+  status-badge rows, monochrome app chrome). Lists the buyer's orders (`GET /api/customer/orders`),
+  each with status, tracking, and items, and — when `order.canRequestReturn` is true — a
+  **"Request a return"** action that opens a reason-picker + photo/note form. The form POSTs the
+  thin app proxy `POST /api/customer/returns` (`src/app/api/customer/returns+api.ts`), which resolves
+  the signed-in buyer (`getUserFromRequest`) and forwards to platform-api `POST /api/public/returns`
+  with the verified account email — keeping all returns logic + emails central (thin-client rule),
+  the same way checkout proxies through `store/[slug]/checkout`.
+- **Fix buyer attribution:** in-app checkout currently writes `pending@checkout`. The in-app checkout
+  proxy `src/app/api/store/[slug]/checkout+api.ts` now resolves the signed-in user's email (token
+  verified locally, no DB query) and forwards `customerEmail` to platform-api's checkout so in-app
+  purchases attribute to the account up front (guests/brand-site buyers still match by Stripe email;
+  a guest `order-lookup` covers the rest). The caller `src/components/product-detail.tsx` switched its
+  Buy call from `fetch` to `apiFetch` so the token is attached.
 - **Creator returns inbox** in the Studio Console (new component, mounted in `studio-composer.tsx`):
   list `requested` claims, view photos, Approve/Decline.
 

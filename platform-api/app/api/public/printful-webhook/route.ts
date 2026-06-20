@@ -3,7 +3,16 @@ import { timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
-import { sendShippedEmail } from '@/lib/notify';
+import { sendDeliveredReviewRequest, sendShippedEmail } from '@/lib/notify';
+
+// DELIVERED / REVIEW-REQUEST EMAIL — design note (docs/accounts/EMAIL_PIPELINE.md #4):
+// Printful (v1) emits no carrier "delivered" event, so there is no real delivery signal to hook.
+// Email lives ONLY in platform-api (Resend), but the persistent shippedAt+N timer (the natural
+// "presumed delivered, window closed" moment) is the app-side release-payouts job, which can't
+// import this Resend module. Rather than invent a cross-service email contract, v1 fires the
+// review request from THIS webhook on `package_shipped` — the closest available signal — with copy
+// scoped to "leave a review once it arrives." A true delivery trigger waits on carrier tracking
+// integration (follow-up); when that lands, move this send to the delivered branch.
 
 // POST /api/public/printful-webhook — Printful order lifecycle events, mapped to our order_status:
 //   package_shipped  → shipped (+ tracking + customer email)
@@ -63,17 +72,27 @@ export async function POST(req: Request) {
 
     if (event.type === 'package_shipped') {
       const ship = event.data.shipment ?? {};
+      // Stamp the ship date and derive the return window + payout-release date from it. The 7-day
+      // clock is anchored on shippedAt (no carrier-delivery integration in v1); RETURN_WINDOW_DAYS
+      // is the single knob. returnWindowEndsAt = payoutReleaseAt = shippedAt + window. See
+      // docs/accounts/RETURNS_REFUNDS.md (payout hold).
+      const RETURN_WINDOW_DAYS = Number(process.env.RETURN_WINDOW_DAYS ?? 7);
+      const shippedAt = new Date();
+      const windowEnd = new Date(shippedAt.getTime() + RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
       await db
         .update(schema.orders)
         .set({
           status: 'shipped',
           trackingNumber: ship.tracking_number ?? null,
           trackingUrl: ship.tracking_url ?? null,
+          shippedAt,
+          returnWindowEndsAt: windowEnd,
+          payoutReleaseAt: windowEnd,
         })
         .where(eq(schema.orders.id, order.id));
 
       const [store] = await db
-        .select({ name: schema.stores.name })
+        .select({ slug: schema.stores.slug, name: schema.stores.name })
         .from(schema.stores)
         .where(eq(schema.stores.id, order.storeId))
         .limit(1);
@@ -81,13 +100,22 @@ export async function POST(req: Request) {
         .select({ name: schema.orderItems.nameSnapshot })
         .from(schema.orderItems)
         .where(eq(schema.orderItems.orderId, order.id));
-      await sendShippedEmail({
-        to: order.customerEmail,
-        brandName: store?.name ?? 'your brand',
-        items: items.map((i) => i.name),
-        trackingNumber: ship.tracking_number,
-        trackingUrl: ship.tracking_url,
-      }).catch((e) => console.error('[printful-webhook] notify:', e));
+      if (store) {
+        await sendShippedEmail({
+          to: order.customerEmail,
+          store,
+          items: items.map((i) => i.name),
+          trackingNumber: ship.tracking_number,
+          trackingUrl: ship.tracking_url,
+        }).catch((e) => console.error('[printful-webhook] notify:', e));
+        // Review request — v1 proxy fired here (no carrier delivered event; see the design note up
+        // top). Best-effort; never throws into the webhook 200.
+        await sendDeliveredReviewRequest({
+          to: order.customerEmail,
+          store,
+          order: { id: order.id },
+        }).catch((e) => console.error('[printful-webhook] review notify:', e));
+      }
     } else if (event.type === 'package_returned') {
       // The package came back to sender. Track it so the creator sees it and can issue a Stripe refund.
       await db.update(schema.orders).set({ status: 'returned' }).where(eq(schema.orders.id, order.id));

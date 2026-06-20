@@ -65,6 +65,7 @@ export function Footer() {
       <div className="wrap row">
         <span className="copy">© {year} Nano Crew. All rights reserved.</span>
         <div className="links">
+          <Link href="/store/returns">Returns</Link>
           <Link href="/terms">Terms</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/contact">Contact</Link>

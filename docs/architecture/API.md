@@ -49,7 +49,10 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | GET/PATCH/DELETE | `/api/creator/stores/:slug` | bearer | Read / edit / **delete** a brand. DELETE is owner-only and cascades the store → catalogues/designs/products/variants/orders/posts/revisions (external Printful/GitHub/Vercel cleaned out of band). |
 | GET | `/api/creator/stats` | bearer | Per-store revenue, orders, 30-day views, OG + product images. |
 | GET | `/api/creator/orders` | bearer | Recent orders across the creator's stores. |
-| POST | `/api/creator/orders/:id/refund` | bearer | Refund an order. |
+| POST | `/api/creator/orders/:id/refund` | bearer | Refund an order (`refundOrder`, branches on `payoutStatus` — see [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md)). |
+| GET | `/api/creator/returns` | bearer | The Studio **returns inbox** — every return claim across the creator's stores (`accessibleStoreIds`, owner + collaborators), newest first, joined with a small order summary. |
+| POST | `/api/creator/returns/:id/approve` | bearer | Approve a claim → the **shared** refund path (`refundOrder`); marks the claim `refunded` + records the `refundId`. Idempotent. Best-effort approved/refund email via `/api/internal/notify`. |
+| POST | `/api/creator/returns/:id/decline` | bearer | Decline a claim → claim `declined`, order reverts to `shipped` (no money moves). Best-effort decline email via `/api/internal/notify`. |
 | POST/DELETE | `/api/creator/push-token` | bearer | Register / unregister an Expo push token. |
 | POST | `/api/creator/upload` | bearer, RL | Upload an image asset. |
 
@@ -105,6 +108,18 @@ credits up front and refund on failure.
 | GET | `/api/public/stores/:slug/products` | — | (App-side mirror) headless catalog. |
 | POST | `/api/public/beacon` | — | Anonymous pageview tick. |
 
+### Customer (signed-in buyer) — the "Purchases" surface
+
+Distinct from the **creator** routes (which scope by store): these scope by the buyer's **account
+email** (`lower(customerEmail) = lower(user.email)`; `creators.email` is UNIQUE so the match is
+unambiguous). DIRECT APIs (plain DB reads / a thin proxy), not the forge. See
+[ORDERS.md](../accounts/ORDERS.md) + [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md).
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/customer/orders` | bearer | The buyer's orders (newest first, ≤100), each with items, status, tracking, return window, and a `canRequestReturn` flag. Backs the app **Purchases** section. |
+| POST | `/api/customer/returns` | bearer | Thin proxy for the in-app **"Request a return"** action — resolves the signed-in buyer and forwards `{ orderId, reason, photoUrls?, note?, items? }` + the verified account email to platform-api `POST /api/public/returns` (returns logic + emails stay central, thin-client rule). **503** if `PLATFORM_API_BASE` unset. |
+
 ## 5. Billing & credits
 
 | Method | Path | Auth | Purpose |
@@ -115,6 +130,12 @@ credits up front and refund on failure.
 | POST | `/api/creator/billing/portal` | bearer | Stripe billing-portal URL. |
 | POST | `/api/creator/billing/iap-verify` | bearer | Apple IAP (StoreKit 2) — client sends `{ transactionId }` (`appAccountToken` = creator id); the server pulls the signed transaction via the App Store Server API (`src/lib/app-store.ts`, no legacy verifyReceipt), then grants credits **or** activates the subscription + first month. Idempotent on the transactionId. Needs `APPLE_IAP_*` + `APPLE_BUNDLE_ID`. |
 | GET/POST | `/api/creator/connect` | bearer | Read / start Stripe Connect onboarding for creator payouts. |
+
+### Internal jobs (server-to-server, `INTERNAL_API_KEY`)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/api/internal/release-payouts` | `x-internal-key` (constant-time) | The deferred-payout **release job** (Railway, persistent). Scans `orders WHERE payoutStatus='held' AND payoutReleaseAt < now() AND status NOT IN (return_requested, returned, refunded, cancelled, failed)` and transfers each brand its `brandNetCents` (`source_transaction = stripeChargeId`), setting `payoutStatus='released'`. Idempotent (per-order Stripe idempotency key). Returns `{scanned, released, failed, errors}`. **Owner config:** a Railway/Vercel cron must hit it on an interval; alert on a non-zero `failed`. See [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md). |
 
 ---
 
@@ -130,8 +151,16 @@ credits up front and refund on failure.
 | GET | `/api/public/stores/:slug/videos` | Featured on-model film wall (Veo) for the homepage. |
 | GET | `/api/public/stores/:slug/posts` | Published journal for the website. |
 | GET | `/api/public/stores/:slug/posts/:postSlug` | One journal post. |
-| POST | `/api/public/checkout` | **The POS.** Storefront cart → Stripe Checkout; validates store/variant ownership, in-stock, price, and routes via the brand's connected account. CORS preflight (`OPTIONS`). **503** if Stripe unconfigured. |
+| POST | `/api/public/checkout` | **The POS.** Storefront cart → Stripe Checkout; validates store/variant ownership, in-stock, price. **Separate charges + transfers** (held-marketplace): captures 100% to the platform and persists the brand's net as HELD (`payoutStatus='held'`, `brandNetCents`, `connectedAccountId`) when the brand has a charges-enabled Connect account, else settles to the platform (`payoutStatus='none'`). CORS preflight (`OPTIONS`). **503** if Stripe unconfigured. See [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md). |
+| POST | `/api/public/order-lookup` | **Guest return gate.** `{ email, orderNumber }` (the order id) → a minimal order view (`status`, items, tracking, `returnWindowEndsAt`, `inWindow`). Email + id must both match; same `404` either way (no order-existence leak). CORS preflight. |
+| POST | `/api/public/returns` | **Open a return claim** (guest from a brand site OR the in-app proxy). `{ orderId, reason, photoUrls?, note?, items? }`; validates the window is open + reason in-enum (`defective`/`wrong_item`/`damaged`/`not_received`) + photo present for defective/damaged, inserts a `return_requests` row, flips the order → `return_requested`, and best-effort acks the buyer (`sendReturnRequested`). **400** bad reason / missing photo · **404** unknown order · **409** not shipped / window closed / not claimable. CORS preflight. See [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md). |
 | POST | `/api/public/beacon` | Anonymous daily pageview tick. |
+
+### Internal email dispatch (server-to-server, `INTERNAL_API_KEY`)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/api/internal/notify` | `x-internal-key` (constant-time) | Central send dispatch so **app-side** creator actions (the Railway approve/decline routes) can fire a branded shopper email **without** pulling Resend into the app — Resend lives ONLY in platform-api. Payload `{ action: 'approved'｜'declined', returnId, reason? }`; the route resolves the claim → store → buyer from `returnId` and dispatches `sendReturnApproved`/`sendReturnDeclined`. Best-effort: a configured-and-authed call always **202**s (a failed send never fails the creator action); **401** when the key is unset/mismatched. See [EMAIL_PIPELINE.md](../accounts/EMAIL_PIPELINE.md). |
 
 ### Billing return pages
 
@@ -144,9 +173,9 @@ credits up front and refund on failure.
 
 | Method | Path | Verification | Purpose |
 |---|---|---|---|
-| POST | `/api/public/stripe-webhook` | Stripe signature (`constructEventAsync`, `WEBHOOK_SECRET`) | Commerce: paid order → submit to Printful. **400** bad signature. |
+| POST | `/api/public/stripe-webhook` | Stripe signature (`constructEventAsync`, `WEBHOOK_SECRET`) | Commerce: `checkout.session.completed` → paid order, captures `stripeChargeId` (the held-transfer `source_transaction`, from the PaymentIntent's `latest_charge`), submits to Printful, sends the order-confirmation email. `charge.refunded` → mark refunded + refund-confirmation email (covers dashboard refunds). **400** bad signature. |
 | POST | `/api/public/billing-webhook` | Stripe signature (separate `STRIPE_BILLING_WEBHOOK_SECRET`) | Subscriptions + credit-pack grants. **400** bad signature. |
-| POST | `/api/public/printful-webhook` | **Opt-in token** | Fulfillment lifecycle → tracking. When `PRINTFUL_WEBHOOK_TOKEN` is set, the caller must present a matching `?token=` (constant-time compared) — **401** otherwise; when unset, falls back to the store-id check (**403**). |
+| POST | `/api/public/printful-webhook` | **Opt-in token** | Fulfillment lifecycle → tracking. `package_shipped` stamps `shippedAt` + `returnWindowEndsAt` = `payoutReleaseAt` = `shippedAt + RETURN_WINDOW_DAYS` (env, default 7) and sends the shipped + review-request emails (v1 review proxy — no carrier delivered event). When `PRINTFUL_WEBHOOK_TOKEN` is set, the caller must present a matching `?token=` (constant-time compared) — **401** otherwise; when unset, falls back to the store-id check (**403**). |
 
 ### Brand-site `/admin` creator routes (bearer-authed)
 

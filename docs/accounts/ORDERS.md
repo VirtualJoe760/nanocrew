@@ -57,9 +57,22 @@ shippingAddress: collected?.shipping_details ?? s.customer_details ?? null,
 ```
 
 So `customerEmail` is **populated from Stripe**, not from any Nano Crew session. It then submits
-the paid order to Printful (`submitOrderToPrintful`). Other events: `checkout.session.expired` →
-`cancelled`; `charge.refunded` (full) → `refunded`. Further fulfilment transitions
-(`shipped`, `delivered`, `on_hold`, `returned`, `failed`) come from the Printful webhook.
+the paid order to Printful (`submitOrderToPrintful`) and sends the order-confirmation email. Other
+events: `checkout.session.expired` → `cancelled`; `charge.refunded` (full) → `refunded` +
+refund-confirmation email. Further fulfilment transitions (`shipped`, `delivered`, `on_hold`,
+`returned`, `failed`) come from the Printful webhook — and `package_shipped` now also stamps
+`shippedAt` + `returnWindowEndsAt` = `payoutReleaseAt` (ship + `RETURN_WINDOW_DAYS`, default 7),
+opening the return window and the payout hold (see [BILLING_CREDITS.md](BILLING_CREDITS.md) →
+"Payout timing" and [RETURNS_REFUNDS.md](RETURNS_REFUNDS.md)).
+
+**`return_requested` — the customer return claim.** A buyer can open a defect/wrong/damaged/
+not-received claim inside the window (`POST /api/public/returns`), which inserts a `return_requests`
+row and flips the order to **`return_requested`** (a status distinct from `returned`, the Printful
+package-came-back event). The brand resolves it from the Studio returns inbox: **approve** → the
+shared refund path (`refundOrder`, branching on `payoutStatus`) → order `refunded`; **decline** →
+order reverts to `shipped`, no money moves. The full model, the held-payout interplay, and the email
+each step fires are in [RETURNS_REFUNDS.md](RETURNS_REFUNDS.md) +
+[EMAIL_PIPELINE.md](../accounts/EMAIL_PIPELINE.md).
 
 ## How the CREATOR sees orders — authed + store-scoped
 
@@ -80,30 +93,33 @@ hit different backends:
 Every one of these requires a creator token (`getUserFromRequest`) and filters by store
 membership via `src/lib/tenant.ts`. A creator only ever sees **their** stores' orders.
 
-## There is NO shopper "my orders" today
+## The shopper "Purchases" surface — being built (email match)
 
-Nothing lets a *buyer* look up their own orders. The only order-reading surfaces are
-creator-scoped (above). Because a shopper isn't an account
-([AUTH_IDENTITY.md](AUTH_IDENTITY.md)) and `orders` has no user FK, there is nowhere — app or
-brand site — for a customer to see "my past orders." Post-purchase, the shopper has only Stripe's
-receipt email and the order's tracking link.
+Historically nothing let a *buyer* look up their own orders: the only order-reading surfaces were
+creator-scoped (above), a shopper isn't an account ([AUTH_IDENTITY.md](AUTH_IDENTITY.md)), and
+`orders` has no user FK — so post-purchase the shopper had only Stripe's receipt email and the
+tracking link. That gap is now being closed (the returns feature needs it). The buyer view works
+**with no schema change**, by **email match**:
 
-## Target — shopper "my orders" by email match (task list #23–24, #26, #28)
+- **Match `orders.customerEmail` to the logged-in account's email.** The account's email comes from
+  the same Supabase identity; the order's email came from Stripe at checkout. When they're equal,
+  the order is "yours." (`creators.email` is UNIQUE, so the match is unambiguous.)
+- **`GET /api/customer/orders`** (`src/app/api/customer/orders+api.ts`) — a **shopper-scoped, authed**
+  read (distinct from the creator routes, which scope by store) returning the caller's orders where
+  `lower(customerEmail) = lower(user.email)`, newest first, each with its line items, status,
+  tracking, return window, and a `canRequestReturn` flag. This is a **DIRECT API** (a plain DB read),
+  not the forge. It backs the app's **"Purchases"** section (`src/components/purchases.tsx`).
+- For guests on a brand site (no account), `POST /api/public/order-lookup { email, orderNumber }`
+  gates the guest return flow by matching the email to the order id.
 
-Once a brand site can create a real Nano Crew account ([AUTH_IDENTITY.md](AUTH_IDENTITY.md)
-"Target"), a logged-in shopper gets a "my orders" view that works **with no schema change**:
+Surfaced in the Nano Crew app today (the buyer's order history across every brand they've purchased
+from); the brand-site shopper account page is the remaining template-level half.
 
-- **Match `orders.customerEmail` to the logged-in account's email.** The account's email comes
-  from the same Supabase identity; the order's email came from Stripe at checkout. When they're
-  equal, the order is "yours." (`creators.email` is UNIQUE, so the match is unambiguous.)
-- A new **shopper-scoped, authed** read endpoint (distinct from the creator routes, which scope
-  by store) returns the caller's orders where `customerEmail = <their account email>`.
-- Surfaced in **two places**: on the brand site (a shopper account page) **and** in the Nano Crew
-  app (the buyer's order history across every brand they've purchased from) — one account, one
-  order history, everywhere.
-
-Implementation notes for whoever builds it: the email match only covers orders placed with that
-same email; orders checked out with a different email than the account won't appear (acceptable
-for v1). Wire the brand-site half at the **template level** so every generated site ships it, and
-update this doc + [AUTH_IDENTITY.md](AUTH_IDENTITY.md) in the same change.
+Implementation note: the email match only covers orders placed with that same email; orders checked
+out under a different email than the account won't appear (acceptable for v1). The in-app checkout
+proxy now resolves the signed-in user's email up front so in-app purchases attribute to the account
+(guests/brand-site buyers still match by Stripe email). Wire the brand-site half at the **template
+level** so every generated site ships it, and update this doc + [AUTH_IDENTITY.md](AUTH_IDENTITY.md)
+in the same change. The return flow on top of this surface is in
+[RETURNS_REFUNDS.md](RETURNS_REFUNDS.md).
 </content>

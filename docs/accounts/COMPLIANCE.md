@@ -67,6 +67,25 @@ Have counsel confirm the Terms cover: marketplace-facilitator status, independen
 (creators aren't employees), INFORM disclosures, minimum age, indemnification (present), merchant-of-
 record + refund/chargeback handling. See [[commerce-pricing-flow]], [[plan-tiers]].
 
+### 7. Merchant of Record + the return window — **confirm (return feature)**
+The returns feature switches storefront checkout to **separate charges and transfers** (the platform
+captures 100% and holds the brand's net for the return window — see
+[RETURNS_REFUNDS.md](RETURNS_REFUNDS.md) + [BILLING_CREDITS.md](BILLING_CREDITS.md)). Under separate
+charges the **platform may be the Merchant of Record** and thus legally own the refund/return
+obligation to the buyer (this is the same MoR question as the sales-tax item §5 — they share a root).
+Putting that obligation on the *creator* in the Terms while the *platform* is MoR is a mismatch to
+resolve.
+
+- **Policy floor:** because POD is made-to-order, the shipped return policy is scoped to
+  **defect / wrong-item / damaged / not-received** claims only — **no buyer's-remorse** ship-backs
+  (the [POD_POLICY.md](POD_POLICY.md) constraint). The `RETURN_WINDOW_DAYS` knob (default 7, anchored
+  on ship date) is the claim window. Confirm this floor is **defensible** for the states/jurisdictions
+  we sell into (some require a minimum acceptance/return right) and that the policy copy on every
+  storefront matches.
+- **Counsel sign-off needed before launch:** who is MoR, whether the defect-only window is sufficient,
+  and the Terms wording reconciling MoR with the creator-indemnification framing. *Not legal advice* —
+  flag, don't assume.
+
 ## Current-state audit (code, 2026-06-20)
 - **Signup** (`src/app/account.tsx`, `src/db/schema.ts` `creators`): collects `name`, `phone`,
   `termsAcceptedAt`, `termsVersion`. **No `date_of_birth`, no age gate.**

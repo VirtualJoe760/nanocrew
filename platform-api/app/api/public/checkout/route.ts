@@ -69,10 +69,13 @@ export async function POST(req: Request) {
         ? 0
         : Math.round((FEE_PCT * (subtotalCents + shippingCents) + FEE_FLAT_CENTS) / (1 - FEE_PCT));
 
-    // Stripe Connect (Phase D): if this brand's creator has a charges-enabled connected account,
-    // route the charge to it as a destination charge and keep the platform's application fee. The
-    // fee covers COGS (Printful) + shipping + a commission; the brand receives its profit. When no
-    // such account exists, checkout settles to the platform exactly as before (inert until set up).
+    // Stripe Connect (Phase D) — SEPARATE CHARGES AND TRANSFERS (the held-marketplace pattern).
+    // If this brand's creator has a charges-enabled connected account we capture 100% of the charge
+    // to the PLATFORM (no destination charge, no application fee), compute the brand's exact net the
+    // same way as before, and persist it as HELD on the order. The brand is only paid later, by the
+    // release job, once the return window closes with no open claim (see docs/accounts/RETURNS_REFUNDS.md).
+    // When no charges-enabled account exists, checkout settles to the platform exactly as before
+    // (payoutStatus 'none', brandNetCents 0 — nothing to transfer). Inert until Connect is set up.
     const COMMISSION_PCT = Number(process.env.PLATFORM_COMMISSION_PCT ?? 0.1);
     const COGS_FALLBACK_PCT = Number(process.env.DEFAULT_COGS_PCT ?? 0.5); // when a variant's Printful cost is unknown
     const [connected] = await db
@@ -81,25 +84,28 @@ export async function POST(req: Request) {
       .where(eq(schema.connectedAccounts.creatorId, store.creatorId))
       .limit(1);
 
-    let connectParams: { payment_intent_data?: { application_fee_amount: number; transfer_data: { destination: string } } } = {};
+    const totalCents = subtotalCents + shippingCents + processingFeeCents;
     let applicationFeeCents = 0;
+    // The deferred payout fields, persisted on the order row (default = platform-settled / 'none').
+    let payoutStatus: 'none' | 'held' = 'none';
+    let brandNetCents = 0;
+    let connectedAccountId: string | null = null;
     if (connected?.stripeAccountId && connected.chargesEnabled) {
       const cogsCents = lineItems.reduce(
         (n, l) => n + (l.variant.printfulCostCents ?? Math.round(l.variant.retailPriceCents * COGS_FALLBACK_PCT)) * l.quantity,
         0,
       );
       const commissionCents = Math.round(subtotalCents * COMMISSION_PCT);
-      const totalCents = subtotalCents + shippingCents + processingFeeCents;
       // Platform keeps COGS + shipping + commission + the processing fee; the brand gets the
-      // remainder (its profit) — the processing fee never eats into the brand's cut.
+      // remainder (its profit) — the processing fee never eats into the brand's cut. Same math as the
+      // old destination charge; now used to compute the HELD transfer rather than an application fee.
       applicationFeeCents = Math.min(totalCents, cogsCents + shippingCents + commissionCents + processingFeeCents);
-      connectParams = {
-        payment_intent_data: {
-          application_fee_amount: applicationFeeCents,
-          transfer_data: { destination: connected.stripeAccountId },
-        },
-      };
+      brandNetCents = totalCents - applicationFeeCents;
+      connectedAccountId = connected.stripeAccountId;
+      payoutStatus = 'held';
     }
+    // NOTE: no payment_intent_data — the charge is captured 100% to the platform. The brand's net is
+    // transferred later by /api/internal/release-payouts via src/lib/connect.ts releasePayout().
 
     // The brand site we send the shopper back to.
     const origin = req.headers.get('origin') ?? store.deploymentUrl ?? `https://store-${store.slug}.vercel.app`;
@@ -113,6 +119,11 @@ export async function POST(req: Request) {
         subtotalCents,
         totalCents: subtotalCents,
         applicationFeeCents,
+        // Deferred payout (separate charges + transfers). The brand's net is held on the platform
+        // until the release job runs; the webhook fills stripeChargeId (the transfer source).
+        payoutStatus,
+        brandNetCents,
+        connectedAccountId,
       })
       .returning({ id: schema.orders.id });
     await db.insert(schema.orderItems).values(
@@ -162,7 +173,8 @@ export async function POST(req: Request) {
         },
       ],
       metadata: { orderId: order.id, storeSlug: store.slug, storeName: store.name },
-      ...connectParams,
+      // No payment_intent_data: the charge settles 100% to the platform. The brand's held net is
+      // transferred later by the release job — see the payout fields persisted on the order above.
       success_url: `${origin}/cart?checkout=success`,
       cancel_url: `${origin}/cart?checkout=cancelled`,
     });

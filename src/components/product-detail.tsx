@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { openBrowserAsync } from 'expo-web-browser';
 
 import { Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiFetch, apiUrl } from '@/lib/api';
 import { SquareCarousel } from '@/components/square-carousel';
 
 // The in-app product page: a square image carousel, copy, size/colour picker, and an in-app
@@ -117,7 +117,9 @@ export function ProductDetail({
     setBuying(true);
     setNote(null);
     try {
-      const r = await fetch(apiUrl(`/api/store/${encodeURIComponent(slug)}/checkout`), {
+      // apiFetch attaches the Supabase token when signed in, so the proxy can attribute the
+      // order to the buyer's account email (guests just send no token → anonymous checkout).
+      const r = await apiFetch(`/api/store/${encodeURIComponent(slug)}/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: [{ variantId: selected.id, quantity: 1 }] }),
