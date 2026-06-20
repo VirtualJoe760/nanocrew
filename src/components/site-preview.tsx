@@ -404,10 +404,13 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
     if (!critique || !edits.length) return;
     setSending(true);
     setNote(null);
+    // Snapshot the edits up front — the async pipeline below (plan → generate → revise) takes a while
+    // and the user can remove edits mid-flight; using the live array would desync the request.
+    const snap = edits;
     const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${critique.token}` };
-    const annotations = edits.filter((e) => e.strokes.length).map((e) => ({ url: e.url, width: e.width, strokes: e.strokes, shots: e.shots ?? [] }));
+    const annotations = snap.filter((e) => e.strokes.length).map((e) => ({ url: e.url, width: e.width, strokes: e.strokes, shots: e.shots ?? [] }));
     const rawMd = () => {
-      const body = edits.map((e, i) => `${i + 1}. ${e.note}${e.regions.length ? `\n   (circled: ${e.regions.join('; ')})` : ''}`).join('\n\n');
+      const body = snap.map((e, i) => `${i + 1}. ${e.note}${e.regions.length ? `\n   (circled: ${e.regions.join('; ')})` : ''}`).join('\n\n');
       return `The creator requested these changes to their live storefront, in their own words:\n\n${body}\n\n(About the page: ${url})`;
     };
     try {
@@ -419,7 +422,7 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
       let assets: string[] = [];
       let planned = false;
       try {
-        const msgs = venus.messages.length ? venus.messages : edits.map((e) => ({ role: 'user' as const, text: e.note }));
+        const msgs = venus.messages.length ? venus.messages : snap.map((e) => ({ role: 'user' as const, text: e.note }));
         const pr = await fetch(apiUrl('/api/creator/plan-site-edits'), { method: 'POST', headers: auth, body: JSON.stringify({ messages: msgs }) });
         if (pr.ok) {
           const pd = (await pr.json()) as { images?: typeof images; edits?: string[]; assets?: string[] };
@@ -487,7 +490,7 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
       const editPlan = {
         images: imageOutcomes,
         // When planning failed we still forged the raw notes; surface that as the edit list.
-        edits: editTexts.length ? editTexts : md && !planned ? edits.map((e) => e.note) : [],
+        edits: editTexts.length ? editTexts : md && !planned ? snap.map((e) => e.note) : [],
       };
       setNote('Saving your changes…');
       const res = await fetch(apiUrl('/api/creator/revise'), {
@@ -510,6 +513,7 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
       critique.onSent?.();
       onClose();
     } catch {
+      setReviewing(false); // dismiss the review panel so the creator can edit/retry, not get stuck
       setNote('Could not send your changes. Try again.');
     } finally {
       setSending(false);

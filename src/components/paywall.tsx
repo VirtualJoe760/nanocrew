@@ -61,7 +61,7 @@ export function Paywall({
       const d = (await r.json().catch(() => null)) as (Data & { error?: string }) | null;
       // Only accept a well-formed payload — never let an error object reach the render
       // (it has no `tiers`/`creditPacks` arrays, which used to crash the screen).
-      if (!r.ok || !d || !Array.isArray(d.tiers)) {
+      if (!r.ok || !d || !Array.isArray(d.tiers) || !Array.isArray(d.creditPacks)) {
         setData(null);
         setNote('Could not load plans. Please try again.');
       } else {

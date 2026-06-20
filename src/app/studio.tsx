@@ -1326,7 +1326,7 @@ export default function StudioScreen() {
               onEditBrand={(slug, name) => { setConsoleBrand({ slug, name }); setShowComposer(true); }}
               onNewBrand={onNewBrand}
               onOpenBilling={() => setPaywall('manage')}
-              onBounty={(panel) => router.navigate(`/design?panel=${panel}`)}
+              onBounty={(panel, slot) => router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`)}
             />
           </>
         ) : brand ? (
