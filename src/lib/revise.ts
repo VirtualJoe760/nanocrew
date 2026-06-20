@@ -53,7 +53,7 @@ rm -rf ${repo}-merge
 git clone https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git ${repo}-merge
 cd ${repo}-merge
 git checkout main
-git merge --no-ff origin/${input.branch} -m "Merge revision ${input.branch}" || { echo MERGE_CONFLICT; exit 1; }
+git -c user.name=nanocrew -c user.email=studio@nanocrew.app merge --no-ff origin/${input.branch} -m "Merge revision ${input.branch}" || { echo MERGE_CONFLICT; exit 1; }
 git push -q origin main
 git push -q origin --delete ${input.branch} || true
 echo MERGE_DONE

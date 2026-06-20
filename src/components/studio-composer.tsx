@@ -55,6 +55,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [critiquePreview, setCritiquePreview] = useState(false);
   const [siteAction, setSiteAction] = useState<'idle' | 'building'>('idle');
   const [publishing, setPublishing] = useState(false); // open/close shop in the marketplace in flight
+  const [approving, setApproving] = useState(false); // merging a reviewed change to production (Publish)
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [reviewDismissed, setReviewDismissed] = useState<Set<string>>(new Set()); // "keep editing" hides a ready review
   const [products, setProducts] = useState<Product[]>([]);
@@ -98,8 +99,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const building = !siteUrl && (activeStore?.status === 'building' || provisionRev?.status === 'building');
   const buildFailed = !siteUrl && !building && provisionRev?.status === 'failed';
 
-  const loadStores = useCallback(async () => {
-    setLoading(true);
+  // `silent` skips the full-screen spinner — used by the 6s build-status poll so it doesn't flash a
+  // loader on every tick. Only the first/explicit load shows the spinner.
+  const loadStores = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const r = await fetch(apiUrl('/api/creator/stats'), { headers: { Authorization: `Bearer ${token}` } });
       const d = (await r.json()) as { stores?: StoreRow[] };
@@ -108,7 +111,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     } catch {
       setNote('Could not reach your store.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [token, slug]);
 
@@ -347,7 +350,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     compute();
     const tick = setInterval(compute, 1000);
     const poll = setInterval(() => {
-      void loadStores();
+      void loadStores(true); // silent — no spinner flash on every poll tick
       void loadRevisions();
     }, 6000);
     return () => {
@@ -376,7 +379,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     if (!visible) return;
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') {
-        void loadStores();
+        void loadStores(true); // silent refresh on foreground — no spinner flash
         if (active) void loadRevisions();
       }
     });
@@ -388,7 +391,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([loadStores(), active ? loadRevisions() : Promise.resolve(), active ? loadProducts() : Promise.resolve()]);
+      await Promise.all([loadStores(true), active ? loadRevisions() : Promise.resolve(), active ? loadProducts() : Promise.resolve()]);
     } finally {
       setRefreshing(false);
     }
@@ -515,8 +518,18 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   };
 
   const approve = async (rev: Revision) => {
-    await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), { method: 'POST', headers });
-    await loadRevisions();
+    setApproving(true);
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), { method: 'POST', headers });
+      if (!res.ok) throw new Error();
+      setNote('Published — your change is live.');
+      await loadRevisions();
+    } catch {
+      setNote('Couldn’t publish that change. Try again in a moment.');
+    } finally {
+      setApproving(false);
+    }
   };
 
   // ✕ on the review card — the creator declined this preview. Tell the server to discard the change
@@ -714,8 +727,8 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                                 <ThemedText type="code" style={styles.white}>Review</ThemedText>
                               </Pressable>
                             ) : null}
-                            <Pressable onPress={() => approve(pendingRev)} style={[styles.reviewBtn, { backgroundColor: pal.accent, borderColor: pal.accent }]}>
-                              <ThemedText type="code" style={{ color: pal.onAccent }}>Publish</ThemedText>
+                            <Pressable onPress={() => approve(pendingRev)} disabled={approving} style={[styles.reviewBtn, { backgroundColor: pal.accent, borderColor: pal.accent, opacity: approving ? 0.6 : 1 }]}>
+                              <ThemedText type="code" style={{ color: pal.onAccent }}>{approving ? 'Publishing…' : 'Publish'}</ThemedText>
                             </Pressable>
                           </View>
                         </>
