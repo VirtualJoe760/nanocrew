@@ -234,6 +234,12 @@ export default function DesignScreen() {
   const [setupStep, setSetupStep] = useState<'brand' | 'collection'>('brand');
   const catalogueRef = useRef<{ id: string; name: string } | null>(null);
   catalogueRef.current = catalogue;
+  // "Site assets" mode — design for the brand's WEBSITE (hero / logo / social) instead of a product
+  // collection. Site assets are brand-level (site-assets accepts storeSlug), so no collection is
+  // needed; this mode is mutually exclusive with having an active catalogue.
+  const [assetMode, setAssetMode] = useState(false);
+  const assetModeRef = useRef(false);
+  assetModeRef.current = assetMode;
   const [blanks, setBlanks] = useState<CatalogBlank[]>([]);
   const [blanksLoading, setBlanksLoading] = useState(true);
   const [dockHeight, setDockHeight] = useState(160);
@@ -526,12 +532,21 @@ export default function DesignScreen() {
   // that overrides the storefront placeholder, then revalidates the live site.
   const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo' | 'og') => {
     const catId = catalogueRef.current?.id;
-    if (!catId || !url || !url.startsWith('http')) return;
+    const slug = brandRef.current?.slug;
+    if (!url || !url.startsWith('http')) return;
+    // cover is a COLLECTION cover → it needs an active catalogue, even in Site assets mode.
+    if (slot === 'cover' && !catId) {
+      Alert.alert('Pick a collection', 'A cover image belongs to a collection — switch to a collection to set one.');
+      return;
+    }
+    if (!catId && !slug) return;
+    // Brand-level slots (hero/logo/og) resolve by storeSlug; cover resolves by catalogueId.
+    const target = catId ? { catalogueId: catId } : { storeSlug: slug };
     try {
       const res = await apiFetch('/api/creator/site-assets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ catalogueId: catId, slot, url }),
+        body: JSON.stringify({ ...target, slot, url }),
       });
       if (!res.ok) {
         const e = (await res.json().catch(() => ({}))) as { error?: string };
@@ -565,7 +580,8 @@ export default function DesignScreen() {
         ...(canAssign
           ? [
               { text: 'Set as website hero', onPress: () => void assignDesign(d, 'hero') },
-              { text: 'Set as collection cover', onPress: () => void assignDesign(d, 'cover') },
+              // Cover belongs to a collection — only offer it when one is active.
+              ...(catalogueRef.current ? [{ text: 'Set as collection cover', onPress: () => void assignDesign(d, 'cover') }] : []),
               { text: 'Set as logo', onPress: () => void assignDesign(d, 'logo') },
               { text: 'Set as social image', onPress: () => void assignDesign(d, 'og') },
             ]
@@ -917,8 +933,23 @@ export default function DesignScreen() {
       .catch(() => {});
   };
 
+  // Setup: design the brand's WEBSITE assets — no collection. Clears the canvas, drops any active
+  // catalogue, and opens the dock straight to the Web assets panel (hero / logo / social).
+  const chooseAssetsMode = () => {
+    setAssetMode(true);
+    assetModeRef.current = true;
+    setCatalogue(null);
+    catalogueRef.current = null;
+    setDesigns([]);
+    setNodes([]);
+    setDockPanel('web');
+    setCatSheetOpen(false);
+  };
+
   const switchCatalogue = (cat: { id: string; name: string }) => {
     setCatSheetOpen(false);
+    setAssetMode(false);
+    assetModeRef.current = false;
     if (cat.id === catalogue?.id) return;
     setCatalogue(cat);
     catalogueRef.current = cat;
@@ -938,6 +969,8 @@ export default function DesignScreen() {
       .then((r) => r.json())
       .then((d: { catalogue?: { id: string; name: string } }) => {
         if (!d.catalogue) return;
+        setAssetMode(false);
+        assetModeRef.current = false;
         setCatalogues((c) => [...c, d.catalogue!]);
         setCatalogue(d.catalogue);
         catalogueRef.current = d.catalogue;
@@ -1076,12 +1109,12 @@ export default function DesignScreen() {
             style={styles.catChip}
             hitSlop={6}>
             <ThemedText type="code" themeColor="tint" style={styles.eyebrow} numberOfLines={1}>
-              {brand ? `${brand.name}${catalogue ? ` · ${catalogue.name}` : ''}` : 'Design'} ▾
+              {brand ? `${brand.name}${assetMode ? ' · Site assets' : catalogue ? ` · ${catalogue.name}` : ''}` : 'Design'} ▾
             </ThemedText>
           </Pressable>
           {designs.length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.flex}>
-              No designs yet — tap Generate
+              {assetMode ? 'Generate a hero, logo or social image' : 'No designs yet — tap Generate'}
             </ThemedText>
           ) : (
             <ScrollView
@@ -1494,7 +1527,7 @@ export default function DesignScreen() {
             <ThemedView type="background" style={styles.sheet}>
               <View style={styles.sheetHeader}>
                 <ThemedText type="smallBold">
-                  {setupStep === 'brand' ? 'Which brand?' : `Collection for ${brand?.name ?? 'brand'}`}
+                  {setupStep === 'brand' ? 'Which brand?' : `What are you designing for ${brand?.name ?? 'this brand'}?`}
                 </ThemedText>
                 <Pressable onPress={() => setCatSheetOpen(false)} hitSlop={10}>
                   <ThemedText type="small" themeColor="textSecondary">
@@ -1527,6 +1560,15 @@ export default function DesignScreen() {
                       </ThemedText>
                     </Pressable>
                   ) : null}
+                  {/* Design the brand's WEBSITE assets — no collection needed. */}
+                  <Pressable onPress={chooseAssetsMode} style={styles.catRow}>
+                    <ThemedText type="small" themeColor={assetMode ? 'text' : 'textSecondary'}>
+                      {assetMode ? '●  ' : '○  '}🌐 Site assets — hero · logo · social
+                    </ThemedText>
+                  </Pressable>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.catPresetLabel}>
+                    Collections
+                  </ThemedText>
                   {catalogues.map((c) => (
                     <Pressable key={c.id} onPress={() => switchCatalogue(c)} style={styles.catRow}>
                       <ThemedText

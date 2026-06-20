@@ -173,10 +173,16 @@ older `src/lib/notify.ts` path only covered the in-app synchronous revise.)
 AI product designer — a zoomable canvas (the proven stephen-lawyer create→design→Printful loop). Auth
 required; signed-out shows a graceful sign-in prompt rather than the canvas.
 
-- **Setup popup (first thing on the tab):** pick the **brand** you're designing for, then the
-  **collection**. One brand → it's pre-selected and you land on the collection step. The top-left
-  chip (`BRAND · COLLECTION ▾`) reopens it to switch. Catalogues are brand-scoped
-  (`/api/catalogues?store=<slug>`, access-checked).
+- **Setup popup (first thing on the tab):** pick the **brand** you're designing for, then **what
+  for** — either **🌐 Site assets** (the brand's website: hero / logo / social — **no collection
+  needed**) or a **collection** (products). One brand → it's pre-selected and you land on the
+  second step. The top-left chip (`BRAND · Site assets` or `BRAND · COLLECTION ▾`) reopens it to
+  switch. Catalogues are brand-scoped (`/api/catalogues?store=<slug>`, access-checked).
+  - **Site assets mode** (`assetMode`): brand-level, catalogue-free. Site-asset slots resolve by
+    `storeSlug` (the `/api/creator/site-assets` endpoint accepts either `catalogueId` *or*
+    `storeSlug`); `cover` is the one slot that still needs a collection (it's a collection cover).
+    The dock opens straight to **Web assets**; the canvas isn't persisted (assets save on the store
+    when assigned). Picking/creating a collection exits the mode.
 - **Top bar:** the brand·collection chip + design-history strip.
 - **Canvas:** node kinds — `design`, `template` (blank garment), `composition` (design-on-garment),
   `webslot` (a website-asset target), `group`. Pan/zoom, tap, box-select, blend. Auto-saves to
