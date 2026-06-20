@@ -83,8 +83,13 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const provisionRev = revisions.find((r) => r.requestMd.includes('"kind":"provision"'));
   // The forge edit awaiting the creator (building/ready/failed) — drives the in-Console review bar
   // and is where a "Go to review" notification lands. Provision (initial build) is shown separately.
+  // A 'ready' revision MUST have a preview to be reviewable — without one there's nothing to review,
+  // so it must not render a bare "Publish" card (that was the stray second button after declining).
   const pendingRev = revisions.find(
-    (r) => !r.requestMd.includes('"kind":"provision"') && ['building', 'ready', 'failed'].includes(r.status) && !reviewDismissed.has(r.id),
+    (r) =>
+      !r.requestMd.includes('"kind":"provision"') &&
+      !reviewDismissed.has(r.id) &&
+      (r.status === 'building' || r.status === 'failed' || (r.status === 'ready' && !!r.previewUrl)),
   );
   // Durable signals ONLY — a local flag can get stuck "building" forever if the server-side build
   // fails before it ever flips the store status back. The store goes 'building' the instant
