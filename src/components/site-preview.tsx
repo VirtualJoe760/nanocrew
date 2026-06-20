@@ -141,27 +141,33 @@ function describeHit(d: Hit): string | null {
   return null;
 }
 
+// Review mode: a read-only preview of a pending change with two choices — keep editing (which loads
+// the Venus editor) or approve. NO Venus until the creator opts in via "Continue editing".
+type Review = { onContinueEditing: () => void; onApprove: () => void; approving?: boolean };
+
 export function SitePreview({
   visible,
   url,
   onClose,
   critique,
+  review,
 }: {
   visible: boolean;
   url: string;
   onClose: () => void;
   critique?: Critique;
+  review?: Review;
 }) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaProvider>
-        <PreviewContent url={url} onClose={onClose} critique={critique} />
+        <PreviewContent url={url} onClose={onClose} critique={critique} review={review} />
       </SafeAreaProvider>
     </Modal>
   );
 }
 
-function PreviewContent({ url, onClose, critique }: { url: string; onClose: () => void; critique?: Critique }) {
+function PreviewContent({ url, onClose, critique, review }: { url: string; onClose: () => void; critique?: Critique; review?: Review }) {
   const insets = useSafeAreaInsets();
   const ref = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
@@ -588,6 +594,22 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
           ) : null}
         </View>
 
+        {/* Review mode — read-only preview + two choices. NO Venus here; she only wakes on "Continue
+            editing", which swaps this for the critique panel below. */}
+        {review && !critique ? (
+          <View style={[styles.panel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <ThemedText type="code" style={styles.hint}>Reviewing your change — approve it, or keep editing.</ThemedText>
+            <View style={styles.reviewRow}>
+              <Pressable onPress={review.onContinueEditing} style={styles.reviewSecondary}>
+                <ThemedText type="smallBold" style={styles.reviewSecondaryText}>Continue editing</ThemedText>
+              </Pressable>
+              <Pressable onPress={review.onApprove} disabled={review.approving} style={[styles.reviewPrimary, review.approving && { opacity: 0.6 }]}>
+                <ThemedText type="smallBold" style={styles.reviewPrimaryText}>{review.approving ? 'Approving…' : 'Approve edits'}</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         {/* Venus panel — the orb is the focus; subtitles below; a faint control hint */}
         {critique ? (
           <View style={[styles.panel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
@@ -716,6 +738,11 @@ const styles = StyleSheet.create({
   subtitle: { color: INK, textAlign: 'center', minHeight: 18 },
   hint: { color: FAINT, fontSize: 11, textAlign: 'center' },
   noteText: { color: '#e0a07a', fontSize: 12, textAlign: 'center' },
+  reviewRow: { flexDirection: 'row', alignSelf: 'stretch', gap: Spacing.three, marginTop: Spacing.one },
+  reviewSecondary: { flex: 1, borderWidth: 1, borderColor: 'rgba(205,209,217,0.4)', borderRadius: 999, paddingVertical: Spacing.three, alignItems: 'center' },
+  reviewSecondaryText: { color: GOLD },
+  reviewPrimary: { flex: 1, backgroundColor: GOLD, borderRadius: 999, paddingVertical: Spacing.three, alignItems: 'center' },
+  reviewPrimaryText: { color: '#0b0b0d' },
 
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', alignSelf: 'stretch', gap: Spacing.two },
   typeInput: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)', borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, color: INK, fontSize: 15, textAlignVertical: 'top' },

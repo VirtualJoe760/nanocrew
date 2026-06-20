@@ -56,6 +56,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [siteAction, setSiteAction] = useState<'idle' | 'building'>('idle');
   const [publishing, setPublishing] = useState(false); // open/close shop in the marketplace in flight
   const [approving, setApproving] = useState(false); // merging a reviewed change to production (Publish)
+  const [reviewRev, setReviewRev] = useState<Revision | null>(null); // the revision being reviewed in the preview
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [reviewDismissed, setReviewDismissed] = useState<Set<string>>(new Set()); // "keep editing" hides a ready review
   const [products, setProducts] = useState<Product[]>([]);
@@ -517,7 +518,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     }
   };
 
-  const approve = async (rev: Revision) => {
+  const approve = async (rev: Revision): Promise<boolean> => {
     setApproving(true);
     setNote(null);
     try {
@@ -525,10 +526,24 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       if (!res.ok) throw new Error();
       setNote('Published — your change is live.');
       await loadRevisions();
+      return true;
     } catch {
       setNote('Couldn’t publish that change. Try again in a moment.');
+      return false;
     } finally {
       setApproving(false);
+    }
+  };
+
+  // "Approve edits" from the review preview → merge, then close the preview and land the creator on
+  // the brand Settings panel (go-live toggle / domain / marketplace / performance).
+  const approveFromReview = async (rev: Revision) => {
+    const ok = await approve(rev);
+    if (ok) {
+      setPreviewTarget(null);
+      setReviewRev(null);
+      setCritiquePreview(false);
+      setTab('settings');
     }
   };
 
@@ -697,44 +712,40 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                 </View>
               ) : (
                 <>
-                  {/* Review bar — a forge edit from the live-site editor is building/ready. This is where
-                      a "Go to review" notification lands: Review the preview → Publish, or keep editing. */}
-                  {pendingRev ? (
+                  {/* A pending forge edit. READY → a single "Review & Approve" button that opens the
+                      preview in REVIEW mode (Continue editing / Approve edits). BUILDING → progress.
+                      FAILED → a retry hint. */}
+                  {pendingRev?.status === 'ready' && pendingRev.previewUrl ? (
+                    <>
+                      <Pressable onPress={() => { setPreviewTarget(pendingRev.previewUrl); setReviewRev(pendingRev); setCritiquePreview(false); }} style={styles.primaryBtn}>
+                        <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Review &amp; Approve</ThemedText>
+                      </Pressable>
+                      <Pressable onPress={() => decline(pendingRev)} hitSlop={8} style={{ alignSelf: 'center' }}>
+                        <ThemedText type="code" style={styles.dim}>discard this change</ThemedText>
+                      </Pressable>
+                    </>
+                  ) : pendingRev?.status === 'building' ? (
                     <View style={styles.reviewCard}>
-                      {/* ✕ declines this change — discards it server-side (it never reached production). */}
                       <Pressable onPress={() => decline(pendingRev)} hitSlop={10} style={styles.reviewClose}>
                         <ThemedText type="code" style={styles.reviewCloseX}>✕</ThemedText>
                       </Pressable>
-                      {pendingRev.status === 'building' ? (
-                        <>
-                          <View style={styles.reviewRow}>
-                            <ActivityIndicator size="small" color={pal.accent} />
-                            <ThemedText type="small" style={[styles.white, { flex: 1 }]}>Venus is building a preview…</ThemedText>
-                          </View>
-                          <View style={styles.progressTrack}>
-                            <View style={[styles.progressFill, { width: `${Math.round(buildFill * 100)}%` }]} />
-                          </View>
-                          <ThemedText type="code" style={styles.progressMeta}>
-                            {`${Math.floor(buildElapsed / 60)}:${String(buildElapsed % 60).padStart(2, '0')} elapsed · ${buildEta}`}
-                          </ThemedText>
-                        </>
-                      ) : pendingRev.status === 'ready' ? (
-                        <>
-                          <ThemedText type="smallBold" style={styles.white}>A change is ready</ThemedText>
-                          <View style={styles.reviewRow}>
-                            {pendingRev.previewUrl ? (
-                              <Pressable onPress={() => { setPreviewTarget(pendingRev.previewUrl); setCritiquePreview(true); }} style={styles.reviewBtn}>
-                                <ThemedText type="code" style={styles.white}>Review</ThemedText>
-                              </Pressable>
-                            ) : null}
-                            <Pressable onPress={() => approve(pendingRev)} disabled={approving} style={[styles.reviewBtn, { backgroundColor: pal.accent, borderColor: pal.accent, opacity: approving ? 0.6 : 1 }]}>
-                              <ThemedText type="code" style={{ color: pal.onAccent }}>{approving ? 'Publishing…' : 'Publish'}</ThemedText>
-                            </Pressable>
-                          </View>
-                        </>
-                      ) : (
-                        <ThemedText type="small" style={styles.dim}>That change didn’t take — tap ✕ to dismiss, or talk to Venus to try again.</ThemedText>
-                      )}
+                      <View style={styles.reviewRow}>
+                        <ActivityIndicator size="small" color={pal.accent} />
+                        <ThemedText type="small" style={[styles.white, { flex: 1 }]}>Venus is building a preview…</ThemedText>
+                      </View>
+                      <View style={styles.progressTrack}>
+                        <View style={[styles.progressFill, { width: `${Math.round(buildFill * 100)}%` }]} />
+                      </View>
+                      <ThemedText type="code" style={styles.progressMeta}>
+                        {`${Math.floor(buildElapsed / 60)}:${String(buildElapsed % 60).padStart(2, '0')} elapsed · ${buildEta}`}
+                      </ThemedText>
+                    </View>
+                  ) : pendingRev?.status === 'failed' ? (
+                    <View style={styles.reviewCard}>
+                      <Pressable onPress={() => decline(pendingRev)} hitSlop={10} style={styles.reviewClose}>
+                        <ThemedText type="code" style={styles.reviewCloseX}>✕</ThemedText>
+                      </Pressable>
+                      <ThemedText type="small" style={styles.dim}>That change didn’t take — tap ✕ to dismiss, or talk to Venus to try again.</ThemedText>
                     </View>
                   ) : null}
 
@@ -965,8 +976,9 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
         <SitePreview
           visible={!!previewTarget}
           url={previewTarget}
-          onClose={() => setPreviewTarget(null)}
+          onClose={() => { setPreviewTarget(null); setReviewRev(null); setCritiquePreview(false); }}
           critique={critiquePreview && active ? { slug: active, token, onSent: () => { void loadRevisions(); } } : undefined}
+          review={reviewRev && !critiquePreview ? { onContinueEditing: () => setCritiquePreview(true), onApprove: () => void approveFromReview(reviewRev), approving } : undefined}
         />
       ) : null}
       {shortComposer && active ? (
