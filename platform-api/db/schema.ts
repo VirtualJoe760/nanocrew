@@ -45,6 +45,36 @@ export const orderStatus = pgEnum('order_status', [
   'on_hold', // Printful paused the order (needs attention) — order_put_hold
   'returned', // the package came back to sender — package_returned (creator may then refund)
   'failed', // Printful could not fulfill — order_failed (distinct from a customer cancel)
+  // Customer-initiated return claim (defect/wrong/damaged) — distinct from 'returned' (the Printful
+  // package physically came back). Opened via POST /api/public/returns; resolves to 'refunded' or
+  // back to its prior fulfillment state on decline. See docs/accounts/RETURNS_REFUNDS.md.
+  'return_requested',
+]);
+
+// Brand payout (Stripe Connect — separate charges + transfers). The charge captures 100% to the
+// platform; the brand's net is HELD until ship date + RETURN_WINDOW_DAYS (the return window), then a
+// transfer is created. A refund/return inside the window cancels the un-sent transfer (no claw-back).
+// See docs/accounts/RETURNS_REFUNDS.md (payout hold) + docs/accounts/BILLING_CREDITS.md.
+export const payoutStatus = pgEnum('payout_status', [
+  'none', // no connected account / settled to the platform (nothing to transfer)
+  'held', // brand net captured on the platform, awaiting the release date
+  'released', // transfer to the brand's connected account created
+  'reversed', // transfer was created then reversed (a refund landed after release)
+  'skipped', // refunded/returned in-window before release — the transfer was never made
+]);
+
+export const returnReason = pgEnum('return_reason', [
+  'defective', // arrived faulty / misprinted
+  'wrong_item', // received the wrong product or variant
+  'damaged', // damaged in transit
+  'not_received', // never arrived
+]);
+
+export const returnRequestStatus = pgEnum('return_request_status', [
+  'requested', // customer opened a claim, awaiting brand review
+  'approved', // brand approved — a refund (and/or reprint) is issued
+  'declined', // brand declined the claim
+  'refunded', // refund completed (terminal)
 ]);
 
 // Free = browse + shop only. The three paid tiers gate launching a store (Joe, 2026-06-12):
@@ -313,6 +343,19 @@ export const orders = pgTable(
     shippingAddress: jsonb('shipping_address_json'),
     trackingUrl: text('tracking_url'),
     trackingNumber: text('tracking_number'),
+    // Return window + payout hold (ship date + RETURN_WINDOW_DAYS). shippedAt is stamped in the
+    // package_shipped webhook; returnWindowEndsAt = payoutReleaseAt = shippedAt + window.
+    shippedAt: timestamp('shipped_at'),
+    returnWindowEndsAt: timestamp('return_window_ends_at'),
+    // Deferred brand payout (separate charges + transfers). stripeChargeId is the source_transaction
+    // for the held transfer; brandNetCents is the transfer amount; connectedAccountId is the
+    // destination snapshotted at checkout so release never depends on later Connect state.
+    stripeChargeId: text('stripe_charge_id'),
+    brandNetCents: integer('brand_net_cents').notNull().default(0),
+    connectedAccountId: text('connected_account_id'),
+    payoutStatus: payoutStatus('payout_status').notNull().default('none'),
+    payoutReleaseAt: timestamp('payout_release_at'),
+    payoutTransferId: text('payout_transfer_id'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -322,6 +365,7 @@ export const orders = pgTable(
   (o) => ({
     storeIdx: index('orders_store_idx').on(o.storeId),
     statusIdx: index('orders_status_idx').on(o.status),
+    payoutReleaseIdx: index('orders_payout_release_idx').on(o.payoutStatus, o.payoutReleaseAt),
   }),
 );
 
@@ -336,6 +380,42 @@ export const orderItems = pgTable('order_items', {
   nameSnapshot: text('name_snapshot').notNull(),
   variantSnapshot: text('variant_snapshot').notNull(),
 });
+
+// Customer-initiated return claims. POD items are made-to-order, so the platform floor is
+// defect/wrong/damaged/not-received claims (no buyer's-remorse ship-backs) — see
+// docs/accounts/RETURNS_REFUNDS.md + docs/accounts/POD_POLICY.md. Opened via the public API,
+// resolved by the brand in the Studio returns inbox (approve → existing refund path).
+// NOTE: new table → migration MUST `ENABLE ROW LEVEL SECURITY` (deny-all) per the supabase-rls rule.
+export const returnRequests = pgTable(
+  'return_requests',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    // Denormalized for the creator returns inbox + scoping (the order already carries storeId).
+    storeId: uuid('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    customerEmail: text('customer_email').notNull(),
+    reason: returnReason('reason').notNull(),
+    // Optional: which order_items + quantities the claim covers (null = the whole order).
+    itemsJson: jsonb('items_json'),
+    photoUrls: jsonb('photo_urls'), // evidence (required for defective/damaged at the API layer)
+    note: text('note'),
+    status: returnRequestStatus('status').notNull().default('requested'),
+    resolution: text('resolution'), // the brand's note on approve/decline
+    refundId: text('refund_id'), // Stripe refund id once approved → refunded
+    rmaCode: text('rma_code'), // optional; most POD claims need no physical return
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at'),
+  },
+  (r) => ({
+    orderIdx: index('return_requests_order_idx').on(r.orderId),
+    storeIdx: index('return_requests_store_idx').on(r.storeId),
+    statusIdx: index('return_requests_status_idx').on(r.status),
+  }),
+);
 
 // ---------- Traffic (brand-site beacon) ----------
 

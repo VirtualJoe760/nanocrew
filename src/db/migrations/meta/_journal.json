@@ -169,6 +169,13 @@
       "when": 1781907521154,
       "tag": "0023_illegal_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1781981402015,
+      "tag": "0024_secret_zemo",
+      "breakpoints": true
     }
   ]
 }

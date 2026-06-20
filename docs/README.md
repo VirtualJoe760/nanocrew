@@ -50,6 +50,8 @@ The docs are organized into divisions. Start here, then open the division you ne
 | [accounts/AUTH_IDENTITY.md](accounts/AUTH_IDENTITY.md) | One Supabase identity mirrored by `creators`; app (local) vs platform-api (remote) token verify; store ownership + collaborators; the TARGET unified account |
 | [accounts/ORDERS.md](accounts/ORDERS.md) | Orders keyed by `customerEmail` only; creator order views; the TARGET shopper "my orders" by email match |
 | [accounts/BILLING_CREDITS.md](accounts/BILLING_CREDITS.md) | Plans/subscriptions, AI credits (accounts + ledger + costs), Stripe Connect payouts |
+| [accounts/RETURNS_REFUNDS.md](accounts/RETURNS_REFUNDS.md) | The money lifecycle after checkout — the **7-day payout hold** (separate charges + transfers, ship+7d), the `return_requests` model (defect/wrong/damaged only), public returns API + creator inbox, refund mechanics, the buyer "Purchases" surface. 🚧 building |
+| [accounts/EMAIL_PIPELINE.md](accounts/EMAIL_PIPELINE.md) | Every branded transactional email — Resend (reuse `notify.ts`), one verified domain with per-brand `no-reply-{slug}@mail-nano-crew.com`, the send-function contract, the lifecycle catalogue. 🚧 building |
 | [accounts/POD_POLICY.md](accounts/POD_POLICY.md) | Per-provider fulfillment content policy (`src/lib/pod-policy.ts`) — catch a print-provider rejection (Printful, future suppliers) at publish, before an order is placed. Separate from generation safety. |
 | [accounts/COMPLIANCE.md](accounts/COMPLIANCE.md) | US marketplace compliance — what Stripe Connect already covers (KYC/tax-ID/age) vs what we must add (age gate, INFORM Consumers Act disclosures, sales-tax/marketplace-facilitator). 1099-K, W-9, COPPA, minor contracts. Includes a phased **build plan**. Not legal advice. |
 
