@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
+import { revalidateStorefront } from '@/lib/storefront-revalidate';
 
 // GET   /api/creator/stores/:slug — the creator's store settings + lifecycle status.
 // PATCH /api/creator/stores/:slug { name?, tagline?, descriptionMd?, isPublic? } — update
@@ -58,6 +59,10 @@ export async function PATCH(req: Request, { slug }: Record<string, string>) {
   if (!Object.keys(patch).length) return Response.json({ error: 'nothing to update' }, { status: 400 });
 
   const [updated] = await db.update(schema.stores).set(patch).where(eq(schema.stores.id, r.id)).returning();
+  // Refresh the live storefront so anything it reads at runtime (tagline/meta) reflects the change.
+  // NOTE: the brand NAME shown on the site comes from baked brand.json / the logo, so a name change
+  // shows in-app immediately but needs a rebuild (or the logo) to change the on-site header.
+  void revalidateStorefront(updated.slug);
   return Response.json({ store: summary(updated) });
 }
 

@@ -53,12 +53,14 @@ export function SiteEditor({
   onClose,
   token,
   slug,
+  brandName,
   onSaved,
 }: {
   visible: boolean;
   onClose: () => void;
   token: string;
   slug: string;
+  brandName?: string;
   onSaved?: () => void;
 }) {
   const pal = useStudioPalette();
@@ -66,6 +68,7 @@ export function SiteEditor({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [name, setName] = useState(''); // the brand name (stores.name) — saved via the store PATCH
   const [copy, setCopy] = useState<Record<string, string>>({});
   const [colors, setColors] = useState<Record<string, string>>({});
   const [fonts, setFonts] = useState<{ display?: string; body?: string }>({});
@@ -99,8 +102,11 @@ export function SiteEditor({
   }, [slug, token]);
 
   useEffect(() => {
-    if (visible) void load();
-  }, [visible, load]);
+    if (visible) {
+      setName(brandName ?? '');
+      void load();
+    }
+  }, [visible, brandName, load]);
 
   // ✦ Enhance one text field — AI rewrites/writes it in the brand voice, then drops it back in.
   const enhance = async (field: string) => {
@@ -136,6 +142,12 @@ export function SiteEditor({
     setSaving(true);
     setNote(null);
     try {
+      // Brand name lives on the store record (not site-config) — PATCH it if it changed.
+      const trimmed = name.trim();
+      if (trimmed && trimmed !== (brandName ?? '')) {
+        const nr = await fetch(apiUrl(`/api/creator/stores/${slug}`), { method: 'PATCH', headers, body: JSON.stringify({ name: trimmed }) });
+        if (!nr.ok) throw new Error();
+      }
       const res = await fetch(apiUrl('/api/creator/site-config'), {
         method: 'POST',
         headers,
@@ -156,7 +168,7 @@ export function SiteEditor({
       <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
         <View style={styles.sheet}>
           <View style={styles.headerRow}>
-            <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Customize site</ThemedText>
+            <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Site Options</ThemedText>
             <View style={{ flex: 1 }} />
             <Pressable onPress={onClose} hitSlop={12}>
               <ThemedText type="code" style={styles.dim}>close ✕</ThemedText>
@@ -174,6 +186,19 @@ export function SiteEditor({
 
               {/* TEXT */}
               <ThemedText type="code" style={styles.sectionLabel}>TEXT</ThemedText>
+              <View style={styles.field}>
+                <View style={styles.fieldHead}>
+                  <ThemedText type="code" style={styles.fieldLabel}>Brand name</ThemedText>
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Your brand name"
+                  placeholderTextColor={pal.dim}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                />
+              </View>
               {TEXT_FIELDS.map((f) => (
                 <View key={f.key} style={styles.field}>
                   <View style={styles.fieldHead}>

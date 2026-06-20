@@ -723,7 +723,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                           <ThemedText type="smallBold" style={styles.white}>A change is ready</ThemedText>
                           <View style={styles.reviewRow}>
                             {pendingRev.previewUrl ? (
-                              <Pressable onPress={() => { setPreviewTarget(pendingRev.previewUrl); setCritiquePreview(false); }} style={styles.reviewBtn}>
+                              <Pressable onPress={() => { setPreviewTarget(pendingRev.previewUrl); setCritiquePreview(true); }} style={styles.reviewBtn}>
                                 <ThemedText type="code" style={styles.white}>Review</ThemedText>
                               </Pressable>
                             ) : null}
@@ -739,7 +739,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                   ) : null}
 
                   <Pressable onPress={() => setEditor(true)} style={styles.primaryBtn}>
-                    <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Customize — text, colors &amp; fonts</ThemedText>
+                    <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Site Options</ThemedText>
                   </Pressable>
                   <ThemedText type="code" style={styles.dim}>Exact edits, applied instantly. For a bigger redesign, tap your site above and talk to Venus.</ThemedText>
                 </>
@@ -988,7 +988,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
         />
       ) : null}
       {editor && active ? (
-        <SiteEditor visible={editor} onClose={() => setEditor(false)} token={token} slug={active} />
+        <SiteEditor visible={editor} onClose={() => setEditor(false)} token={token} slug={active} brandName={brandName ?? activeStore?.name ?? undefined} onSaved={() => void loadStores(true)} />
       ) : null}
     </Modal>
   );
