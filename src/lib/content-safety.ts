@@ -1,14 +1,18 @@
 import { HarmBlockThreshold, HarmCategory } from '@google/genai';
 
 // Content safety for AI generation. Two layers:
-//   1. assertSafePrompt() — a cheap server-side pre-check that rejects sexual-explicit and
-//      graphic-violence/gore prompts BEFORE we spend credits or hit the model.
+//   1. assertSafePrompt() — a cheap server-side pre-check that rejects ONLY the most extreme
+//      content (CSAM always, genuine pornography, graphic gore) BEFORE we spend credits or hit
+//      the model.
 //   2. IMAGE_SAFETY_SETTINGS — Gemini safetySettings spread into every image generateContent
-//      config so the model itself blocks the same two categories (defense in depth).
+//      config at BLOCK_ONLY_HIGH so the model itself blocks only the same extreme tail.
 //
-// Policy (per Terms §5): the only hard-prohibited generation categories are sexual content and
-// graphic violence/gore — things we will not print on a garment. This is deliberately narrow;
-// we are not a general content moderator, just keeping the print pipeline clean and lawful.
+// Policy: freedom of expression is the default. We are NOT a general content moderator and we do
+// NOT police copyright/IP — creators are solely responsible for the designs they generate
+// (brands, characters, likenesses are their call). We hard-block only the genuinely extreme:
+// CSAM (never a choice), out-and-out pornography (explicit sex acts), and graphic gore (a real
+// person being killed/mutilated). Everything short of that — edgy, nude, branded, named
+// characters, celebrities, weapons, stylized violence — passes.
 
 export class ContentSafetyError extends Error {
   status = 422;
@@ -18,19 +22,17 @@ export class ContentSafetyError extends Error {
   }
 }
 
-// Steering clause for the prompt-WRITING helpers (✨ Enhance, 🎲 Random). Their job is to produce a
-// prompt the IMAGE model will actually render — and that model REFUSES copyrighted characters /
-// franchises (Marvel/DC/anime/games), real brand names + logos, celebrities + real people, and
-// graphic violence/gore (returning text, not an image → the "AI declined" path in /api/generate).
-// So these writers must reinterpret any such reference as an original, non-infringing equivalent.
-// This is the proactive half of the filter: keep generations succeeding instead of getting refused.
+// Guidance for the prompt-WRITING helpers (✨ Enhance, 🎲 Random). Their job is to expand the
+// creator's idea into a vivid, concrete image prompt — faithfully. We do NOT steer away from
+// brands, named characters, or celebrities (the creator owns that responsibility); the writer
+// renders what they ask for. The only things to keep out are the two categories we hard-block
+// anyway, so the writer never escalates a mild idea into a guaranteed refusal.
 export const GENERATABLE_GUIDANCE =
-  'IMPORTANT — keep the result ORIGINAL and safe to render: never name or depict copyrighted ' +
-  'characters or franchises (e.g. Marvel/DC, anime, video-game characters), real brand names or ' +
-  'logos, celebrities, or real public figures. If the idea references one, reinterpret it as an ' +
-  'original, non-infringing equivalent (e.g. "a battle-worn armored hero" instead of a named ' +
-  'superhero; "a web-slinging acrobat in a red-and-blue suit" instead of a named one). Avoid gore ' +
-  'and graphic violence (stylized action is fine). Describe a concrete, original subject.';
+  'Describe a concrete, vivid, visual subject. Render the creator’s idea faithfully — including ' +
+  'any brand, character, celebrity, or likeness they ask for (they are responsible for their own ' +
+  'designs). The only things to avoid adding are genuinely pornographic content (explicit sex ' +
+  'acts) and graphic gore (a real person being killed or mutilated); edgy, nude, branded, named, ' +
+  'and stylized-action subjects are all fine.';
 
 // Policy: creators own their designs. Nudity, seductive/edgy imagery, weapons, and action scenes
 // all generate fine — we block ONLY genuinely pornographic content and HIGH-severity graphic gore
@@ -59,15 +61,16 @@ const SEXUAL = [
   /\b(explicit\s+(sex|sexual)|sexually\s+explicit|graphic\s+sex)\b/i,
 ];
 
+// Narrowed to the genuinely extreme: actual graphic gore (mutilation/dismemberment/decapitation).
+// Deliberately NOT included — too prone to catching stylized, metaphorical, or band/merch language
+// that creators legitimately want: "torture", "brutal murder/massacre/carnage/bloodbath", and the
+// broad "graphic violence/death/injury". Those pass; only depicted gore is blocked.
 const VIOLENCE_GORE = [
   /\b(gore|gory|gruesome)\b/i,
   /\b(dismember(ed|ment)?|decapitat(e|ed|ion)|disembowel(ed|ment)?|mutilat(e|ed|ion))\b/i,
   /\b(beheading|beheaded|severed\s+(head|limb|hand|arm|leg)|entrails|viscera)\b/i,
   /\b(head|skull|brains)\s+(blown|shot|exploded|splattered|caved\s*in)/i,
   /\bblown\s+(off|apart|to\s+(bits|pieces|smithereens))\b/i,
-  /\b(graphic\s+(violence|gore|death|injury))\b/i,
-  /\b(torture|torturing|tortured)\b/i,
-  /\b(brutal(ly)?\s+(murder|kill|slaughter)|massacre|carnage|bloodbath)\b/i,
 ];
 
 // CSAM — the ONE category that is NEVER a policy choice. Any sexual/nude context involving a minor

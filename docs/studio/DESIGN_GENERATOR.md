@@ -45,16 +45,22 @@ assets. Generation is credit-gated and Nano-Banana-backed.
 **Content safety (`src/lib/content-safety.ts`).** Every image route that takes a creator's free-text
 prompt screens it through `assertSafePrompt()` **before charging credits or hitting the model**, and
 spreads `IMAGE_SAFETY_SETTINGS` into the Gemini `config` (`BLOCK_ONLY_HIGH`, defense in depth). The
-policy is deliberately PERMISSIVE — creators own their designs, so nudity, seductive/edgy imagery,
-weapons, and action scenes all generate. Only three things are blocked: **CSAM** (any sexual/nude
-context involving a minor — a hard block, never a policy toggle, also blocked server-side by Google),
-**genuinely pornographic** prompts (explicit sex acts), and **high-severity graphic gore** (a person
-being killed/mutilated — not action-hero imagery). Matches Terms §5; a blocked prompt returns HTTP
-422 with a message and costs no credits. Wired into
-`/api/generate`, `/api/merge`, `/api/composite`, `/api/tryon`, and `/api/enhance` (the prompt
-expander). `composite`/`tryon` carry only the safetySettings since their inputs are an already-vetted
-design + a garment/selfie (no free-text prompt). This is deliberately narrow — we keep the print
-pipeline lawful, not moderate general edginess.
+policy is deliberately PERMISSIVE — freedom of expression is the default, creators own their designs,
+so nudity, seductive/edgy imagery, weapons, and action scenes all generate. Only three things are
+blocked: **CSAM** (any sexual/nude context involving a minor — a hard block, never a policy toggle,
+also blocked server-side by Google), **genuinely pornographic** prompts (explicit sex acts), and
+**high-severity graphic gore** (a person being killed/mutilated — not action-hero imagery; the gore
+patterns are tight, so "torture", "massacre", "bloodbath" and the like pass). **We do NOT police
+copyright/IP** — named characters, brands, and celebrity likenesses are the creator's responsibility
+(Terms put copyright on them via indemnification), so `✨ Enhance` / `🎲 Random` expand such prompts
+faithfully rather than steering to an "original" equivalent. (If `/api/generate`'s underlying image
+model declines a named character itself — RECITATION — that's the provider's limit, surfaced as a 422
+"the image model wouldn't render this"; it is not us blocking it.) A blocked prompt returns HTTP 422
+with a message and costs no credits. Wired into `/api/generate`, `/api/merge`, `/api/composite`,
+`/api/tryon`, and `/api/enhance` (the prompt expander). `composite`/`tryon` carry only the
+safetySettings since their inputs are an already-vetted design + a garment/selfie (no free-text
+prompt). Separately, the Printful **print** policy (`pod-policy.ts`) still *warns* (not blocks) on
+third-party IP at publish time — that reflects the fulfillment partner's real terms, not generation.
 
 ## Web graphics — generate → stage → assign to the site
 

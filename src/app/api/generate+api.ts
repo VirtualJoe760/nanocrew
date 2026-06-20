@@ -44,21 +44,22 @@ interface GenResponse {
   promptFeedback?: { blockReason?: string };
 }
 
-// Nano Banana returns TEXT (not an image) when it declines a prompt — usually a copyrighted
-// character / brand / real likeness (RECITATION) or restricted content (SAFETY/PROHIBITED). Turn
-// that into an actionable message instead of a bare "No image returned" so the creator knows to
-// rephrase (and isn't told it's a server error).
+// Nano Banana returns TEXT (not an image) when IT declines a prompt. This is the model provider's
+// own limitation, not our policy — we don't police copyright (creators own their designs). But the
+// model itself sometimes refuses named characters / brands / real likenesses (RECITATION) or its
+// own restricted content (SAFETY/PROHIBITED), so we surface that as an actionable message instead
+// of a bare "No image returned" (and don't make it look like a server error).
 function refusalMessage(reason?: string, modelText?: string): string {
   const r = reason ?? '';
   if (/RECITATION/i.test(r)) {
-    return "The AI wouldn't generate this — it looks like a copyrighted character, brand, or real person. Try an original subject (avoid named characters/brands/celebrities).";
+    return "The image model wouldn’t render this one — its provider declines some named characters, brands, and real people. Try describing the look in your own words instead.";
   }
   if (/SAFETY|PROHIBITED|IMAGE_SAFETY|BLOCK/i.test(r)) {
-    return 'The AI declined this prompt under its content policy. Try rephrasing — remove violent, branded, or explicit wording.';
+    return 'The image model declined this prompt. Try rephrasing or simplifying the wording.';
   }
   const t = (modelText ?? '').trim();
-  if (t) return `The AI returned a message instead of an image: ${t.slice(0, 180)}`;
-  return "The AI didn't return an image — try rephrasing. Named characters, brands, celebrities, and violent wording are often refused.";
+  if (t) return `The image model returned a message instead of an image: ${t.slice(0, 180)}`;
+  return 'The image model didn’t return an image — try rephrasing or simplifying the prompt.';
 }
 
 /**
