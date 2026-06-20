@@ -82,6 +82,16 @@ and Video generation lives in the brand Console, not here.) Every generation is 
 first — Apply change / Regenerate / Discard → **Use this** — before it lands on the canvas (generation
 happens in the sheet; `commitDesign()` persists on approve).
 
+**Toggles** (chips under the prompt, for designs AND web assets): **Transparent/Filled**, **Aa Text**
+(design lettering, cut-out), and **😂 Meme**. Meme steers generation into the classic internet-meme
+format via [`src/lib/meme.ts`](../../src/lib/meme.ts) `buildMemePrompt()` — bold ALL-CAPS Impact
+caption (white + black outline) over the described image, honoring named layouts (top/bottom, Drake,
+two-buttons, this-vs-that…). It forces a filled background (a meme is a complete captioned image) and
+hides Transparent/Aa Text while on; the placeholder switches to teach the input format (image +
+caption). Works for web assets and t-shirt designs. "Change it" in review re-edits the staged meme
+(e.g. "change the bottom text to…"). Verified live: a "two buttons" prompt → a correctly-formatted
+1024×1024 meme.
+
 A graphic on the canvas can then be **assigned to the site**: long-press it → *Set as website hero
 / collection cover / logo*. That posts to **`POST /api/creator/site-assets { catalogueId, slot, url }`**
 (a direct DB write — store owner derived from the catalogue), which sets `stores.site_assets.hero`,

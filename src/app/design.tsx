@@ -48,6 +48,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch, readJson } from '@/lib/api';
+import { buildMemePrompt, MEME_PLACEHOLDER } from '@/lib/meme';
 import type { CatalogBlank } from '@/lib/printful';
 import { EFFORT_LABELS, EFFORT_TIERS, type Effort } from '@/lib/effort';
 
@@ -1760,6 +1761,7 @@ function GenerateModal({
   const [webRatio, setWebRatio] = useState('1:1'); // site assets default to a centered square (logo/mark)
   const [refImage, setRefImage] = useState<string | null>(null);
   const [isText, setIsText] = useState(false);
+  const [meme, setMeme] = useState(false); // steer generation into classic meme format (text + image)
   const [rolling, setRolling] = useState(false);
   // How hard the AI works on the 🎲 Random concept and ✨ Enhance expansion (prompt richness).
   const [effort, setEffort] = useState<Effort>(3);
@@ -1835,15 +1837,17 @@ function GenerateModal({
       (isText && prompt.trim()
         ? `The words "${prompt.trim()}" as a bold, high-contrast lettering graphic with clean typography`
         : prompt);
-    const text = base.trim();
+    // Meme mode wraps the idea in classic meme formatting (Impact caption + image). Only on the
+    // initial generation, not a "change it" re-roll (overridePrompt) — that edits the staged meme.
+    const text = meme && !overridePrompt && base.trim() ? buildMemePrompt(base) : base.trim();
     const ref = overrideRef ?? refImage ?? undefined;
     if (!text && !ref) return;
     setBusy(true);
     setError(null);
     try {
-      // Text lettering is always cut out; otherwise honor the creator's transparent/filled choice
-      // (for BOTH product designs and web graphics — a logo wants transparent, a hero wants filled).
-      const bg = isText ? 'transparent' : background;
+      // Memes are filled (a complete captioned image). Text lettering is always cut out; otherwise
+      // honor the creator's transparent/filled choice (a logo wants transparent, a hero wants filled).
+      const bg = meme ? 'filled' : isText ? 'transparent' : background;
       const aspectRatio = isGraphics ? webRatio : ratio;
       const res = await apiFetch('/api/generate', {
         method: 'POST',
@@ -1976,9 +1980,11 @@ function GenerateModal({
                 value={prompt}
                 onChangeText={setPrompt}
                 placeholder={
-                  modality === 'graphics'
-                    ? 'Describe a web graphic — a hero image, a banner…'
-                    : 'Describe a design — or upload a reference image below'
+                  meme
+                    ? MEME_PLACEHOLDER
+                    : modality === 'graphics'
+                      ? 'Describe a web graphic — a hero image, a banner…'
+                      : 'Describe a design — or upload a reference image below'
                 }
                 placeholderTextColor={theme.textSecondary}
                 style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
@@ -2008,10 +2014,10 @@ function GenerateModal({
                   </ThemedView>
                 </Pressable>
                 {/* Transparent vs filled background — for product designs AND web graphics
-                    (a transparent PNG logo, a filled hero/banner). Hidden when Aa Text is on
-                    (lettering is always cut out). */}
+                    (a transparent PNG logo, a filled hero/banner). Hidden when Aa Text or Meme is on
+                    (lettering is cut out; a meme is a complete filled image). */}
                 <>
-                    {!isText
+                    {!isText && !meme
                       ? (['transparent', 'filled'] as const).map((b) => (
                           <Pressable key={b} onPress={() => setBackground(b)}>
                             <ThemedView
@@ -2024,7 +2030,7 @@ function GenerateModal({
                           </Pressable>
                         ))
                       : null}
-                    {modality === 'design' ? (
+                    {modality === 'design' && !meme ? (
                       <Pressable onPress={() => setIsText((t) => !t)}>
                         <ThemedView
                           type={isText ? 'backgroundSelected' : 'backgroundElement'}
@@ -2035,6 +2041,17 @@ function GenerateModal({
                         </ThemedView>
                       </Pressable>
                     ) : null}
+                    {/* Meme — steer generation into the classic meme format (caption text + image).
+                        For web assets AND t-shirt designs. Mutually exclusive with Aa Text. */}
+                    <Pressable onPress={() => { setMeme((m) => !m); setIsText(false); }}>
+                      <ThemedView
+                        type={meme ? 'backgroundSelected' : 'backgroundElement'}
+                        style={styles.chip}>
+                        <ThemedText type="small" themeColor={meme ? 'text' : 'textSecondary'}>
+                          😂 Meme
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
                 </>
                 <Pressable onPress={rollIdea} disabled={rolling}>
                   <ThemedView type="backgroundElement" style={[styles.chip, { opacity: rolling ? 0.5 : 1 }]}>
