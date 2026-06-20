@@ -69,7 +69,7 @@ what works, what crashes, and a prioritized fix list. **Video was out of scope**
 9. ✅ **DONE — `publishToMarket` feedback.** No-ops with `setNote('Pick a brand first.')` when no brand is selected (+ a `publishing` entry guard).
 
 ### P2 — features / follow-ups (from earlier QA)
-10. **Dedicated nav-bar color** control (nav currently inherits `background`; you asked for nav color specifically).
+10. ✅ **DONE — Dedicated nav-bar colour.** Added a **Nav bar** field to the mini-CMS colour picker (`site-editor.tsx` `COLOR_FIELDS` + `site-config` GET defaults + the data contract). Wired at the **template level** across all 5 templates + the `_shared` seed: `getBrandColors()` returns `nav` (live override → falls back to `background`, so untouched sites are unchanged), `layout.tsx` injects `--brand-nav`, `globals.css` registers `--color-nav: var(--brand-nav, var(--brand-background))`, and the header/nav uses `bg-nav` instead of `bg-background`. Live-read, no rebuild. All 5 templates `next build` clean; app `tsc` + `expo export` clean. (Ships with the templates-repo push.)
 11. **Per-brand favicon** for the 4 standard templates (needs a *bundled* font — `next/og` build-failed on CDN fetch).
 12. **Re-verify typed-Venus Submit** end-to-end on a clean reload / on device (Crash #2).
 13. **On-device verify** the Railway-deployed generate-422 + Enhance-filter fixes.

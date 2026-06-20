@@ -119,7 +119,7 @@ now self-canonical (were inheriting `canonical:'/'`).
 ```jsonc
 {
   "copy":   { "heroHeadline": "…", "heroSubline": "…", "heroCta": "…", "storyKicker": "…", "story": "…", "tagline": "…" },
-  "colors": { "background": "#…", "text": "#…", "primary": "#…", "accent": "#…" },
+  "colors": { "background": "#…", "nav": "#…", "text": "#…", "primary": "#…", "accent": "#…" },  // nav: header/nav bar — blank falls back to background
   "fonts":  { "display": "<preset>", "body": "<preset>" }   // preset keys → font stacks in lib/site-config.ts
 }
 ```

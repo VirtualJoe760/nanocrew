@@ -30,6 +30,7 @@ const TEXT_FIELDS: { key: string; label: string; hint: string; multiline?: boole
 
 const COLOR_FIELDS: { key: string; label: string }[] = [
   { key: 'background', label: 'Background' },
+  { key: 'nav', label: 'Nav bar' }, // falls back to Background on the site if left blank
   { key: 'text', label: 'Text' },
   { key: 'primary', label: 'Primary / buttons' },
   { key: 'accent', label: 'Accent' },

@@ -11,7 +11,7 @@ import { TenantError, storeForMember } from '@/lib/tenant';
 //
 // Shape (every field optional; absent → the template keeps its baked brand.json / copy.json value):
 //   { copy?:   { heroHeadline?, heroSubline?, heroCta?, storyKicker?, story?, tagline? },
-//     colors?: { background?, text?, primary?, accent? },
+//     colors?: { background?, nav?, text?, primary?, accent? },  // nav blank → falls back to background
 //     fonts?:  { display?, body? } }   // preset keys, mapped to font stacks in the template
 
 type SiteConfig = {
@@ -90,6 +90,10 @@ export async function GET(req: Request) {
     const defaults = {
       colors: {
         background: palette.background ?? byRole.background ?? '',
+        // Nav bar is a live-only override (no baked role) — seed it from any saved value or the
+        // background so the picker opens showing what the site currently renders. Blank → the
+        // template falls the nav back to the background, so existing sites are unchanged.
+        nav: palette.nav ?? byRole.nav ?? '',
         text: palette.text ?? byRole.text ?? '',
         primary: palette.primary ?? byRole.primary ?? '',
         accent: palette.accent ?? byRole.accent ?? '',
