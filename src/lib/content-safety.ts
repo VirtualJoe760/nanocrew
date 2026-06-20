@@ -18,6 +18,20 @@ export class ContentSafetyError extends Error {
   }
 }
 
+// Steering clause for the prompt-WRITING helpers (✨ Enhance, 🎲 Random). Their job is to produce a
+// prompt the IMAGE model will actually render — and that model REFUSES copyrighted characters /
+// franchises (Marvel/DC/anime/games), real brand names + logos, celebrities + real people, and
+// graphic violence/gore (returning text, not an image → the "AI declined" path in /api/generate).
+// So these writers must reinterpret any such reference as an original, non-infringing equivalent.
+// This is the proactive half of the filter: keep generations succeeding instead of getting refused.
+export const GENERATABLE_GUIDANCE =
+  'IMPORTANT — keep the result ORIGINAL and safe to render: never name or depict copyrighted ' +
+  'characters or franchises (e.g. Marvel/DC, anime, video-game characters), real brand names or ' +
+  'logos, celebrities, or real public figures. If the idea references one, reinterpret it as an ' +
+  'original, non-infringing equivalent (e.g. "a battle-worn armored hero" instead of a named ' +
+  'superhero; "a web-slinging acrobat in a red-and-blue suit" instead of a named one). Avoid gore ' +
+  'and graphic violence (stylized action is fine). Describe a concrete, original subject.';
+
 // Policy: creators own their designs. Nudity, seductive/edgy imagery, weapons, and action scenes
 // all generate fine — we block ONLY genuinely pornographic content and HIGH-severity graphic gore
 // (a real-feeling person being killed/mutilated, not action-hero imagery). BLOCK_ONLY_HIGH lets

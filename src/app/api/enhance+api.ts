@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
-import { ContentSafetyError, assertSafePrompt } from '@/lib/content-safety';
+import { ContentSafetyError, GENERATABLE_GUIDANCE, assertSafePrompt } from '@/lib/content-safety';
 import { clampEffort, enhanceGuidance } from '@/lib/effort';
 import { guardRate } from '@/lib/rate-limit';
 
@@ -40,7 +40,8 @@ export async function POST(req: Request) {
             {
               text:
                 `Expand this terse clothing-design idea into an image-generation prompt: ` +
-                `"${prompt}". Keep the exact same subject and intent. ${enhanceGuidance(effort)} ` +
+                `"${prompt}". Keep the same subject and intent where possible. ${enhanceGuidance(effort)} ` +
+                `${GENERATABLE_GUIDANCE} ` +
                 'Reply with ONLY the enhanced prompt — no quotes, no preamble.',
             },
           ],

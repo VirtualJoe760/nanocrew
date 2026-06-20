@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 import { getUserFromRequest } from '@/lib/auth';
+import { GENERATABLE_GUIDANCE } from '@/lib/content-safety';
 import { clampEffort, ideaGuidance } from '@/lib/effort';
 import { guardRate } from '@/lib/rate-limit';
 
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
             {
               text:
                 `Invent ONE original clothing-graphic concept in the "${vibe}" vibe. ` +
-                `${ideaGuidance(effort)} Specific and visual. ` +
+                `${ideaGuidance(effort)} Specific and visual. ${GENERATABLE_GUIDANCE} ` +
                 'Reply with ONLY the design prompt itself — no quotes, no preamble.',
             },
           ],
