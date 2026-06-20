@@ -40,7 +40,7 @@ const REFUNDABLE_STATUSES = new Set(['paid', 'submitted_to_printful', 'in_produc
 type ConsoleTab = 'edit' | 'posts' | 'sell' | 'settings';
 const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', sell: 'Sell', settings: 'Settings' };
 
-export function StudioComposer({ visible, onClose, token, onOpenBilling, onDeleted, slug, brandName }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; onDeleted?: () => void; slug?: string; brandName?: string }) {
+export function StudioComposer({ visible, onClose, token, onOpenBilling, onDeleted, onBrandRenamed, slug, brandName }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; onDeleted?: () => void; onBrandRenamed?: (name: string) => void; slug?: string; brandName?: string }) {
   const pal = useStudioPalette();
   const styles = useMemo(() => makeStyles(pal), [pal]);
   const [tab, setTab] = useState<ConsoleTab>('edit');
@@ -128,7 +128,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       const store = sd.stores?.find((s) => s.slug === active);
       const od = (await ordersRes.json()) as { orders?: OrderRow[] };
       const md = (await marginsRes.json()) as { products?: (MarginRow & { storeName: string })[] };
-      const name = brandName ?? store?.name;
+      const name = store?.name ?? brandName;
       const mine = (md.products ?? []).filter((m) => m.storeName === name);
       const withCost = mine.filter((m) => m.marginPct != null);
       setInsights({
@@ -437,7 +437,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   };
 
   const confirmDeleteBrand = () => {
-    const name = brandName ?? activeStore?.name ?? 'this brand';
+    const name = activeStore?.name ?? brandName ?? 'this brand';
     Alert.alert(
       `Delete ${name}?`,
       'This permanently deletes the brand — its store, products, designs, posts, and sales records. The live website stops serving. This cannot be undone.',
@@ -587,7 +587,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
         <View style={styles.sheet}>
           <View style={styles.headerRow}>
             <ThemedText type="subtitle" style={styles.consoleTitle} numberOfLines={1}>
-              {draft ? 'Write a post' : (brandName ?? stores.find((s) => s.slug === active)?.name ?? 'Brand console')}
+              {draft ? 'Write a post' : (stores.find((s) => s.slug === active)?.name ?? brandName ?? 'Brand console')}
             </ThemedText>
             <View style={{ flex: 1 }} />
             <Pressable onPress={draft ? () => { setDraft(null); setNote(null); } : onClose} hitSlop={12}>
@@ -667,7 +667,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                       <Image source={{ uri: ogImageUrl }} style={styles.previewImg} contentFit="cover" />
                     ) : (
                       <View style={[styles.previewImg, styles.previewFallback]}>
-                        <ThemedText type="subtitle" style={styles.previewFallbackText} numberOfLines={2}>{brandName ?? activeStore?.name}</ThemedText>
+                        <ThemedText type="subtitle" style={styles.previewFallbackText} numberOfLines={2}>{activeStore?.name ?? brandName}</ThemedText>
                       </View>
                     )}
                     <View style={styles.previewTap}>
@@ -1001,7 +1001,17 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
         />
       ) : null}
       {editor && active ? (
-        <SiteEditor visible={editor} onClose={() => setEditor(false)} token={token} slug={active} brandName={brandName ?? activeStore?.name ?? undefined} onSaved={() => void loadStores(true)} />
+        <SiteEditor
+          visible={editor}
+          onClose={() => setEditor(false)}
+          token={token}
+          slug={active}
+          brandName={activeStore?.name ?? brandName ?? undefined}
+          onSaved={(renamedTo) => {
+            void loadStores(true);
+            if (renamedTo) onBrandRenamed?.(renamedTo);
+          }}
+        />
       ) : null}
     </Modal>
   );

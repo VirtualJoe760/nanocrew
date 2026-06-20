@@ -61,7 +61,7 @@ export function SiteEditor({
   token: string;
   slug: string;
   brandName?: string;
-  onSaved?: () => void;
+  onSaved?: (renamedTo?: string) => void;
 }) {
   const pal = useStudioPalette();
   const insets = useSafeAreaInsets();
@@ -143,11 +143,15 @@ export function SiteEditor({
     setSaving(true);
     setNote(null);
     try {
-      // Brand name lives on the store record (not site-config) — PATCH it if it changed.
+      // Brand name lives on the store record (not site-config) — PATCH it if it changed. A name
+      // change cascades on the backend: it clears the old logo (it baked the old name) and rewrites
+      // the site's brand.json so it rebuilds with the new name.
       const trimmed = name.trim();
+      let renamed = false;
       if (trimmed && trimmed !== (brandName ?? '')) {
         const nr = await fetch(apiUrl(`/api/creator/stores/${slug}`), { method: 'PATCH', headers, body: JSON.stringify({ name: trimmed }) });
         if (!nr.ok) throw new Error();
+        renamed = true;
       }
       const res = await fetch(apiUrl('/api/creator/site-config'), {
         method: 'POST',
@@ -155,8 +159,12 @@ export function SiteEditor({
         body: JSON.stringify({ storeSlug: slug, copy, colors, fonts }),
       });
       if (!res.ok) throw new Error();
-      setNote('Saved — live on your site now. Reload the site to see it.');
-      onSaved?.();
+      setNote(
+        renamed
+          ? 'Saved. Renamed to ' + trimmed + ' everywhere. Your old logo was removed (it showed the old name) — remake it in the Design tab or ask Venus. Your site is rebuilding now.'
+          : 'Saved — live on your site now. Reload the site to see it.',
+      );
+      onSaved?.(renamed ? trimmed : undefined);
     } catch {
       setNote('Could not save — try again.');
     } finally {

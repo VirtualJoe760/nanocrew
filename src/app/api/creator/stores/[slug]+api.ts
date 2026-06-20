@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
+import { updateBrandJson } from '@/lib/brand-config';
 import { db, schema } from '@/lib/db';
 import { revalidateStorefront } from '@/lib/storefront-revalidate';
 
@@ -58,12 +59,20 @@ export async function PATCH(req: Request, { slug }: Record<string, string>) {
   if (typeof b.isPublic === 'boolean') patch.isPublic = b.isPublic;
   if (!Object.keys(patch).length) return Response.json({ error: 'nothing to update' }, { status: 400 });
 
+  // A NAME change cascades: the old logo bakes the old name, so we drop it (this also re-surfaces the
+  // "Add your logo" bounty in the app) and the creator is told to remake it. The on-site name + logo
+  // are baked in brand.json, so we rewrite that too → Vercel rebuilds with the new name and no logo.
+  const nameChanged = !!patch.name && patch.name !== r.name;
+  if (nameChanged) patch.logoUrl = null;
+
   const [updated] = await db.update(schema.stores).set(patch).where(eq(schema.stores.id, r.id)).returning();
   // Refresh the live storefront so anything it reads at runtime (tagline/meta) reflects the change.
-  // NOTE: the brand NAME shown on the site comes from baked brand.json / the logo, so a name change
-  // shows in-app immediately but needs a rebuild (or the logo) to change the on-site header.
   void revalidateStorefront(updated.slug);
-  return Response.json({ store: summary(updated) });
+  if (nameChanged) {
+    // Best-effort: push the new name + clear the baked logo in the site repo (no-op for app-only brands).
+    void updateBrandJson(updated.slug, { name: updated.name, logoUrl: '' });
+  }
+  return Response.json({ store: summary(updated), logoCleared: nameChanged });
 }
 
 // DELETE /api/creator/stores/:slug — permanently delete this brand. Owner-only (resolve() checks

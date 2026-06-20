@@ -106,11 +106,18 @@ Per-brand management sheet (opened from the dashboard or the header manage icon)
 when you have several. Four tabs:
 
 - **Edit site** — if a site exists: OG-image preview (tap → in-app browser with critique), a **go-live /
-  custom-domain** row (`GoLiveComposer`), **✦ Customize** — the mini-CMS (`SiteEditor`), and **chat with
+  custom-domain** row (`GoLiveComposer`), **✦ Site Options** — the mini-CMS (`SiteEditor`), and **chat with
   Venus**. Two distinct paths: the **mini-CMS is direct + instant** (edit site copy / colors / fonts →
   `POST /api/creator/site-config` → `stores.site_config`, read live by the template, **no rebuild**;
   each text box has a **✦ Enhance** button — AI rewrites it in the brand voice via
-  `/api/creator/enhance-copy`, free + rate-limited like `/api/enhance`);
+  `/api/creator/enhance-copy`, free + rate-limited like `/api/enhance`).
+  **Brand name** is also edited here, but it is NOT a mini-CMS field — it lives on the store record and
+  is baked into the site. Saving a new name `PATCH /api/creator/stores/:slug { name }` **cascades**:
+  it (1) updates `stores.name` (app updates instantly), (2) **clears the logo** (`stores.logoUrl=null`
+  — the old logo baked the old name; this re-surfaces the "Add your logo" bounty + the app tells the
+  creator to remake it in Design or via Venus), and (3) rewrites the site repo's **`brand.json`**
+  (`name` + cleared `logoUrl`) via the GitHub contents API (`src/lib/brand-config.ts`) → Vercel
+  **rebuilds** the site with the new name and no logo.
   the **Venus chat is the forge** (open-ended redesigns → preview → approve). If no site: **Build site**
   (`/api/creator/build-site`; a `402` prompts the Pro upgrade). → `/api/creator/{site-config,enhance-copy,
   revise,revisions[/:id/approve]}`.
