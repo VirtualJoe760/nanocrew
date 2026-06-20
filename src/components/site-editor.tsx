@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GradientSlider } from '@/components/gradient-slider';
 import { ThemedText } from '@/components/themed-text';
@@ -64,6 +64,7 @@ export function SiteEditor({
   onSaved?: () => void;
 }) {
   const pal = useStudioPalette();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(pal), [pal]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -165,7 +166,7 @@ export function SiteEditor({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.fill} edges={['top']}>
         <View style={styles.sheet}>
           <View style={styles.headerRow}>
             <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Site Options</ThemedText>
@@ -178,7 +179,12 @@ export function SiteEditor({
           {loading ? (
             <ActivityIndicator style={styles.center} color={pal.accent} />
           ) : (
-            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={styles.fillFlex}
+              contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + Spacing.six }]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              automaticallyAdjustKeyboardInsets>
               <ThemedText type="small" style={styles.dim}>
                 Your site&apos;s current text, colors &amp; fonts — edit any of them. Changes apply
                 instantly, no rebuild. For a bigger redesign, chat with Venus in the console.
@@ -304,6 +310,7 @@ export function SiteEditor({
 function makeStyles(pal: StudioPalette) {
   return StyleSheet.create({
     fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+    fillFlex: { flex: 1 },
     sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: pal.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: pal.line, overflow: 'hidden' },
     headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },
     title: { color: pal.ink },
