@@ -89,6 +89,7 @@ export function Paywall({
   // Subscribe / switch to a plan. iOS → Apple IAP (subscription); web/Android or IAP failure →
   // web Stripe Checkout. A user cancelling IAP just aborts (no fallback browser pop).
   const subscribe = async (plan: string) => {
+    if (busy) return;
     if (iapOn) {
       setBusy(plan);
       setNote(null);
@@ -103,6 +104,7 @@ export function Paywall({
 
   // Buy a credit pack. iOS → Apple IAP (consumable); else web Stripe.
   const buyPack = async (pk: Pack) => {
+    if (busy) return;
     const productId = creditProductId(pk.credits);
     if (iapOn && productId) {
       setBusy(pk.id);
@@ -138,6 +140,7 @@ export function Paywall({
   // Stripe billing portal — manage card, invoices, or cancel. Only meaningful once they have a
   // real Stripe customer (i.e. an active paid subscription bought through checkout).
   const openPortal = async () => {
+    if (busy) return;
     setBusy('portal');
     setNote(null);
     try {

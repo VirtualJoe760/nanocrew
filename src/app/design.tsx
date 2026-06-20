@@ -159,6 +159,8 @@ export default function DesignScreen() {
   const [colorNodeId, setColorNodeId] = useState<string | null>(null);
   const [colors, setColors] = useState<Swatch[]>([]);
   const [colorsLoading, setColorsLoading] = useState(false);
+  const [colorsError, setColorsError] = useState(false); // load failed (vs. genuinely no colours)
+  const [colorBlankId, setColorBlankId] = useState<string | null>(null); // remembered for retry
   // Combine sheet — opens when a design "clicks" onto a product; user picks the placement.
   const [combineTarget, setCombineTarget] = useState<{
     designNodeId: string;
@@ -303,6 +305,10 @@ export default function DesignScreen() {
   const fabPulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: fabPulse.value }] }));
   const nodesRef = useRef<CanvasNode[]>(nodes);
   nodesRef.current = nodes;
+  // Guards a double-tap on "Combine": the modal closes via setCombineTarget(null), but a second
+  // touch can fire in the same frame before React re-renders — without this both calls read the
+  // same target and create two composite rows + two /api/compositions requests.
+  const combiningRef = useRef(false);
 
   // Canvas transform shared values are OWNED by DesignCanvas (creating them here and passing
   // as props breaks useAnimatedStyle's transform reactivity on physical iOS — Reanimated #6276).
@@ -758,9 +764,11 @@ export default function DesignScreen() {
   // row (members spring into place — the "click together"), create the composition row,
   // and kick off the on-garment render for the chosen placement.
   const doCombine = (placement: string) => {
+    if (combiningRef.current) return;
     const target = combineTarget;
     setCombineTarget(null);
     if (!target) return;
+    combiningRef.current = true;
     const prev = nodesRef.current;
     const designNode = prev.find((n) => n.id === target.designNodeId);
     const tpl = prev.find((n) => n.id === target.tplNodeId);
@@ -873,7 +881,10 @@ export default function DesignScreen() {
           renderComposite(nodeId, compositionId, designId, target.blankId, placement, designUrl);
         },
       )
-      .catch(() => renderComposite(nodeId, null, target.designId, target.blankId, placement));
+      .catch(() => renderComposite(nodeId, null, target.designId, target.blankId, placement))
+      .finally(() => {
+        combiningRef.current = false;
+      });
   };
 
   const onGroupMove = (id: string, x: number, y: number) => {
@@ -909,15 +920,21 @@ export default function DesignScreen() {
     else if (node?.kind === 'template') openColorPicker(id, node.refId);
   };
 
-  const openColorPicker = (id: string, blankId: string) => {
-    setColorNodeId(id);
+  const loadColors = (blankId: string) => {
     setColors([]);
+    setColorsError(false);
     setColorsLoading(true);
     apiFetch(`/api/blank/${blankId}/colors`)
       .then(readJson<{ colors?: Swatch[] }>)
       .then((d) => setColors(d.colors ?? []))
-      .catch(() => setColors([]))
+      .catch(() => setColorsError(true))
       .finally(() => setColorsLoading(false));
+  };
+
+  const openColorPicker = (id: string, blankId: string) => {
+    setColorNodeId(id);
+    setColorBlankId(blankId);
+    loadColors(blankId);
   };
 
   const pickColor = (c: Swatch) => {
@@ -1453,6 +1470,12 @@ export default function DesignScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   Loading colours…
                 </ThemedText>
+              ) : colorsError ? (
+                <Pressable onPress={() => colorBlankId && loadColors(colorBlankId)} hitSlop={8}>
+                  <ThemedText type="small" themeColor="tint">
+                    Couldn’t load colours — tap to try again.
+                  </ThemedText>
+                </Pressable>
               ) : colors.length === 0 ? (
                 <ThemedText type="small" themeColor="textSecondary">
                   No colours available for this product.

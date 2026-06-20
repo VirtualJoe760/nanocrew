@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, readJson } from '@/lib/api';
 
 // Platform-owner overview (admin emails only — gated by /api/platform/admin). Every store,
 // total orders + revenue, creator count. Opens from the Account tab for admins.
@@ -30,14 +30,24 @@ export function PlatformAdmin({ visible, onClose }: { visible: boolean; onClose:
   const theme = useTheme();
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
+  // Distinguish "you're not an admin" (403 — a final answer, no retry) from a transient
+  // network/server failure (retryable) so an admin isn't told they lack access during an outage.
+  const [errKind, setErrKind] = useState<'forbidden' | 'network' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const r = await apiFetch('/api/platform/admin');
-      setData(r.ok ? ((await r.json()) as Data) : null);
+      if (r.status === 401 || r.status === 403) {
+        setData(null);
+        setErrKind('forbidden');
+        return;
+      }
+      setData(await readJson<Data>(r));
+      setErrKind(null);
     } catch {
       setData(null);
+      setErrKind('network');
     } finally {
       setLoading(false);
     }
@@ -65,7 +75,16 @@ export function PlatformAdmin({ visible, onClose }: { visible: boolean; onClose:
             <ActivityIndicator style={styles.center} color={theme.tint} />
           ) : !data ? (
             <View style={styles.center}>
-              <ThemedText type="small" themeColor="textSecondary">Couldn’t load — admin access only.</ThemedText>
+              {errKind === 'forbidden' ? (
+                <ThemedText type="small" themeColor="textSecondary">Admin access only.</ThemedText>
+              ) : (
+                <>
+                  <ThemedText type="small" themeColor="textSecondary">Couldn’t load — check your connection.</ThemedText>
+                  <Pressable onPress={() => void load()} hitSlop={8} style={styles.retryBtn}>
+                    <ThemedText type="smallBold" themeColor="tint">Try again</ThemedText>
+                  </Pressable>
+                </>
+              )}
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -102,7 +121,8 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
   eyebrow: { letterSpacing: 2 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.six },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.six, gap: Spacing.three },
+  retryBtn: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.four },
   scroll: { padding: Spacing.four, gap: Spacing.three },
   metricRow: { flexDirection: 'row', gap: Spacing.three },
   metric: { flex: 1, borderRadius: 12, padding: Spacing.four, gap: Spacing.one },

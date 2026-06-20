@@ -15,7 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, readJson } from '@/lib/api';
 
 // WYSIWYG print size/placement editor. Positions are real Printful print-file pixels,
 // clamped to the print area; "Generate Printful mockup" renders the truth via Printful.
@@ -136,33 +136,37 @@ export function PlacementEditorBody({
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0); // bump to re-run the hydrate after a failed load
 
   const designById = useMemo(() => new Map(designs.map((d) => [d.id, d])), [designs]);
 
   // Hydrate: print areas + the composition's saved placements.
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setError(null);
     Promise.all([
-      apiFetch(`/api/blank/${templateKey}/printareas`).then((r) => r.json()),
-      apiFetch(`/api/compositions/${compositionId}`).then((r) => r.json()),
+      apiFetch(`/api/blank/${templateKey}/printareas`).then(
+        readJson<{ areas?: Area[]; variantId?: number | null }>,
+      ),
+      apiFetch(`/api/compositions/${compositionId}`).then(
+        readJson<{
+          composition?: {
+            designId: string;
+            placement: string;
+            placements?: {
+              placement: string;
+              designId: string;
+              position:
+                | (Box & { areaWidth: number; areaHeight: number; limitToPrintArea?: boolean })
+                | null;
+            }[];
+          };
+        }>,
+      ),
     ])
       .then(
-        ([pa, comp]: [
-          { areas?: Area[]; variantId?: number | null },
-          {
-            composition?: {
-              designId: string;
-              placement: string;
-              placements?: {
-                placement: string;
-                designId: string;
-                position:
-                  | (Box & { areaWidth: number; areaHeight: number; limitToPrintArea?: boolean })
-                  | null;
-              }[];
-            };
-          },
-        ]) => {
+        ([pa, comp]) => {
           if (!alive) return;
           const areaList = pa.areas ?? [];
           setAreas(areaList);
@@ -194,14 +198,14 @@ export function PlacementEditorBody({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compositionId, templateKey]);
+  }, [compositionId, templateKey, reloadKey]);
 
   // Garment colourways (for the on-product colour preview).
   useEffect(() => {
     let alive = true;
     apiFetch(`/api/blank/${templateKey}/variants`)
-      .then((r) => r.json())
-      .then((d: { variants?: { color: string; colorCode: string; image: string }[] }) => {
+      .then(readJson<{ variants?: { color: string; colorCode: string; image: string }[] }>)
+      .then((d) => {
         if (!alive || !d.variants?.length) return;
         const seen = new Set<string>();
         const list: ColorVariant[] = [];
@@ -387,8 +391,8 @@ export function PlacementEditorBody({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-      .then((r) => r.json())
-      .then((d: { mockups?: Record<string, string>; previewUrl?: string; error?: string }) => {
+      .then(readJson<{ mockups?: Record<string, string>; previewUrl?: string; error?: string }>)
+      .then((d) => {
         if (d.error) throw new Error(d.error);
         setMockups(d.mockups ?? null);
         if (d.previewUrl) onPreview(d.previewUrl);
@@ -414,6 +418,18 @@ export function PlacementEditorBody({
   const pct = entry && area ? Math.round((entry.box.width / area.areaWidth) * 100) : 0;
 
   if (loading) return <ActivityIndicator style={{ marginVertical: Spacing.six }} />;
+
+  // A failed hydrate left no print areas — show the error with a retry instead of a broken,
+  // empty editor (or, before readJson, a silent spinner that never resolved).
+  if (error && !areas.length)
+    return (
+      <View style={{ alignItems: 'center', gap: Spacing.three, marginVertical: Spacing.six }}>
+        <ThemedText type="small" themeColor="textSecondary">{error}</ThemedText>
+        <Pressable onPress={() => setReloadKey((k) => k + 1)} hitSlop={8} style={{ paddingVertical: Spacing.two, paddingHorizontal: Spacing.four }}>
+          <ThemedText type="smallBold" themeColor="tint">Try again</ThemedText>
+        </Pressable>
+      </View>
+    );
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.three }}>

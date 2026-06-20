@@ -101,6 +101,9 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
           ) : !brand ? (
             <View style={styles.center}>
               <Text style={{ color: fg }}>Couldn’t load this brand.</Text>
+              <Pressable onPress={() => void load()} style={[styles.shopBtn, { backgroundColor: accent, marginTop: Spacing.three }]}>
+                <Text style={[styles.shopBtnText, { color: bg }]}>Try again</Text>
+              </Pressable>
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

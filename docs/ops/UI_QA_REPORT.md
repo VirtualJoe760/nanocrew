@@ -62,11 +62,11 @@ what works, what crashes, and a prioritized fix list. **Video was out of scope**
 4. **Paywall `creditPacks.map()`** can crash — validation checks `tiers` is an array but not `creditPacks` (`paywall.tsx:64,241`). Add `Array.isArray(d.creditPacks)`.
 5. **`site-preview` submit reads a mutating `edits` array** (can be emptied mid-submit) → snapshot `edits` at submit start; and **review modal can't be dismissed after a failed submit** → `setReviewing(false)` in the catch.
 
-### P1 — UX / safety
-6. **Double-submit guards** missing: refund, brand delete, Combine, OAuth sign-in buttons, Paywall subscribe/buyPack (also `await checkout()` before clearing `busy`).
-7. **Missing error / retry states**: BrandStore, PlatformAdmin (conflates "not admin" with "network error"), PlacementEditor print-areas/variants (spinner forever on failure), the color-picker modal.
-8. **`reviewDismissed` Set never reset** on `loadRevisions` → a dismissed review can stay hidden across refetches (`studio-composer.tsx:61`).
-9. **`publishToMarket` no-ops when no store selected** with no feedback → disable the control or show a note.
+### P1 — UX / safety  ✅ ALL DONE
+6. ✅ **DONE — Double-submit guards.** Entry `if (busy/inFlight) return;` added to `refundOrder` + `deleteBrand` (studio-composer), `subscribe`/`buyPack`/`openPortal` (paywall — `checkout` already awaited), `social`/`submit`/`deleteAccount` (account OAuth + email + delete). `doCombine` (design) now guards a same-frame double-tap with a `combiningRef` (was creating two composite rows + two `/api/compositions` calls), reset in the request's `.finally`.
+7. ✅ **DONE — Error / retry states.** **BrandStore**: "Couldn't load" now has a **Try again** button. **PlatformAdmin**: distinguishes a 401/403 ("Admin access only." — final) from a network/5xx ("Couldn't load — check your connection." + **Try again**) instead of conflating both as "not admin." **PlacementEditor**: applied `readJson` to printareas/composition/variants/mockup (a 5xx no longer parses as success → empty editor), and a failed hydrate now renders the error + a **Try again** (bumps a `reloadKey`) instead of a broken empty editor. **Color picker** (design): a load failure now shows "Couldn't load colours — tap to try again" (remembers the blank id) instead of conflating failure with "no colours available."
+8. ✅ **DONE — `reviewDismissed` reset.** `loadRevisions` now clears the optimistic hide-set after refetch — a genuine decline stays hidden (status `declined`, excluded by the `pendingRev` status filter) while a decline whose server call FAILED correctly reappears for a retry (`studio-composer.tsx`).
+9. ✅ **DONE — `publishToMarket` feedback.** No-ops with `setNote('Pick a brand first.')` when no brand is selected (+ a `publishing` entry guard).
 
 ### P2 — features / follow-ups (from earlier QA)
 10. **Dedicated nav-bar color** control (nav currently inherits `background`; you asked for nav color specifically).

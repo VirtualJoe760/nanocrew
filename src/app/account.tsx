@@ -168,6 +168,7 @@ export default function AccountScreen() {
   }, [loading, session, params.auto]);
 
   const social = async (provider: OAuthProvider) => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -182,6 +183,7 @@ export default function AccountScreen() {
   };
 
   const submit = async (mode: 'in' | 'up') => {
+    if (busy) return;
     const e = email.trim().toLowerCase();
     if (!e || password.length < 6) {
       setError('Enter an email and a password of at least 6 characters.');
@@ -219,6 +221,7 @@ export default function AccountScreen() {
   };
 
   const deleteAccount = async () => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {

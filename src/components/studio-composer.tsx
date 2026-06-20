@@ -165,6 +165,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       });
       const d = await readJson<{ revisions?: Revision[] }>(r);
       setRevisions(d.revisions ?? []);
+      // Re-derive the hidden set from server truth: a genuine decline lands as status
+      // 'declined' (excluded by pendingRev's status filter), so clearing the optimistic
+      // local hide here means a decline whose server call FAILED correctly reappears for
+      // a retry instead of staying hidden forever.
+      setReviewDismissed(new Set());
     } catch {
       /* leave as-is */
     }
@@ -399,6 +404,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   }, [active, loadStores, loadRevisions, loadProducts]);
 
   const refundOrder = async (id: string) => {
+    if (refundingId) return;
     setRefundingId(id);
     setNote(null);
     try {
@@ -421,7 +427,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
 
   // Permanently delete this brand — its store, products, designs, posts, orders, and site records.
   const deleteBrand = async () => {
-    if (!active) return;
+    if (!active || deleting) return;
     setDeleting(true);
     setNote(null);
     try {
@@ -451,7 +457,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   // App-only "open shop": list (or unlist) the brand in the ecosystem — in-app Market + nanocrew.app
   // — with no website/domain required. A custom domain stays a separate Pro upgrade.
   const publishToMarket = async (listed: boolean) => {
-    if (!active) return;
+    if (publishing) return;
+    if (!active) {
+      setNote('Pick a brand first.');
+      return;
+    }
     setPublishing(true);
     setNote(null);
     try {
