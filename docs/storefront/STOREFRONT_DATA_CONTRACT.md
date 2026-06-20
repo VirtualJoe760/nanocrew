@@ -104,9 +104,17 @@ same override model as products. Fields are `null`/`{}` until the creator assign
 ### `GET /api/public/stores/:slug/site-config`
 
 The **mini-CMS** overrides — site **copy, colors, and fonts** a creator edits in Studio (the brand
-console → ✦ Customize). Stored on `stores.site_config` (jsonb). Read LIVE and layered over the
+console → ✦ Site Options). Stored on `stores.site_config` (jsonb). Read LIVE and layered over the
 template's baked `brand.json` + `copy.json`; absent fields keep the baked value. **No forge run, no
 rebuild** — an edit shows on the next page load.
+
+**SEO reads this live too** (Batch 2, 2026-06-20): the template root `layout.tsx` uses
+`generateMetadata()` + `getSiteCopy()` so `copy.story`/`copy.tagline` drive the `<title>`, meta
+description, OG/Twitter, and the `Organization` JSON-LD (`organizationLd()` takes live
+`{description, slogan, logo}`); the About page renders the live `storyBody`. So a rename / story /
+tagline edit reaches SEO with no rebuild — previously these were baked from `brand.json` and went
+stale (the "Alpha Master" meta-description bug). Static subpages (`/shop /about /contact /blog`) are
+now self-canonical (were inheriting `canonical:'/'`).
 
 ```jsonc
 {
