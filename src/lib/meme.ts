@@ -19,13 +19,14 @@ export function buildMemePrompt(idea: string): string {
   return (
     `Create a funny internet MEME image. ${body}. ` +
     `Use classic meme formatting: render ALL caption text in bold ALL-CAPS condensed sans-serif ` +
-    `(Impact font), pure white letters with a thick solid black outline, large and centered with a ` +
-    `small margin from the edges — as a top caption and/or a bottom caption as described. Spell every ` +
-    `word correctly and keep the text fully legible and unobstructed. ` +
+    `(Impact font), pure white letters with a thick solid black outline — as a top caption and/or a ` +
+    `bottom caption as described, large and centered, inset just enough that the text isn't clipped. ` +
+    `Spell every word correctly and keep the text fully legible and unobstructed. ` +
     `If the idea names or implies a known layout (top/bottom caption, a two-panel "this vs that" or ` +
     `Drake-style approve/reject, a side-by-side reaction, or labeled characters), compose it that way. ` +
-    `Bold, high-contrast, genuinely shareable; the subject stays clearly visible behind the text. ` +
-    `Make it clean enough to print on a t-shirt.`
+    `CRITICAL: the meme must FILL THE ENTIRE FRAME edge to edge — the photo/background reaches all four ` +
+    `edges of the image with NO white border, no frame, and no margin or padding around the meme. ` +
+    `Bold, high-contrast, genuinely shareable; the subject stays clearly visible behind the text.`
   );
 }
 
