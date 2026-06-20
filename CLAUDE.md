@@ -47,7 +47,7 @@ The division is organized into subdirectories — open the one you need:
 - `architecture/` — ARCHITECTURE · DATABASE_PLAN · API
 - `storefront/` — STOREFRONT_ENGINE · STOREFRONT_DATA_CONTRACT · TEMPLATE_AUTHORING · COMPONENT_SYSTEM · BUILD_QUALITY · FEATURED_PRODUCTS · COLLECTIONS_LOOKBOOK
 - `studio/` — BUILD_FLOW · FORGE_AI · DESIGN_GENERATOR (the Venus→forge build, refine, publish arc)
-- `accounts/` — AUTH_IDENTITY · ORDERS · BILLING_CREDITS (one Supabase identity; orders by email; plans/credits/Connect)
+- `accounts/` — AUTH_IDENTITY · ORDERS · BILLING_CREDITS · POD_POLICY · COMPLIANCE (one Supabase identity; orders by email; plans/credits/Connect; US marketplace compliance + build plan)
 - `app/` PAGES · `ops/` PRODUCTION_CHECKLIST + DEV_BUILD · `roadmap/`
 
 ## The four deployable units (one shared Supabase Postgres)
