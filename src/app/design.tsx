@@ -47,7 +47,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, readJson } from '@/lib/api';
 import type { CatalogBlank } from '@/lib/printful';
 import { EFFORT_LABELS, EFFORT_TIERS, type Effort } from '@/lib/effort';
 
@@ -213,8 +213,8 @@ export default function DesignScreen() {
     setChosenPlacement('front');
     setPlacementsLoading(true);
     apiFetch(`/api/blank/${combineTarget.blankId}/placements`)
-      .then((r) => r.json())
-      .then((d: { placements?: { key: string; label: string; allOver: boolean }[] }) => {
+      .then(readJson<{ placements?: { key: string; label: string; allOver: boolean }[] }>)
+      .then((d) => {
         setPlacements(d.placements ?? []);
         if (d.placements?.length && !d.placements.some((p) => p.key === 'front')) {
           setChosenPlacement(d.placements[0].key);
@@ -317,8 +317,8 @@ export default function DesignScreen() {
   useEffect(() => {
     let alive = true;
     apiFetch('/api/blanks')
-      .then((r) => r.json())
-      .then((d: { blanks?: CatalogBlank[] }) => {
+      .then(readJson<{ blanks?: CatalogBlank[] }>)
+      .then((d) => {
         if (alive && d.blanks) setBlanks(d.blanks);
       })
       .catch(() => {})
@@ -333,8 +333,8 @@ export default function DesignScreen() {
     // brands" while Studio/Account showed them fine for the same account. Design only needs
     // id/slug/name, so /api/me gives guaranteed parity.
     apiFetch('/api/me')
-      .then((r) => r.json())
-      .then((d: { stores?: Brand[] }) => {
+      .then(readJson<{ stores?: Brand[] }>)
+      .then((d) => {
         if (!alive) return;
         const list = (d.stores ?? []).map((s) => ({ id: s.id, slug: s.slug, name: s.name }));
         setBrands(list);
@@ -381,13 +381,14 @@ export default function DesignScreen() {
 
   const loadCatalogue = (catId: string) => {
     apiFetch(`/api/canvas/${catId}`)
-      .then((r) => r.json())
       .then(
-        (d: {
+        readJson<{
           designs?: { id: string; prompt: string; url: string }[];
           nodes?: DbNode[];
           compositions?: DbComposition[];
-        }) => {
+        }>,
+      )
+      .then((d) => {
           if (catalogueRef.current?.id !== catId) return; // switched away while loading
           const comps = new Map((d.compositions ?? []).map((c) => [c.id, c]));
           // Group link keys (stored in the group row's own groupId) → fresh DB row ids.
@@ -664,8 +665,8 @@ export default function DesignScreen() {
         garmentName: blank.name,
       }),
     })
-      .then((r) => r.json())
-      .then((d: { image?: string }) => finish(d.image))
+      .then(readJson<{ image?: string }>)
+      .then((d) => finish(d.image))
       .catch(() => finish());
   };
 
@@ -830,13 +831,15 @@ export default function DesignScreen() {
         placement,
       }),
     })
-      .then((r) => r.json())
       .then(
-        (d: {
+        readJson<{
           composition?: { id: string };
           adaptedDesign?: { id: string; url: string; prompt: string };
           technique?: string;
-        }) => {
+        }>,
+      )
+      .then(
+        (d) => {
           const compositionId = d.composition?.id ?? null;
           let designId = target.designId;
           let designUrl: string | undefined;
@@ -911,8 +914,8 @@ export default function DesignScreen() {
     setColors([]);
     setColorsLoading(true);
     apiFetch(`/api/blank/${blankId}/colors`)
-      .then((r) => r.json())
-      .then((d: { colors?: Swatch[] }) => setColors(d.colors ?? []))
+      .then(readJson<{ colors?: Swatch[] }>)
+      .then((d) => setColors(d.colors ?? []))
       .catch(() => setColors([]))
       .finally(() => setColorsLoading(false));
   };
@@ -934,8 +937,8 @@ export default function DesignScreen() {
     setCatalogues([]);
     setSetupStep('collection');
     apiFetch(`/api/catalogues?store=${encodeURIComponent(b.slug)}`)
-      .then((r) => r.json())
-      .then((d: { catalogues?: { id: string; name: string }[] }) => setCatalogues(d.catalogues ?? []))
+      .then(readJson<{ catalogues?: { id: string; name: string }[] }>)
+      .then((d) => setCatalogues(d.catalogues ?? []))
       .catch(() => {});
   };
 
@@ -959,7 +962,7 @@ export default function DesignScreen() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: WEB_ASSETS_COLLECTION, storeSlug: slug }),
         });
-        const d = (await r.json()) as { catalogue?: { id: string; name: string } };
+        const d = await readJson<{ catalogue?: { id: string; name: string } }>(r);
         if (d.catalogue) {
           cat = d.catalogue;
           setCatalogues((c) => [...c, d.catalogue!]);
@@ -998,8 +1001,8 @@ export default function DesignScreen() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: n, season, storeSlug: brandRef.current?.slug }),
     })
-      .then((r) => r.json())
-      .then((d: { catalogue?: { id: string; name: string } }) => {
+      .then(readJson<{ catalogue?: { id: string; name: string } }>)
+      .then((d) => {
         if (!d.catalogue) return;
         setAssetMode(false);
         assetModeRef.current = false;
@@ -1761,7 +1764,7 @@ function GenerateModal({
     setRolling(true);
     try {
       const res = await apiFetch(`/api/idea?effort=${effort}`);
-      const d = (await res.json()) as { idea?: string };
+      const d = await readJson<{ idea?: string }>(res);
       if (d.idea) setPrompt(d.idea);
     } catch {
       // ignore — user can just type
@@ -1781,7 +1784,7 @@ function GenerateModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text, effort }),
       });
-      const d = (await res.json()) as { enhanced?: string };
+      const d = await readJson<{ enhanced?: string }>(res);
       if (d.enhanced) setPrompt(d.enhanced);
     } catch {
       // keep the original prompt

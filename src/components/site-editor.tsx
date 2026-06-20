@@ -5,7 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GradientSlider } from '@/components/gradient-slider';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, readJson } from '@/lib/api';
 import { HEX, HUE_STOPS, hexToHsl, hslToHex } from '@/lib/color';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
@@ -85,10 +85,10 @@ export function SiteEditor({
       const r = await fetch(apiUrl(`/api/creator/site-config?store=${encodeURIComponent(slug)}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const d = (await r.json()) as {
+      const d = await readJson<{
         config?: SiteConfig;
         defaults?: { colors?: Record<string, string>; copy?: Record<string, string> };
-      };
+      }>(r);
       // Open pre-filled with the brand's CURRENT values: baked defaults first, any saved override
       // on top. So the creator edits from what's live, not a blank form. (Fonts are override-only —
       // the baked font lives in the template, so a blank picker = "the site default".)

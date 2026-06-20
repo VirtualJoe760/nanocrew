@@ -5,7 +5,7 @@ import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, readJson } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // The returning creator's Studio landing — no auto-AI. A small Venus presence, and per
@@ -128,11 +128,11 @@ export function StudioDashboard({
         fetch(apiUrl('/api/creator/credits'), { headers: { Authorization: `Bearer ${token}` } }),
         fetch(apiUrl('/api/creator/subscription'), { headers: { Authorization: `Bearer ${token}` } }),
       ]);
-      const d = (await statsRes.json()) as { stores?: StoreRow[] };
+      const d = await readJson<{ stores?: StoreRow[] }>(statsRes);
       setStores(d.stores ?? []);
-      const c = (await creditRes.json()) as { balance?: number };
+      const c = await readJson<{ balance?: number }>(creditRes);
       if (typeof c.balance === 'number') setCredits(c.balance);
-      const sub = (await subRes.json()) as { entitlements?: { plan?: string; active?: boolean } };
+      const sub = await readJson<{ entitlements?: { plan?: string; active?: boolean } }>(subRes);
       if (sub.entitlements?.active && sub.entitlements.plan) setPlan(sub.entitlements.plan);
     } catch {
       /* keep prior */

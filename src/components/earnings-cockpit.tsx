@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, readJson } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // The creator's business cockpit — revenue, orders, traffic, recent activity.
@@ -47,9 +47,9 @@ export function EarningsCockpit({ visible, onClose, token }: { visible: boolean;
       try {
         const headers = { Authorization: `Bearer ${token}` };
         const [s, o, m] = await Promise.all([
-          fetch(apiUrl('/api/creator/stats'), { headers }).then((r) => r.json()),
-          fetch(apiUrl('/api/creator/orders'), { headers }).then((r) => r.json()),
-          fetch(apiUrl('/api/creator/margins'), { headers }).then((r) => r.json()),
+          fetch(apiUrl('/api/creator/stats'), { headers }).then(readJson<{ stores?: StoreStat[] }>),
+          fetch(apiUrl('/api/creator/orders'), { headers }).then(readJson<{ orders?: OrderRow[] }>),
+          fetch(apiUrl('/api/creator/margins'), { headers }).then(readJson<{ products?: MarginRow[]; avgMarginPct?: number }>),
         ]);
         if (!alive) return;
         setStores(s.stores ?? []);

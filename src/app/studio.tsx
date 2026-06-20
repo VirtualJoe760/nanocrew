@@ -50,7 +50,7 @@ import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, readJson } from '@/lib/api';
 import type { BrandResult, ChatMessage, TimedWord } from '@/lib/interview';
 import { DEFAULT_VOICE } from '@/lib/voices';
 
@@ -617,7 +617,7 @@ export default function StudioScreen() {
           //  WITH brands on the primer instead of their brand dashboard.)
           try {
             const r = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } });
-            const d = (await r.json()) as { stores?: unknown[] };
+            const d = await readJson<{ stores?: unknown[] }>(r);
             if (!alive) return;
             setHasStore((d.stores?.length ?? 0) > 0);
           } catch {
@@ -627,7 +627,7 @@ export default function StudioScreen() {
           const r = await fetch(apiUrl('/api/me'), {
             headers: { Authorization: `Bearer ${session.access_token}` },
           });
-          const d = (await r.json()) as { stores?: unknown[] };
+          const d = await readJson<{ stores?: unknown[] }>(r);
           if (!alive) return;
           // Venus (Gemini) is the only consultant now — no voice picker. Always use the default.
           setVoiceId(DEFAULT_VOICE.id);
@@ -1173,10 +1173,10 @@ export default function StudioScreen() {
         setPaywall(g.error === 'brand_limit' ? 'brand_limit' : 'subscription_required');
         return;
       }
-      const d = (await r.json()) as {
+      const d = await readJson<{
         store?: { slug: string; logoUrl?: string | null };
         error?: string;
-      };
+      }>(r);
       if (!d.store) throw new Error(d.error || 'Failed to create store');
       setCreated(d.store.slug);
       setHasStore(true);
@@ -1188,7 +1188,7 @@ export default function StudioScreen() {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ say: `${brand.name} is online. Head to the Design tab — let's make your first drop.` }),
         });
-        const s = (await v.json()) as { speech?: string };
+        const s = await readJson<{ speech?: string }>(v);
         if (s.speech) await playSpeech(s.speech);
       } catch {
         // launch fanfare is optional

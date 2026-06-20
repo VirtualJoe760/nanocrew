@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { openBrowserAsync } from 'expo-web-browser';
 
 import { Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, readJson } from '@/lib/api';
 import { SquareCarousel } from '@/components/square-carousel';
 import { ProductDetail } from '@/components/product-detail';
 
@@ -49,7 +49,7 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
     setLoading(true);
     try {
       const r = await fetch(apiUrl(`/api/store/${encodeURIComponent(slug)}`));
-      setData((await r.json()) as StoreData);
+      setData(await readJson<StoreData>(r));
     } catch {
       setData(null);
     } finally {

@@ -10,7 +10,7 @@ import { SiteEditor } from '@/components/site-editor';
 import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, readJson } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // Venus's management surface for a returning creator: request site changes in plain
@@ -106,7 +106,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     if (!silent) setLoading(true);
     try {
       const r = await fetch(apiUrl('/api/creator/stats'), { headers: { Authorization: `Bearer ${token}` } });
-      const d = (await r.json()) as { stores?: StoreRow[] };
+      const d = await readJson<{ stores?: StoreRow[] }>(r);
       setStores(d.stores ?? []);
       setActive((a) => slug ?? a ?? d.stores?.[0]?.slug ?? null);
     } catch {
@@ -124,10 +124,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
         fetch(apiUrl('/api/creator/orders'), { headers: { Authorization: `Bearer ${token}` } }),
         fetch(apiUrl('/api/creator/margins'), { headers: { Authorization: `Bearer ${token}` } }),
       ]);
-      const sd = (await statsRes.json()) as { stores?: { slug: string; name: string; revenueCents: number; orders: number; views30d: number }[] };
+      const sd = await readJson<{ stores?: { slug: string; name: string; revenueCents: number; orders: number; views30d: number }[] }>(statsRes);
       const store = sd.stores?.find((s) => s.slug === active);
-      const od = (await ordersRes.json()) as { orders?: OrderRow[] };
-      const md = (await marginsRes.json()) as { products?: (MarginRow & { storeName: string })[] };
+      const od = await readJson<{ orders?: OrderRow[] }>(ordersRes);
+      const md = await readJson<{ products?: (MarginRow & { storeName: string })[] }>(marginsRes);
       const name = store?.name ?? brandName;
       const mine = (md.products ?? []).filter((m) => m.storeName === name);
       const withCost = mine.filter((m) => m.marginPct != null);
@@ -150,7 +150,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       const r = await fetch(apiUrl(`/api/creator/posts?storeSlug=${encodeURIComponent(active)}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const d = (await r.json()) as { posts?: Post[] };
+      const d = await readJson<{ posts?: Post[] }>(r);
       setPosts(d.posts ?? []);
     } catch {
       /* leave list as-is */
@@ -163,7 +163,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       const r = await fetch(apiUrl(`/api/creator/revisions?storeSlug=${encodeURIComponent(active)}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const d = (await r.json()) as { revisions?: Revision[] };
+      const d = await readJson<{ revisions?: Revision[] }>(r);
       setRevisions(d.revisions ?? []);
     } catch {
       /* leave as-is */
@@ -176,7 +176,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       const r = await fetch(apiUrl(`/api/creator/products?storeSlug=${encodeURIComponent(active)}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const d = (await r.json()) as { products?: Product[] };
+      const d = await readJson<{ products?: Product[] }>(r);
       setProducts(d.products ?? []);
     } catch {
       /* leave as-is */
@@ -186,7 +186,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const loadCredits = useCallback(async () => {
     try {
       const r = await fetch(apiUrl('/api/creator/credits'), { headers: { Authorization: `Bearer ${token}` } });
-      const d = (await r.json()) as { balance?: number; costs?: { video_voiceover?: number; video_veo?: number } };
+      const d = await readJson<{ balance?: number; costs?: { video_voiceover?: number; video_veo?: number } }>(r);
       if (typeof d.balance === 'number') setCredits(d.balance);
       if (typeof d.costs?.video_voiceover === 'number') setVoiceoverCost(d.costs.video_voiceover);
       if (typeof d.costs?.video_veo === 'number') setVeoCost(d.costs.video_veo);
@@ -508,7 +508,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     setNote(null);
     try {
       const r = await fetch(apiUrl('/api/creator/upload'), { method: 'POST', headers, body: JSON.stringify({ dataUrl }) });
-      const d = (await r.json()) as { url?: string };
+      const d = await readJson<{ url?: string }>(r);
       if (d.url) setDraft((dr) => (dr ? { ...dr, coverImageUrl: d.url } : dr));
       else setNote('Could not upload the image.');
     } catch {
@@ -577,8 +577,13 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   };
 
   const mutatePost = async (p: Post, method: 'PATCH' | 'DELETE', body?: object) => {
-    await fetch(apiUrl(`/api/creator/posts/${p.id}`), { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) });
-    await loadPosts();
+    try {
+      const res = await fetch(apiUrl(`/api/creator/posts/${p.id}`), { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) });
+      if (!res.ok) throw new Error('mutate failed');
+      await loadPosts();
+    } catch {
+      setNote(method === 'DELETE' ? 'Could not delete the post.' : 'Could not update the post.');
+    }
   };
 
   return (

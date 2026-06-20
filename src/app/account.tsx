@@ -28,7 +28,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { TERMS_URL, TERMS_VERSION } from '@/lib/legal';
 import { useTheme } from '@/hooks/use-theme';
 import { BottomTabInset, Spacing } from '@/constants/theme';
-import { apiFetch, apiUrl } from '@/lib/api';
+import { ApiError, apiFetch, apiUrl, readJson } from '@/lib/api';
 import { signInWithProvider, type OAuthProvider } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
 
@@ -136,8 +136,8 @@ export default function AccountScreen() {
     fetch(apiUrl('/api/me'), {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
-      .then((r) => r.json())
-      .then((d: { stores?: StoreRow[] }) => setStores(d.stores ?? []))
+      .then(readJson<{ stores?: StoreRow[] }>)
+      .then((d) => setStores(d.stores ?? []))
       .catch(() => {});
     apiFetch('/api/platform/admin')
       .then((r) => setIsAdmin(r.ok))
@@ -238,14 +238,14 @@ export default function AccountScreen() {
     setError(null);
     try {
       const r = await apiFetch('/api/creator/connect', { method: 'POST' });
-      const d = (await r.json()) as { url?: string; error?: string };
-      if (r.ok && d.url) {
+      const d = await readJson<{ url?: string }>(r);
+      if (d.url) {
         Linking.openURL(d.url).catch(() => {});
         return;
       }
-      setError(d.error ?? 'Payouts aren’t available yet.');
-    } catch {
-      setError('Could not start payout setup.');
+      setError('Payouts aren’t available yet.');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not start payout setup.');
     }
   };
 
