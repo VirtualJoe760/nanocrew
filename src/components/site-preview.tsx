@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, type LayoutChangeEvent, Linking, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, type LayoutChangeEvent, Linking, Modal, NativeModules, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, TurboModuleRegistry, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path, Polyline } from 'react-native-svg';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -15,19 +15,26 @@ import { CRITIQUE_GREETING, critiqueInstruction } from '@/lib/live-voice';
 
 const IS_WEB = Platform.OS === 'web';
 
-// react-native-view-shot is a NATIVE module. A static `import` runs TurboModuleRegistry.getEnforcing
-// at module-load time, which THROWS (and crashes this whole screen) on any build that doesn't bundle
-// it — e.g. a dev binary made before it was added. So load it lazily + defensively: if it's missing,
-// captureRef stays null and we fall back to the forge's server-side stroke re-render.
+// react-native-view-shot is a NATIVE module. `require`-ing it runs the lib's internal
+// TurboModuleRegistry.getEnforcing('RNViewShot') at module-eval time, which on a binary WITHOUT the
+// module doesn't just throw — in dev it red-boxes regardless of any surrounding try/catch. So we
+// must never even `require` it unless the native module is actually registered. Pre-check with the
+// NON-throwing TurboModuleRegistry.get (and the classic NativeModules fallback); if absent, capture
+// stays null and we fall back to the forge's server-side stroke re-render. Lights up automatically
+// on a build that bundles the module.
 type CaptureRef = (ref: unknown, opts: { format?: string; quality?: number; result?: string }) => Promise<string>;
 let _captureRef: CaptureRef | null | undefined;
 function getCaptureRef(): CaptureRef | null {
   if (_captureRef !== undefined) return _captureRef;
+  _captureRef = null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _captureRef = require('react-native-view-shot').captureRef as CaptureRef;
+    const registered = (TurboModuleRegistry.get && TurboModuleRegistry.get('RNViewShot')) || NativeModules?.RNViewShot;
+    if (registered) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      _captureRef = require('react-native-view-shot').captureRef as CaptureRef;
+    }
   } catch {
-    _captureRef = null; // native module not in this binary
+    _captureRef = null; // belt-and-suspenders
   }
   return _captureRef;
 }
