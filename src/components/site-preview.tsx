@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, type LayoutChangeEvent, Linking, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path, Polyline } from 'react-native-svg';
-import { captureRef } from 'react-native-view-shot';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
@@ -15,6 +14,23 @@ import { apiUrl } from '@/lib/api';
 import { CRITIQUE_GREETING, critiqueInstruction } from '@/lib/live-voice';
 
 const IS_WEB = Platform.OS === 'web';
+
+// react-native-view-shot is a NATIVE module. A static `import` runs TurboModuleRegistry.getEnforcing
+// at module-load time, which THROWS (and crashes this whole screen) on any build that doesn't bundle
+// it — e.g. a dev binary made before it was added. So load it lazily + defensively: if it's missing,
+// captureRef stays null and we fall back to the forge's server-side stroke re-render.
+type CaptureRef = (ref: unknown, opts: { format?: string; quality?: number; result?: string }) => Promise<string>;
+let _captureRef: CaptureRef | null | undefined;
+function getCaptureRef(): CaptureRef | null {
+  if (_captureRef !== undefined) return _captureRef;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    _captureRef = require('react-native-view-shot').captureRef as CaptureRef;
+  } catch {
+    _captureRef = null; // native module not in this binary
+  }
+  return _captureRef;
+}
 
 // A live, navigable view of the creator's storefront — the in-app "iframe". In critique mode
 // it becomes a turn-based editor driven by Venus: tap the orb to talk, tap the pen to circle a
@@ -294,18 +310,13 @@ function PreviewContent({ url, onClose, critique }: { url: string; onClose: () =
     const cyDoc = (Math.min(...ys) + Math.max(...ys)) / 2;
     const vy = Math.round(cyDoc - scrollYRef.current); // back to viewport coords for elementFromPoint
     ref.current?.injectJavaScript(hitScript(i, cx, vy));
-    // Capture the page + this fresh mark while it's on screen — the proof we send to Claude.
-    // Guard SYNCHRONOUSLY: if the native module isn't in the binary (e.g. a dev build made before
-    // react-native-view-shot was added), captureRef throws before returning a promise. Swallow it —
-    // the forge falls back to re-rendering the strokes, so circling must never crash.
-    if (!IS_WEB) {
-      try {
-        captureRef(shotRef, { format: 'jpg', quality: 0.6, result: 'data-uri' })
-          .then((uri) => setDraftShots((prev) => { const next = prev.slice(); next[i] = uri; return next; }))
-          .catch(() => {});
-      } catch {
-        /* native module absent — stroke-render fallback covers it */
-      }
+    // Capture the page + this fresh mark while it's on screen — the proof we send to Claude. Lazily
+    // resolved; null on a binary without the native module → we just skip (forge re-renders strokes).
+    const capture = IS_WEB ? null : getCaptureRef();
+    if (capture) {
+      capture(shotRef, { format: 'jpg', quality: 0.6, result: 'data-uri' })
+        .then((uri) => setDraftShots((prev) => { const next = prev.slice(); next[i] = uri; return next; }))
+        .catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftStrokes.length]);
