@@ -62,8 +62,7 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 - 🟡 **Auto first-drop** — `generateFirstDrop()` is wired into store creation but gated by
   `AUTO_FIRST_DROP=1` (real Gemini + Printful spend). Validate on one brand, then enable. (Task #26)
   **Resolved:** `first-drop.ts` now authenticates server-to-server via `INTERNAL_API_KEY` +
-  `x-internal-creator` (acts as the store's creator), so set that env to enable it. (The CLI
-  `scripts/first-drop.mjs` would need the same headers if used directly.)
+  `x-internal-creator` (acts as the store's creator), so set that env to enable it.
 - ⚪ **Meta (Facebook) app** — required for the "Continue with Facebook" button: icon, privacy policy,
   data-deletion URL, category, review. (Task #18)
 
