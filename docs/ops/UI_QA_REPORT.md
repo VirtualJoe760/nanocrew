@@ -70,7 +70,7 @@ what works, what crashes, and a prioritized fix list. **Video was out of scope**
 
 ### P2 — features / follow-ups (from earlier QA)
 10. ✅ **DONE — Dedicated nav-bar colour.** Added a **Nav bar** field to the mini-CMS colour picker (`site-editor.tsx` `COLOR_FIELDS` + `site-config` GET defaults + the data contract). Wired at the **template level** across all 5 templates + the `_shared` seed: `getBrandColors()` returns `nav` (live override → falls back to `background`, so untouched sites are unchanged), `layout.tsx` injects `--brand-nav`, `globals.css` registers `--color-nav: var(--brand-nav, var(--brand-background))`, and the header/nav uses `bg-nav` instead of `bg-background`. Live-read, no rebuild. All 5 templates `next build` clean; app `tsc` + `expo export` clean. (Ships with the templates-repo push.)
-11. **Per-brand favicon** for the 4 standard templates (needs a *bundled* font — `next/og` build-failed on CDN fetch).
+11. ✅ **DONE — Per-brand favicon = the brand logo.** Wired via Next `metadata.icons` across all 5 templates (live-read `getSiteLogo` on the 4 standard; baked `brand.logoUrl` on street) → no `next/og`, no font (the original CDN-font build break is gone). Removed the static `favicon.ico` (4 standard) + street's hardcoded "SL" monogram `icon.tsx`/`apple-icon.tsx` + unused `brand-mark.tsx`. Logo-less brands fall back to the browser default. All 5 `next build` clean; verified the `<link rel="icon">`/`apple-touch-icon` emit the logo. (Templates-repo `8b76a08`.)
 12. **Re-verify typed-Venus Submit** end-to-end on a clean reload / on device (Crash #2).
 13. **On-device verify** the Railway-deployed generate-422 + Enhance-filter fixes.
 
