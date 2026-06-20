@@ -41,10 +41,15 @@ assets. Generation is credit-gated and Nano-Banana-backed.
 
 > Nano Banana can't emit alpha → the magenta chroma-key trick in `src/lib/transparency.ts` produces
 > transparent PNGs. This works for BOTH printable designs (1:1) AND **web assets** (Graphics mode —
-> a transparent logo/emblem/overlay at the chosen web ratio like 16:9). `buildConstraints()` honors
-> the requested `aspectRatio` on the transparent path (it used to hard-force Square 1:1 + a "garment
-> print" framing, which broke transparent web assets) and asks for a clear magenta margin so
-> `keyOutMagenta` (aspect-agnostic — it samples the border ring on all four sides) keys it cleanly.
+> a transparent logo/emblem/banner at the chosen web ratio like 16:9). Two things had to be fixed:
+> (1) `buildConstraints()`'s transparent branch used to hard-force "Square 1:1" + a "garment print"
+> framing; it's now context-neutral and asks for a clear magenta margin so `keyOutMagenta`
+> (aspect-agnostic — samples the border ring on all four sides) keys cleanly. (2) **Aspect ratio must
+> be set via `config.imageConfig.aspectRatio`** — `gemini-2.5-flash-image` IGNORES aspect ratio in the
+> prompt text and returns ~square, so a 16:9 hero came out square until we passed `imageConfig`
+> (validated against the API's supported set — `GEMINI_RATIOS`; an unsupported value like the product
+> picker's `4:5` is omitted to avoid a 400, falling back to the model default). Verified live: a
+> transparent 16:9 request → 1056×577, 82% transparent.
 
 **Content safety (`src/lib/content-safety.ts`).** Every image route that takes a creator's free-text
 prompt screens it through `assertSafePrompt()` **before charging credits or hitting the model**, and

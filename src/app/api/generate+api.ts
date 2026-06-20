@@ -12,6 +12,13 @@ import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 // reaches the app bundle). Returns the generated PNG as a base64 data URL.
 const MODEL = 'gemini-2.5-flash-image';
 
+// gemini-2.5-flash-image honors aspect ratio via config.imageConfig.aspectRatio — NOT prompt text
+// (the model ignores "...at a 16:9 aspect ratio" and returns ~square). Only these values are accepted
+// by the Gemini API; an unsupported value (e.g. the product picker's 4:5) 400s, so we pass it only
+// when supported and otherwise omit (model default ~1:1). This is what makes a 16:9 web hero / banner
+// actually come out wide instead of square — incl. transparent web assets.
+const GEMINI_RATIOS = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '21:9']);
+
 // Constraints come AFTER the user's description — leading with "clothing graphic, high
 // contrast" steered the model away from faithful subjects (e.g. real likenesses).
 function buildConstraints(background: 'transparent' | 'filled', aspectRatio: string): string {
@@ -177,7 +184,11 @@ export async function POST(req: Request) {
       const res = (await ai.models.generateContent({
         model: MODEL,
         contents: [{ role: 'user', parts }],
-        config: { responseModalities: [Modality.IMAGE], safetySettings: IMAGE_SAFETY_SETTINGS },
+        config: {
+          responseModalities: [Modality.IMAGE],
+          safetySettings: IMAGE_SAFETY_SETTINGS,
+          ...(GEMINI_RATIOS.has(aspectRatio) ? { imageConfig: { aspectRatio } } : {}),
+        },
       })) as GenResponse;
 
       const cand = res.candidates?.[0];
