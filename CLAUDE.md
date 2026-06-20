@@ -38,8 +38,14 @@ The division is organized into subdirectories — open the one you need:
   why generated sites still look like bare templates, and how our AI talks to the forge robot (the
   mail-merge brief, the unconditioned robot, the swallowed failures, and the fix). Read these before
   touching provisioning, the brief, or the forge.
+- **`docs/storefront/TEMPLATE_AUTHORING.md`** — **"let's create a template" starts HERE.** The recipe
+  that keeps infra intact: templates are THIN CLIENTS (no commerce/secrets — those stay central in
+  platform-api; adding a POD provider/our API = a platform-api change, never a template push), the
+  required contract, and how to register a style (provision.ts + interview.ts + live-voice.ts +
+  brand-review.tsx). Target end-state: **`docs/storefront/COMPONENT_SYSTEM.md`** (`_shared` + a `base`
+  seed, forge-vendored) so the client layer isn't duplicated across hundreds of templates.
 - `architecture/` — ARCHITECTURE · DATABASE_PLAN · API
-- `storefront/` — STOREFRONT_ENGINE · STOREFRONT_DATA_CONTRACT · BUILD_QUALITY · FEATURED_PRODUCTS · COLLECTIONS_LOOKBOOK
+- `storefront/` — STOREFRONT_ENGINE · STOREFRONT_DATA_CONTRACT · TEMPLATE_AUTHORING · COMPONENT_SYSTEM · BUILD_QUALITY · FEATURED_PRODUCTS · COLLECTIONS_LOOKBOOK
 - `studio/` — BUILD_FLOW · FORGE_AI · DESIGN_GENERATOR (the Venus→forge build, refine, publish arc)
 - `accounts/` — AUTH_IDENTITY · ORDERS · BILLING_CREDITS (one Supabase identity; orders by email; plans/credits/Connect)
 - `app/` PAGES · `ops/` PRODUCTION_CHECKLIST + DEV_BUILD · `roadmap/`

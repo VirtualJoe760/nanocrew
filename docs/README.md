@@ -29,6 +29,7 @@ The docs are organized into divisions. Start here, then open the division you ne
 | [storefront/BUILD_QUALITY.md](storefront/BUILD_QUALITY.md) | Why one generated site looks like a brand and another doesn't — the A/B, root causes (most fixed), and the remaining sighted-robot work |
 | [storefront/FEATURED_PRODUCTS.md](storefront/FEATURED_PRODUCTS.md) | Creators pick featured products that headline the home + market |
 | [storefront/COLLECTIONS_LOOKBOOK.md](storefront/COLLECTIONS_LOOKBOOK.md) | Collections with cover images, browsable as a lookbook (site + app) |
+| [storefront/TEMPLATE_AUTHORING.md](storefront/TEMPLATE_AUTHORING.md) | **"Let's create a template" starts here** — the recipe that keeps infra intact (thin-client invariant, the contract, registering a style). Read before adding/editing a template |
 | [storefront/COMPONENT_SYSTEM.md](storefront/COMPONENT_SYSTEM.md) | **DESIGN** — the "jigsaw" component system: `templates/_shared` + a block manifest so templates stop duplicating UI and the forge composes blocks declaratively (folds in template-UI unification) |
 
 ## 🎨 Studio (`studio/`) — the creator's build → refine → publish arc
