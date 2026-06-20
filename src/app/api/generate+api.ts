@@ -26,12 +26,14 @@ function buildConstraints(background: 'transparent' | 'filled', aspectRatio: str
   }
   // The model can't emit true alpha — it FAKES transparency as rendered checkerboard
   // pixels. So we request a solid pure-magenta backdrop and chroma-key it server-side
-  // (lib/transparency.ts) into a real transparent PNG.
+  // (lib/transparency.ts) into a real transparent PNG. Honor the requested aspectRatio (and stay
+  // context-neutral — not "garment") so TRANSPARENT WEB ASSETS come out web-shaped (hero/banner/
+  // logo at 16:9, 1:1, etc.) instead of being forced to a square garment print.
   return (
-    `${base} Render it as artwork for printing on a garment, centered on a SOLID, ` +
-    'UNIFORM, PURE MAGENTA (#FF00FF) background filling the entire frame edge to edge. ' +
-    'The artwork itself must contain NO magenta or pink hues. Never render a ' +
-    'checkerboard pattern. Square (1:1) aspect ratio.'
+    `${base} Render the subject centered on a SOLID, UNIFORM, PURE MAGENTA (#FF00FF) background ` +
+    `that fills the entire frame edge to edge at a ${aspectRatio} aspect ratio, leaving a clear ` +
+    `magenta margin around the subject. The subject itself must contain NO magenta or pink hues, ` +
+    `and the background must be flat magenta — never a checkerboard or gradient.`
   );
 }
 

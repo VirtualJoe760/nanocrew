@@ -40,7 +40,11 @@ ratio) to `/api/generate`; an uploaded image with no prompt is stored directly a
 assets. Generation is credit-gated and Nano-Banana-backed.
 
 > Nano Banana can't emit alpha → the magenta chroma-key trick in `src/lib/transparency.ts` produces
-> transparent design PNGs for printing.
+> transparent PNGs. This works for BOTH printable designs (1:1) AND **web assets** (Graphics mode —
+> a transparent logo/emblem/overlay at the chosen web ratio like 16:9). `buildConstraints()` honors
+> the requested `aspectRatio` on the transparent path (it used to hard-force Square 1:1 + a "garment
+> print" framing, which broke transparent web assets) and asks for a clear magenta margin so
+> `keyOutMagenta` (aspect-agnostic — it samples the border ring on all four sides) keys it cleanly.
 
 **Content safety (`src/lib/content-safety.ts`).** Every image route that takes a creator's free-text
 prompt screens it through `assertSafePrompt()` **before charging credits or hitting the model**, and
