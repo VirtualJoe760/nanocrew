@@ -2047,7 +2047,9 @@ function GenerateModal({
                         the prior background choice. Mutually exclusive with Aa Text. */}
                     <Pressable onPress={() => { const next = !meme; setMeme(next); if (next) { setIsText(false); setBackground('filled'); } }}>
                       <ThemedView type={meme ? 'backgroundSelected' : 'backgroundElement'} style={styles.chip}>
-                        <ThemedText type="small" themeColor={meme ? 'text' : 'textSecondary'}>😂</ThemedText>
+                        {/* Frog face = the internet's IP-safe stand-in for Pepe / meme-frog culture
+                            (the actual Pepe character is Matt Furie's copyright — not for our UI). */}
+                        <ThemedText type="small" themeColor={meme ? 'text' : 'textSecondary'}>🐸</ThemedText>
                       </ThemedView>
                     </Pressable>
                 </>
