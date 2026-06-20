@@ -858,23 +858,24 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               {/* Settings — domain, this brand's performance, and the danger zone */}
               {tab === 'settings' ? (
                 <>
-                  {/* Open shop in the ecosystem (app + nanocrew.app) — no website needed */}
-                  <ThemedText type="code" style={styles.sectionLabel}>MARKETPLACE</ThemedText>
+                  {/* Go live — sets isPublic + status:'live', which is what lists the brand in the
+                      in-app Market AND on nanocrew.app/<slug> (one action; no website needed). */}
+                  <ThemedText type="code" style={styles.sectionLabel}>TAKE YOUR SITE LIVE</ThemedText>
                   <Pressable onPress={() => publishToMarket(activeStore?.status !== 'live')} disabled={publishing} style={styles.settingRow}>
                     <View style={{ flex: 1 }}>
                       <ThemedText type="smallBold" style={styles.white}>
-                        {activeStore?.status === 'live' ? 'Shop is open' : 'Open your shop'}
+                        {activeStore?.status === 'live' ? 'Your site is live' : 'Take your site live'}
                       </ThemedText>
                       <ThemedText type="code" style={styles.dim}>
                         {activeStore?.status === 'live'
-                          ? '● Selling in the Nano Crew app + on nanocrew.app'
-                          : 'List this brand to sell in the app + web — no website needed'}
+                          ? '● Live in the Nano Crew Market + on nanocrew.app'
+                          : 'Go live to sell in the Market + on the web — no website needed'}
                       </ThemedText>
                     </View>
                     {publishing ? (
                       <ActivityIndicator size="small" color={pal.accent} />
                     ) : (
-                      <ThemedText type="code" style={styles.green}>{activeStore?.status === 'live' ? 'close shop' : 'open shop →'}</ThemedText>
+                      <ThemedText type="code" style={styles.green}>{activeStore?.status === 'live' ? 'take offline' : 'go live →'}</ThemedText>
                     )}
                   </Pressable>
 
