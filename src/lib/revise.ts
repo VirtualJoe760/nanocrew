@@ -7,64 +7,63 @@ import { db, schema } from '@/lib/db';
 // drains the store_revisions queue. This module only handles the post-review actions:
 //   • approveRevision — merge the working branch into main (production deploy)
 //   • declineRevision — discard the working branch (production was never touched)
-// Env: GITHUB_TOKEN / GITHUB_OWNER / VPS_HOST / VPS_USER (+ optional VPS_SSH_KEY).
+//
+// IMPORTANT: these run ON THE BACKEND (Railway), which has NO SSH access to the forge droplet and
+// no local git identity — so we do NOT shell out to git/ssh here. We merge and delete branches
+// through the GitHub REST API (the backend already holds GITHUB_TOKEN). Merging `revision/<id>`
+// into `main` of `store-<slug>` triggers the repo's Vercel production deploy automatically.
+// Env: GITHUB_TOKEN / GITHUB_OWNER.
 
 function config() {
-  const { GITHUB_TOKEN, GITHUB_OWNER, VPS_HOST, VPS_USER, VERCEL_TOKEN } = process.env;
-  if (!GITHUB_TOKEN || !GITHUB_OWNER || !VPS_HOST || !VPS_USER) return null;
-  return { GITHUB_TOKEN, GITHUB_OWNER, VPS_HOST, VPS_USER, VERCEL_TOKEN: VERCEL_TOKEN ?? null };
+  const { GITHUB_TOKEN, GITHUB_OWNER } = process.env;
+  if (!GITHUB_TOKEN || !GITHUB_OWNER) return null;
+  return { GITHUB_TOKEN, GITHUB_OWNER };
 }
 
-async function run(cmd: string, args: string[], opts?: { input?: string; timeoutMs?: number }) {
-  const { execFile } = await import('node:child_process');
-  return new Promise<string>((resolve, reject) => {
-    const child = execFile(
-      cmd,
-      args,
-      { timeout: opts?.timeoutMs ?? 120000, maxBuffer: 8 * 1024 * 1024 },
-      (err, stdout, stderr) => (err ? reject(new Error(`${cmd} failed: ${stderr || err.message}`)) : resolve(stdout)),
-    );
-    if (opts?.input) {
-      child.stdin?.write(opts.input);
-      child.stdin?.end();
-    }
+async function gh(cfg: NonNullable<ReturnType<typeof config>>, path: string, init?: RequestInit) {
+  return fetch(`https://api.github.com${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${cfg.GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
 }
 
-async function ssh(cfg: NonNullable<ReturnType<typeof config>>, script: string, timeoutMs: number) {
-  const { homedir } = await import('node:os');
-  const sshKey = process.env.VPS_SSH_KEY ?? `${homedir()}/.ssh/nanocrew`;
-  return run('ssh', ['-i', sshKey, '-o', 'StrictHostKeyChecking=accept-new', `${cfg.VPS_USER}@${cfg.VPS_HOST}`, 'bash -s'], {
-    input: script,
-    timeoutMs,
-  });
+/** Best-effort delete of a working branch ref (revision/<id>). Never throws. */
+async function deleteBranch(cfg: NonNullable<ReturnType<typeof config>>, repo: string, branch: string) {
+  if (!branch || !branch.startsWith('revision/')) return;
+  try {
+    await gh(cfg, `/repos/${cfg.GITHUB_OWNER}/${repo}/git/refs/heads/${branch}`, { method: 'DELETE' });
+  } catch {
+    /* non-fatal — the branch lingering is harmless */
+  }
 }
 
-/** Creator approved the preview → merge the branch into main (production deploy). */
+/** Creator approved the preview → merge the branch into main (production deploy) via the GitHub API. */
 export async function approveRevision(input: { revisionId: string; slug: string; branch: string }): Promise<boolean> {
   const cfg = config();
   if (!cfg) return false;
   const repo = `store-${input.slug}`;
-  const fullRepo = `${cfg.GITHUB_OWNER}/${repo}`;
   try {
-    const script = `set -e
-cd ~/stores 2>/dev/null || { mkdir -p ~/stores && cd ~/stores; }
-rm -rf ${repo}-merge
-git clone https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git ${repo}-merge
-cd ${repo}-merge
-git checkout main
-git -c user.name=nanocrew -c user.email=studio@nanocrew.app merge --no-ff origin/${input.branch} -m "Merge revision ${input.branch}" || { echo MERGE_CONFLICT; exit 1; }
-git push -q origin main
-git push -q origin --delete ${input.branch} || true
-echo MERGE_DONE
-`;
-    const out = await ssh(cfg, script, 5 * 60 * 1000);
-    if (!out.includes('MERGE_DONE')) throw new Error('merge did not complete');
+    const res = await gh(cfg, `/repos/${cfg.GITHUB_OWNER}/${repo}/merges`, {
+      method: 'POST',
+      body: JSON.stringify({ base: 'main', head: input.branch, commit_message: `Merge revision ${input.branch}` }),
+    });
+    // 201 = merged, 204 = nothing to merge (branch already in main). Both are success.
+    if (res.status !== 201 && res.status !== 204) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`merge ${res.status}: ${detail.slice(0, 200)}`);
+    }
+    await deleteBranch(cfg, repo, input.branch);
     await db
       .update(schema.storeRevisions)
       .set({ status: 'approved' })
       .where(eq(schema.storeRevisions.id, input.revisionId));
-    console.log(`[revise] ${fullRepo} branch ${input.branch} merged to main`);
+    console.log(`[revise] ${cfg.GITHUB_OWNER}/${repo} branch ${input.branch} merged to main (${res.status})`);
     return true;
   } catch (e) {
     console.error(`[revise approve] ${repo}: ${e instanceof Error ? e.message : 'failed'}`);
@@ -78,21 +77,9 @@ echo MERGE_DONE
 export async function declineRevision(input: { revisionId: string; slug: string; branch: string }): Promise<boolean> {
   await db.update(schema.storeRevisions).set({ status: 'declined' }).where(eq(schema.storeRevisions.id, input.revisionId));
   const cfg = config();
-  if (cfg && input.branch && input.branch.startsWith('revision/')) {
-    const repo = `store-${input.slug}`;
-    const fullRepo = `${cfg.GITHUB_OWNER}/${repo}`;
-    try {
-      await ssh(
-        cfg,
-        `cd ~/stores/${repo}-merge 2>/dev/null && git push -q origin --delete ${input.branch} || ` +
-          `git -c credential.helper= ls-remote https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git >/dev/null 2>&1 && ` +
-          `git push -q https://x-access-token:${cfg.GITHUB_TOKEN}@github.com/${fullRepo}.git --delete ${input.branch} || true`,
-        60 * 1000,
-      );
-      console.log(`[revise decline] ${fullRepo} branch ${input.branch} discarded`);
-    } catch (e) {
-      console.error(`[revise decline] ${repo}: branch cleanup failed (non-fatal): ${e instanceof Error ? e.message : 'failed'}`);
-    }
+  if (cfg) {
+    await deleteBranch(cfg, `store-${input.slug}`, input.branch);
+    console.log(`[revise decline] store-${input.slug} branch ${input.branch} discarded`);
   }
   return true;
 }
