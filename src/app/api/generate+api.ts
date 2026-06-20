@@ -40,7 +40,25 @@ interface InlinePart {
   text?: string;
 }
 interface GenResponse {
-  candidates?: Array<{ content?: { parts?: InlinePart[] } }>;
+  candidates?: Array<{ content?: { parts?: InlinePart[] }; finishReason?: string }>;
+  promptFeedback?: { blockReason?: string };
+}
+
+// Nano Banana returns TEXT (not an image) when it declines a prompt — usually a copyrighted
+// character / brand / real likeness (RECITATION) or restricted content (SAFETY/PROHIBITED). Turn
+// that into an actionable message instead of a bare "No image returned" so the creator knows to
+// rephrase (and isn't told it's a server error).
+function refusalMessage(reason?: string, modelText?: string): string {
+  const r = reason ?? '';
+  if (/RECITATION/i.test(r)) {
+    return "The AI wouldn't generate this — it looks like a copyrighted character, brand, or real person. Try an original subject (avoid named characters/brands/celebrities).";
+  }
+  if (/SAFETY|PROHIBITED|IMAGE_SAFETY|BLOCK/i.test(r)) {
+    return 'The AI declined this prompt under its content policy. Try rephrasing — remove violent, branded, or explicit wording.';
+  }
+  const t = (modelText ?? '').trim();
+  if (t) return `The AI returned a message instead of an image: ${t.slice(0, 180)}`;
+  return "The AI didn't return an image — try rephrasing. Named characters, brands, celebrities, and violent wording are often refused.";
 }
 
 /**
@@ -146,8 +164,11 @@ export async function POST(req: Request) {
     parts.push({ inlineData: { mimeType: refImage.mimeType, data: refImage.data } });
   }
 
-  // Nano Banana occasionally returns text/safety with no image — retry a couple times.
+  // Nano Banana occasionally returns text/safety with no image — retry a couple times. A HARD
+  // content refusal (copyright/safety) won't change on retry, so we surface it immediately.
   let lastErr = 'No image returned';
+  let modelText = ''; // the model's own text when it declines (no image) — used for the message
+  let sawException = false;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = (await ai.models.generateContent({
@@ -156,7 +177,8 @@ export async function POST(req: Request) {
         config: { responseModalities: [Modality.IMAGE], safetySettings: IMAGE_SAFETY_SETTINGS },
       })) as GenResponse;
 
-      for (const part of res.candidates?.[0]?.content?.parts ?? []) {
+      const cand = res.candidates?.[0];
+      for (const part of cand?.content?.parts ?? []) {
         if (part.inlineData?.data) {
           // Host it on Cloudinary → return a small URL instead of a multi-MB data blob.
           let buffer: Buffer = Buffer.from(part.inlineData.data, 'base64');
@@ -192,6 +214,18 @@ export async function POST(req: Request) {
           return Response.json({ image, id });
         }
       }
+
+      // No image in this attempt — figure out WHY (Gemini puts the reason in finishReason /
+      // promptFeedback / a text part). A hard content refusal won't change on retry → return now.
+      const finish = cand?.finishReason;
+      const blockReason = res.promptFeedback?.blockReason;
+      const text = (cand?.content?.parts ?? []).map((p) => p.text).filter(Boolean).join(' ').trim();
+      if (text) modelText = text;
+      if ((finish && /SAFETY|PROHIBITED|RECITATION|IMAGE_SAFETY|BLOCK/i.test(finish)) || blockReason) {
+        refund();
+        console.log(`[pipeline:generate] refused finish=${finish ?? ''} block=${blockReason ?? ''}`);
+        return Response.json({ error: refusalMessage(finish ?? blockReason, text), reason: finish ?? blockReason }, { status: 422 });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       // Quota/auth/model errors won't be fixed by retrying.
@@ -199,9 +233,13 @@ export async function POST(req: Request) {
         refund();
         return Response.json({ error: msg }, { status: 502 });
       }
+      sawException = true;
       lastErr = msg;
     }
   }
   refund();
-  return Response.json({ error: lastErr }, { status: 502 });
+  // Exhausted retries. A genuine upstream/exception → 502; otherwise the model just kept declining
+  // to return an image (no hard-refusal flag) → 422 with an actionable message, not a scary gateway error.
+  if (sawException) return Response.json({ error: lastErr }, { status: 502 });
+  return Response.json({ error: refusalMessage(undefined, modelText), reason: 'no_image' }, { status: 422 });
 }
