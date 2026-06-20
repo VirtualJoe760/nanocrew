@@ -54,6 +54,9 @@ export function FinalizeSheet({
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishedId, setPublishedId] = useState<string | null>(null);
+  // Non-blocking POD-provider policy notes (e.g. third-party IP) surfaced AT LAUNCH — the creator
+  // owns the design + any copyright, but we tell them the print provider may decline it.
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -107,6 +110,7 @@ export function FinalizeSheet({
     if (!canPublish) return;
     setPublishing(true);
     setError(null);
+    setWarnings([]);
     const chosen = variants.filter((v) => selectedColors.has(v.color));
     apiFetch('/api/publish', {
       method: 'POST',
@@ -122,9 +126,21 @@ export function FinalizeSheet({
         })),
       }),
     })
-      .then((r) => r.json())
-      .then((d: { ok?: boolean; printfulSyncProductId?: string; error?: string }) => {
-        if (!d.ok || !d.printfulSyncProductId) throw new Error(d.error || 'Publish failed');
+      .then(async (r) => {
+        // The launch-time POD policy gate lives server-side (checkProviderPolicy). A hard block comes
+        // back 422 with a human `message` (prefer it over the `provider_policy` code); a successful
+        // publish may carry non-blocking `warnings` (e.g. third-party IP) to surface to the creator.
+        const d = (await r.json().catch(() => ({}))) as {
+          ok?: boolean;
+          printfulSyncProductId?: string;
+          error?: string;
+          message?: string;
+          warnings?: { reason: string }[];
+        };
+        if (!r.ok || !d.ok || !d.printfulSyncProductId) {
+          throw new Error(d.message || d.error || 'Publish failed');
+        }
+        setWarnings((d.warnings ?? []).map((w) => w.reason).filter(Boolean));
         setPublishedId(d.printfulSyncProductId);
         onPublished(d.printfulSyncProductId);
       })
@@ -197,6 +213,15 @@ export function FinalizeSheet({
               <ThemedText type="small" themeColor="textSecondary">
                 Sync product #{publishedId} · {selectedCount} variants
               </ThemedText>
+              {warnings.length ? (
+                <View style={styles.warnBox}>
+                  {warnings.map((w, i) => (
+                    <ThemedText key={i} type="small" themeColor="textSecondary" style={styles.warnText}>
+                      ⚠ {w}
+                    </ThemedText>
+                  ))}
+                </View>
+              ) : null}
               <Pressable onPress={onClose}>
                 <View style={[styles.publish, { backgroundColor: theme.text }]}>
                   <ThemedText type="smallBold" style={{ color: theme.background }}>
@@ -313,5 +338,7 @@ const styles = StyleSheet.create({
   },
   swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.5)' },
   doneWrap: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
+  warnBox: { gap: Spacing.one, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 10, backgroundColor: 'rgba(180,140,0,0.10)', alignSelf: 'stretch' },
+  warnText: { textAlign: 'center' },
   publish: { alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.three, borderRadius: 999, minHeight: 44 },
 });
