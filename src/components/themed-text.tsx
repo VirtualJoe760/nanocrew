@@ -82,8 +82,7 @@ const styles = StyleSheet.create({
     // color comes from the theme tint (platinum on dark / graphite on light) — set inline above
   },
   code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
+    fontFamily: Fonts.mono, // now Jost-Regular — the mono motif is unified on Jost
     fontSize: 12,
   },
 });

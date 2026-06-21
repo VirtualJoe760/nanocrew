@@ -46,20 +46,21 @@ export const Fonts = Platform.select({
     serif: 'ui-serif',
     /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+    // The monospace label motif is retired — unified on Jost (Regular). Key kept so call
+    // sites (ThemedText `code`, etc.) don't need to change.
+    mono: 'Jost-Regular',
   },
   default: {
     sans: 'normal',
     serif: 'serif',
     rounded: 'normal',
-    mono: 'monospace',
+    mono: 'Jost-Regular',
   },
   web: {
     sans: 'var(--font-display)',
     serif: 'var(--font-serif)',
     rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
+    mono: 'Jost-Regular',
   },
 });
 
