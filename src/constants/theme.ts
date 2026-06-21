@@ -28,7 +28,7 @@ export const Colors = {
     background: '#08080a', // near-pure black
     backgroundElement: '#161619',
     backgroundSelected: '#232327',
-    textSecondary: '#c6c8cf', // secondary text — brightened again to read over the dot field
+    textSecondary: '#ebedf1', // secondary text — near-white on dark so it pops (no grey)
     tint: '#cdd1d9', // platinum silver
     canvas: '#121319',
     canvasDot: '#34374a',
