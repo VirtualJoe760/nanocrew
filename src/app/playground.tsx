@@ -18,21 +18,9 @@ function Loading() {
 }
 
 function Scene() {
-  if (Platform.OS === 'web') {
-    // Web-only: load CanvasKit, then the scene module. Required lazily so native never evaluates it.
-    // The CanvasKit WASM isn't served at its default path under Metro/Expo web, so point it at the
-    // matching CDN build (Skia 2.2.12 bundles canvaskit-wasm 0.40.0).
-    const { WithSkiaWeb } = require('@shopify/react-native-skia/lib/module/web');
-    return (
-      <WithSkiaWeb
-        getComponent={() => import('@/components/backgrounds/venus-field-scene')}
-        fallback={<Loading />}
-        opts={{ locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.40.0/bin/full/${file}` }}
-      />
-    );
-  }
-  const VenusFieldScene = require('@/components/backgrounds/venus-field-scene').default;
-  return <VenusFieldScene />;
+  // R3F renders on web (plain three/WebGL) and native (expo-gl) — no CanvasKit loader.
+  const VenusHeadScene = require('@/components/backgrounds/venus-head-scene').default;
+  return <VenusHeadScene />;
 }
 
 export default function Playground() {
