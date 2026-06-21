@@ -3,7 +3,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 // Dev-only sandbox for GPU / shader experiments (react-native-skia). NOT linked in the tab bar —
-// navigate to `/playground` by hand. The neon "tracelight" field lives in components/playground-scene.
+// navigate to `/playground` by hand. It renders the shared background scene
+// (components/backgrounds/dot-field-scene) full-screen so we can iterate on it in isolation.
 // On web, CanvasKit (the Skia WASM runtime) is lazy-loaded via WithSkiaWeb; on native it's the JSI
 // module and renders directly. Returns null in production builds.
 
@@ -24,14 +25,14 @@ function Scene() {
     const { WithSkiaWeb } = require('@shopify/react-native-skia/lib/module/web');
     return (
       <WithSkiaWeb
-        getComponent={() => import('@/components/playground-scene')}
+        getComponent={() => import('@/components/backgrounds/dot-field-scene')}
         fallback={<Loading />}
         opts={{ locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.40.0/bin/full/${file}` }}
       />
     );
   }
-  const PlaygroundScene = require('@/components/playground-scene').default;
-  return <PlaygroundScene />;
+  const DotFieldScene = require('@/components/backgrounds/dot-field-scene').default;
+  return <DotFieldScene />;
 }
 
 export default function Playground() {

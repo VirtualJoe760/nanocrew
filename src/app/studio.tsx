@@ -35,7 +35,8 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
-import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
+import { NCMark, type Palette, usePalette } from '@/components/nc-screen';
+import { AppBackground } from '@/components/backgrounds/app-background';
 import { withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';
 
@@ -1013,7 +1014,7 @@ function StudioScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: p.bg }]}>
-      <FabricBackground p={p} />
+      <AppBackground />
       <Modal
         visible={welcomeVisible}
         animationType="fade"
