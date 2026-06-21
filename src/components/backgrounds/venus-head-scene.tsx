@@ -40,7 +40,14 @@ const SHELL_NAMES = ['Wolf3D_Head'];
 const HAIR_BOB_Y_OFFSET = -0.02;
 // A-line: tilt the clip plane toward the front so the front/side pieces stay LONGER
 // (sweep past the jaw) and the back is shorter. 0 = flat blunt bob; higher = more angle.
-const HAIR_BOB_TILT = 0.6;
+const HAIR_BOB_TILT = 0.95;
+// Widen the hair envelope (x) slightly for fullness over the ear area. 1 = unchanged.
+const HAIR_WIDEN_X = 1.06;
+const HAIR_FORWARD_Z = 1.0;
+// Drop the outermost (ear) vertices from the bright face shell — RPM hair tucks
+// behind the ears, so hiding the glowing ears lets the hair read as covering them.
+// Fraction of the head half-width beyond which face verts are dropped.
+const EAR_DROP_FRAC = 0.82;
 
 // DEV: play a sample speech clip on load so the mouth moves (and the pulse reacts)
 // on web. Set false for production / live Gemini audio. (Guarded to web.)
@@ -174,6 +181,30 @@ function bakeHeadLocal(scene: THREE.Object3D, head: THREE.Object3D, names: strin
   if (!geos.length) return null;
   const merged = mergeGeometries(geos, false);
   return merged ? mergeVertices(merged) : null;
+}
+
+// Drop triangles whose verts sit beyond |x| = maxAbsX (the ears) so the bright
+// face shell stops at the cheeks and the hair reads as covering the ears.
+function dropEars(geo: THREE.BufferGeometry, maxAbsX: number): THREE.BufferGeometry {
+  const pos = geo.attributes.position;
+  const idx = geo.index;
+  const remap = new Int32Array(pos.count).fill(-1);
+  const newPos: number[] = [];
+  let nv = 0;
+  for (let i = 0; i < pos.count; i++) {
+    if (Math.abs(pos.getX(i)) <= maxAbsX) { remap[i] = nv++; newPos.push(pos.getX(i), pos.getY(i), pos.getZ(i)); }
+  }
+  const newIdx: number[] = [];
+  if (idx) {
+    for (let t = 0; t < idx.count; t += 3) {
+      const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2);
+      if (remap[a] >= 0 && remap[b] >= 0 && remap[c] >= 0) newIdx.push(remap[a], remap[b], remap[c]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(newPos), 3));
+  if (idx) g.setIndex(newIdx);
+  return g;
 }
 
 // Bake the positional aurora gradient + height + per-node phase onto faceGeo.
@@ -331,9 +362,18 @@ function Avatar({ url }: { url: string }) {
           if (!m.isMesh) return;
           const n = m.name || '';
           if (isHair(n)) {
+            // Widen the hair envelope so it drapes OVER the ears (bind-pose verts;
+            // skinning still applies on top). Do this BEFORE the rim bakes from it.
+            const hp = m.geometry.attributes.position as THREE.BufferAttribute;
+            for (let i = 0; i < hp.count; i++) {
+              hp.setX(i, hp.getX(i) * HAIR_WIDEN_X);
+              hp.setZ(i, hp.getZ(i) * HAIR_FORWARD_Z);
+            }
+            hp.needsUpdate = true;
+            m.geometry.computeBoundingSphere();
             // Real hair, kept SKINNED (follows the head): a soft translucent cool
             // volume that frames the face + occludes the bald-scalp wireframe behind.
-            // Clipped to a chin-length bob after framing (see HAIR_BOB_DROP).
+            // Clipped to an A-line bob after framing (see HAIR_BOB_* consts).
             hairMat = new THREE.MeshBasicMaterial({
               color: new THREE.Color('#26315f'),
               transparent: true,
@@ -379,8 +419,11 @@ function Avatar({ url }: { url: string }) {
         if (bones.head) {
           const dotTex = makeDotTexture();
           const irisTex = makeIrisTexture();
-          const faceGeo = bakeHeadLocal(gltf.scene, bones.head, SHELL_NAMES);
-          if (faceGeo) {
+          const rawFace = bakeHeadLocal(gltf.scene, bones.head, SHELL_NAMES);
+          if (rawFace) {
+            rawFace.computeBoundingBox();
+            const halfW = Math.max(Math.abs(rawFace.boundingBox!.min.x), Math.abs(rawFace.boundingBox!.max.x));
+            const faceGeo = dropEars(rawFace, halfW * EAR_DROP_FRAC); // bright shell stops at the cheeks
             bakeAurora(faceGeo);
             const dotGeo = subsample(faceGeo, 3); // sparser, more deliberate nodes
 

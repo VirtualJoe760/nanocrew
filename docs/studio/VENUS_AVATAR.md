@@ -69,6 +69,9 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     by a **tilted** world-space `THREE.Plane` (`gl.localClippingEnabled`) — `HAIR_BOB_TILT` angles it
     toward the front so the **front/side pieces stay longer** than the back (A-line), `HAIR_BOB_Y_OFFSET`
     sets the length; applied to BOTH the solid and the rim so the cut is consistent. Keeps the fringe.
+    The hair is slightly widened (`HAIR_WIDEN_X`) and the **bright ear geometry is dropped from the
+    face shell** (`dropEars`, `EAR_DROP_FRAC`) — RPM hair tucks behind the ears, so hiding the glowing
+    ears lets the hair read as draping **over** them.
   - **Eyes — a readable IRIS:** a sprite with a generated iris texture (dark pupil + bright limbal
     ring + striations + catchlight, `makeIrisTexture`) over a faint halo, parented to the
     `LeftEye`/`RightEye` bones so the gaze **tracks the saccades**. (Additive: the alpha-0 pupil reads
