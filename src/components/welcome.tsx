@@ -149,11 +149,19 @@ export function Welcome({ onChoose }: { onChoose: (choice: OnboardChoice) => voi
         </View>
       </ScrollView>
 
-      {/* Dots + footer — clear the tab bar (BottomTabInset is 0 on web, so floor it). */}
+      {/* Footer — Next (advances; swipe alone doesn't work with a mouse on web), tappable dots,
+          log-in + version. Clears the tab bar (BottomTabInset is 0 on web, so floor it). */}
       <View style={[s.footer, { paddingBottom: Math.max(BottomTabInset, 52) + insets.bottom + 10 }]}>
+        {page < lastPage ? (
+          <Pressable onPress={() => goTo(page + 1)} style={[s.nextBtn, { backgroundColor: p.accent }]}>
+            <ThemedText type="smallBold" style={{ color: p.bg }}>Next</ThemedText>
+          </Pressable>
+        ) : null}
         <View style={s.dots}>
           {Array.from({ length: pageCount }).map((_, i) => (
-            <View key={i} style={[s.dot, { backgroundColor: i === page ? p.accent : p.faint, opacity: i === page ? 1 : 0.4 }]} />
+            <Pressable key={i} onPress={() => goTo(i)} hitSlop={6}>
+              <View style={[s.dot, { backgroundColor: i === page ? p.accent : p.faint, opacity: i === page ? 1 : 0.4 }]} />
+            </Pressable>
           ))}
         </View>
         <View style={s.footerRow}>
@@ -202,6 +210,7 @@ function makeStyles(p: Palette) {
     textLink: { fontSize: 13, letterSpacing: 0.3 },
     finePrint: { fontSize: 11, letterSpacing: 0.5, marginTop: 22, textAlign: 'center' },
     footer: { paddingHorizontal: 22, paddingTop: 8 },
+    nextBtn: { alignSelf: 'center', minWidth: 180, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 28, alignItems: 'center', marginBottom: 16 },
     dots: { flexDirection: 'row', justifyContent: 'center', gap: 7, marginBottom: 14 },
     dot: { width: 7, height: 7, borderRadius: 4 },
     footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
