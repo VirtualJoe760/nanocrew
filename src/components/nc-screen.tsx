@@ -26,6 +26,9 @@ export function makePalette(dark: boolean) {
     faint: dark ? '#74767f' : '#9a9ba2', // tertiary text — brightened (was #56575e)
     accent: dark ? '#cdd1d9' : '#44474e',
     accent2: dark ? '#e8eaee' : '#2c2e34',
+    // A cool, slightly-neon hue for input focus — distinct from the platinum button glow so a
+    // focused field reads differently from a CTA. (Buttons = accent/platinum; inputs = accentCool.)
+    accentCool: dark ? '#7cc7df' : '#2f7d8f',
     line: dark ? 'rgba(205,209,217,0.16)' : 'rgba(68,71,78,0.20)',
     coreInner: dark ? '#f4f4f6' : '#8a8d94',
   };

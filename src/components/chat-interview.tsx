@@ -3,6 +3,7 @@ import { ActivityIndicator, Keyboard, Platform, Pressable, ScrollView, StyleShee
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { type Palette } from '@/components/nc-screen';
+import { glow } from '@/constants/glow';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import type { ChatMessage } from '@/lib/interview';
@@ -48,6 +49,7 @@ export function ChatInterview({
   const insets = useSafeAreaInsets();
   const s = makeStyles(p);
   const [text, setText] = useState('');
+  const [inputFocused, setInputFocused] = useState(false);
   const [kb, setKb] = useState(0);
   const scroller = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
@@ -130,14 +132,26 @@ export function ChatInterview({
           placeholder={`Message ${aiName}…`}
           placeholderTextColor={p.faint}
           multiline
-          style={[s.input, { color: p.ink }]}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
+          style={[
+            s.input,
+            { color: p.ink },
+            inputFocused && { borderColor: p.accentCool },
+            inputFocused && glow(p.accentCool, 12, 0.5),
+          ]}
           onSubmitEditing={send}
           blurOnSubmit={false}
         />
         <Pressable onPress={send} disabled={!text.trim() || thinking} hitSlop={8}>
-          <View style={[s.send, { backgroundColor: p.accent, opacity: !text.trim() || thinking ? 0.4 : 1 }]}>
-            <ThemedText type="code" style={{ color: bg }}>send</ThemedText>
-          </View>
+          {(() => {
+            const active = !!text.trim() && !thinking;
+            return (
+              <View style={[s.send, { backgroundColor: p.accent, opacity: active ? 1 : 0.4 }, active && glow(p.accent, 14, 0.55)]}>
+                <ThemedText type="code" style={{ color: bg }}>send</ThemedText>
+              </View>
+            );
+          })()}
         </Pressable>
       </View>
     </View>

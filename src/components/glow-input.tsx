@@ -1,20 +1,29 @@
 import { useState } from 'react';
-import { StyleSheet, TextInput, type TextInputProps, View } from 'react-native';
+import { StyleSheet, type StyleProp, TextInput, type TextInputProps, View, type ViewStyle } from 'react-native';
 
 import { usePalette } from '@/components/nc-screen';
 import { glow } from '@/constants/glow';
 
-// The app's standard text input. Soft tinted fill + a platinum nano-glow on focus so the active
-// field pops. Reuse this instead of a bare <TextInput>.
-export function GlowInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
+// The app's standard text input. Soft tinted fill + a cool nano-glow on focus (a different hue from
+// the platinum button glow) so the active field reads distinctly. Reuse this instead of a bare
+// <TextInput>. `containerStyle` lays out the outer wrap (margins, width); `style` styles the field.
+export function GlowInput({
+  style,
+  containerStyle,
+  onFocus,
+  onBlur,
+  ...props
+}: TextInputProps & { containerStyle?: StyleProp<ViewStyle> }) {
   const p = usePalette();
   const [focused, setFocused] = useState(false);
   return (
     <View
       style={[
         styles.wrap,
-        { borderColor: focused ? p.accent : p.line, backgroundColor: p.dark ? 'rgba(205,209,217,0.05)' : 'rgba(68,71,78,0.04)' },
-        focused && glow(p.accent, 12, 0.5),
+        containerStyle,
+        { borderColor: focused ? p.accentCool : p.line, backgroundColor: p.dark ? 'rgba(205,209,217,0.05)' : 'rgba(68,71,78,0.04)' },
+        // Inputs glow a cooler hue than buttons (which glow platinum), so a focused field reads distinctly.
+        focused && glow(p.accentCool, 14, 0.55),
       ]}>
       <TextInput
         {...props}

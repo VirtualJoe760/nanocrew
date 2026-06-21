@@ -11,7 +11,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -21,6 +20,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
 import { GlowButton } from '@/components/glow-button';
+import { GlowInput } from '@/components/glow-input';
 import { glow } from '@/constants/glow';
 import { BrandStore } from '@/components/brand-store';
 import { EarningsCockpit } from '@/components/earnings-cockpit';
@@ -434,44 +434,36 @@ export default function AccountScreen() {
                 </ThemedText>
                 {isSignup ? (
                   <>
-                    <TextInput
+                    <GlowInput
                       value={fullName}
                       onChangeText={setFullName}
                       placeholder="Full name"
-                      placeholderTextColor={theme.textSecondary}
                       autoCapitalize="words"
                       autoComplete="name"
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
                     />
-                    <TextInput
+                    <GlowInput
                       value={phone}
                       onChangeText={setPhone}
                       placeholder="Phone (optional)"
-                      placeholderTextColor={theme.textSecondary}
                       keyboardType="phone-pad"
                       autoComplete="tel"
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
                     />
                   </>
                 ) : null}
-                <TextInput
+                <GlowInput
                   value={email}
                   onChangeText={setEmail}
                   placeholder="email@you.com"
-                  placeholderTextColor={theme.textSecondary}
                   autoCapitalize="none"
                   keyboardType="email-address"
                   autoComplete="email"
-                  style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
                 />
-                <TextInput
+                <GlowInput
                   value={password}
                   onChangeText={setPassword}
                   placeholder="password"
-                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry
                   autoComplete="password"
-                  style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
                 />
                 {isSignup ? (
                   <>

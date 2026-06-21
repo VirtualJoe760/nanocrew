@@ -5,7 +5,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +18,7 @@ import { BrandStore } from '@/components/brand-store';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
+import { GlowInput } from '@/components/glow-input';
 import { apiUrl } from '@/lib/api';
 
 type TrendingItem = {
@@ -199,15 +199,14 @@ export default function MarketScreen() {
             </ThemedText>
           </View>
 
-          <TextInput
+          <GlowInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search brands"
-            placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
-            style={[styles.search, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: line }]}
+            containerStyle={styles.search}
           />
 
           {loading ? (
@@ -272,14 +271,7 @@ const styles = StyleSheet.create({
   header: { gap: Spacing.one, paddingTop: Spacing.three },
   eyebrow: { textTransform: 'uppercase', letterSpacing: 2 },
   title: {},
-  search: {
-    marginTop: Spacing.three,
-    height: 46,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.three,
-    fontSize: 16,
-  },
+  search: { marginTop: Spacing.three },
   scrollContent: { paddingTop: Spacing.five, paddingBottom: BottomTabInset + Spacing.five, gap: Spacing.six },
   section: { gap: Spacing.three },
   sectionTitle: { textTransform: 'uppercase', letterSpacing: 1.5 },

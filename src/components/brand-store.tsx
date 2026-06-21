@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import { openBrowserAsync } from 'expo-web-browser';
 
 import { Spacing } from '@/constants/theme';
+import { glow } from '@/constants/glow';
 import { apiUrl, readJson } from '@/lib/api';
 import { SquareCarousel } from '@/components/square-carousel';
 import { ProductDetail } from '@/components/product-detail';
@@ -101,7 +102,7 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
           ) : !brand ? (
             <View style={styles.center}>
               <Text style={{ color: fg }}>Couldn’t load this brand.</Text>
-              <Pressable onPress={() => void load()} style={[styles.shopBtn, { backgroundColor: accent, marginTop: Spacing.three }]}>
+              <Pressable onPress={() => void load()} style={[styles.shopBtn, { backgroundColor: accent, marginTop: Spacing.three }, glow(accent, 16, 0.5)]}>
                 <Text style={[styles.shopBtnText, { color: bg }]}>Try again</Text>
               </Pressable>
             </View>
@@ -127,7 +128,7 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
                 {brand.siteUrl ? (
                   <Pressable
                     onPress={() => brand.siteUrl && openBrowserAsync(brand.siteUrl)}
-                    style={[styles.shopBtn, { backgroundColor: accent }]}
+                    style={[styles.shopBtn, { backgroundColor: accent }, glow(accent, 16, 0.5)]}
                   >
                     <Text style={[styles.shopBtnText, { color: bg }]}>Shop the website ↗</Text>
                   </Pressable>

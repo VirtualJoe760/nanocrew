@@ -36,6 +36,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
+import { glow } from '@/constants/glow';
 
 import { BrandReview } from '@/components/brand-review';
 import { ChatInterview } from '@/components/chat-interview';
@@ -1098,7 +1099,9 @@ export default function StudioScreen() {
               Your AI brand consultant. Talk it through, and Venus designs your clothing
               brand, builds the store, and launches your website.
             </ThemedText>
-            <Pressable onPress={() => router.navigate('/account')} style={[styles.ctaPrimary, { backgroundColor: p.accent }]}>
+            <Pressable
+              onPress={() => router.navigate('/account')}
+              style={({ pressed }) => [styles.ctaPrimary, { backgroundColor: p.accent }, glow(p.accent, 18, pressed ? 0.3 : 0.6), pressed && { transform: [{ scale: 0.98 }] }]}>
               <ThemedText type="smallBold" style={{ color: BG }}>
                 Create an account
               </ThemedText>
@@ -1178,7 +1181,7 @@ export default function StudioScreen() {
             </ThemedText>
             {/* Voice is the recommended, prominent choice; typing is a quieter fallback. */}
             <Pressable onPress={startVoice}>
-              <View style={styles.getStarted}>
+              <View style={[styles.getStarted, glow(p.accent, 20, 0.6)]}>
                 <ThemedText type="smallBold" style={{ color: BG }}>
                   🎙  Talk with {aiName} — recommended
                 </ThemedText>
