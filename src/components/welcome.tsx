@@ -156,7 +156,7 @@ export function Welcome({ onChoose }: { onChoose: (choice: OnboardChoice) => voi
 
       {/* Top bar: brand mark + log in */}
       <View style={s.topBar}>
-        <NCMark size={20} color={p.ink} />
+        <NCMark size={32} color={p.ink} />
         <Pressable onPress={() => onChoose('login')} hitSlop={8}>
           <ThemedText type="code" style={[s.loginLink, { color: p.dim }]}>Log in</ThemedText>
         </Pressable>
