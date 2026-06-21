@@ -5,6 +5,7 @@ import {
   AppState,
   Dimensions,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -1013,15 +1014,22 @@ export default function StudioScreen() {
   const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
   const aiName = 'Venus'; // the only consultant — no picker
 
-  // First-launch welcome takeover: signed-out + not yet seen → the value-prop carousel + the
-  // trial/free/shop offer. Subsequent signed-out visits fall through to the inline join intro.
-  if (welcomeChecked && !loading && !session && showWelcome) {
-    return <Welcome onChoose={handleChoose} />;
-  }
+  // First-launch welcome: a full-screen Modal presented ABOVE the tab bar so it owns its own swipe
+  // gestures (no tab-navigator conflict) and hides the bottom bar during onboarding.
+  const welcomeVisible = welcomeChecked && !loading && !session && showWelcome;
 
   return (
     <View style={[styles.container, { backgroundColor: p.bg }]}>
       <FabricBackground p={p} />
+      <Modal
+        visible={welcomeVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowWelcome(false);
+          AsyncStorage.setItem(ONBOARD_SEEN_KEY, '1').catch(() => {});
+        }}>
+        <Welcome onChoose={handleChoose} />
+      </Modal>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

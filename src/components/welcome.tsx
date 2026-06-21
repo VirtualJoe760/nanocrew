@@ -5,7 +5,6 @@ import Constants from 'expo-constants';
 
 import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
 import { ThemedText } from '@/components/themed-text';
-import { BottomTabInset } from '@/constants/theme';
 
 // First-launch welcome carousel. Advertises the app's value (Studio · Design · Market) and offers
 // three ways in: a 7-day Pro free trial, a free account ($3 of credits), or "just here to shop".
@@ -149,9 +148,8 @@ export function Welcome({ onChoose }: { onChoose: (choice: OnboardChoice) => voi
         </View>
       </ScrollView>
 
-      {/* Footer — Next (advances; swipe alone doesn't work with a mouse on web), tappable dots,
-          log-in + version. Clears the tab bar (BottomTabInset is 0 on web, so floor it). */}
-      <View style={[s.footer, { paddingBottom: Math.max(BottomTabInset, 52) + insets.bottom + 10 }]}>
+      {/* Footer — Next (advances; mouse can't drag-swipe on web), tappable dots, log-in + version. */}
+      <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
         {page < lastPage ? (
           <Pressable onPress={() => goTo(page + 1)} style={[s.nextBtn, { backgroundColor: p.accent }]}>
             <ThemedText type="smallBold" style={{ color: p.bg }}>Next</ThemedText>
