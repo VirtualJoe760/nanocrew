@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 
 import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
@@ -86,10 +85,17 @@ const appVersion = `v${Constants.expoConfig?.version ?? '1.0.0'}${
   Constants.expoConfig?.ios?.buildNumber ? ` (${Constants.expoConfig.ios.buildNumber})` : ''
 }`;
 
-export function Welcome({ onChoose }: { onChoose: (choice: OnboardChoice) => void }) {
+export function Welcome({
+  onChoose,
+  topInset = 0,
+  bottomInset = 0,
+}: {
+  onChoose: (choice: OnboardChoice) => void;
+  topInset?: number;
+  bottomInset?: number;
+}) {
   const p = usePalette();
   const s = makeStyles(p);
-  const insets = useSafeAreaInsets();
   const scroller = useRef<ScrollView>(null);
   const [width, setWidth] = useState(Dimensions.get('window').width);
   const [page, setPage] = useState(0);
@@ -151,12 +157,12 @@ export function Welcome({ onChoose }: { onChoose: (choice: OnboardChoice) => voi
   }, []);
 
   return (
-    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
+    <View style={s.root}>
       <FabricBackground p={p} />
 
       {/* Top bar: brand mark + log in */}
-      <View style={s.topBar}>
-        <NCMark size={32} color={p.ink} />
+      <View style={[s.topBar, { paddingTop: topInset + 14 }]}>
+        <NCMark size={64} color={p.ink} />
         <Pressable onPress={() => onChoose('login')} hitSlop={8}>
           <ThemedText type="code" style={[s.loginLink, { color: p.dim }]}>Log in</ThemedText>
         </Pressable>
@@ -243,7 +249,7 @@ export function Welcome({ onChoose }: { onChoose: (choice: OnboardChoice) => voi
       </ScrollView>
 
       {/* Footer: Next + dots + version */}
-      <View style={[s.footer, { paddingBottom: insets.bottom + 14 }]}>
+      <View style={[s.footer, { paddingBottom: bottomInset + 14 }]}>
         {page < lastPage ? (
           <Pressable onPress={() => goTo(page + 1)} style={[s.nextBtn, { backgroundColor: p.accent }]}>
             <ThemedText type="smallBold" style={{ color: p.bg }}>Next</ThemedText>
@@ -258,7 +264,7 @@ export function Welcome({ onChoose }: { onChoose: (choice: OnboardChoice) => voi
         </View>
         <ThemedText type="code" style={[s.version, { color: p.faint }]}>{appVersion}</ThemedText>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -281,7 +287,7 @@ function PhoneFrame({ kind, p }: { kind: ScreenKind; p: Palette }) {
 function makeStyles(p: Palette) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: p.bg },
-    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 6, paddingBottom: 4 },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 14, paddingBottom: 4 },
     loginLink: { fontSize: 13, letterSpacing: 0.5 },
     pager: { flex: 1 },
     slide: { flex: 1, paddingHorizontal: 28, justifyContent: 'center' },

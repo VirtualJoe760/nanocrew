@@ -1017,7 +1017,9 @@ export default function StudioScreen() {
           setShowWelcome(false);
           AsyncStorage.setItem(ONBOARD_SEEN_KEY, '1').catch(() => {});
         }}>
-        <Welcome onChoose={handleChoose} />
+        {/* The Modal renders in its own native view tree (no safe-area context), so pass the
+            app-level insets in — otherwise the top bar sits under the Dynamic Island / status bar. */}
+        <Welcome onChoose={handleChoose} topInset={insets.top} bottomInset={insets.bottom} />
       </Modal>
 
       <KeyboardAvoidingView
