@@ -61,8 +61,14 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   the full **"Ascendant Cortana"** build:
   - Loads the **female** RPM head via plain three `GLTFLoader` (NOT drei `useGLTF` — see gotchas).
   - **Clean-face fix (the hair/face conflict):** only the 4 morph-rigged meshes are the face
-    (`Wolf3D_Head`, `EyeLeft`, `EyeRight`, `Wolf3D_Teeth`); body/outfit/**glasses** are hidden and
-    `Wolf3D_Hair` becomes a faint additive `EdgesGeometry` contour that *frames* her (no tangle).
+    (`Wolf3D_Head`, `EyeLeft`, `EyeRight`, `Wolf3D_Teeth`); body/outfit/**glasses** are hidden. The
+    substrate is `side: FrontSide` (culls the back-of-skull x-ray → reads as a face).
+  - **Hair (attractiveness pass):** `Wolf3D_Hair` is kept **skinned + visible** as a soft
+    translucent cool **volume** (`MeshBasicMaterial`, FrontSide, depthWrite — frames the face +
+    occludes the bald scalp behind it) with a glowing `EdgesGeometry` **rim** over it. (Earlier
+    sparse-points / faint-edge-contour treatments looked straggly — replaced.)
+  - **Eyes:** glowing **irises** (a bright icy core + soft halo, `depthTest:false`) parented to the
+    `LeftEye`/`RightEye` bones, so she has an expressive gaze that **tracks the saccades**.
   - **Two-layer render:** a DIM constant-color morph-driven substrate (`MeshBasicMaterial`
     wireframe, opacity 0.12, all 4 face meshes) carries lip-sync + blink, UNDER a **bright static
     glow shell** parented to the `Head` bone (built once via `bakeHeadLocal` → head-local geometry →

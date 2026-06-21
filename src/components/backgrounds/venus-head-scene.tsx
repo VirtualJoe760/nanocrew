@@ -221,6 +221,28 @@ function subsample(geo: THREE.BufferGeometry, stride: number): THREE.BufferGeome
   return g;
 }
 
+// A glowing iris parented to an eye bone — a bright core + soft halo at the
+// eyeball front, so she has an expressive gaze that tracks with the saccades.
+function makeIris(bone: THREE.Object3D | undefined, dotTex: THREE.Texture): THREE.Material[] {
+  if (!bone) return [];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0.013]), 3));
+  const haloMat = new THREE.PointsMaterial({
+    size: 0.03, map: dotTex, color: new THREE.Color('#5BD8E6'), opacity: 0.55,
+    transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
+    depthWrite: false, depthTest: false,
+  });
+  const coreMat = new THREE.PointsMaterial({
+    size: 0.013, map: dotTex, color: new THREE.Color('#eaf7ff'),
+    transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
+    depthWrite: false, depthTest: false,
+  });
+  const halo = new THREE.Points(g, haloMat); halo.renderOrder = 3;
+  const core = new THREE.Points(g, coreMat); core.renderOrder = 4;
+  bone.add(halo, core);
+  return [haloMat];
+}
+
 function Avatar({ url }: { url: string }) {
   const { camera } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
@@ -272,8 +294,21 @@ function Avatar({ url }: { url: string }) {
           const m = o as THREE.Mesh;
           if (!m.isMesh) return;
           const n = m.name || '';
+          if (isHair(n)) {
+            // Real hair, kept SKINNED (follows the head): a soft translucent cool
+            // volume that frames the face + occludes the bald-scalp wireframe behind.
+            m.material = new THREE.MeshBasicMaterial({
+              color: new THREE.Color('#26315f'),
+              transparent: true,
+              opacity: 0.72,
+              side: THREE.FrontSide,
+              depthWrite: true,
+            });
+            m.renderOrder = 0;
+            return;
+          }
           const isFace = FACE_NAMES.includes(n) || !!m.morphTargetDictionary;
-          if (!isFace && (isClutter(n) || isHair(n))) {
+          if (!isFace && isClutter(n)) {
             m.visible = false;
             return;
           }
@@ -282,6 +317,7 @@ function Avatar({ url }: { url: string }) {
             wireframe: true,
             transparent: true,
             opacity: 0.12,
+            side: THREE.FrontSide, // cull the back of the skull → reads as a face, not an x-ray
             blending: THREE.AdditiveBlending,
             depthWrite: false,
           });
@@ -367,25 +403,28 @@ function Avatar({ url }: { url: string }) {
             shell.add(coreSphere, edgeHalo, glowPts, edgeCore, corePts); // back→front
             shell.renderOrder = 2;
 
-            // (e) faint hair contour — frames her as female without tangling
+            // (e) glowing hair RIM — a luminous silhouette over the solid volume
+            //     so the hair reads as holographic, not a flat dark shape
             const hairGeo = bakeHeadLocal(gltf.scene, bones.head, ['Wolf3D_Hair']);
             if (hairGeo) {
-              const hairEdges = new THREE.EdgesGeometry(hairGeo, 32);
-              const hairMat = new THREE.LineBasicMaterial({
-                color: new THREE.Color('#2f5560'), transparent: true, opacity: 0.16,
+              const hairRimMat = new THREE.LineBasicMaterial({
+                color: new THREE.Color('#6E86E0'), transparent: true, opacity: 0.22,
                 blending: THREE.AdditiveBlending, depthWrite: false,
               });
-              hairMat.opacity = 0.12; // restrained — a whisper of a frame
-              const hairHalo = new THREE.LineSegments(hairEdges, hairMat);
-              hairHalo.renderOrder = 1;
-              shell.add(hairHalo);
-              cycleMats.push(hairMat);
+              const hairRim = new THREE.LineSegments(new THREE.EdgesGeometry(hairGeo, 45), hairRimMat);
+              hairRim.renderOrder = 1;
+              shell.add(hairRim);
+              cycleMats.push(hairRimMat);
             }
+
+            // (f) glowing irises — expressive gaze that tracks the saccades
+            cycleMats.push(...makeIris(bones.leftEye, dotTex));
+            cycleMats.push(...makeIris(bones.rightEye, dotTex));
 
             bones.head.add(shell);
             cycleMats.push(edgeCoreMat, edgeHaloMat);
 
-            // (f) aura pool — she sits in her own light (billboarded, behind head)
+            // (g) aura pool — she sits in her own light (billboarded, behind head)
             const auraMat = new THREE.MeshBasicMaterial({
               map: makeAuraTexture(), transparent: true, opacity: 0.1,
               blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false,
