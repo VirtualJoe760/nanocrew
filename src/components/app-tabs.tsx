@@ -41,6 +41,16 @@ export default function AppTabs() {
         <Icon sf="person.circle" />
         <Label>Account</Label>
       </NativeTabs.Trigger>
+
+      {/* Dev-only GPU/shader sandbox — a "Lab" tab in dev builds only (absent in production; the
+          screen also returns null there). Renders on a native dev build; the web preview can't show
+          it because expo-router/unstable-native-tabs only renders the initial tab on web. */}
+      {__DEV__ ? (
+        <NativeTabs.Trigger name="playground">
+          <Icon sf="cube" />
+          <Label>Lab</Label>
+        </NativeTabs.Trigger>
+      ) : null}
     </NativeTabs>
   );
 }
