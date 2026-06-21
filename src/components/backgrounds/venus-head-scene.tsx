@@ -35,6 +35,9 @@ const FACE_NAMES = ['Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'];
 // The bright glow SHELL is built from the face SKIN only — eyeballs + teeth stay
 // on the dim substrate (cleaner sockets, no bright eye-blobs; structure leads).
 const SHELL_NAMES = ['Wolf3D_Head'];
+// Short-bob hair: clip the long hair at the chin, measured relative to the camera
+// aim height (≈ chin). More negative = longer. Tuned to a Mia-bob.
+const HAIR_BOB_Y_OFFSET = -0.02;
 
 // DEV: play a sample speech clip on load so the mouth moves (and the pulse reacts)
 // on web. Set false for production / live Gemini audio. (Guarded to web.)
@@ -221,30 +224,59 @@ function subsample(geo: THREE.BufferGeometry, stride: number): THREE.BufferGeome
   return g;
 }
 
-// A glowing iris parented to an eye bone — a bright core + soft halo at the
-// eyeball front, so she has an expressive gaze that tracks with the saccades.
-function makeIris(bone: THREE.Object3D | undefined, dotTex: THREE.Texture): THREE.Material[] {
+// An IRIS sprite texture — dark pupil, a bright limbal ring, striated cyan iris,
+// and a catchlight. Additive: the alpha-0 pupil reads dark, so you SEE the iris.
+function makeIrisTexture(): THREE.Texture {
+  const size = 64, c = (size - 1) / 2;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (x - c) / c, dy = (y - c) / c;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      let a = 0, cr = 110, cg = 210, cb = 255; // cyan iris
+      if (r < 0.30) a = 0;                                   // pupil — dark hole
+      else if (r < 0.38) { a = 1; cr = 220; cg = 248; cb = 255; } // bright inner ring
+      else if (r < 0.82) {
+        const ang = Math.atan2(dy, dx);
+        a = (0.7 + 0.3 * Math.sin(ang * 18)) * (1 - (r - 0.38) / 0.6); // striated iris
+      } else a = 0;
+      // catchlight — a small bright spot upper-left
+      const cl = Math.max(0, 1 - Math.hypot(dx + 0.28, dy + 0.3) / 0.22);
+      if (cl > 0) { a = Math.max(a, cl); cr = 255; cg = 255; cb = 255; }
+      const i = (y * size + x) * 4;
+      data[i] = cr; data[i + 1] = cg; data[i + 2] = cb;
+      data[i + 3] = Math.round(Math.min(1, Math.max(0, a)) * 255);
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// An iris parented to an eye bone — a readable iris (ring + dark pupil + catchlight)
+// over a faint halo, so she has an expressive gaze that tracks with the saccades.
+function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, dotTex: THREE.Texture): THREE.Material[] {
   if (!bone) return [];
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0.013]), 3));
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0.014]), 3));
   const haloMat = new THREE.PointsMaterial({
-    size: 0.03, map: dotTex, color: new THREE.Color('#5BD8E6'), opacity: 0.55,
+    size: 0.016, map: dotTex, color: new THREE.Color('#2f6f8a'), opacity: 0.22,
     transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
     depthWrite: false, depthTest: false,
   });
-  const coreMat = new THREE.PointsMaterial({
-    size: 0.013, map: dotTex, color: new THREE.Color('#eaf7ff'),
+  const irisMat = new THREE.PointsMaterial({
+    size: 0.028, map: irisTex, color: new THREE.Color('#ffffff'),
     transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
     depthWrite: false, depthTest: false,
   });
   const halo = new THREE.Points(g, haloMat); halo.renderOrder = 3;
-  const core = new THREE.Points(g, coreMat); core.renderOrder = 4;
-  bone.add(halo, core);
+  const iris = new THREE.Points(g, irisMat); iris.renderOrder = 4;
+  bone.add(halo, iris);
   return [haloMat];
 }
 
 function Avatar({ url }: { url: string }) {
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
   const rig = useRef<Rig | null>(null);
   const a = useRef({ nextBlink: 1.2, blinkAt: -1, nextSacc: 0.6, gx: 0, gy: 0, nextBrow: 2.5, browAt: -1, browAmt: 0 });
@@ -290,6 +322,7 @@ function Avatar({ url }: { url: string }) {
         // FACE substrate stays in the scene, DIM + additive + CONSTANT color so
         // the mouth still visibly lip-syncs under the bright shell.
         const meshes: THREE.Mesh[] = [];
+        let hairMat: THREE.MeshBasicMaterial | undefined;
         gltf.scene.traverse((o) => {
           const m = o as THREE.Mesh;
           if (!m.isMesh) return;
@@ -297,13 +330,15 @@ function Avatar({ url }: { url: string }) {
           if (isHair(n)) {
             // Real hair, kept SKINNED (follows the head): a soft translucent cool
             // volume that frames the face + occludes the bald-scalp wireframe behind.
-            m.material = new THREE.MeshBasicMaterial({
+            // Clipped to a chin-length bob after framing (see HAIR_BOB_DROP).
+            hairMat = new THREE.MeshBasicMaterial({
               color: new THREE.Color('#26315f'),
               transparent: true,
               opacity: 0.72,
               side: THREE.FrontSide,
               depthWrite: true,
             });
+            m.material = hairMat;
             m.renderOrder = 0;
             return;
           }
@@ -335,10 +370,12 @@ function Avatar({ url }: { url: string }) {
         let nodeMat: THREE.ShaderMaterial | undefined;
         let coreMat: THREE.ShaderMaterial | undefined;
         let edgeCoreMat: THREE.LineBasicMaterial | undefined;
+        let hairRimMat: THREE.LineBasicMaterial | undefined;
         let aura: THREE.Object3D | undefined;
 
         if (bones.head) {
           const dotTex = makeDotTexture();
+          const irisTex = makeIrisTexture();
           const faceGeo = bakeHeadLocal(gltf.scene, bones.head, SHELL_NAMES);
           if (faceGeo) {
             bakeAurora(faceGeo);
@@ -407,7 +444,7 @@ function Avatar({ url }: { url: string }) {
             //     so the hair reads as holographic, not a flat dark shape
             const hairGeo = bakeHeadLocal(gltf.scene, bones.head, ['Wolf3D_Hair']);
             if (hairGeo) {
-              const hairRimMat = new THREE.LineBasicMaterial({
+              hairRimMat = new THREE.LineBasicMaterial({
                 color: new THREE.Color('#6E86E0'), transparent: true, opacity: 0.22,
                 blending: THREE.AdditiveBlending, depthWrite: false,
               });
@@ -418,8 +455,8 @@ function Avatar({ url }: { url: string }) {
             }
 
             // (f) glowing irises — expressive gaze that tracks the saccades
-            cycleMats.push(...makeIris(bones.leftEye, dotTex));
-            cycleMats.push(...makeIris(bones.rightEye, dotTex));
+            cycleMats.push(...makeIris(bones.leftEye, irisTex, dotTex));
+            cycleMats.push(...makeIris(bones.rightEye, irisTex, dotTex));
 
             bones.head.add(shell);
             cycleMats.push(edgeCoreMat, edgeHaloMat);
@@ -447,6 +484,19 @@ function Avatar({ url }: { url: string }) {
         camera.position.set(0, aimY, 1.0);
         camera.lookAt(0, aimY, 0);
         camera.updateProjectionMatrix();
+
+        // short bob: clip the hair (solid + rim) at chin level in WORLD space,
+        // keeping the fringe but cutting the length. Same plane → consistent edge.
+        const bobPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(aimY + HAIR_BOB_Y_OFFSET));
+        if (hairMat || hairRimMat) {
+          gl.localClippingEnabled = true;
+          for (const mat of [hairMat, hairRimMat]) {
+            if (!mat) continue;
+            mat.clippingPlanes = [bobPlane];
+            mat.needsUpdate = true;
+          }
+        }
+
         if (aura) gltf.scene.add(aura);
         setRoot(gltf.scene);
       },
