@@ -29,6 +29,8 @@ import {
 
 const AVATAR_URL = 'https://raw.githubusercontent.com/met4citizen/TalkingHead/main/avatars/brunette.glb';
 const DEG = Math.PI / 180;
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+const _hairMV = new THREE.Matrix4(); // scratch for the hair object→view rotation
 
 // The 4 morph-rigged meshes that make up the visible face (verified from the GLB).
 const FACE_NAMES = ['Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'];
@@ -114,9 +116,11 @@ type Rig = {
   nodeMat?: THREE.ShaderMaterial;
   coreMat?: THREE.ShaderMaterial;
   edgeCoreMat?: THREE.LineBasicMaterial;
-  cycleMats: THREE.Material[]; // edges + hair — narrow hue drift
+  cycleMats: THREE.Material[]; // edges — narrow hue drift
   aura?: THREE.Object3D;       // billboarded aura pool
   shell?: THREE.Group;
+  bob?: THREE.Mesh;            // procedural bob (per-frame hair-shader uniforms)
+  hairMat?: THREE.ShaderMaterial;
 };
 
 // Soft round additive sprite — DataTexture (no DOM canvas → native-safe).
@@ -206,25 +210,87 @@ function dropEars(geo: THREE.BufferGeometry, maxAbsX: number): THREE.BufferGeome
   return g;
 }
 
-// Smooth holographic hair shader: dark translucent fill + a glowing fresnel rim
-// at the silhouette (no jagged internal edges). Writes depth so it occludes.
+// Realistic stylized HAIR shader (Kajiya-Kay / Scheuermann dual anisotropic sheen +
+// strand striations + root→tip gradient + soft tapered hem + blunt-fringe edge). The
+// view-space hair TANGENT is derived from a baked object-space flow dir so the crown
+// sheen band slides naturally as the head sways. ES2-safe (mediump, no loops/dFdx).
 const HAIR_VERT = /* glsl */ `
   precision mediump float;
-  varying vec3 vN, vV;
+  attribute float aRoot;    // 0 crown → 1 tip
+  attribute float aAround;  // 0..1 azimuth (strand index around the head)
+  attribute float aEdge;    // metres above this vert's A-line cut (soft taper)
+  attribute float aFringe;  // 1.0 = front blunt-fringe vert
+  attribute float aEdgeF;   // metres above browY (fringe verts)
+  attribute vec3  aFlow;    // OBJECT-space hair flow (≈ down-strand)
+  uniform mat3 uViewRot;    // object→view rotation (per-frame)
+  varying vec3  vN, vV, vT;
+  varying float vRoot, vAround, vEdge, vFringe, vEdgeF;
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     vN = normalize(normalMatrix * normal);
     vV = normalize(-mv.xyz);
+    vec3 flowVS = normalize(uViewRot * aFlow);
+    vec3 T = flowVS - vN * dot(flowVS, vN);
+    if (dot(T, T) < 1e-4) T = cross(vN, vec3(1.0, 0.0, 0.0)); // crown-pole guard
+    vT = normalize(T);
+    vRoot = aRoot; vAround = aAround; vEdge = aEdge; vFringe = aFringe; vEdgeF = aEdgeF;
     gl_Position = projectionMatrix * mv;
   }
 `;
 const HAIR_FRAG = /* glsl */ `
   precision mediump float;
-  uniform vec3 uBase, uRim;
-  varying vec3 vN, vV;
+  uniform vec3  uRoot, uTip, uRim, uSpec1, uSpec2, uLightVS;
+  uniform float uExp1, uExp2, uShift1, uShift2, uSpec1Str, uSpec2Str;
+  uniform float uStrandCount, uStrandWander, uTipFade, uBaseAlpha, uTime;
+  varying vec3  vN, vV, vT;
+  varying float vRoot, vAround, vEdge, vFringe, vEdgeF;
+  float hash21(vec2 p){ p=fract(p*vec2(123.34,345.45)); p+=dot(p,p+34.345); return fract(p.x*p.y); }
+  float vnoise(vec2 p){
+    vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+    float a=hash21(i), b=hash21(i+vec2(1.,0.)), c=hash21(i+vec2(0.,1.)), d=hash21(i+vec2(1.,1.));
+    return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+  }
+  vec3 shiftTangent(vec3 T, vec3 N, float s){ return normalize(T + s * N); }
+  float strandSpec(vec3 T, vec3 V, vec3 L, float e){
+    vec3 H = normalize(L + V); float th = dot(T, H);
+    float s = sqrt(max(1.0 - th*th, 0.0));
+    return smoothstep(-1.0, 0.0, th) * pow(s, e);
+  }
   void main() {
-    float f = pow(1.0 - max(dot(vV, vN), 0.0), 2.2); // 0 face-on, 1 at the silhouette
-    gl_FragColor = vec4(uBase + uRim * f * 1.6, 0.62 + 0.36 * f);
+    vec3 N = normalize(vN), V = normalize(vV), T = normalize(vT), L = normalize(uLightVS);
+    // root→tip color + brightness
+    float g = smoothstep(0.05, 1.0, vRoot);
+    vec3 col = mix(uRoot, uTip, g);
+    col += uTip * 0.35 * smoothstep(0.72, 1.0, vRoot);
+    col *= mix(0.7, 1.0, smoothstep(0.0, 0.18, vRoot));
+    // strand striations (emerge toward the tips, calmed at the silhouette)
+    float wander = (vnoise(vec2(vAround*18.0, vRoot*2.0)) - 0.5) * uStrandWander;
+    float bnd = pow(0.5 + 0.5*cos((vAround*uStrandCount + wander)*6.2831853), 1.6);
+    float clump = vnoise(vec2(vAround*26.0, vRoot*3.0))*0.6 + vnoise(vec2(vAround*60.0, vRoot*8.0))*0.4;
+    float strand = mix(0.82, 1.12, mix(bnd, clump, 0.35));
+    float nv = max(dot(N, V), 0.0);
+    strand = mix(1.0, strand, smoothstep(0.0, 0.4, nv));
+    col *= mix(1.0, strand, g);
+    // dual anisotropic Kajiya-Kay sheen
+    float jit = (vnoise(vec2(vAround*uStrandCount, vRoot*4.0)) - 0.5) * 0.05;
+    float s1 = strandSpec(shiftTangent(T, N, uShift1 + jit), V, L, uExp1) * uSpec1Str;
+    float s2 = strandSpec(shiftTangent(T, N, uShift2 + jit), V, L, uExp2) * uSpec2Str;
+    s2 *= mix(0.6, 1.4, hash21(floor(vec2(vAround*uStrandCount, vRoot*30.0)) + floor(uTime*6.0)));
+    vec3 spec = uSpec1 * s1 + uSpec2 * s2;
+    // fresnel rim (smoothed normals → clean falloff that hides facets) — subtle
+    float f = pow(1.0 - nv, 2.6);
+    col += spec + uRim * f * 0.5;
+    // soft tapered A-line hem (feathered), but NOT on the blunt fringe
+    float wisp = vnoise(vec2(vAround*uStrandCount*0.5, 7.0)) * uTipFade * 0.9;
+    float taper = smoothstep(0.0, uTipFade, vEdge - wisp);
+    float tipStrands = mix(1.0, smoothstep(0.35, 0.75, strand), 1.0 - taper);
+    float fade = mix(taper, 1.0, vFringe);
+    // crisp blunt-fringe cut line
+    col += uTip * (1.0 - smoothstep(0.0, 0.012, vEdgeF)) * vFringe * 0.8;
+    float specLum = dot(spec, vec3(0.299, 0.587, 0.114));
+    float alpha = (uBaseAlpha + 0.30 * f + specLum * 0.9) * fade * tipStrands;
+    if (alpha < 0.12) discard;
+    gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
   }
 `;
 
@@ -250,12 +316,15 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
   // rounded crown → full width over the ears → taper IN toward the jaw (curves under).
   const prof = (t: number) => {
     const dome = 0.34, jaw = 0.58;
-    if (t < dome) return Math.sin((t / dome) * Math.PI * 0.5); // round the crown up to full width
-    if (t < jaw) return 1;                                     // full width over the ears
-    return 1 - 0.32 * ((t - jaw) / (1 - jaw));                 // taper in to the jaw/chin
+    // 0.08 floor avoids a degenerate crown pole (r=0 → NaN normals)
+    if (t < dome) return 0.08 + 0.92 * Math.sin((t / dome) * Math.PI * 0.5); // round the crown
+    if (t < jaw) return 1;                                                   // full width over the ears
+    return 1 - 0.32 * ((t - jaw) / (1 - jaw));                               // taper in to the jaw/chin
   };
 
-  const segU = 72, segV = 52;
+  const segU = 96, segV = 72;                  // smoother crown; ~13k tris, cheap
+  const fringeRow = Math.round((browY - topY) / ((botY - topY) / segV)); // row where y ≈ browY
+  const FRINGE_ARC = faceHalfX * 1.15;         // how wide across the front the fringe spans
   const grid: THREE.Vector3[][] = [];
   for (let iv = 0; iv <= segV; iv++) {
     const t = iv / segV;
@@ -269,28 +338,86 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
     grid.push(row);
   }
 
-  const out: number[] = [];
-  const push = (p: THREE.Vector3) => out.push(p.x, p.y, p.z);
-  for (let iv = 0; iv < segV; iv++) {
-    for (let iu = 0; iu < segU; iu++) {
-      const a = grid[iv][iu], b = grid[iv][iu + 1], c = grid[iv + 1][iu + 1], d = grid[iv + 1][iu];
-      const mx = (a.x + b.x + c.x + d.x) / 4, my = (a.y + b.y + c.y + d.y) / 4, mz = (a.z + b.z + c.z + d.z) / 4;
-      const isFace = mz > cz && my < browY && Math.abs(mx - cx) < faceHalfX; // face opening
-      const belowBottom = my < jawY - BOB_TILT * (mz - cz);                  // A-line bottom
-      if (isFace || belowBottom) continue;
-      push(a); push(b); push(c);
-      push(a); push(c); push(d);
+  // ── shared vertices (one per grid node; last column reuses the first → seam welds) ──
+  const cols = segU;
+  const vid = (iv: number, iu: number) => iv * cols + (iu % cols);
+  const positions: number[] = [];
+  const aRoot: number[] = [], aAround: number[] = [], aEdge: number[] = [];
+  const aFringe: number[] = [], aEdgeF: number[] = [], aFlow: number[] = [];
+  const cutLine = (p: THREE.Vector3) => jawY - BOB_TILT * (p.z - cz);
+  for (let iv = 0; iv <= segV; iv++) {
+    for (let iu = 0; iu < cols; iu++) {
+      const p = grid[iv][iu];
+      positions.push(p.x, p.y, p.z);
+      aRoot.push(iv / segV);
+      aAround.push(iu / cols);
+      aEdge.push(p.y - cutLine(p));
+      aFringe.push(p.z > cz && Math.abs(p.x - cx) < FRINGE_ARC && iv <= fringeRow ? 1 : 0);
+      aEdgeF.push(p.y - browY);
+      const pn = grid[Math.min(iv + 1, segV)][iu]; // down-strand flow ≈ toward next row
+      const fl = new THREE.Vector3(pn.x - p.x, pn.y - p.y, pn.z - p.z);
+      if (fl.lengthSq() < 1e-8) fl.set(0, -1, 0);
+      fl.normalize();
+      aFlow.push(fl.x, fl.y, fl.z);
     }
   }
+
+  // ── carve: emit indices only for kept quads (face opening / A-line / blunt fringe) ──
+  const indices: number[] = [];
+  for (let iv = 0; iv < segV; iv++) {
+    for (let iu = 0; iu < cols; iu++) {
+      const a = grid[iv][iu], b = grid[iv][iu + 1], c = grid[iv + 1][iu + 1], d = grid[iv + 1][iu];
+      const mx = (a.x + b.x + c.x + d.x) / 4, my = (a.y + b.y + c.y + d.y) / 4, mz = (a.z + b.z + c.z + d.z) / 4;
+      const isFrontBand = mz > cz && Math.abs(mx - cx) < FRINGE_ARC;
+      let drop: boolean;
+      if (isFrontBand) {
+        drop = iv >= fringeRow;                                       // crisp horizontal blunt cut
+      } else {
+        const isFace = mz > cz && my < browY && Math.abs(mx - cx) < faceHalfX;
+        const belowBottom = my < jawY - BOB_TILT * (mz - cz);
+        drop = isFace || belowBottom;
+      }
+      if (drop) continue;
+      indices.push(vid(iv, iu), vid(iv, iu + 1), vid(iv + 1, iu + 1), vid(iv, iu), vid(iv + 1, iu + 1), vid(iv + 1, iu));
+    }
+  }
+
   const bobGeo = new THREE.BufferGeometry();
-  bobGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3));
-  bobGeo.computeVertexNormals();
+  bobGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  bobGeo.setAttribute('aRoot', new THREE.BufferAttribute(new Float32Array(aRoot), 1));
+  bobGeo.setAttribute('aAround', new THREE.BufferAttribute(new Float32Array(aAround), 1));
+  bobGeo.setAttribute('aEdge', new THREE.BufferAttribute(new Float32Array(aEdge), 1));
+  bobGeo.setAttribute('aFringe', new THREE.BufferAttribute(new Float32Array(aFringe), 1));
+  bobGeo.setAttribute('aEdgeF', new THREE.BufferAttribute(new Float32Array(aEdgeF), 1));
+  bobGeo.setAttribute('aFlow', new THREE.BufferAttribute(new Float32Array(aFlow), 3));
+  bobGeo.setIndex(indices);
+  bobGeo.computeVertexNormals(); // SMOOTH — shared verts + welded seam (kills facets)
 
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uBase: { value: new THREE.Color('#0e2633') }, uRim: { value: new THREE.Color('#5fd0e0') } },
+    uniforms: {
+      uRoot: { value: new THREE.Color('#06141b') },
+      uTip: { value: new THREE.Color('#2f93a6') }, // medium teal hair (not neon cyan)
+      uRim: { value: new THREE.Color('#4ab6c4') },
+      uSpec1: { value: new THREE.Color('#bfeff7') }, // primary sheen — light cyan-white
+      uSpec2: { value: new THREE.Color('#37c2c8') }, // secondary — teal glint
+      uLightVS: { value: new THREE.Vector3(0.15, 0.55, 0.85).normalize() },
+      uExp1: { value: 50.0 },
+      uExp2: { value: 120.0 },
+      uShift1: { value: -0.05 },
+      uShift2: { value: 0.04 },
+      uSpec1Str: { value: 0.6 },
+      uSpec2Str: { value: 0.65 },
+      uStrandCount: { value: 130.0 },
+      uStrandWander: { value: 6.0 },
+      uTipFade: { value: 0.05 * H },
+      uBaseAlpha: { value: 0.88 }, // solid hair — occludes the face behind the fringe
+      uTime: { value: 0 },
+      uViewRot: { value: new THREE.Matrix3() },
+    },
     vertexShader: HAIR_VERT,
     fragmentShader: HAIR_FRAG,
     transparent: true,
+    blending: THREE.NormalBlending,
     side: THREE.FrontSide,
     depthWrite: true,
   });
@@ -485,6 +612,8 @@ function Avatar({ url }: { url: string }) {
         let coreMat: THREE.ShaderMaterial | undefined;
         let edgeCoreMat: THREE.LineBasicMaterial | undefined;
         let aura: THREE.Object3D | undefined;
+        let bob: THREE.Mesh | undefined;
+        let hairMat: THREE.ShaderMaterial | undefined;
 
         if (bones.head) {
           const dotTex = makeDotTexture();
@@ -565,7 +694,9 @@ function Avatar({ url }: { url: string }) {
               bones.rightEye.getWorldPosition(eR);
               e.add(eR).multiplyScalar(0.5);
               bones.head.worldToLocal(e); // eye line in head-local space
-              shell.add(buildBobHair(rawFace.boundingBox, e.y));
+              bob = buildBobHair(rawFace.boundingBox, e.y);
+              hairMat = bob.material as THREE.ShaderMaterial;
+              shell.add(bob);
             }
 
             // (f) glowing irises — expressive gaze that tracks the saccades
@@ -589,7 +720,7 @@ function Avatar({ url }: { url: string }) {
           }
         }
 
-        rig.current = { meshes, bones, rest, nodeMat, coreMat, edgeCoreMat, cycleMats, aura, shell };
+        rig.current = { meshes, bones, rest, nodeMat, coreMat, edgeCoreMat, cycleMats, aura, shell, bob, hairMat };
 
         // frame the face off the known avatar scale (head at the top, face at +z).
         // NOTE: frame BEFORE adding the aura plane — it would inflate the bbox.
@@ -654,6 +785,18 @@ function Avatar({ url }: { url: string }) {
     if (r.aura) {
       r.aura.quaternion.copy(camera.quaternion);
       r.aura.scale.setScalar(0.95 * (1 + 0.03 * Math.sin(t * 0.25)));
+    }
+
+    // ── hair: object→view rotation (anisotropic sheen band) + time + breathing light ──
+    if (r.bob && r.hairMat) {
+      r.bob.updateWorldMatrix(true, false);
+      _hairMV.multiplyMatrices(camera.matrixWorldInverse, r.bob.matrixWorld);
+      r.hairMat.uniforms.uViewRot.value.setFromMatrix4(_hairMV);
+      r.hairMat.uniforms.uTime.value = t;
+      r.hairMat.uniforms.uLightVS.value
+        .set(0.15, 0.55, 0.85)
+        .applyAxisAngle(Z_AXIS, Math.sin(t * 0.6) * 0.06)
+        .normalize();
     }
 
     // blink — eyelids close + open (0→1→0)

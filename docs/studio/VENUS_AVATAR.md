@@ -64,17 +64,26 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     (`Wolf3D_Head`, `EyeLeft`, `EyeRight`, `Wolf3D_Teeth`); body/outfit/**glasses** are hidden. The
     substrate is `side: FrontSide` (culls the back-of-skull x-ray → reads as a face).
   - **Hair — a PROCEDURAL BOB** (`buildBobHair`): the demo avatar only ships **long** hair, and
-    clipping that mesh can't fake a bob's *shape* (it just reads as long hair cut off). So the long
-    `Wolf3D_Hair` is **hidden** and we build the bob ourselves: a `SphereGeometry` scaled to an
-    ellipsoid wrapping the head (sized off the **crown + the eye line** — "eyes are halfway down the
-    head"), then triangles are carved away for the **face opening** (front, below the fringe, within
-    the face width) and an **A-line bottom** (a tilted cutoff, front kept longer). Rendered as a smooth
-    **fresnel-glow** volume (`HAIR_VERT`/`HAIR_FRAG`: dark translucent fill + a cyan rim at the
-    silhouette, `depthWrite` so it occludes the scalp + covers the ears). Tunables: `BOB_WIDEN`,
-    `BOB_DEPTH`, `BOB_FACE_OPEN`, `BOB_FRINGE`, `BOB_LEN`, `BOB_TILT`. The bright **ear geometry is
-    dropped from the face shell** (`dropEars`, `EAR_DROP_FRAC`) so it doesn't poke through.
-    **Note:** this is the demo workaround — the user's own RPM Venus with a real bob asset (URL swap)
-    is the production answer; RPM was unreachable when we built this.
+    clipping that mesh can't fake a bob's *shape*. So the long `Wolf3D_Hair` is **hidden** and we build
+    the bob ourselves — a **revolved BELL profile** (`prof(t)`: rounded crown that hugs the skull →
+    full width over the ears → taper IN toward the jaw; a sphere reads as an afro, a bell reads as a
+    bob), sized off the **crown + eye line** ("eyes are halfway down the head"). Built as an **INDEXED**
+    grid (shared verts + welded seam → `computeVertexNormals` gives SMOOTH shading, the #1 anti-facet
+    fix) with triangles carved for the **face opening**, an **A-line bottom** (tilted cutoff, front
+    longer), and a **blunt fringe** (snapped to a grid row for a straight edge). Per-vertex attributes
+    baked: `aRoot` (crown→tip), `aAround` (azimuth), `aEdge`/`aEdgeF` (soft hem / fringe edge),
+    `aFlow` (object-space strand flow).
+  - **Hair SHADER** (`HAIR_VERT`/`HAIR_FRAG`, realism pass): a **Kajiya-Kay / Scheuermann dual
+    anisotropic sheen** (the bright highlight band that reads as hair — tangent = the baked flow
+    projected onto the surface, lit by a faked view-space upper-front light fed per-frame via
+    `uViewRot`/`uTime`), over a **root→tip teal gradient**, **procedural strand striations**, a soft
+    **fresnel rim**, a **feathered A-line hem** + crisp fringe edge. `NormalBlending`, `uBaseAlpha`
+    ~0.88 (solid hair occludes the face behind the fringe). ES2/expo-gl-safe (no postprocessing,
+    no loops/dFdx; promote `mediump`→`highp` if the crown band crawls on device). ~20 tunable uniforms;
+    the 5 worth eyeballing: `uBaseAlpha`, `uShift1/2`, `uStrandCount`, `uExp1/2`, `uTipFade`.
+  - The bright **ear geometry is dropped from the face shell** (`dropEars`, `EAR_DROP_FRAC`) so it
+    doesn't poke through the bob. **Note:** the procedural bob is the demo workaround — the user's own
+    RPM Venus with a real bob asset (URL swap) is the production answer; RPM was unreachable when built.
   - **Eyes — a readable IRIS:** a sprite with a generated iris texture (dark pupil + bright limbal
     ring + striations + catchlight, `makeIrisTexture`) over a faint halo, parented to the
     `LeftEye`/`RightEye` bones so the gaze **tracks the saccades**. (Additive: the alpha-0 pupil reads
