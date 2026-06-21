@@ -267,6 +267,8 @@ const HAIR_FRAG = /* glsl */ `
   }
   void main() {
     vec3 N = normalize(vN), V = normalize(vV), T = normalize(vT), L = normalize(uLightVS);
+    float facing = gl_FrontFacing ? 1.0 : 0.0;
+    if (facing < 0.5) N = -N; // backface = the INSIDE of the hair: flip so shading is sane
     // root→tip color + brightness
     float g = smoothstep(0.05, 1.0, vRoot);
     vec3 col = mix(uRoot, uTip, g);
@@ -296,6 +298,7 @@ const HAIR_FRAG = /* glsl */ `
     float fade = mix(taper, 1.0, vFringe);
     // crisp blunt-fringe cut line
     col += uTip * (1.0 - smoothstep(0.0, 0.012, vEdgeF)) * vFringe * 0.8;
+    col *= mix(0.5, 1.0, facing); // the inside of the hair reads darker (but stays visible)
     float specLum = dot(spec, vec3(0.299, 0.587, 0.114));
     float alpha = (uBaseAlpha + 0.30 * f + specLum * 0.9) * fade * tipStrands;
     if (alpha < 0.12) discard;
@@ -430,7 +433,7 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
     fragmentShader: HAIR_FRAG,
     transparent: true,
     blending: THREE.NormalBlending,
-    side: THREE.FrontSide,
+    side: THREE.DoubleSide, // show the INSIDE too, so waving strands don't cull/vanish
     depthWrite: true,
   });
   const bob = new THREE.Mesh(bobGeo, mat);
@@ -719,6 +722,19 @@ function Avatar({ url }: { url: string }) {
 
             bones.head.add(shell);
             cycleMats.push(edgeCoreMat, edgeHaloMat);
+
+            // depth-only HEAD occluder — an invisible solid head that writes the depth
+            // buffer (colorWrite off) so hair BEHIND the face is hidden, while front hair
+            // (bangs/sides) still covers the face and the flowing bottom strands draw.
+            // (Default LEQUAL depth lets the coincident face wireframe still pass.)
+            const occluder = new THREE.Mesh(rawFace, new THREE.MeshBasicMaterial({
+              colorWrite: false,
+              polygonOffset: true,      // push the occluder's depth BACK so the (skinned) face
+              polygonOffsetFactor: 4,   // always passes in front of it, but the far back-hair
+              polygonOffsetUnits: 4,    // (well behind) is still blocked.
+            }));
+            occluder.renderOrder = -10;
+            bones.head.add(occluder);
 
             // (g) aura pool — she sits in her own light (billboarded, behind head)
             const auraMat = new THREE.MeshBasicMaterial({

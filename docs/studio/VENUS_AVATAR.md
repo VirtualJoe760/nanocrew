@@ -87,6 +87,12 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     parameterized by **head-fraction** so proportions stay stable as it lengthens. ES2/expo-gl-safe (no
     postprocessing, no loops/dFdx; `mediump`→`highp` if the crown band crawls). The 5 uniforms worth
     eyeballing: `uBaseAlpha`, `uShift1/2`, `uStrandCount`, `uExp1/2`, `uWaveAmp`.
+  - **Hair occlusion** (so waving strands don't vanish, and the back of the hair doesn't show
+    through the translucent face): the hair is `side: DoubleSide` (the INSIDE renders too — a backface
+    flip + inside-dim in `HAIR_FRAG` keeps it shaded sanely), and a **depth-only HEAD occluder** (an
+    invisible solid `Wolf3D_Head`, `colorWrite:false` + `polygonOffset` to clear the skinned/bind-pose
+    mismatch, `renderOrder -10`) writes the head's depth so: hair BEHIND the face is hidden, front hair
+    (bangs/sides) covers the face, and the flowing bottom strands (not behind the head) still draw.
   - **Ears removed two ways** so they don't poke out from under the bob: the bright ear geometry is
     dropped from the face shell (`dropEars`, `EAR_DROP_FRAC`), AND the dim substrate is clipped at the
     ear line (two world-space `THREE.Plane`s on the substrate materials, `gl.localClippingEnabled`).
