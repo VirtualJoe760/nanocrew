@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 
 import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
 import { ThemedText } from '@/components/themed-text';
+import { glow, textGlow } from '@/constants/glow';
 
 // First-launch welcome carousel (presented as a full-screen Modal by studio.tsx). Advertises the app
 // (Studio · Design · Market), then a plan picker with the sign-up offer, or "shop & browse for free".
@@ -162,9 +163,11 @@ export function Welcome({
 
       {/* Top bar: brand mark + log in */}
       <View style={[s.topBar, { paddingTop: topInset + 14 }]}>
-        <NCMark size={64} color={p.ink} />
+        <View style={glow(p.accent2, 22, 0.5)}>
+          <NCMark size={64} color={p.ink} />
+        </View>
         <Pressable onPress={() => onChoose('login')} hitSlop={8}>
-          <ThemedText type="code" style={[s.loginLink, { color: p.dim }]}>Log in</ThemedText>
+          <ThemedText type="code" style={[s.loginLink, { color: p.accent }, textGlow(p.accent, 8)]}>Log in</ThemedText>
         </Pressable>
       </View>
 
@@ -182,8 +185,8 @@ export function Welcome({
           <View key={slide.key} style={[s.slide, { width }]}>
             <PhoneFrame kind={slide.screen} p={p} />
             <View style={s.copy}>
-              <ThemedText type="code" style={[s.eyebrow, { color: p.dim }]}>{slide.eyebrow}</ThemedText>
-              <ThemedText type="title" style={[s.title, { color: p.ink }]}>{slide.title}</ThemedText>
+              <ThemedText type="code" style={[s.eyebrow, { color: p.accent }, textGlow(p.accent, 7)]}>{slide.eyebrow}</ThemedText>
+              <ThemedText type="title" style={[s.title, { color: p.ink }, textGlow('rgba(205,209,217,0.55)', 16)]}>{slide.title}</ThemedText>
               <ThemedText type="small" style={[s.body, { color: p.dim }]}>{slide.body}</ThemedText>
             </View>
           </View>
@@ -191,8 +194,8 @@ export function Welcome({
 
         {/* Offer / plan picker */}
         <View key="cta" style={[s.slide, s.ctaSlide, { width }]}>
-          <ThemedText type="title" style={[s.title, s.ctaTitle, { color: p.ink }]}>Start your label today.</ThemedText>
-          <ThemedText type="code" style={[s.offerBanner, { color: p.accent }]}>
+          <ThemedText type="title" style={[s.title, s.ctaTitle, { color: p.ink }, textGlow('rgba(205,209,217,0.55)', 16)]}>Start your label today.</ThemedText>
+          <ThemedText type="code" style={[s.offerBanner, { color: p.accent }, textGlow(p.accent, 9)]}>
             {billing === 'annual' ? 'LIMITED — 15% OFF YOUR FIRST YEAR' : 'LIMITED — 15% OFF YOUR FIRST MONTH'}
           </ThemedText>
 
@@ -215,7 +218,11 @@ export function Welcome({
               <Pressable
                 key={pl.plan}
                 onPress={() => onChoose('subscribe')}
-                style={[s.planCard, { borderColor: pl.popular ? p.accent : p.faint, backgroundColor: pl.popular ? (p.dark ? '#101014' : '#fbfbfc') : 'transparent' }]}>
+                style={[
+                  s.planCard,
+                  { borderColor: pl.popular ? p.accent : p.faint, backgroundColor: pl.popular ? (p.dark ? '#101014' : '#fbfbfc') : 'transparent' },
+                  pl.popular && glow(p.accent, 16, 0.45),
+                ]}>
                 <View style={s.planRow}>
                   <ThemedText type="smallBold" style={{ color: p.ink }}>
                     {pl.label}
@@ -251,7 +258,7 @@ export function Welcome({
       {/* Footer: Next + dots + version */}
       <View style={[s.footer, { paddingBottom: bottomInset + 14 }]}>
         {page < lastPage ? (
-          <Pressable onPress={() => goTo(page + 1)} style={[s.nextBtn, { backgroundColor: p.accent }]}>
+          <Pressable onPress={() => goTo(page + 1)} style={[s.nextBtn, { backgroundColor: p.accent }, glow(p.accent, 20, 0.6)]}>
             <ThemedText type="smallBold" style={{ color: p.bg }}>Next</ThemedText>
           </Pressable>
         ) : null}
