@@ -28,7 +28,7 @@ export const Colors = {
     background: '#08080a', // near-pure black
     backgroundElement: '#161619',
     backgroundSelected: '#232327',
-    textSecondary: '#9396a0',
+    textSecondary: '#adb0ba', // secondary text — brightened (was #9396a0) to lift off the dark bg
     tint: '#cdd1d9', // platinum silver
     canvas: '#121319',
     canvasDot: '#34374a',

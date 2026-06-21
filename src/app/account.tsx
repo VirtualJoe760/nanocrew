@@ -20,6 +20,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
+import { GlowButton } from '@/components/glow-button';
+import { glow } from '@/constants/glow';
 import { BrandStore } from '@/components/brand-store';
 import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { Purchases } from '@/components/purchases';
@@ -403,9 +405,11 @@ export default function AccountScreen() {
               <View style={styles.authWrap}>
                 {/* Branded join hero — first impression before anyone has an account. */}
                 <View style={styles.joinHero}>
-                  <NCMark size={60} color={theme.text} />
-                  <ThemedText style={[styles.joinWordmark, { color: theme.text }]}>Nano Crew</ThemedText>
-                  <ThemedText type="title" style={styles.joinTitle}>
+                  <View style={glow(theme.tint, 22, 0.5)}>
+                    <NCMark size={60} color={theme.text} />
+                  </View>
+                  <ThemedText glow style={[styles.joinWordmark, { color: theme.text }]}>Nano Crew</ThemedText>
+                  <ThemedText type="title" glow style={styles.joinTitle}>
                     {isSignup ? 'Build your brand' : 'Welcome back'}
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary" style={styles.joinSub}>
@@ -418,13 +422,13 @@ export default function AccountScreen() {
                 {/* Apple requires Sign in with Apple first on iOS when other social logins exist. */}
                 {Platform.OS === 'ios' ? (
                   <Pressable onPress={() => social('apple')} disabled={busy}>
-                    <View style={[styles.button, styles.appleButton, { opacity: busy ? 0.5 : 1 }]}>
+                    <View style={[styles.button, styles.appleButton, glow(theme.tint, 10, 0.28), { opacity: busy ? 0.5 : 1 }]}>
                       <ThemedText type="smallBold" style={styles.appleText}> Continue with Apple</ThemedText>
                     </View>
                   </Pressable>
                 ) : null}
                 <Pressable onPress={() => social('google')} disabled={busy}>
-                  <ThemedView type="backgroundElement" style={[styles.button, { opacity: busy ? 0.5 : 1 }]}>
+                  <ThemedView type="backgroundElement" style={[styles.button, glow(theme.tint, 10, 0.3), { opacity: busy ? 0.5 : 1 }]}>
                     <ThemedText type="smallBold">Continue with Google</ThemedText>
                   </ThemedView>
                 </Pressable>
@@ -495,17 +499,11 @@ export default function AccountScreen() {
                     {error}
                   </ThemedText>
                 ) : null}
-                <Pressable onPress={() => submit(isSignup ? 'up' : 'in')} disabled={busy}>
-                  <View style={[styles.button, { backgroundColor: theme.text, opacity: busy ? 0.5 : 1 }]}>
-                    {busy ? (
-                      <ActivityIndicator color={theme.background} />
-                    ) : (
-                      <ThemedText type="smallBold" style={{ color: theme.background }}>
-                        {isSignup ? 'Create account' : 'Sign in'}
-                      </ThemedText>
-                    )}
-                  </View>
-                </Pressable>
+                <GlowButton
+                  label={isSignup ? 'Create account' : 'Sign in'}
+                  onPress={() => submit(isSignup ? 'up' : 'in')}
+                  loading={busy}
+                />
                 <Pressable onPress={() => { setIsSignup((v) => !v); setError(null); }} disabled={busy}>
                   <ThemedText type="small" themeColor="textSecondary" style={styles.createLink}>
                     {isSignup ? 'Have an account? Sign in' : 'New here? Create an account'}

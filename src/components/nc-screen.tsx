@@ -22,8 +22,8 @@ export function makePalette(dark: boolean) {
       ? ['#101013', '#0d0d10', '#131318', '#0b0b0e']
       : ['#eeeef0', '#e9e9ec', '#f0f0f2', '#e3e3e6'],
     ink: dark ? '#f4f4f6' : '#131316',
-    dim: dark ? '#9396a0' : '#6a6c73',
-    faint: dark ? '#56575e' : '#a3a4ab',
+    dim: dark ? '#adb0ba' : '#5f616a', // secondary text — brightened (was #9396a0) to lift off the dark bg
+    faint: dark ? '#74767f' : '#9a9ba2', // tertiary text — brightened (was #56575e)
     accent: dark ? '#cdd1d9' : '#44474e',
     accent2: dark ? '#e8eaee' : '#2c2e34',
     line: dark ? 'rgba(205,209,217,0.16)' : 'rgba(68,71,78,0.20)',

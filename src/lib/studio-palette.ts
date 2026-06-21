@@ -14,7 +14,7 @@ export function makeStudioPalette(dark: boolean) {
     surface: dark ? '#161619' : '#ffffff', // cards / thumbnails
     card: dark ? 'rgba(205,209,217,0.05)' : 'rgba(68,71,78,0.05)', // tinted panels (silver/graphite)
     ink: dark ? '#f4f4f6' : '#131316', // primary text
-    dim: dark ? '#9396a0' : '#6a6c73', // secondary text
+    dim: dark ? '#adb0ba' : '#5f616a', // secondary text — brightened (was #9396a0) to lift off the dark bg
     accent: dark ? '#cdd1d9' : '#44474e', // platinum silver / graphite on light
     accent2: dark ? '#e8eaee' : '#2c2e34', // brighter silver / darker graphite
     line: dark ? 'rgba(205,209,217,0.16)' : 'rgba(68,71,78,0.2)', // borders
