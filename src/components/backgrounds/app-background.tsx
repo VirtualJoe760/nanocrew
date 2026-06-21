@@ -16,6 +16,10 @@ const CK_OPTS = {
   locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.40.0/bin/full/${file}`,
 };
 
+// A dark veil over the dots so text always has a consistent bed of contrast. The colour is the brand
+// background (#08080a); raise/lower the alpha to make the dots quieter/livelier behind content.
+const SCRIM = 'rgba(8,8,10,0.42)';
+
 function Scene() {
   if (Platform.OS === 'web') {
     // Web: load CanvasKit, then the scene module. Required lazily so native never evaluates it.
@@ -30,6 +34,8 @@ export function AppBackground() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Scene />
+      {/* scrim — sits over the dots, under the screen content, so text always pops */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: SCRIM }]} />
     </View>
   );
 }

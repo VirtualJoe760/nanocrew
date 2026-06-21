@@ -22,8 +22,8 @@ export function makePalette(dark: boolean) {
       ? ['#101013', '#0d0d10', '#131318', '#0b0b0e']
       : ['#eeeef0', '#e9e9ec', '#f0f0f2', '#e3e3e6'],
     ink: dark ? '#f4f4f6' : '#131316',
-    dim: dark ? '#adb0ba' : '#5f616a', // secondary text — brightened (was #9396a0) to lift off the dark bg
-    faint: dark ? '#74767f' : '#9a9ba2', // tertiary text — brightened (was #56575e)
+    dim: dark ? '#c6c8cf' : '#54565e', // secondary text — brightened again to read over the dot field
+    faint: dark ? '#9ea0a9' : '#86878f', // tertiary text — brightened again
     accent: dark ? '#cdd1d9' : '#44474e',
     accent2: dark ? '#e8eaee' : '#2c2e34',
     // A cool, slightly-neon hue for input focus — distinct from the platinum button glow so a
