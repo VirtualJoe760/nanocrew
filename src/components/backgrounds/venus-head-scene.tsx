@@ -45,7 +45,7 @@ const BOB_WIDEN = 1.0;       // shell width vs head half-width (hugs; covers ear
 const BOB_DEPTH = 1.12;      // shell depth vs head half-width
 const BOB_FACE_OPEN = 0.6;   // half-width of the face opening (× head half-width)
 const BOB_FRINGE = 0.44;     // fringe ends this fraction of head height below the crown (~brow)
-const BOB_LEN = -0.12;       // bob bottom (fraction of head height; negative = below the chin)
+const BOB_LEN = -0.2;        // bob bottom (fraction of head height; negative = below the chin)
 const BOB_TILT = 0.65;       // A-line: front kept longer than the back (long-bob front pieces)
 // Drop the outermost (ear) verts from the bright face shell (hidden under the bob).
 const EAR_DROP_FRAC = 0.82;
