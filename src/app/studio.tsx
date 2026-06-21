@@ -46,6 +46,8 @@ import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Welcome, type OnboardChoice } from '@/components/welcome';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
@@ -60,6 +62,8 @@ type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 // Dark ink used for text ON the gold accent buttons — gold is light, so dark text reads in
 // both modes. (The screen background comes from the palette below.)
 const BG = '#08080a';
+const ONBOARD_SEEN_KEY = 'nc_welcome_seen';
+const ONBOARD_INTENT_KEY = 'nc_onboard_intent';
 // idle → listening → thinking → speaking. Champagne gold resting, brightening to near-white
 // as Venus speaks — monochrome + gold, per the Nano Crew brand.
 const STATE_COLORS = ['#cdd1d9', '#e8eaee', '#dfe2e8', '#ffffff'];
@@ -584,6 +588,72 @@ export default function StudioScreen() {
     }
   }, [reviewParams.reviewSlug, reviewParams.reviewName]);
   const [paywall, setPaywall] = useState<'subscription_required' | 'brand_limit' | 'manage' | null>(null);
+
+  // ── First-launch welcome + onboarding intent ───────────────────────────────────────────────
+  const [welcomeChecked, setWelcomeChecked] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [onboardIntent, setOnboardIntent] = useState<OnboardChoice | null>(null);
+  const intentHandledRef = useRef(false);
+  const pendingTrialGrantRef = useRef(false);
+
+  // Load the first-launch flag + any pending onboarding intent once.
+  useEffect(() => {
+    (async () => {
+      try {
+        const [seen, intent] = await Promise.all([
+          AsyncStorage.getItem(ONBOARD_SEEN_KEY),
+          AsyncStorage.getItem(ONBOARD_INTENT_KEY),
+        ]);
+        if (intent === 'trial' || intent === 'free' || intent === 'shop') setOnboardIntent(intent);
+        setShowWelcome(!seen);
+      } catch {
+        setShowWelcome(false);
+      } finally {
+        setWelcomeChecked(true);
+      }
+    })();
+  }, []);
+
+  // Welcome CTA: remember the choice, dismiss the panel, send them to auth (/account). The chosen
+  // path is executed once they sign in (the effect below).
+  const handleChoose = useCallback(async (choice: OnboardChoice) => {
+    setShowWelcome(false);
+    AsyncStorage.setItem(ONBOARD_SEEN_KEY, '1').catch(() => {});
+    if (choice === 'login') {
+      router.navigate('/account');
+      return;
+    }
+    setOnboardIntent(choice);
+    AsyncStorage.setItem(ONBOARD_INTENT_KEY, choice).catch(() => {});
+    router.navigate('/account');
+  }, []);
+
+  // Once signed in, run the chosen path: trial → Pro paywall (+ a week of credits granted server-side
+  // once the subscription verifies), free → the $3 starting credits, shop → Market. Idempotent.
+  useEffect(() => {
+    if (!session || !onboardIntent || intentHandledRef.current) return;
+    intentHandledRef.current = true;
+    const token = session.access_token;
+    const post = (path: OnboardChoice) =>
+      fetch(apiUrl('/api/creator/onboarding'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      }).catch(() => {});
+    (async () => {
+      if (onboardIntent === 'trial') {
+        pendingTrialGrantRef.current = true; // the week of credits is granted when the paywall closes
+        setPaywall('subscription_required');
+      } else if (onboardIntent === 'free') {
+        await post('free');
+      } else if (onboardIntent === 'shop') {
+        await post('shop');
+        router.navigate('/market');
+      }
+      AsyncStorage.removeItem(ONBOARD_INTENT_KEY).catch(() => {});
+      setOnboardIntent(null);
+    })();
+  }, [session, onboardIntent]);
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
   // get started), returning creators see their dashboard, and the AI entity only
   // runs in 'interview'. 'loading' until we know which.
@@ -943,6 +1013,12 @@ export default function StudioScreen() {
   const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
   const aiName = 'Venus'; // the only consultant — no picker
 
+  // First-launch welcome takeover: signed-out + not yet seen → the value-prop carousel + the
+  // trial/free/shop offer. Subsequent signed-out visits fall through to the inline join intro.
+  if (welcomeChecked && !loading && !session && showWelcome) {
+    return <Welcome onChoose={handleChoose} />;
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: p.bg }]}>
       <FabricBackground p={p} />
@@ -988,7 +1064,19 @@ export default function StudioScreen() {
             <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} onDeleted={() => { setShowComposer(false); setConsoleBrand(null); setDashKey((k) => k + 1); }} onBrandRenamed={(name) => { setConsoleBrand((b) => (b ? { ...b, name } : b)); setDashKey((k) => k + 1); }} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
             <Paywall
               visible={!!paywall}
-              onClose={() => setPaywall(null)}
+              onClose={() => {
+                setPaywall(null);
+                // If this paywall was opened by the welcome "Start free trial" CTA, claim the
+                // one-week credit grant now (the route only grants once a Pro plan is truly active).
+                if (pendingTrialGrantRef.current && session) {
+                  pendingTrialGrantRef.current = false;
+                  fetch(apiUrl('/api/creator/onboarding'), {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: 'trial' }),
+                  }).catch(() => {});
+                }
+              }}
               token={session.access_token}
               reason={paywall}
               onFreeSlot={() => { setPaywall(null); setMode('dashboard'); }}
