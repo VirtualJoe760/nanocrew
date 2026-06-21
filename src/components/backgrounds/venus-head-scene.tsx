@@ -521,12 +521,40 @@ function makeIrisTexture(): THREE.Texture {
   return tex;
 }
 
+// The WHITE of the eye (sclera) — a soft almond RING (hole in the centre so the iris +
+// dark pupil show through) so the eye reads as an eye. Color = SCLERA_COLOR.
+const SCLERA_COLOR = '#dfeef3';
+function makeScleraTexture(): THREE.Texture {
+  const size = 64, c = (size - 1) / 2;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (x - c) / c, dy = (y - c) / c;
+      const e = Math.sqrt(dx * dx + (dy * dy) / 0.42); // almond — wider than tall
+      let a = Math.max(0, 1 - e);
+      const h = Math.min(1, Math.max(0, (e - 0.34) / 0.22)); // hole in the centre for the iris
+      a *= h * h * (3 - 2 * h);
+      const i = (y * size + x) * 4;
+      data[i] = 255; data[i + 1] = 255; data[i + 2] = 255;
+      data[i + 3] = Math.round(Math.pow(Math.min(1, a), 1.2) * 255);
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.needsUpdate = true;
+  return tex;
+}
+
 // An iris parented to an eye bone — a readable iris (ring + dark pupil + catchlight)
-// over a faint halo, so she has an expressive gaze that tracks with the saccades.
-function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, dotTex: THREE.Texture): THREE.Material[] {
+// over a faint halo + a SCLERA (eye-white), so she has an expressive gaze.
+function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scleraTex: THREE.Texture, dotTex: THREE.Texture): THREE.Material[] {
   if (!bone) return [];
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0.014]), 3));
+  const scleraMat = new THREE.PointsMaterial({
+    size: 0.058, map: scleraTex, color: new THREE.Color(SCLERA_COLOR), opacity: 0.75,
+    transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
+    depthWrite: false, depthTest: false,
+  });
   const haloMat = new THREE.PointsMaterial({
     size: 0.016, map: dotTex, color: new THREE.Color('#2f6f8a'), opacity: 0.22,
     transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
@@ -537,9 +565,10 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, dotT
     transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
     depthWrite: false, depthTest: false,
   });
+  const sclera = new THREE.Points(g, scleraMat); sclera.renderOrder = 2;
   const halo = new THREE.Points(g, haloMat); halo.renderOrder = 3;
   const iris = new THREE.Points(g, irisMat); iris.renderOrder = 4;
-  bone.add(halo, iris);
+  bone.add(sclera, halo, iris);
   return [haloMat];
 }
 
@@ -634,6 +663,7 @@ function Avatar({ url }: { url: string }) {
         if (bones.head) {
           const dotTex = makeDotTexture();
           const irisTex = makeIrisTexture();
+          const scleraTex = makeScleraTexture();
           const rawFace = bakeHeadLocal(gltf.scene, bones.head, SHELL_NAMES);
           if (rawFace) {
             rawFace.computeBoundingBox();
@@ -717,21 +747,22 @@ function Avatar({ url }: { url: string }) {
             }
 
             // (f) glowing irises — expressive gaze that tracks the saccades
-            cycleMats.push(...makeIris(bones.leftEye, irisTex, dotTex));
-            cycleMats.push(...makeIris(bones.rightEye, irisTex, dotTex));
+            cycleMats.push(...makeIris(bones.leftEye, irisTex, scleraTex, dotTex));
+            cycleMats.push(...makeIris(bones.rightEye, irisTex, scleraTex, dotTex));
 
             bones.head.add(shell);
             cycleMats.push(edgeCoreMat, edgeHaloMat);
 
-            // depth-only HEAD occluder — an invisible solid head that writes the depth
-            // buffer (colorWrite off) so hair BEHIND the face is hidden, while front hair
-            // (bangs/sides) still covers the face and the flowing bottom strands draw.
-            // (Default LEQUAL depth lets the coincident face wireframe still pass.)
+            // solid dark FILL of the face + neck (the "blackness") — also the depth
+            // occluder: writes depth so hair BEHIND the face is hidden, front hair
+            // (bangs/sides) covers the face, and flowing bottom strands still draw.
+            // polygonOffset pushes its depth back so the (skinned) glowing wireframe
+            // sits cleanly in front of it; the dark fill shows through the wire gaps.
             const occluder = new THREE.Mesh(rawFace, new THREE.MeshBasicMaterial({
-              colorWrite: false,
-              polygonOffset: true,      // push the occluder's depth BACK so the (skinned) face
-              polygonOffsetFactor: 4,   // always passes in front of it, but the far back-hair
-              polygonOffsetUnits: 4,    // (well behind) is still blocked.
+              color: new THREE.Color('#05090f'),
+              polygonOffset: true,
+              polygonOffsetFactor: 4,
+              polygonOffsetUnits: 4,
             }));
             occluder.renderOrder = -10;
             bones.head.add(occluder);

@@ -89,20 +89,22 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     eyeballing: `uBaseAlpha`, `uShift1/2`, `uStrandCount`, `uExp1/2`, `uWaveAmp`.
   - **Hair occlusion** (so waving strands don't vanish, and the back of the hair doesn't show
     through the translucent face): the hair is `side: DoubleSide` (the INSIDE renders too — a backface
-    flip + inside-dim in `HAIR_FRAG` keeps it shaded sanely), and a **depth-only HEAD occluder** (an
-    invisible solid `Wolf3D_Head`, `colorWrite:false` + `polygonOffset` to clear the skinned/bind-pose
-    mismatch, `renderOrder -10`) writes the head's depth so: hair BEHIND the face is hidden, front hair
-    (bangs/sides) covers the face, and the flowing bottom strands (not behind the head) still draw.
+    flip + inside-dim in `HAIR_FRAG` keeps it shaded sanely), and a **solid dark FILL of the face +
+    neck** (a `Wolf3D_Head` mesh, dark color `#05090f` — the "blackness", `renderOrder -10`,
+    `polygonOffset` to clear the skinned/bind-pose mismatch so the glowing wireframe sits in front) that
+    doubles as the depth occluder: hair BEHIND the face is hidden, front hair (bangs/sides) covers the
+    face, and the flowing bottom strands (not behind the head) still draw.
   - **Ears removed two ways** so they don't poke out from under the bob: the bright ear geometry is
     dropped from the face shell (`dropEars`, `EAR_DROP_FRAC`), AND the dim substrate is clipped at the
     ear line (two world-space `THREE.Plane`s on the substrate materials, `gl.localClippingEnabled`).
     **Note:** the procedural bob is the demo workaround — the user's own RPM Venus with a real bob asset
     (URL swap) is the production answer; RPM was unreachable when built.
-  - **Eyes — a readable IRIS:** a sprite with a generated iris texture (dark pupil + bright limbal
-    ring + striations + catchlight, `makeIrisTexture`) over a faint halo, parented to the
-    `LeftEye`/`RightEye` bones so the gaze **tracks the saccades**. (Additive: the alpha-0 pupil reads
-    dark, so the iris is visible.) Sized (`irisMat.size`) to read at the **portrait camera crop**
-    (camera pulled in to ~0.99 on the eyes — see the framing block).
+  - **Eyes — a SCLERA + readable IRIS:** parented to the `LeftEye`/`RightEye` bones (so the gaze
+    **tracks the saccades**): a **sclera** (eye-white) sprite — a soft almond *ring* (`makeScleraTexture`,
+    hole in the centre so the iris/pupil show through), color `SCLERA_COLOR` — behind an **iris** sprite
+    (`makeIrisTexture`: dark pupil + bright limbal ring + striations + catchlight) over a faint halo.
+    Additive, `depthTest:false` so they read over the dark face fill; the alpha-0 pupil stays dark.
+    Sized to read at the **portrait camera crop** (camera pulled to ~0.99 on the eyes).
   - **Two-layer render:** a DIM constant-color morph-driven substrate (`MeshBasicMaterial`
     wireframe, opacity 0.12, all 4 face meshes) carries lip-sync + blink, UNDER a **bright static
     glow shell** parented to the `Head` bone (built once via `bakeHeadLocal` → head-local geometry →
