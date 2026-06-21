@@ -2,11 +2,11 @@ import { Canvas, Fill, Shader, Skia, useClock } from '@shopify/react-native-skia
 import { useWindowDimensions } from 'react-native';
 import { useDerivedValue } from 'react-native-reanimated';
 
-// ── Neon "tracelight" field ────────────────────────────────────────────────
-// A full-screen SkSL fragment shader: flowing neon ribbons drifting through deep
-// space, with additive glow (free in Skia — no postprocessing bloom needed), a
-// parallax starfield, and a vignette. Cool brand palette (cyan → platinum, faint
-// violet halo). Driven by a single `u_time` uniform off the Skia clock.
+// ── Dark space ─────────────────────────────────────────────────────────────
+// A minimal, very dark "deep space" background — a near-black radial depth wash,
+// a faint slow nebula breath, a sparse twinkling starfield, and a dark vignette.
+// Intentionally bare: a clean canvas to build the background on. Driven by a
+// single `u_time` uniform off the Skia clock.
 //
 // SkSL ≈ GLSL: half4 main(float2 fragCoord), float2/float3/half4, bounded loops,
 // helpers declared before use. Tweak the constants below and HMR shows it live.
@@ -24,43 +24,24 @@ half4 main(float2 fragCoord) {
   // centered, aspect-correct coordinates
   float2 uv = (fragCoord - 0.5 * u_resolution) / u_resolution.y;
   float t = u_time;
+  float d = length(uv);
 
-  // deep-space base — a subtle cool wash, darker toward the edges
-  float3 col = mix(float3(0.03, 0.04, 0.07), float3(0.0, 0.0, 0.0),
-                   clamp(length(uv) * 0.9, 0.0, 1.0));
+  // very dark base — near-black, a touch of cool depth toward the center
+  float3 col = mix(float3(0.018, 0.022, 0.035), float3(0.003, 0.004, 0.010),
+                   clamp(d * 1.1, 0.0, 1.0));
 
-  // flowing neon traces — each a drifting sine ribbon with 1/d glow falloff
-  float glow = 0.0;   // soft halo
-  float core = 0.0;   // tight bright core
-  for (int i = 0; i < 6; i++) {
-    float fi = float(i);
-    float speed = 0.25 + fi * 0.12;
-    float amp   = 0.32 - fi * 0.03;
-    float freq  = 1.3 + fi * 0.55;
-    float phase = fi * 1.7;
-    float y = sin(uv.x * freq + t * speed + phase) * amp
-            + sin(uv.x * freq * 0.5 - t * speed * 0.7) * amp * 0.4;
-    float d = abs(uv.y - y);
-    float thick = 0.0016 + 0.0010 * (0.5 + 0.5 * sin(t * 0.8 + fi));
-    glow += thick / (d + 0.0015);
-    core += (thick * 2.5) / (d * d * 60.0 + 0.02);
-  }
+  // a faint, slow nebula breath for depth (extremely subtle)
+  float neb = 0.5 + 0.5 * sin(t * 0.15);
+  col += float3(0.02, 0.03, 0.05) * (1.0 - clamp(d, 0.0, 1.0)) * neb * 0.35;
 
-  // color ramp: faint violet halo → cyan body → platinum-white core
-  float3 violet = float3(0.55, 0.45, 1.00);
-  float3 cyan   = float3(0.30, 0.80, 1.00);
-  float3 white  = float3(0.85, 0.95, 1.00);
-  float3 neon = mix(violet, cyan, clamp(glow * 0.5, 0.0, 1.0));
-  neon = mix(neon, white, clamp(core * 0.8, 0.0, 1.0));
-  col += neon * (glow * 0.16 + core * 0.20);
+  // sparse, subtle stars with a gentle twinkle
+  float2 cell = floor(fragCoord / 3.0);
+  float h = hash21(cell);
+  float star = step(0.9965, h) * (0.45 + 0.55 * sin(t * 1.5 + h * 40.0));
+  col += float3(0.7, 0.8, 1.0) * star * 0.5;
 
-  // drifting starfield
-  float2 cell = floor(fragCoord / 2.5);
-  float star = step(0.992, hash21(cell)) * (0.4 + 0.6 * sin(t * 2.0 + hash21(cell + 3.1) * 30.0));
-  col += float3(0.7, 0.85, 1.0) * star * 0.6;
-
-  // vignette
-  col *= 1.0 - 0.45 * dot(uv, uv);
+  // dark vignette
+  col *= 1.0 - 0.5 * d * d;
 
   return half4(col, 1.0);
 }

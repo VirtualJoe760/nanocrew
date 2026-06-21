@@ -36,6 +36,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
+import { withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';
 
 import { BrandReview } from '@/components/brand-review';
@@ -554,7 +555,9 @@ function Nucleus({
 
 // ---------- Screen ----------
 
-export default function StudioScreen() {
+export default withScreenFade(StudioScreen);
+
+function StudioScreen() {
   const insets = useSafeAreaInsets();
   const p = usePalette();
   const { session, loading } = useAuth();

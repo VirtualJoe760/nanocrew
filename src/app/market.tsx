@@ -18,6 +18,7 @@ import { BrandStore } from '@/components/brand-store';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
+import { withScreenFade } from '@/components/screen-fade';
 import { GlowInput } from '@/components/glow-input';
 import { apiUrl } from '@/lib/api';
 
@@ -141,7 +142,9 @@ function BrandCard({
   );
 }
 
-export default function MarketScreen() {
+export default withScreenFade(MarketScreen);
+
+function MarketScreen() {
   const theme = useTheme();
   const p = usePalette();
   const [query, setQuery] = useState('');

@@ -16,6 +16,7 @@ import {
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
+import { withScreenFade } from '@/components/screen-fade';
 import Animated, {
   cancelAnimation,
   runOnJS,
@@ -146,7 +147,9 @@ let nodeCounter = 0;
 
 type Swatch = { color: string; colorCode: string; image: string };
 
-export default function DesignScreen() {
+export default withScreenFade(DesignScreen);
+
+function DesignScreen() {
   const theme = useTheme();
   const p = usePalette();
   const { session } = useAuth();

@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
+import { withScreenFade } from '@/components/screen-fade';
 import { GlowButton } from '@/components/glow-button';
 import { GlowInput } from '@/components/glow-input';
 import { glow } from '@/constants/glow';
@@ -106,7 +107,9 @@ function Row({
   );
 }
 
-export default function AccountScreen() {
+export default withScreenFade(AccountScreen);
+
+function AccountScreen() {
   const theme = useTheme();
   const p = usePalette();
   const { session, loading } = useAuth();
