@@ -25,14 +25,14 @@ function Scene() {
     const { WithSkiaWeb } = require('@shopify/react-native-skia/lib/module/web');
     return (
       <WithSkiaWeb
-        getComponent={() => import('@/components/backgrounds/dot-field-scene')}
+        getComponent={() => import('@/components/backgrounds/venus-field-scene')}
         fallback={<Loading />}
         opts={{ locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.40.0/bin/full/${file}` }}
       />
     );
   }
-  const DotFieldScene = require('@/components/backgrounds/dot-field-scene').default;
-  return <DotFieldScene />;
+  const VenusFieldScene = require('@/components/backgrounds/venus-field-scene').default;
+  return <VenusFieldScene />;
 }
 
 export default function Playground() {
