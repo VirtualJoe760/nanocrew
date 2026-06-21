@@ -35,9 +35,12 @@ const FACE_NAMES = ['Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'];
 // The bright glow SHELL is built from the face SKIN only — eyeballs + teeth stay
 // on the dim substrate (cleaner sockets, no bright eye-blobs; structure leads).
 const SHELL_NAMES = ['Wolf3D_Head'];
-// Short-bob hair: clip the long hair at the chin, measured relative to the camera
-// aim height (≈ chin). More negative = longer. Tuned to a Mia-bob.
+// Short-bob hair: clip the long hair at the chin, measured relative to the face
+// reference height (≈ chin). More negative = longer.
 const HAIR_BOB_Y_OFFSET = -0.02;
+// A-line: tilt the clip plane toward the front so the front/side pieces stay LONGER
+// (sweep past the jaw) and the back is shorter. 0 = flat blunt bob; higher = more angle.
+const HAIR_BOB_TILT = 0.6;
 
 // DEV: play a sample speech clip on load so the mouth moves (and the pulse reacts)
 // on web. Set false for production / live Gemini audio. (Guarded to web.)
@@ -265,7 +268,7 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, dotT
     depthWrite: false, depthTest: false,
   });
   const irisMat = new THREE.PointsMaterial({
-    size: 0.028, map: irisTex, color: new THREE.Color('#ffffff'),
+    size: 0.04, map: irisTex, color: new THREE.Color('#ffffff'),
     transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
     depthWrite: false, depthTest: false,
   });
@@ -351,7 +354,7 @@ function Avatar({ url }: { url: string }) {
             color: '#2C5C66',
             wireframe: true,
             transparent: true,
-            opacity: 0.12,
+            opacity: 0.085, // faint — smoother, less "anatomical" up close (still carries lip-sync)
             side: THREE.FrontSide, // cull the back of the skull → reads as a face, not an x-ray
             blending: THREE.AdditiveBlending,
             depthWrite: false,
@@ -480,14 +483,18 @@ function Avatar({ url }: { url: string }) {
         // frame the face off the known avatar scale (head at the top, face at +z).
         // NOTE: frame BEFORE adding the aura plane — it would inflate the bbox.
         const box = new THREE.Box3().setFromObject(gltf.scene);
-        const aimY = box.max.y - 0.24;
-        camera.position.set(0, aimY, 1.0);
-        camera.lookAt(0, aimY, 0);
+        const aimY = box.max.y - 0.24;        // face/chin reference (for the bob clip)
+        const eyeY = box.max.y - 0.235;       // aim near the eyes/nose
+        camera.position.set(0, eyeY, 0.99);   // portrait crop — whole head + the bob, eyes still read
+        camera.lookAt(0, eyeY, 0);
         camera.updateProjectionMatrix();
 
-        // short bob: clip the hair (solid + rim) at chin level in WORLD space,
-        // keeping the fringe but cutting the length. Same plane → consistent edge.
-        const bobPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(aimY + HAIR_BOB_Y_OFFSET));
+        // A-line bob: a TILTED world-space clip plane (front kept longer, back shorter),
+        // applied to the hair solid + rim so the cut is consistent. Keeps the fringe.
+        const bobPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+          new THREE.Vector3(0, 1, HAIR_BOB_TILT).normalize(),
+          new THREE.Vector3(0, aimY + HAIR_BOB_Y_OFFSET, 0),
+        );
         if (hairMat || hairRimMat) {
           gl.localClippingEnabled = true;
           for (const mat of [hairMat, hairRimMat]) {
