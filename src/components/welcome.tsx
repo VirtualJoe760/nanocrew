@@ -163,9 +163,7 @@ export function Welcome({
 
       {/* Top bar: brand mark + log in */}
       <View style={[s.topBar, { paddingTop: topInset + 14 }]}>
-        <View style={glow(p.accent2, 22, 0.5)}>
-          <NCMark size={64} color={p.ink} />
-        </View>
+        <NCMark size={64} color={p.ink} />
         <Pressable onPress={() => onChoose('login')} hitSlop={8}>
           <ThemedText type="code" style={[s.loginLink, { color: p.accent }, textGlow(p.accent, 8)]}>Log in</ThemedText>
         </Pressable>

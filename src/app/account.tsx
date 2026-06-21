@@ -405,9 +405,7 @@ export default function AccountScreen() {
               <View style={styles.authWrap}>
                 {/* Branded join hero — first impression before anyone has an account. */}
                 <View style={styles.joinHero}>
-                  <View style={[glow(theme.tint, 22, 0.5), { alignSelf: 'flex-start' }]}>
-                    <NCMark size={52} color={theme.text} />
-                  </View>
+                  <NCMark size={52} color={theme.text} />
                   <ThemedText glow style={[styles.joinWordmark, { color: theme.text }]}>Nano Crew</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary" style={styles.joinSub}>
                     {isSignup
