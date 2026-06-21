@@ -227,8 +227,11 @@ const HAIR_VERT = /* glsl */ `
   varying vec3  vN, vV, vT;
   varying float vRoot, vAround, vEdge, vFringe, vEdgeF;
   void main() {
-    // gentle wave — tips sway (aRoot² keeps roots fixed); the stiff fringe sways less
-    float amt = aRoot * aRoot * uWaveAmp * (1.0 - 0.6 * aFringe);
+    // gentle wave — body tips sway (aRoot² anchors roots); the FRINGE flutters at its
+    // bang-tips (anchored at the scalp, swaying where aEdgeF≈0 just above the eyes).
+    float bodyAmt = aRoot * aRoot * uWaveAmp;
+    float fringeAmt = uWaveAmp * 0.65 * smoothstep(0.08, 0.0, aEdgeF);
+    float amt = mix(bodyAmt, fringeAmt, aFringe);
     vec3 wpos = position;
     wpos.x += sin(uTime * uWaveSpeed + aRoot * 7.0 + aAround * 11.0) * amt;
     wpos.z += cos(uTime * uWaveSpeed * 0.85 + aRoot * 6.0 + aAround * 9.0) * amt * 0.7;
@@ -417,7 +420,7 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
       uStrandCount: { value: 130.0 },
       uStrandWander: { value: 6.0 },
       uTipFade: { value: 0.05 * H },
-      uBaseAlpha: { value: 0.88 }, // solid hair — occludes the face behind the fringe
+      uBaseAlpha: { value: 0.5 }, // translucent → holographic like the rest of the mesh (sheen stays bright)
       uTime: { value: 0 },
       uWaveAmp: { value: 0.02 },     // tip sway amplitude (metres)
       uWaveSpeed: { value: 1.1 },    // wave speed
@@ -538,7 +541,7 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, dotT
 }
 
 function Avatar({ url }: { url: string }) {
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
   const rig = useRef<Rig | null>(null);
   const a = useRef({ nextBlink: 1.2, blinkAt: -1, nextSacc: 0.6, gx: 0, gy: 0, nextBrow: 2.5, browAt: -1, browAmt: 0 });
@@ -623,6 +626,7 @@ function Avatar({ url }: { url: string }) {
         let aura: THREE.Object3D | undefined;
         let bob: THREE.Mesh | undefined;
         let hairMat: THREE.ShaderMaterial | undefined;
+        let earClipX = 0; // |x| beyond which the dim substrate ears are clipped
 
         if (bones.head) {
           const dotTex = makeDotTexture();
@@ -631,7 +635,8 @@ function Avatar({ url }: { url: string }) {
           if (rawFace) {
             rawFace.computeBoundingBox();
             const halfW = Math.max(Math.abs(rawFace.boundingBox!.min.x), Math.abs(rawFace.boundingBox!.max.x));
-            const faceGeo = dropEars(rawFace, halfW * EAR_DROP_FRAC); // bright shell stops at the cheeks
+            earClipX = halfW * EAR_DROP_FRAC;
+            const faceGeo = dropEars(rawFace, earClipX); // bright shell stops at the cheeks
             bakeAurora(faceGeo);
             const dotGeo = subsample(faceGeo, 3); // sparser, more deliberate nodes
 
@@ -738,6 +743,21 @@ function Avatar({ url }: { url: string }) {
         camera.position.set(0, eyeY, 0.99);   // portrait crop — whole head + the bob, eyes still read
         camera.lookAt(0, eyeY, 0);
         camera.updateProjectionMatrix();
+
+        // clip the dim SUBSTRATE at the ear line so the ears don't poke out from under
+        // the hair (the bright shell already dropped them; the bob covers the area).
+        if (earClipX > 0) {
+          gl.localClippingEnabled = true;
+          const earPlanes = [
+            new THREE.Plane(new THREE.Vector3(-1, 0, 0), earClipX), // keep x <= +earClipX
+            new THREE.Plane(new THREE.Vector3(1, 0, 0), earClipX),  // keep x >= -earClipX
+          ];
+          for (const mm of meshes) {
+            const mat = mm.material as THREE.Material;
+            mat.clippingPlanes = earPlanes;
+            mat.needsUpdate = true;
+          }
+        }
 
         if (aura) gltf.scene.add(aura);
         setRoot(gltf.scene);
