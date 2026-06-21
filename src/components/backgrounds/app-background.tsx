@@ -1,4 +1,6 @@
+import { useCallback, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 // The app-wide animated background. Render it as a screen's base layer (first child,
 // absolute-fill, behind the content) so the app feels of one piece. NOT used on the
@@ -8,9 +10,10 @@ import { Platform, StyleSheet, View } from 'react-native';
 // (pointed at the matching CDN build — see playground.tsx for the same fix). The
 // scene itself lives in dot-field-scene.tsx.
 //
-// Perf note: this is an always-animating GPU canvas. It's a light fragment shader,
-// but on a phone it should be validated for battery — and ideally only the focused
-// screen's instance should run (a follow-up; native tabs keep screens mounted).
+// Perf: the animated Skia canvas only mounts while its screen is FOCUSED (native tabs
+// keep screens mounted, so an always-on canvas would burn battery/GPU off-screen, and
+// on web would hold a WebGL context per screen). When not focused only the dark scrim
+// remains — which matches the base background, so there's no visible gap.
 
 const CK_OPTS = {
   locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.40.0/bin/full/${file}`,
@@ -31,9 +34,18 @@ function Scene() {
 }
 
 export function AppBackground() {
+  // Mount the animated canvas only while this screen is focused.
+  const [active, setActive] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setActive(true);
+      return () => setActive(false);
+    }, []),
+  );
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Scene />
+      {active ? <Scene /> : null}
       {/* scrim — sits over the dots, under the screen content, so text always pops */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: SCRIM }]} />
     </View>
