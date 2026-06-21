@@ -1,19 +1,15 @@
-import { useCallback, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
 
-// The app-wide animated background. Render it as a screen's base layer (first child,
-// absolute-fill, behind the content) so the app feels of one piece. NOT used on the
-// Design screen, which keeps its own neutral backdrop.
+// The app-wide animated background. Rendered ONCE at the root (behind the tabs in
+// _layout) so it's a single, continuous, indefinite loop that PERSISTS across view
+// changes — switching tabs never remounts it, so it never restarts or flashes. The
+// tab screens (Studio/Market/Account) render transparent so it shows through; Design
+// keeps an opaque backdrop so it sits on top (no dots there).
+//
+// One canvas total → also the cheapest option for battery / WebGL contexts.
 //
 // Skia is a native module; on web the CanvasKit WASM is lazy-loaded via WithSkiaWeb
-// (pointed at the matching CDN build — see playground.tsx for the same fix). The
-// scene itself lives in dot-field-scene.tsx.
-//
-// Perf: the animated Skia canvas only mounts while its screen is FOCUSED (native tabs
-// keep screens mounted, so an always-on canvas would burn battery/GPU off-screen, and
-// on web would hold a WebGL context per screen). When not focused only the dark scrim
-// remains — which matches the base background, so there's no visible gap.
+// (pointed at the matching CDN build). The scene lives in dot-field-scene.tsx.
 
 const CK_OPTS = {
   locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.40.0/bin/full/${file}`,
@@ -34,19 +30,10 @@ function Scene() {
 }
 
 export function AppBackground() {
-  // Mount the animated canvas only while this screen is focused.
-  const [active, setActive] = useState(false);
-  useFocusEffect(
-    useCallback(() => {
-      setActive(true);
-      return () => setActive(false);
-    }, []),
-  );
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {active ? <Scene /> : null}
-      {/* scrim — sits over the dots, under the screen content, so text always pops */}
+      <Scene />
+      {/* scrim — sits over the dots, under everything else, so text always pops */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: SCRIM }]} />
     </View>
   );

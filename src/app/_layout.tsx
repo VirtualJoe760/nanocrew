@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
+import { AppBackground } from '@/components/backgrounds/app-background';
 import { attachReviewDeepLink } from '@/lib/push';
 
 // Hold the native splash until General Sans (the brand sans) is loaded, so text never
@@ -33,6 +34,9 @@ export default function TabLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* One continuous background for the whole app, behind the tabs. Studio/Market/Account
+          render transparent so it shows through; Design keeps an opaque backdrop (no dots). */}
+      <AppBackground />
       <AnimatedSplashOverlay />
       <AppTabs />
     </GestureHandlerRootView>
