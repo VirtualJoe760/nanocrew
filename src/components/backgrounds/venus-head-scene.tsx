@@ -35,18 +35,17 @@ const FACE_NAMES = ['Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'];
 // The bright glow SHELL is built from the face SKIN only — eyeballs + teeth stay
 // on the dim substrate (cleaner sockets, no bright eye-blobs; structure leads).
 const SHELL_NAMES = ['Wolf3D_Head'];
-// Short-bob hair: clip the long hair at the chin, measured relative to the face
-// reference height (≈ chin). More negative = longer.
-const HAIR_BOB_Y_OFFSET = -0.02;
-// A-line: tilt the clip plane toward the front so the front/side pieces stay LONGER
-// (sweep past the jaw) and the back is shorter. 0 = flat blunt bob; higher = more angle.
-const HAIR_BOB_TILT = 0.95;
-// Widen the hair envelope (x) slightly for fullness over the ear area. 1 = unchanged.
-const HAIR_WIDEN_X = 1.06;
-const HAIR_FORWARD_Z = 1.0;
-// Drop the outermost (ear) vertices from the bright face shell — RPM hair tucks
-// behind the ears, so hiding the glowing ears lets the hair read as covering them.
-// Fraction of the head half-width beyond which face verts are dropped.
+// Procedural BOB hair — the demo avatar only has long hair, so we build the bob
+// ourselves: a stylized shell wrapping the head (covers the ears, fringe over the
+// brow, A-line length), rendered as a translucent volume + glowing rim. These tune
+// its shape relative to the head bounding box.
+const BOB_WIDEN = 1.12;      // shell width vs head half-width (covers ears + frames face)
+const BOB_DEPTH = 1.25;      // shell depth vs head half-width
+const BOB_FACE_OPEN = 0.6;   // half-width of the face opening (× head half-width)
+const BOB_FRINGE = 0.44;     // fringe ends this fraction of head height below the crown (~brow)
+const BOB_LEN = 0.02;        // bob bottom height (fraction of head height above the chin)
+const BOB_TILT = 0.62;       // A-line: front kept longer than the back
+// Drop the outermost (ear) verts from the bright face shell (hidden under the bob).
 const EAR_DROP_FRAC = 0.82;
 
 // DEV: play a sample speech clip on load so the mouth moves (and the pulse reacts)
@@ -207,6 +206,79 @@ function dropEars(geo: THREE.BufferGeometry, maxAbsX: number): THREE.BufferGeome
   return g;
 }
 
+// Smooth holographic hair shader: dark translucent fill + a glowing fresnel rim
+// at the silhouette (no jagged internal edges). Writes depth so it occludes.
+const HAIR_VERT = /* glsl */ `
+  precision mediump float;
+  varying vec3 vN, vV;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vN = normalize(normalMatrix * normal);
+    vV = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const HAIR_FRAG = /* glsl */ `
+  precision mediump float;
+  uniform vec3 uBase, uRim;
+  varying vec3 vN, vV;
+  void main() {
+    float f = pow(1.0 - max(dot(vV, vN), 0.0), 2.2); // 0 face-on, 1 at the silhouette
+    gl_FragColor = vec4(uBase + uRim * f * 1.6, 0.62 + 0.36 * f);
+  }
+`;
+
+// Build a stylized BOB hair shell that wraps the head (covers the ears), with a
+// fringe over the brow, a face opening, and an A-line bottom — rendered as a smooth
+// fresnel-glow volume. `eyeY` (head-local) anchors the sizing to real proportions.
+function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
+  const cx = (bb.min.x + bb.max.x) / 2;
+  const cz = (bb.min.z + bb.max.z) / 2;
+  const w = bb.max.x - bb.min.x;            // head width (incl. ears)
+  // "eyes are halfway down the head" → chin/crown from the crown + eye line
+  const crownY = bb.max.y;
+  const H = 2 * (crownY - eyeY);            // head height (crown→chin)
+  const chinY = crownY - H;
+  const center = new THREE.Vector3(cx, crownY - 0.4 * H, cz - 0.05 * w);
+  const rx = (w / 2) * BOB_WIDEN, ry = H * 0.54, rz = (w / 2) * BOB_DEPTH;
+
+  let geo: THREE.BufferGeometry = new THREE.SphereGeometry(1, 96, 72);
+  geo.scale(rx, ry, rz);
+  geo.translate(center.x, center.y, center.z);
+  geo = geo.toNonIndexed();
+
+  const browY = crownY - BOB_FRINGE * H; // fringe hangs to ~the brow (just above the eyes)
+  const faceHalfX = (w / 2) * BOB_FACE_OPEN;
+  const jawY = chinY + BOB_LEN * H;              // bob bottom (A-line tilt per-face)
+
+  const src = geo.attributes.position;
+  const out: number[] = [];
+  for (let i = 0; i < src.count; i += 3) {
+    let mx = 0, my = 0, mz = 0;
+    for (let k = 0; k < 3; k++) { mx += src.getX(i + k); my += src.getY(i + k); mz += src.getZ(i + k); }
+    mx /= 3; my /= 3; mz /= 3;
+    const isFace = mz > center.z && my < browY && Math.abs(mx - cx) < faceHalfX; // face opening
+    const belowBottom = my < jawY - BOB_TILT * (mz - center.z);                  // A-line bottom
+    if (isFace || belowBottom) continue;
+    for (let k = 0; k < 3; k++) out.push(src.getX(i + k), src.getY(i + k), src.getZ(i + k));
+  }
+  const bobGeo = new THREE.BufferGeometry();
+  bobGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3));
+  bobGeo.computeVertexNormals();
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uBase: { value: new THREE.Color('#0e2633') }, uRim: { value: new THREE.Color('#5fd0e0') } },
+    vertexShader: HAIR_VERT,
+    fragmentShader: HAIR_FRAG,
+    transparent: true,
+    side: THREE.FrontSide,
+    depthWrite: true,
+  });
+  const bob = new THREE.Mesh(bobGeo, mat);
+  bob.renderOrder = 0;
+  return bob;
+}
+
 // Bake the positional aurora gradient + height + per-node phase onto faceGeo.
 function bakeAurora(geo: THREE.BufferGeometry) {
   geo.computeVertexNormals();
@@ -310,7 +382,7 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, dotT
 }
 
 function Avatar({ url }: { url: string }) {
-  const { camera, gl } = useThree();
+  const { camera } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
   const rig = useRef<Rig | null>(null);
   const a = useRef({ nextBlink: 1.2, blinkAt: -1, nextSacc: 0.6, gx: 0, gy: 0, nextBrow: 2.5, browAt: -1, browAmt: 0 });
@@ -356,33 +428,12 @@ function Avatar({ url }: { url: string }) {
         // FACE substrate stays in the scene, DIM + additive + CONSTANT color so
         // the mouth still visibly lip-syncs under the bright shell.
         const meshes: THREE.Mesh[] = [];
-        let hairMat: THREE.MeshBasicMaterial | undefined;
         gltf.scene.traverse((o) => {
           const m = o as THREE.Mesh;
           if (!m.isMesh) return;
           const n = m.name || '';
           if (isHair(n)) {
-            // Widen the hair envelope so it drapes OVER the ears (bind-pose verts;
-            // skinning still applies on top). Do this BEFORE the rim bakes from it.
-            const hp = m.geometry.attributes.position as THREE.BufferAttribute;
-            for (let i = 0; i < hp.count; i++) {
-              hp.setX(i, hp.getX(i) * HAIR_WIDEN_X);
-              hp.setZ(i, hp.getZ(i) * HAIR_FORWARD_Z);
-            }
-            hp.needsUpdate = true;
-            m.geometry.computeBoundingSphere();
-            // Real hair, kept SKINNED (follows the head): a soft translucent cool
-            // volume that frames the face + occludes the bald-scalp wireframe behind.
-            // Clipped to an A-line bob after framing (see HAIR_BOB_* consts).
-            hairMat = new THREE.MeshBasicMaterial({
-              color: new THREE.Color('#26315f'),
-              transparent: true,
-              opacity: 0.72,
-              side: THREE.FrontSide,
-              depthWrite: true,
-            });
-            m.material = hairMat;
-            m.renderOrder = 0;
+            m.visible = false; // long demo hair → hidden; we build a procedural bob
             return;
           }
           const isFace = FACE_NAMES.includes(n) || !!m.morphTargetDictionary;
@@ -413,7 +464,6 @@ function Avatar({ url }: { url: string }) {
         let nodeMat: THREE.ShaderMaterial | undefined;
         let coreMat: THREE.ShaderMaterial | undefined;
         let edgeCoreMat: THREE.LineBasicMaterial | undefined;
-        let hairRimMat: THREE.LineBasicMaterial | undefined;
         let aura: THREE.Object3D | undefined;
 
         if (bones.head) {
@@ -486,18 +536,16 @@ function Avatar({ url }: { url: string }) {
             shell.add(coreSphere, edgeHalo, glowPts, edgeCore, corePts); // back→front
             shell.renderOrder = 2;
 
-            // (e) glowing hair RIM — a luminous silhouette over the solid volume
-            //     so the hair reads as holographic, not a flat dark shape
-            const hairGeo = bakeHeadLocal(gltf.scene, bones.head, ['Wolf3D_Hair']);
-            if (hairGeo) {
-              hairRimMat = new THREE.LineBasicMaterial({
-                color: new THREE.Color('#6E86E0'), transparent: true, opacity: 0.22,
-                blending: THREE.AdditiveBlending, depthWrite: false,
-              });
-              const hairRim = new THREE.LineSegments(new THREE.EdgesGeometry(hairGeo, 45), hairRimMat);
-              hairRim.renderOrder = 1;
-              shell.add(hairRim);
-              cycleMats.push(hairRimMat);
+            // (e) procedural BOB hair — a stylized shell (covers ears, fringe, A-line)
+            //     rendered as a fresnel-glow volume. Sized off the crown + eye line.
+            if (rawFace.boundingBox && bones.leftEye && bones.rightEye) {
+              const e = new THREE.Vector3();
+              const eR = new THREE.Vector3();
+              bones.leftEye.getWorldPosition(e);
+              bones.rightEye.getWorldPosition(eR);
+              e.add(eR).multiplyScalar(0.5);
+              bones.head.worldToLocal(e); // eye line in head-local space
+              shell.add(buildBobHair(rawFace.boundingBox, e.y));
             }
 
             // (f) glowing irises — expressive gaze that tracks the saccades
@@ -526,26 +574,10 @@ function Avatar({ url }: { url: string }) {
         // frame the face off the known avatar scale (head at the top, face at +z).
         // NOTE: frame BEFORE adding the aura plane — it would inflate the bbox.
         const box = new THREE.Box3().setFromObject(gltf.scene);
-        const aimY = box.max.y - 0.24;        // face/chin reference (for the bob clip)
         const eyeY = box.max.y - 0.235;       // aim near the eyes/nose
         camera.position.set(0, eyeY, 0.99);   // portrait crop — whole head + the bob, eyes still read
         camera.lookAt(0, eyeY, 0);
         camera.updateProjectionMatrix();
-
-        // A-line bob: a TILTED world-space clip plane (front kept longer, back shorter),
-        // applied to the hair solid + rim so the cut is consistent. Keeps the fringe.
-        const bobPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-          new THREE.Vector3(0, 1, HAIR_BOB_TILT).normalize(),
-          new THREE.Vector3(0, aimY + HAIR_BOB_Y_OFFSET, 0),
-        );
-        if (hairMat || hairRimMat) {
-          gl.localClippingEnabled = true;
-          for (const mat of [hairMat, hairRimMat]) {
-            if (!mat) continue;
-            mat.clippingPlanes = [bobPlane];
-            mat.needsUpdate = true;
-          }
-        }
 
         if (aura) gltf.scene.add(aura);
         setRoot(gltf.scene);
