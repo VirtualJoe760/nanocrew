@@ -595,7 +595,7 @@ export default function StudioScreen() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [onboardIntent, setOnboardIntent] = useState<OnboardChoice | null>(null);
   const intentHandledRef = useRef(false);
-  const pendingTrialGrantRef = useRef(false);
+  const pendingSubscribeGrantRef = useRef(false);
 
   // Load the first-launch flag + any pending onboarding intent once.
   useEffect(() => {
@@ -605,7 +605,7 @@ export default function StudioScreen() {
           AsyncStorage.getItem(ONBOARD_SEEN_KEY),
           AsyncStorage.getItem(ONBOARD_INTENT_KEY),
         ]);
-        if (intent === 'trial' || intent === 'free' || intent === 'shop') setOnboardIntent(intent);
+        if (intent === 'subscribe') setOnboardIntent('subscribe');
         setShowWelcome(!seen);
       } catch {
         setShowWelcome(false);
@@ -620,40 +620,29 @@ export default function StudioScreen() {
   const handleChoose = useCallback(async (choice: OnboardChoice) => {
     setShowWelcome(false);
     AsyncStorage.setItem(ONBOARD_SEEN_KEY, '1').catch(() => {});
+    if (choice === 'shop') {
+      router.navigate('/market'); // browse + shop for free — no account required
+      return;
+    }
     if (choice === 'login') {
       router.navigate('/account');
       return;
     }
-    setOnboardIntent(choice);
-    AsyncStorage.setItem(ONBOARD_INTENT_KEY, choice).catch(() => {});
+    // subscribe → remember the intent, send to auth; the paywall opens after sign-in (effect below).
+    setOnboardIntent('subscribe');
+    AsyncStorage.setItem(ONBOARD_INTENT_KEY, 'subscribe').catch(() => {});
     router.navigate('/account');
   }, []);
 
   // Once signed in, run the chosen path: trial → Pro paywall (+ a week of credits granted server-side
   // once the subscription verifies), free → the $3 starting credits, shop → Market. Idempotent.
   useEffect(() => {
-    if (!session || !onboardIntent || intentHandledRef.current) return;
+    if (!session || onboardIntent !== 'subscribe' || intentHandledRef.current) return;
     intentHandledRef.current = true;
-    const token = session.access_token;
-    const post = (path: OnboardChoice) =>
-      fetch(apiUrl('/api/creator/onboarding'), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      }).catch(() => {});
-    (async () => {
-      if (onboardIntent === 'trial') {
-        pendingTrialGrantRef.current = true; // the week of credits is granted when the paywall closes
-        setPaywall('subscription_required');
-      } else if (onboardIntent === 'free') {
-        await post('free');
-      } else if (onboardIntent === 'shop') {
-        await post('shop');
-        router.navigate('/market');
-      }
-      AsyncStorage.removeItem(ONBOARD_INTENT_KEY).catch(() => {});
-      setOnboardIntent(null);
-    })();
+    pendingSubscribeGrantRef.current = true; // the welcome credits are granted when the paywall closes
+    setPaywall('subscription_required');
+    AsyncStorage.removeItem(ONBOARD_INTENT_KEY).catch(() => {});
+    setOnboardIntent(null);
   }, [session, onboardIntent]);
   // The Studio is gated, not auto-launched: new creators see a CTA (pick a voice +
   // get started), returning creators see their dashboard, and the AI entity only
@@ -1074,14 +1063,14 @@ export default function StudioScreen() {
               visible={!!paywall}
               onClose={() => {
                 setPaywall(null);
-                // If this paywall was opened by the welcome "Start free trial" CTA, claim the
-                // one-week credit grant now (the route only grants once a Pro plan is truly active).
-                if (pendingTrialGrantRef.current && session) {
-                  pendingTrialGrantRef.current = false;
+                // If this paywall was opened by a welcome plan CTA, claim the $10 welcome-credit grant
+                // now (the route only grants once a paid plan is truly active).
+                if (pendingSubscribeGrantRef.current && session) {
+                  pendingSubscribeGrantRef.current = false;
                   fetch(apiUrl('/api/creator/onboarding'), {
                     method: 'POST',
                     headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: 'trial' }),
+                    body: JSON.stringify({ path: 'subscribe' }),
                   }).catch(() => {});
                 }
               }}
@@ -1098,7 +1087,7 @@ export default function StudioScreen() {
           <View style={styles.introWrap}>
             <NCNucleus size={132} p={p} />
             <ThemedText type="code" style={[styles.introTag, { color: p.dim }]}>
-              INTELLIGENCE IS THE NEW FABRIC
+              FROM IDEA TO BRAND IN SECONDS
             </ThemedText>
             <ThemedText type="title" style={[styles.introTitle, { color: p.ink }]}>
               Meet Venus

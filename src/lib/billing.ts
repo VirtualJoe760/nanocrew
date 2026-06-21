@@ -51,7 +51,7 @@ export const TIERS: Record<PaidPlan, TierDef> = {
   advanced: {
     plan: 'advanced',
     label: 'Advanced',
-    priceCents: 14900, // $149/mo
+    priceCents: 17500, // $175/mo (web/Stripe; in-app Apple price is higher — set in App Store Connect)
     monthlyCredits: 12000,
     maxBrands: 99,
     website: true,

@@ -34,9 +34,10 @@ export type CreditReason =
 // Starting credits granted on first account touch — "$3 of credits for creating an account"
 // (1 credit ≈ $0.01). Enough for a couple of generations before the upgrade nudge. Tune here.
 export const SIGNUP_BONUS = 300;
-// One week of the Pro allotment (3,000/mo ÷ 4), granted once when a Pro free-trial starts (the
-// monthly 3,000 only lands on a real invoice, which a trial hasn't hit yet). See the onboarding route.
-export const TRIAL_CREDITS = 750;
+// "$10 in free credits" granted up front to a new subscriber (any tier) so they can use the AI
+// during the first week — a paid plan's monthly allotment only lands on a real invoice, which a
+// brand-new sub hasn't hit yet. One-time per account. See the onboarding route.
+export const WELCOME_CREDITS = 1000;
 
 /** Ensure the creator has a credit account, granting the signup bonus on first touch. */
 export async function ensureCreditAccount(creatorId: string): Promise<number> {
