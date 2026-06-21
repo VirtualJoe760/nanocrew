@@ -37,20 +37,48 @@ cost + their video, not our mesh, and the user chose "own it." `generate_3d` fro
 portrait = a head but **no visemes**. Blender authoring = slowest, and Blender is on the
 user's *other* (Windows) machine — unusable from here.
 
-## Current state (what works, verified on web)
-- 3D stack installed: `three` ^0.184, `@react-three/fiber` ^9 (R3F v9, React 19),
-  `@react-three/drei` ^10, `expo-gl` ~16. (R3F renders on web via plain WebGL; on native it
-  uses expo-gl — **native not yet verified**.)
-- **`src/components/backgrounds/venus-head-scene.tsx`** (the live POC, rendered by the Lab):
-  - Loads a **female** RPM head GLB via a **plain three `GLTFLoader`** (see gotchas — NOT
-    drei's `useGLTF`).
-  - Renders every mesh as a cyan (`#7cc7df`) **wireframe** (`MeshBasicMaterial wireframe`).
-  - Frames the **face** off the known avatar scale (the head is at the top of a ~1.85 m body).
-  - Runs a per-frame **liveliness loop** (blink, eye saccades, Head/Neck sway, brow flashes,
-    resting smile) **+ a `viseme_aa` lip-sync TEST pulse** (placeholder for real audio).
-  - Result: a defined female wireframe face that **blinks, sways, and talks** — proven alive.
-- Reached via the dev-only **"Lab"** tab → `/playground` (`src/app/playground.tsx` renders
-  `venus-head-scene`).
+## Aesthetic direction — "Ascendant Cortana"
+User's north star: **"cyberpunk, Cortana, super-intelligence."** Translated (via an art-direction
+workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` workflow synthesis**:
+- **Palette** — one hue family, **cyan→periwinkle→violet** (185°→280°), never warm/gold (brand
+  rule). Positional aurora: front/low = cyan `#5BD8E6`, cheek/mouth band = periwinkle `#7C9BF0`,
+  high/grazing = violet `#B97CF2`, crown = teal-white `#CFF6FF`. Navy-black bg `#06080f`.
+- **Signature = the travelling THOUGHT-PULSE** — waves of brightness sweep up the wireframe
+  (jaw→crown) like neural activation, so you *see her think*. Height-driven in the node vertex
+  shader (one `uTime` uniform; zero per-frame CPU). Idle period ~3.5 s; cascades faster while she
+  speaks. **This is the "super-intelligence" tell.**
+- **Restraint rules** (what keeps it premium, NOT gaudy): hue clamped to the cyan→violet arc
+  (±14°, ≥28 s); exactly ONE instability (a rare ~×0.82 "holographic blip"); **no** scanlines,
+  glyphs, chromatic-split, or HUD; the **mouth/eyes stay the highest-contrast thing every frame**
+  (lip-sync must always read). Everything ambient is slow (5–28 s) and shallow.
+- Full spec: the `venus-art-direction` workflow output (saved this session). Dropped from the
+  concept panel by design: A's scanlines + falling glyphs, B's chromatic aberration + glitch + HUD.
+
+## Current state (built + verified on web)
+- 3D stack: `three` ^0.184, `@react-three/fiber` ^9 (R3F v9, React 19), `@react-three/drei` ^10,
+  `expo-gl` ~16. Web renders via plain WebGL; native uses expo-gl — **native not yet verified**.
+- **`src/components/backgrounds/venus-head-scene.tsx`** (the live POC, rendered by the Lab) — now
+  the full **"Ascendant Cortana"** build:
+  - Loads the **female** RPM head via plain three `GLTFLoader` (NOT drei `useGLTF` — see gotchas).
+  - **Clean-face fix (the hair/face conflict):** only the 4 morph-rigged meshes are the face
+    (`Wolf3D_Head`, `EyeLeft`, `EyeRight`, `Wolf3D_Teeth`); body/outfit/**glasses** are hidden and
+    `Wolf3D_Hair` becomes a faint additive `EdgesGeometry` contour that *frames* her (no tangle).
+  - **Two-layer render:** a DIM constant-color morph-driven substrate (`MeshBasicMaterial`
+    wireframe, opacity 0.12) carries lip-sync + blink, UNDER a **bright static glow shell** parented
+    to the `Head` bone (built once via `bakeHeadLocal` → head-local geometry → `mergeVertices`):
+    aurora-gradient **nodes** (a `ShaderMaterial` carrying the thought-pulse) + node halo +
+    `EdgesGeometry` lines + a fresnel **core-glow** sphere; plus a billboarded **aura pool**. All
+    additive (no postprocessing); GLSL is ES2/expo-gl-safe.
+  - **Real lip-sync** (`src/lib/venus-lipsync.ts`): a zero-dep Web-Audio `AnalyserNode` driver
+    (RMS→`jawOpen`, spectral-centroid→vowel viseme, HF-ratio→fricative) returns `viseme_*`+jaw
+    target weights; `useFrame` damps them onto the substrate. Strict ownership (lip-sync owns ONLY
+    jaw/mouth/viseme). A `DEV_LIPSYNC_TEST` flag plays a sample clip so the mouth moves on web; the
+    pulse also reacts to speak energy (`uSpeak`/`uPeriod`). `wawa-lipsync` adapter behind an inert
+    `USE_WAWA` flag (its visemes are identity-mapped to RPM names) — flip after `npm i wawa-lipsync`.
+  - **Liveliness** (unchanged): blink, eye saccades, Head/Neck sway, brow flashes, resting smile.
+  - **Verified on web** (two-frame capture): a clean, clearly-female glowing plexus face; the
+    thought-pulse visibly travels (crown→jaw between frames); eyes/lips luminous.
+- Reached via the dev-only **"Lab"** tab → `/playground` (renders `venus-head-scene`).
 
 ### The avatar
 - **Demo (POC only):** `https://raw.githubusercontent.com/met4citizen/TalkingHead/main/avatars/brunette.glb`
@@ -99,14 +127,15 @@ user's *other* (Windows) machine — unusable from here.
   [0,1]; zero the losing side of antagonist pairs (eyeLookIn/Out, browUp/Down, smile/frown).
 
 ## What's next (the runway, in priority order)
-1. **Real lip-sync** (the payoff): replace the `viseme_aa` TEST pulse with an **audio→viseme
-   driver**. Use **`wawa-lipsync`** (FFT → viseme weights) or roll amplitude→`jawOpen` +
-   spectral→vowel visemes. Test on a **sample speech clip** in the preview first (no Gemini
-   needed), then wire **Gemini Live PCM** (we already receive/play her audio — tap those
-   chunks). Drive the `viseme_*` set; let the idle layer keep eyes/brows/head.
-2. **The look**: render the wireframe as **glowing nodes + edges** (points at vertices),
-   **decimate** the dense RPM head for a cleaner "plexus", cool/iridescent color (cycle hue
-   like the dot field), bloom/glow, a slow turn for depth, optional dot-field **aura** around her.
+1. ✅ **DONE — Real lip-sync driver** (`src/lib/venus-lipsync.ts`) + the **"Ascendant Cortana" look**
+   (aurora duotone, thought-pulse, core glow, aura, blip) + the **hair/face clean-up**. Verified on
+   web. Remaining within these: tune the lip-sync thresholds to Venus's actual TTS voice (the test
+   clip is generic), and the **N1 reactive coupling** is only lightly wired (`uSpeak` from jaw
+   energy) — deepen it when live audio lands (listening/thinking vs speaking states).
+2. **Wire Gemini Live PCM → the driver**: we already receive/play her audio — tap those chunks.
+   On web that's `connect(htmlAudioElement)`. On **native** there is no `AudioContext`, so this is a
+   separate bridge (render the avatar in a WebView, or compute visemes from PCM frames with a tiny
+   FFT — `sample()`'s math ports; `connect(HTMLMediaElement)` does not).
 3. **The dots-morph reveal**: she **assembles from the background dot field** (scatter→face),
    talks, disperses. Either combine with the Skia dot field (`dot-field-scene.tsx`) or do the
    morph in R3F by lerping the head's vertices from scattered homes → bind positions. The Skia
@@ -128,8 +157,24 @@ user's *other* (Windows) machine — unusable from here.
 - **Skinned-mesh bboxes are wrong**: RPM meshes are `SkinnedMesh`; `Box3.setFromObject(headMesh)`
   returns a tiny (~6 cm) bind-pose box. **Frame off the whole-scene bbox** (the avatar is ~1.85 m,
   head at the top) — see the framing code.
+- **Frame the camera BEFORE adding the aura plane.** `setFromObject(gltf.scene)` includes every
+  child — the aura `PlaneGeometry` inflated the bbox and shrank/dropped the head until the aura was
+  added *after* the framing block. Any large helper object must be added post-framing (or excluded).
+- **Glow shell is STATIC, parented to the `Head` bone**, built once at load (`bakeHeadLocal` bakes
+  face geometry into head-local space → `mergeVertices` welds seams). It shares head sway for free
+  and costs nothing per frame. The **mouth/eyes still move** because the dim *real* morph mesh stays
+  in the scene underneath — never re-derive posed vertices per frame (kills FPS on device).
+- **Custom node shader uses `ShaderMaterial` with `vertexColors: true`** so three injects the
+  `color` attribute (the baked aurora gradient); the shader declares only `aY`/`aRand` + varyings.
+  Keep GLSL **ES2-safe** (`precision mediump`, no `#version 300`, no dynamic loops) for expo-gl.
 - **Apply morphs to all meshes**, not just one — visemes are on the head, but iterate every mesh
   with a `morphTargetDictionary` and set the index if present.
+- **The preview console buffer does NOT clear on reload** — stale errors (e.g. a transient
+  `hairMesh is not defined` from a bundle that raced Metro's recompile) persist across reloads.
+  Trust the **screenshot**, not a lingering console error, once `tsc` is clean.
+- **Lip-sync needs CORS**: `createMediaElementSource` on a cross-origin clip without
+  `crossOrigin="anonymous"` + an `Access-Control-Allow-Origin` header reads a tainted (all-zero)
+  stream → the mouth never moves. Host Venus's real TTS same-origin to sidestep it.
 - **`models.readyplayer.me` is network-blocked here** (and was for the user) — that's why we use
   GitHub-hosted sample GLBs. The browser preview *can* reach GitHub raw + CDNs.
 - **Expo dev server can die** mid-session (saw the preview drift to the nanocrew-site on :3000).
@@ -139,8 +184,10 @@ user's *other* (Windows) machine — unusable from here.
   **dev build** (Skia + expo-gl are native modules) — not yet verified on device.
 
 ## File map
-- `src/components/backgrounds/venus-head-scene.tsx` — **the live R3F POC** (female RPM head,
-  wireframe, liveliness loop, viseme test). ← work here.
+- `src/components/backgrounds/venus-head-scene.tsx` — **the live R3F POC** ("Ascendant Cortana":
+  clean female face, glow shell + thought-pulse, liveliness, real lip-sync wiring). ← work here.
+- `src/lib/venus-lipsync.ts` — the **audio→viseme driver** (zero-dep Web-Audio AnalyserNode; wawa
+  adapter behind `USE_WAWA`). Returns `viseme_*`+jaw target weights for `useFrame` to damp.
 - `src/components/backgrounds/venus-field-scene.tsx` — earlier Skia canonical-mesh dots-morph
   (scatter↔face + wireframe). Reference for the dots-morph reveal.
 - `src/components/backgrounds/face-mesh.ts` — canonical face mesh data (FACE_VERTS/EDGES/DOTS).
