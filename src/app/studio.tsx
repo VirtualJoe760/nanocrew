@@ -71,7 +71,7 @@ const STATE_COLORS = ['#cdd1d9', '#e8eaee', '#dfe2e8', '#ffffff'];
 const STATE_INDEX: Record<EntityState, number> = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
 
 const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
-const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
+const SERIF = 'Jost-Light'; // display title face (was Georgia serif; unified on Jost)
 // Palette + the silk FabricBackground + the NC mark now live in @/components/nc-screen so Studio,
 // Design, Market, and Account all share one look (imported above).
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');

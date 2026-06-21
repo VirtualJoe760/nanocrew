@@ -1058,7 +1058,7 @@ function makeStyles(pal: StudioPalette) {
     sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: pal.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: pal.line, overflow: 'hidden' },
     headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },
     eyebrow: { color: pal.accent, letterSpacing: 2 },
-    consoleTitle: { color: pal.ink, fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }), maxWidth: 220 },
+    consoleTitle: { color: pal.ink, fontFamily: 'Jost-Light', maxWidth: 220 },
     tabBar: { flexDirection: 'row', gap: Spacing.one, marginBottom: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: pal.line },
     tabItem: { flex: 1, alignItems: 'center', paddingVertical: Spacing.two, borderBottomWidth: 2, borderBottomColor: 'transparent' },
     tabItemOn: { borderBottomColor: pal.accent },

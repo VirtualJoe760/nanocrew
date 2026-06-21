@@ -38,7 +38,8 @@ import { supabase } from '@/lib/supabase';
 type StoreRow = { id: string; name: string; slug: string; status: string };
 
 const DANGER = '#e24b4a';
-const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
+const WORDMARK = 'Jost-Thin'; // the "Nano Crew" brand title — Thin 100
+const DISPLAY = 'Jost-Light'; // other display marks
 const PLAN_LABEL: Record<string, string> = { free: 'Free', starter: 'Starter', pro: 'Pro', advanced: 'Advanced' };
 
 // ---- Small layout primitives for a clean grouped (iOS-settings-style) list ----
@@ -539,7 +540,7 @@ const styles = StyleSheet.create({
 
   // Branded chrome header
   brandHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.one },
-  ncMark: { fontFamily: SERIF, fontSize: 18, letterSpacing: 1 },
+  ncMark: { fontFamily: DISPLAY, fontSize: 18, letterSpacing: 1 },
 
   // Profile header
   profile: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.two },
@@ -567,7 +568,7 @@ const styles = StyleSheet.create({
   // Auth (logged-out)
   authWrap: { gap: Spacing.three },
   joinHero: { alignSelf: 'stretch', alignItems: 'flex-start', gap: Spacing.one, marginTop: Spacing.two, marginBottom: Spacing.four },
-  joinWordmark: { fontFamily: SERIF, fontSize: 30, letterSpacing: 1.5, marginTop: Spacing.one },
+  joinWordmark: { fontFamily: WORDMARK, fontSize: 32, letterSpacing: 2, marginTop: Spacing.one },
   joinTitle: { textAlign: 'center', marginTop: Spacing.one },
   joinSub: { textAlign: 'left', lineHeight: 21 },
   eyebrow: { letterSpacing: 2, marginBottom: Spacing.one },

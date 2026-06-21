@@ -13,10 +13,13 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function TabLayout() {
   const [fontsLoaded] = useFonts({
-    'GeneralSans-Regular': require('../../assets/fonts/GeneralSans-Regular.ttf'),
-    'GeneralSans-Medium': require('../../assets/fonts/GeneralSans-Medium.ttf'),
-    'GeneralSans-Semibold': require('../../assets/fonts/GeneralSans-Semibold.ttf'),
-    'GeneralSans-Bold': require('../../assets/fonts/GeneralSans-Bold.ttf'),
+    // Jost (OFL) — static instances generated from the variable font. Each weight is its own
+    // family because RN can't derive a custom font's weight from `fontWeight`. Body = Light 300;
+    // the "Nano Crew" wordmark = Thin 100. (Mapping lives in components/themed-text.tsx.)
+    'Jost-Thin': require('../../assets/fonts/Jost-Thin.ttf'),
+    'Jost-Light': require('../../assets/fonts/Jost-Light.ttf'),
+    'Jost-Regular': require('../../assets/fonts/Jost-Regular.ttf'),
+    'Jost-Medium': require('../../assets/fonts/Jost-Medium.ttf'),
   });
 
   useEffect(() => {

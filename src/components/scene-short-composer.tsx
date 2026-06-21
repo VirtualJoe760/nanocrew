@@ -271,7 +271,7 @@ function makeStyles(pal: StudioPalette) {
     fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
     sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: pal.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: pal.line, overflow: 'hidden' },
     headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },
-    title: { color: pal.ink, fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }) },
+    title: { color: pal.ink, fontFamily: 'Jost-Light' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.six },
     scroll: { padding: Spacing.four, gap: Spacing.two, paddingBottom: Spacing.six },
     sectionLabel: { color: pal.accent, letterSpacing: 1.5, fontSize: 11, marginTop: Spacing.three },

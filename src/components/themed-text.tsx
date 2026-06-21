@@ -34,13 +34,14 @@ export function ThemedText({ style, type = 'default', themeColor, glow, ...rest 
   );
 }
 
-// General Sans (the brand sans) ships as named static weights — RN custom fonts don't derive
-// weight from `fontWeight`, so each visual weight maps to its own family. (Loaded in _layout.tsx.)
+// Jost ships as named static weights — RN custom fonts don't derive weight from `fontWeight`, so
+// each visual weight maps to its own family. (Loaded in _layout.tsx.) Most text is Light 300; the
+// "Nano Crew" wordmark is Thin 100, set directly where it's rendered.
 const GS = {
-  regular: 'GeneralSans-Regular',
-  medium: 'GeneralSans-Medium',
-  semibold: 'GeneralSans-Semibold',
-  bold: 'GeneralSans-Bold',
+  regular: 'Jost-Light', // 300 — body, links (the bulk of the UI)
+  medium: 'Jost-Light', // 300 — body (default/small)
+  semibold: 'Jost-Regular', // 400 — headings (title/subtitle)
+  bold: 'Jost-Medium', // 500 — emphasis (smallBold / buttons)
 } as const;
 
 const styles = StyleSheet.create({
