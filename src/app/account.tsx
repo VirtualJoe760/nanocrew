@@ -405,13 +405,10 @@ export default function AccountScreen() {
               <View style={styles.authWrap}>
                 {/* Branded join hero — first impression before anyone has an account. */}
                 <View style={styles.joinHero}>
-                  <View style={glow(theme.tint, 22, 0.5)}>
-                    <NCMark size={60} color={theme.text} />
+                  <View style={[glow(theme.tint, 22, 0.5), { alignSelf: 'flex-start' }]}>
+                    <NCMark size={52} color={theme.text} />
                   </View>
                   <ThemedText glow style={[styles.joinWordmark, { color: theme.text }]}>Nano Crew</ThemedText>
-                  <ThemedText type="title" glow style={styles.joinTitle}>
-                    {isSignup ? 'Build your brand' : 'Welcome back'}
-                  </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary" style={styles.joinSub}>
                     {isSignup
                       ? 'Talk to Venus, launch an AI-designed clothing brand, and sell it anywhere — all from your phone.'
@@ -571,10 +568,10 @@ const styles = StyleSheet.create({
 
   // Auth (logged-out)
   authWrap: { gap: Spacing.three },
-  joinHero: { alignItems: 'center', gap: Spacing.one, marginTop: Spacing.two, marginBottom: Spacing.two },
-  joinWordmark: { fontFamily: SERIF, fontSize: 30, letterSpacing: 1.5, marginTop: Spacing.two },
+  joinHero: { alignSelf: 'stretch', alignItems: 'flex-start', gap: Spacing.one, marginTop: Spacing.two, marginBottom: Spacing.four },
+  joinWordmark: { fontFamily: SERIF, fontSize: 30, letterSpacing: 1.5, marginTop: Spacing.one },
   joinTitle: { textAlign: 'center', marginTop: Spacing.one },
-  joinSub: { textAlign: 'center', lineHeight: 21, maxWidth: 320 },
+  joinSub: { textAlign: 'left', lineHeight: 21 },
   eyebrow: { letterSpacing: 2, marginBottom: Spacing.one },
   authSub: { marginBottom: Spacing.two },
   input: { borderRadius: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, fontSize: 15 },

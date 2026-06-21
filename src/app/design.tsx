@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NCMark } from '@/components/nc-screen';
+import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
 import Animated, {
   cancelAnimation,
   runOnJS,
@@ -148,6 +148,7 @@ type Swatch = { color: string; colorCode: string; image: string };
 
 export default function DesignScreen() {
   const theme = useTheme();
+  const p = usePalette();
   const { session } = useAuth();
   const { width, height } = useWindowDimensions();
 
@@ -1117,7 +1118,8 @@ export default function DesignScreen() {
 
   if (!session) {
     return (
-      <ThemedView style={styles.container}>
+      <ThemedView style={[styles.container, { backgroundColor: p.bg }]}>
+        <FabricBackground p={p} />
         <SafeAreaView style={styles.gateWrap}>
           <ThemedText style={[styles.gateSpark, { color: theme.tint }]}>✦</ThemedText>
           <ThemedText type="title" style={styles.gateTitle}>
