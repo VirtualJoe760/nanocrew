@@ -6,7 +6,16 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { AppBackground } from '@/components/backgrounds/app-background';
+import Playground from './playground'; // the VENUS LAB (see VENUS_LAB below)
 import { attachReviewDeepLink } from '@/lib/push';
+
+// ── THE VENUS LAB ────────────────────────────────────────────────────────────
+// Our dedicated, permanent playground for iterating on Venus's APPEARANCE. Flip the
+// `false` to `true` to enter it (renders the live venus-head-scene full-screen instead
+// of the app); flip back to `false` for the normal app. Gated by `__DEV__` so it can
+// NEVER ship to production. This is where we work on Venus — full guide + workflow in
+// docs/studio/VENUS_AVATAR.md ("The Venus Lab").
+const VENUS_LAB = __DEV__ && false;
 
 // Hold the native splash until General Sans (the brand sans) is loaded, so text never
 // flashes in the system font first.
@@ -34,11 +43,15 @@ export default function TabLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* One continuous background for the whole app, behind the tabs. Studio/Market/Account
-          render transparent so it shows through; Design keeps an opaque backdrop (no dots). */}
-      <AppBackground />
-      <AnimatedSplashOverlay />
-      <AppTabs />
+      {VENUS_LAB ? (
+        <Playground />
+      ) : (
+        <>
+          <AppBackground />
+          <AnimatedSplashOverlay />
+          <AppTabs />
+        </>
+      )}
     </GestureHandlerRootView>
   );
 }

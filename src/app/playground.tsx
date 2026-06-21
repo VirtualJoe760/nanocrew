@@ -2,11 +2,10 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
-// Dev-only sandbox for GPU / shader experiments (react-native-skia). NOT linked in the tab bar —
-// navigate to `/playground` by hand. It renders the shared background scene
-// (components/backgrounds/dot-field-scene) full-screen so we can iterate on it in isolation.
-// On web, CanvasKit (the Skia WASM runtime) is lazy-loaded via WithSkiaWeb; on native it's the JSI
-// module and renders directly. Returns null in production builds.
+// THE VENUS LAB — our dedicated, permanent dev playground for iterating on Venus's appearance.
+// Renders the live venus-head-scene full-screen so we can work on her in isolation. Entered via
+// the `VENUS_LAB` flag in src/app/_layout.tsx (dev-only; never ships). Full guide: the "Venus Lab"
+// section of docs/studio/VENUS_AVATAR.md. Returns null in production builds.
 
 function Loading() {
   return (
@@ -36,11 +35,11 @@ export default function Playground() {
         <Pressable onPress={() => router.back()} hitSlop={16} style={styles.back}>
           <Text style={styles.backText}>‹ back</Text>
         </Pressable>
-        <Text style={styles.title}>NEON · TRACELIGHT</Text>
+        <Text style={styles.title}>VENUS · LAB</Text>
       </View>
 
       <Text style={[styles.foot, { bottom: insets.bottom + 16 }]}>
-        react-native-skia · SkSL runtime shader
+        venus avatar playground · docs/studio/VENUS_AVATAR.md
       </Text>
     </View>
   );

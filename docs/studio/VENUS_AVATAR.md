@@ -4,6 +4,22 @@
 > preview only (not yet on a native dev build). This doc is the source of truth for the
 > Venus-avatar work — read it before continuing.
 
+## 🛠 THE VENUS LAB — where we work on her appearance (read this first)
+**When the user says we're going to edit / work on Venus's appearance, come HERE — this is our
+dedicated, permanent playground for it.**
+- **What it is:** a dev-only full-screen render of the live avatar (`src/components/backgrounds/
+  venus-head-scene.tsx`) via the `/playground` screen (`src/app/playground.tsx`), so we iterate on
+  her in isolation (no app chrome).
+- **How to enter it:** flip `VENUS_LAB` in **`src/app/_layout.tsx`** from `__DEV__ && false` →
+  `__DEV__ && true`, then reload the web preview. Flip it back to `false` when done. It's gated by
+  `__DEV__`, so it can **never ship to production**. Keep it committed as `false`.
+- **The iteration loop:** edit `venus-head-scene.tsx` (and the hair/eye/shader helpers in the same
+  file) → `npx tsc --noEmit` → reload the `web-preview` server → screenshot to verify. Almost all
+  of Venus's look lives in that ONE file (shaders, the procedural bob, the eyes, the liveliness).
+- **Commit cadence:** commit at each visual milestone; this doc gets updated in the same change.
+- **Don't ship the lab:** before any build/PR, `VENUS_LAB` must be `false` (the app must render
+  `<AppBackground/><AnimatedSplashOverlay/><AppTabs/>`, not `<Playground/>`).
+
 ## The vision
 Venus is the AI a creator talks to in **Studio**. Today she's a monochrome orb/nucleus.
 We're turning her into a **glowing wireframe / "plexus mesh" face** that:
@@ -193,11 +209,11 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    already gates *when*). **Verify on a native dev build** (R3F-native + expo-gl).
 
 ## Gotchas (read before editing)
-- **TEMP `_layout` bypass — MUST REVERT before shipping.** `src/app/_layout.tsx` currently
-  renders `<Playground/>` directly (inside `{false && (<><AppBackground/><AnimatedSplashOverlay/>
-  <AppTabs/></>)}` + `<Playground/>`) so the **Lab renders on web** (NativeTabs-web only renders
-  the *initial* tab, so `/playground` won't show otherwise). Revert to
-  `<AppBackground/><AnimatedSplashOverlay/><AppTabs/>`. This bypass is **uncommitted**.
+- **The Venus Lab is entered via the `VENUS_LAB` flag** in `src/app/_layout.tsx` (see "The Venus
+  Lab" section above) — `__DEV__ && true` renders `<Playground/>` (the avatar) instead of the app.
+  We route the Lab this way because NativeTabs-web only renders the *initial* tab, so navigating to
+  `/playground` won't show otherwise. **Keep it committed as `false`; it must be `false` before any
+  build/PR** (gated by `__DEV__` so it can't ship even if left on, but keep the repo clean).
 - **drei `useGLTF` breaks under Metro** — it wires DRACO/meshopt loaders that use `import.meta`,
   which Metro can't eval ("Cannot use 'import.meta' outside a module"). Use a **plain three
   `GLTFLoader`** (`three/examples/jsm/loaders/GLTFLoader.js`). RPM GLBs aren't draco-compressed.

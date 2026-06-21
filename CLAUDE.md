@@ -46,7 +46,12 @@ The division is organized into subdirectories — open the one you need:
   seed, forge-vendored) so the client layer isn't duplicated across hundreds of templates.
 - `architecture/` — ARCHITECTURE · DATABASE_PLAN · API
 - `storefront/` — STOREFRONT_ENGINE · STOREFRONT_DATA_CONTRACT · TEMPLATE_AUTHORING · COMPONENT_SYSTEM · BUILD_QUALITY · FEATURED_PRODUCTS · COLLECTIONS_LOOKBOOK
-- `studio/` — BUILD_FLOW · FORGE_AI · DESIGN_GENERATOR (the Venus→forge build, refine, publish arc)
+- `studio/` — BUILD_FLOW · FORGE_AI · DESIGN_GENERATOR (the Venus→forge build, refine, publish arc) · **VENUS_AVATAR** (Venus's 3D talking-avatar look)
+- **Editing Venus's APPEARANCE? → the Venus Lab.** When the user says we're working on Venus's
+  look/avatar, go to **`docs/studio/VENUS_AVATAR.md`** (source of truth) and enter the **Venus Lab**:
+  flip `VENUS_LAB` in `src/app/_layout.tsx` to `__DEV__ && true` to render the live avatar
+  (`src/components/backgrounds/venus-head-scene.tsx`) full-screen, iterate, then flip back to `false`
+  (must be `false` before any build/PR). Nearly all of her look lives in that one scene file.
 - `accounts/` — AUTH_IDENTITY · ORDERS · BILLING_CREDITS · POD_POLICY · COMPLIANCE (one Supabase identity; orders by email; plans/credits/Connect; US marketplace compliance + build plan)
 - `app/` PAGES · `ops/` PRODUCTION_CHECKLIST + DEV_BUILD · `roadmap/`
 
