@@ -39,12 +39,12 @@ const SHELL_NAMES = ['Wolf3D_Head'];
 // ourselves: a stylized shell wrapping the head (covers the ears, fringe over the
 // brow, A-line length), rendered as a translucent volume + glowing rim. These tune
 // its shape relative to the head bounding box.
-const BOB_WIDEN = 1.12;      // shell width vs head half-width (covers ears + frames face)
-const BOB_DEPTH = 1.25;      // shell depth vs head half-width
+const BOB_WIDEN = 1.0;       // shell width vs head half-width (hugs; covers ears)
+const BOB_DEPTH = 1.12;      // shell depth vs head half-width
 const BOB_FACE_OPEN = 0.6;   // half-width of the face opening (× head half-width)
 const BOB_FRINGE = 0.44;     // fringe ends this fraction of head height below the crown (~brow)
 const BOB_LEN = 0.02;        // bob bottom height (fraction of head height above the chin)
-const BOB_TILT = 0.62;       // A-line: front kept longer than the back
+const BOB_TILT = 0.4;        // A-line: front kept longer than the back
 // Drop the outermost (ear) verts from the bright face shell (hidden under the bob).
 const EAR_DROP_FRAC = 0.82;
 
@@ -228,39 +228,59 @@ const HAIR_FRAG = /* glsl */ `
   }
 `;
 
-// Build a stylized BOB hair shell that wraps the head (covers the ears), with a
-// fringe over the brow, a face opening, and an A-line bottom — rendered as a smooth
-// fresnel-glow volume. `eyeY` (head-local) anchors the sizing to real proportions.
+// Build a stylized BOB hair shell — a BELL/HELMET profile (rounded crown that hugs
+// the skull, then vertical side panels hanging straight down to the jaw), NOT a round
+// ball. Carved for a face opening + A-line bottom; smooth fresnel-glow volume.
+// `eyeY` (head-local) anchors the sizing to real proportions.
 function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
   const cx = (bb.min.x + bb.max.x) / 2;
   const cz = (bb.min.z + bb.max.z) / 2;
   const w = bb.max.x - bb.min.x;            // head width (incl. ears)
-  // "eyes are halfway down the head" → chin/crown from the crown + eye line
   const crownY = bb.max.y;
-  const H = 2 * (crownY - eyeY);            // head height (crown→chin)
+  const H = 2 * (crownY - eyeY);            // head height (crown→chin); eyes ≈ halfway
   const chinY = crownY - H;
-  const center = new THREE.Vector3(cx, crownY - 0.4 * H, cz - 0.05 * w);
-  const rx = (w / 2) * BOB_WIDEN, ry = H * 0.54, rz = (w / 2) * BOB_DEPTH;
-
-  let geo: THREE.BufferGeometry = new THREE.SphereGeometry(1, 96, 72);
-  geo.scale(rx, ry, rz);
-  geo.translate(center.x, center.y, center.z);
-  geo = geo.toNonIndexed();
-
-  const browY = crownY - BOB_FRINGE * H; // fringe hangs to ~the brow (just above the eyes)
+  const Rx = (w / 2) * BOB_WIDEN, Rz = (w / 2) * BOB_DEPTH;
+  const topY = crownY;                      // the crown
+  const botY = chinY - 0.02 * H;            // lowest (front) point of the bob ≈ chin
+  const browY = crownY - BOB_FRINGE * H;    // fringe hangs to ~the brow
   const faceHalfX = (w / 2) * BOB_FACE_OPEN;
-  const jawY = chinY + BOB_LEN * H;              // bob bottom (A-line tilt per-face)
+  const jawY = chinY + BOB_LEN * H;         // A-line bottom reference (tilt per-face)
 
-  const src = geo.attributes.position;
+  // profile radius (fraction of full width) vs t = 0 at crown … 1 at the bottom:
+  // rounded crown → full width over the ears → taper IN toward the jaw (curves under).
+  const prof = (t: number) => {
+    const dome = 0.34, jaw = 0.58;
+    if (t < dome) return Math.sin((t / dome) * Math.PI * 0.5); // round the crown up to full width
+    if (t < jaw) return 1;                                     // full width over the ears
+    return 1 - 0.32 * ((t - jaw) / (1 - jaw));                 // taper in to the jaw/chin
+  };
+
+  const segU = 72, segV = 52;
+  const grid: THREE.Vector3[][] = [];
+  for (let iv = 0; iv <= segV; iv++) {
+    const t = iv / segV;
+    const y = topY - t * (topY - botY);
+    const r = prof(t);
+    const row: THREE.Vector3[] = [];
+    for (let iu = 0; iu <= segU; iu++) {
+      const ang = (iu / segU) * Math.PI * 2;
+      row.push(new THREE.Vector3(cx + Rx * r * Math.cos(ang), y, cz + Rz * r * Math.sin(ang)));
+    }
+    grid.push(row);
+  }
+
   const out: number[] = [];
-  for (let i = 0; i < src.count; i += 3) {
-    let mx = 0, my = 0, mz = 0;
-    for (let k = 0; k < 3; k++) { mx += src.getX(i + k); my += src.getY(i + k); mz += src.getZ(i + k); }
-    mx /= 3; my /= 3; mz /= 3;
-    const isFace = mz > center.z && my < browY && Math.abs(mx - cx) < faceHalfX; // face opening
-    const belowBottom = my < jawY - BOB_TILT * (mz - center.z);                  // A-line bottom
-    if (isFace || belowBottom) continue;
-    for (let k = 0; k < 3; k++) out.push(src.getX(i + k), src.getY(i + k), src.getZ(i + k));
+  const push = (p: THREE.Vector3) => out.push(p.x, p.y, p.z);
+  for (let iv = 0; iv < segV; iv++) {
+    for (let iu = 0; iu < segU; iu++) {
+      const a = grid[iv][iu], b = grid[iv][iu + 1], c = grid[iv + 1][iu + 1], d = grid[iv + 1][iu];
+      const mx = (a.x + b.x + c.x + d.x) / 4, my = (a.y + b.y + c.y + d.y) / 4, mz = (a.z + b.z + c.z + d.z) / 4;
+      const isFace = mz > cz && my < browY && Math.abs(mx - cx) < faceHalfX; // face opening
+      const belowBottom = my < jawY - BOB_TILT * (mz - cz);                  // A-line bottom
+      if (isFace || belowBottom) continue;
+      push(a); push(b); push(c);
+      push(a); push(c); push(d);
+    }
   }
   const bobGeo = new THREE.BufferGeometry();
   bobGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3));
