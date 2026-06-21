@@ -32,6 +32,9 @@ const DEG = Math.PI / 180;
 
 // The 4 morph-rigged meshes that make up the visible face (verified from the GLB).
 const FACE_NAMES = ['Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'];
+// The bright glow SHELL is built from the face SKIN only — eyeballs + teeth stay
+// on the dim substrate (cleaner sockets, no bright eye-blobs; structure leads).
+const SHELL_NAMES = ['Wolf3D_Head'];
 
 // DEV: play a sample speech clip on load so the mouth moves (and the pulse reacts)
 // on web. Set false for production / live Gemini audio. (Guarded to web.)
@@ -53,10 +56,10 @@ const NODE_VERT = /* glsl */ `
     float w2    = fract(uTime / 9.0 + 0.5);          // slow counter-wave (depth)
     pulse += 0.5 * exp(-(aY - w2) * (aY - w2) * 60.0);
     float tw    = 0.9 + 0.1 * sin(uTime * 2.0 + aRand * 6.2831); // tiny twinkle
-    vGlow  = (0.55 + (2.2 + uSpeak) * pulse) * tw;   // resting 0.55, crest ~2.75
+    vGlow  = (0.5 + (1.5 + uSpeak) * pulse) * tw;    // resting 0.5, subtler crest
     vColor = color;                                  // baked aurora gradient
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = clamp(9.0 * vGlow * (1.0 / -mv.z), 4.0, 22.0);
+    gl_PointSize = clamp(6.0 * vGlow * (1.0 / -mv.z), 3.0, 15.0); // smaller, refined
     gl_Position  = projectionMatrix * mv;
   }
 `;
@@ -300,10 +303,10 @@ function Avatar({ url }: { url: string }) {
 
         if (bones.head) {
           const dotTex = makeDotTexture();
-          const faceGeo = bakeHeadLocal(gltf.scene, bones.head, FACE_NAMES);
+          const faceGeo = bakeHeadLocal(gltf.scene, bones.head, SHELL_NAMES);
           if (faceGeo) {
             bakeAurora(faceGeo);
-            const dotGeo = subsample(faceGeo, 2);
+            const dotGeo = subsample(faceGeo, 3); // sparser, more deliberate nodes
 
             // (a) signature NODES — aurora gradient + travelling thought-pulse
             nodeMat = new THREE.ShaderMaterial({
@@ -324,18 +327,18 @@ function Avatar({ url }: { url: string }) {
             });
             const corePts = new THREE.Points(dotGeo, nodeMat);
 
-            // (b) node halo — fake bloom, tinted by the same baked gradient
+            // (b) node halo — fake bloom, tighter so it reads clean (not washy)
             const glowMat = new THREE.PointsMaterial({
-              size: 0.045, map: dotTex, vertexColors: true, opacity: 0.22,
+              size: 0.034, map: dotTex, vertexColors: true, opacity: 0.12,
               transparent: true, sizeAttenuation: true,
               blending: THREE.AdditiveBlending, depthWrite: false,
             });
             const glowPts = new THREE.Points(dotGeo, glowMat);
 
-            // (c) structural edges (+ scaled halo clone = fake thickness/bloom)
-            const edgesGeo = new THREE.EdgesGeometry(faceGeo, 18);
+            // (c) structural edges LEAD the look (+ scaled halo clone = fake thickness)
+            const edgesGeo = new THREE.EdgesGeometry(faceGeo, 16);
             edgeCoreMat = new THREE.LineBasicMaterial({
-              color: new THREE.Color('#3a6f8a'), transparent: true, opacity: 0.3,
+              color: new THREE.Color('#3a6f8a'), transparent: true, opacity: 0.36,
               blending: THREE.AdditiveBlending, depthWrite: false,
             });
             const edgeCore = new THREE.LineSegments(edgesGeo, edgeCoreMat);
@@ -372,6 +375,7 @@ function Avatar({ url }: { url: string }) {
                 color: new THREE.Color('#2f5560'), transparent: true, opacity: 0.16,
                 blending: THREE.AdditiveBlending, depthWrite: false,
               });
+              hairMat.opacity = 0.12; // restrained — a whisper of a frame
               const hairHalo = new THREE.LineSegments(hairEdges, hairMat);
               hairHalo.renderOrder = 1;
               shell.add(hairHalo);
@@ -383,7 +387,7 @@ function Avatar({ url }: { url: string }) {
 
             // (f) aura pool — she sits in her own light (billboarded, behind head)
             const auraMat = new THREE.MeshBasicMaterial({
-              map: makeAuraTexture(), transparent: true, opacity: 0.16,
+              map: makeAuraTexture(), transparent: true, opacity: 0.1,
               blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false,
             });
             aura = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), auraMat);
@@ -438,7 +442,7 @@ function Avatar({ url }: { url: string }) {
 
     // ── rare holographic blip (the ONE instability) ────────────────────────
     const blip = Math.random() < 0.003 ? 0.82 : 1.0;
-    if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.3 * blip;
+    if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.36 * blip;
 
     // ── node uniforms: thought-pulse time + reactive speak energy + blip ────
     const speak = lipTargets.current.jawOpen ?? 0;
@@ -449,7 +453,7 @@ function Avatar({ url }: { url: string }) {
       u.uSpeak.value = THREE.MathUtils.damp(u.uSpeak.value, speak * 1.2, 8, delta);
       u.uPeriod.value = THREE.MathUtils.damp(u.uPeriod.value, speak > 0.06 ? 1.4 : 3.5, 4, delta);
     }
-    if (r.coreMat) r.coreMat.uniforms.uOpacity.value = 0.85 + 0.15 * Math.sin(t * 0.5);
+    if (r.coreMat) r.coreMat.uniforms.uOpacity.value = 0.5 + 0.1 * Math.sin(t * 0.5);
 
     // ── shell parallax + aura billboard/breath ─────────────────────────────
     if (r.shell) {

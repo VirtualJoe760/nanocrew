@@ -64,11 +64,16 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     (`Wolf3D_Head`, `EyeLeft`, `EyeRight`, `Wolf3D_Teeth`); body/outfit/**glasses** are hidden and
     `Wolf3D_Hair` becomes a faint additive `EdgesGeometry` contour that *frames* her (no tangle).
   - **Two-layer render:** a DIM constant-color morph-driven substrate (`MeshBasicMaterial`
-    wireframe, opacity 0.12) carries lip-sync + blink, UNDER a **bright static glow shell** parented
-    to the `Head` bone (built once via `bakeHeadLocal` → head-local geometry → `mergeVertices`):
-    aurora-gradient **nodes** (a `ShaderMaterial` carrying the thought-pulse) + node halo +
-    `EdgesGeometry` lines + a fresnel **core-glow** sphere; plus a billboarded **aura pool**. All
-    additive (no postprocessing); GLSL is ES2/expo-gl-safe.
+    wireframe, opacity 0.12, all 4 face meshes) carries lip-sync + blink, UNDER a **bright static
+    glow shell** parented to the `Head` bone (built once via `bakeHeadLocal` → head-local geometry →
+    `mergeVertices`): aurora-gradient **nodes** (a `ShaderMaterial` carrying the thought-pulse) +
+    node halo + `EdgesGeometry` lines + a fresnel **core-glow** sphere; plus a billboarded
+    **aura pool**. All additive (no postprocessing); GLSL is ES2/expo-gl-safe.
+  - **"Refined" pass** (user direction — *cleaner, structure-led*): the glow shell is built from the
+    face SKIN only (`SHELL_NAMES = ['Wolf3D_Head']`) so the eyeballs + teeth stay on the dim
+    substrate (clean sockets, no bright eye-blobs); **edges lead** (opacity 0.36) over a sparser
+    (`subsample` stride 3), smaller node field; tighter halo (0.12), subtler pulse crest, dimmer
+    core/aura/hair. The tuning lives in a few constants — easy to push back toward "vivid."
   - **Real lip-sync** (`src/lib/venus-lipsync.ts`): a zero-dep Web-Audio `AnalyserNode` driver
     (RMS→`jawOpen`, spectral-centroid→vowel viseme, HF-ratio→fricative) returns `viseme_*`+jaw
     target weights; `useFrame` damps them onto the substrate. Strict ownership (lip-sync owns ONLY
