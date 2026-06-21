@@ -77,10 +77,13 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     anisotropic sheen** (the bright highlight band that reads as hair — tangent = the baked flow
     projected onto the surface, lit by a faked view-space upper-front light fed per-frame via
     `uViewRot`/`uTime`), over a **root→tip teal gradient**, **procedural strand striations**, a soft
-    **fresnel rim**, a **feathered A-line hem** + crisp fringe edge. `NormalBlending`, `uBaseAlpha`
-    ~0.88 (solid hair occludes the face behind the fringe). ES2/expo-gl-safe (no postprocessing,
-    no loops/dFdx; promote `mediump`→`highp` if the crown band crawls on device). ~20 tunable uniforms;
-    the 5 worth eyeballing: `uBaseAlpha`, `uShift1/2`, `uStrandCount`, `uExp1/2`, `uTipFade`.
+    **fresnel rim**, a **feathered A-line hem** + crisp fringe edge, and a **gentle tip WAVE** (vertex
+    displacement scaled by `aRoot²` so roots stay anchored, off `uTime` — `uWaveAmp`/`uWaveSpeed`).
+    `NormalBlending`, `uBaseAlpha` ~0.88 (solid hair occludes the face behind the fringe). Length/shape
+    via the `BOB_*` consts (`BOB_LEN` negative = below the chin, `BOB_TILT` = A-line); the profile is
+    parameterized by **head-fraction** so proportions stay stable as it lengthens. ES2/expo-gl-safe (no
+    postprocessing, no loops/dFdx; `mediump`→`highp` if the crown band crawls). The 5 uniforms worth
+    eyeballing: `uBaseAlpha`, `uShift1/2`, `uStrandCount`, `uExp1/2`, `uWaveAmp`.
   - The bright **ear geometry is dropped from the face shell** (`dropEars`, `EAR_DROP_FRAC`) so it
     doesn't poke through the bob. **Note:** the procedural bob is the demo workaround — the user's own
     RPM Venus with a real bob asset (URL swap) is the production answer; RPM was unreachable when built.

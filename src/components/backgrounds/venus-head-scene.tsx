@@ -45,8 +45,8 @@ const BOB_WIDEN = 1.0;       // shell width vs head half-width (hugs; covers ear
 const BOB_DEPTH = 1.12;      // shell depth vs head half-width
 const BOB_FACE_OPEN = 0.6;   // half-width of the face opening (× head half-width)
 const BOB_FRINGE = 0.44;     // fringe ends this fraction of head height below the crown (~brow)
-const BOB_LEN = 0.02;        // bob bottom height (fraction of head height above the chin)
-const BOB_TILT = 0.4;        // A-line: front kept longer than the back
+const BOB_LEN = -0.12;       // bob bottom (fraction of head height; negative = below the chin)
+const BOB_TILT = 0.65;       // A-line: front kept longer than the back (long-bob front pieces)
 // Drop the outermost (ear) verts from the bright face shell (hidden under the bob).
 const EAR_DROP_FRAC = 0.82;
 
@@ -223,10 +223,16 @@ const HAIR_VERT = /* glsl */ `
   attribute float aEdgeF;   // metres above browY (fringe verts)
   attribute vec3  aFlow;    // OBJECT-space hair flow (≈ down-strand)
   uniform mat3 uViewRot;    // object→view rotation (per-frame)
+  uniform float uTime, uWaveAmp, uWaveSpeed;
   varying vec3  vN, vV, vT;
   varying float vRoot, vAround, vEdge, vFringe, vEdgeF;
   void main() {
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    // gentle wave — tips sway (aRoot² keeps roots fixed); the stiff fringe sways less
+    float amt = aRoot * aRoot * uWaveAmp * (1.0 - 0.6 * aFringe);
+    vec3 wpos = position;
+    wpos.x += sin(uTime * uWaveSpeed + aRoot * 7.0 + aAround * 11.0) * amt;
+    wpos.z += cos(uTime * uWaveSpeed * 0.85 + aRoot * 6.0 + aAround * 9.0) * amt * 0.7;
+    vec4 mv = modelViewMatrix * vec4(wpos, 1.0);
     vN = normalize(normalMatrix * normal);
     vV = normalize(-mv.xyz);
     vec3 flowVS = normalize(uViewRot * aFlow);
@@ -307,29 +313,30 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
   const chinY = crownY - H;
   const Rx = (w / 2) * BOB_WIDEN, Rz = (w / 2) * BOB_DEPTH;
   const topY = crownY;                      // the crown
-  const botY = chinY - 0.02 * H;            // lowest (front) point of the bob ≈ chin
+  const botY = chinY - 0.45 * H;            // grid extends well below the chin (long A-line front)
   const browY = crownY - BOB_FRINGE * H;    // fringe hangs to ~the brow
   const faceHalfX = (w / 2) * BOB_FACE_OPEN;
   const jawY = chinY + BOB_LEN * H;         // A-line bottom reference (tilt per-face)
 
-  // profile radius (fraction of full width) vs t = 0 at crown … 1 at the bottom:
-  // rounded crown → full width over the ears → taper IN toward the jaw (curves under).
-  const prof = (t: number) => {
+  // profile radius (fraction of full width) vs HEAD-FRACTION hf (0 crown, 1 chin, >1 below):
+  // rounded crown → full width over the ears → taper toward the jaw → hang below the chin.
+  // (parameterizing by hf, not the row index, keeps proportions stable as the hair lengthens.)
+  const prof = (hf: number) => {
     const dome = 0.34, jaw = 0.58;
-    // 0.08 floor avoids a degenerate crown pole (r=0 → NaN normals)
-    if (t < dome) return 0.08 + 0.92 * Math.sin((t / dome) * Math.PI * 0.5); // round the crown
-    if (t < jaw) return 1;                                                   // full width over the ears
-    return 1 - 0.32 * ((t - jaw) / (1 - jaw));                               // taper in to the jaw/chin
+    if (hf < dome) return 0.08 + 0.92 * Math.sin((hf / dome) * Math.PI * 0.5); // round crown (no pole)
+    if (hf < jaw) return 1;                                                    // full width over the ears
+    if (hf < 1) return 1 - 0.3 * ((hf - jaw) / (1 - jaw));                     // taper toward the jaw
+    return 0.7 - 0.18 * (hf - 1);                                              // hang below the chin
   };
 
-  const segU = 96, segV = 72;                  // smoother crown; ~13k tris, cheap
+  const segU = 96, segV = 96;                  // smoother + enough rows over the longer length
   const fringeRow = Math.round((browY - topY) / ((botY - topY) / segV)); // row where y ≈ browY
   const FRINGE_ARC = faceHalfX * 1.15;         // how wide across the front the fringe spans
   const grid: THREE.Vector3[][] = [];
   for (let iv = 0; iv <= segV; iv++) {
     const t = iv / segV;
     const y = topY - t * (topY - botY);
-    const r = prof(t);
+    const r = prof((crownY - y) / H);
     const row: THREE.Vector3[] = [];
     for (let iu = 0; iu <= segU; iu++) {
       const ang = (iu / segU) * Math.PI * 2;
@@ -412,6 +419,8 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
       uTipFade: { value: 0.05 * H },
       uBaseAlpha: { value: 0.88 }, // solid hair — occludes the face behind the fringe
       uTime: { value: 0 },
+      uWaveAmp: { value: 0.02 },     // tip sway amplitude (metres)
+      uWaveSpeed: { value: 1.1 },    // wave speed
       uViewRot: { value: new THREE.Matrix3() },
     },
     vertexShader: HAIR_VERT,
