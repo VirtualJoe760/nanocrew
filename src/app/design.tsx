@@ -1125,7 +1125,6 @@ function DesignScreen() {
       // through — the logged-out gate used to paint the OLD FabricBackground (gradient + waves) on top.
       <ThemedView style={[styles.container, { backgroundColor: 'transparent' }]}>
         <SafeAreaView style={styles.gateWrap}>
-          <ThemedText style={[styles.gateSpark, { color: theme.tint }]}>✦</ThemedText>
           <ThemedText type="title" style={styles.gateTitle}>
             Design your products
           </ThemedText>
