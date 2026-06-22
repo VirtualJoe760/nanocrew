@@ -210,11 +210,19 @@ class NullDriver implements VenusLipsync {
 // sibilant mouth shape. No FFT, no extra audio graph — it analyses the exact samples being played.
 const NATIVE_SILENCE = 0.012; // RMS below this ⇒ mouth closed (between words / at rest)
 const NATIVE_GAIN = 11; // RMS → jaw openness (normal speech RMS ~0.08–0.18 opens most of the way)
-const FRICATIVE_ZCR = 0.18; // zero-crossing rate above this ⇒ sibilant/fricative (teeth, near-closed)
+const NATIVE_JAW = 0.8; // loudness → jaw drop (lower = calmer, less gape)
+const FRICATIVE_ZCR = 0.17; // zero-crossing rate above this ⇒ sibilant/fricative (teeth, near-closed)
+// Within voiced speech, brightness (ZCR) tracks vowel frontness: dark/back vowels (oo, oh) have low
+// ZCR, bright/front vowels (ee, eh) high. Map that range so the mouth shape follows the real sound.
+const VOWEL_DARK = 0.03; // ZCR at/below ⇒ rounded back vowel (O)
+const VOWEL_BRIGHT = 0.12; // ZCR at/above ⇒ spread front vowel (E)
+
+function clamp01(x: number): number {
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
 
 class SpeechLevelDriver implements VenusLipsync {
   debug = { viseme: 'viseme_sil', rms: 0, centroid: 0, hfRatio: 0 };
-  private phase = 0;
   connect() {}
   async connectMicrophone() {}
   resume() {}
@@ -234,22 +242,25 @@ class SpeechLevelDriver implements VenusLipsync {
     }
     const open = Math.min(1, level * NATIVE_GAIN);
     if (zcr > FRICATIVE_ZCR) {
-      // sibilant/fricative — bright, near-closed with teeth, jaw barely parts
+      // sibilant/fricative — bright noise: teeth nearly together, jaw barely parts
       const v = zcr > 0.34 ? 'viseme_SS' : 'viseme_FF';
-      w[v] = Math.min(1, 0.5 + open * 0.4);
-      w.jawOpen = open * 0.28;
-      w.mouthOpen = open * 0.12;
+      w[v] = Math.min(1, 0.45 + open * 0.4);
+      w.jawOpen = open * 0.22;
       this.debug.viseme = v;
     } else {
-      // voiced vowel — amplitude opens the jaw; cycle the shape gently so it isn't a robotic flap
-      this.phase += 0.16;
-      const vow = 0.5 + 0.5 * Math.sin(this.phase);
-      w.jawOpen = open * 0.95;
-      w.mouthOpen = open * 0.5;
-      w.viseme_aa = open * (0.45 + 0.4 * vow);
-      w.viseme_O = open * 0.35 * (1 - vow);
-      w.viseme_E = open * 0.3 * vow;
-      this.debug.viseme = 'viseme_aa';
+      // voiced — brightness (ZCR) crossfades the vowel SHAPE from the actual sound: dark → rounded
+      // (O), mid → open (aa), bright → spread (E). This is what stops every syllable rounding into
+      // "O": the rounded shape now only appears on genuinely dark sounds, not by default. Loudness
+      // drives the jaw; NO mouthOpen (it was adding the rounded gape).
+      const b = clamp01((zcr - VOWEL_DARK) / (VOWEL_BRIGHT - VOWEL_DARK)); // 0 dark .. 1 bright
+      const wO = Math.max(0, 1 - b * 2); // rounded, only for clearly-dark sounds
+      const wE = Math.max(0, b * 2 - 1); // spread, only for clearly-bright sounds
+      const wAa = 1 - wO - wE; // open — the neutral middle
+      w.jawOpen = open * NATIVE_JAW;
+      w.viseme_O = open * 0.5 * wO;
+      w.viseme_aa = open * 0.75 * wAa;
+      w.viseme_E = open * 0.6 * wE;
+      this.debug.viseme = wE >= wAa && wE >= wO ? 'viseme_E' : wO > wAa ? 'viseme_O' : 'viseme_aa';
     }
     return w;
   }

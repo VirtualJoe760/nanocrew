@@ -152,7 +152,9 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
       time-synced envelope of Venus's ACTUAL spoken PCM. `live-voice.ts` pushes every decoded 24 kHz
       chunk (the exact samples it enqueues for playback) into that module aligned to when it becomes
       audible; the driver maps **loudness (RMS) → jaw openness** (silent between words ⇒ mouth closed)
-      and **zero-crossing-rate → vowel vs. sibilant**. `setVenusSpeechLatency(ms)` (default 120) shifts
+      and **brightness (zero-crossing-rate) → vowel SHAPE** — a crossfade dark→rounded `O`,
+      mid→open `aa`, bright→spread `E`, plus vowel-vs-sibilant (so it doesn't round into "O" on every
+      syllable; the mouth shape follows the real sound). `setVenusSpeechLatency(ms)` (default 120) shifts
       the envelope to match ear-to-lip; tune on device. No FFT, no second audio graph — it analyses
       the bytes being played. (Lip-sync keeps running while her buffered audio finishes, even after
       the turn-complete flips state to listening.)
