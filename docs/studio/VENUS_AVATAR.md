@@ -244,16 +244,14 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      `talking` (formed + lip-sync). The **Lab** (`playground.tsx`) has the 4-stage toggle row and **no
      longer renders the Skia `<AppBackground>`** — the lattice IS the background inside the transparent
      canvas, over the `#06080f` bed.
-   - **Talking = she lights up + speaks (DONE).** Two talking-only effects make her clearly readable
-     as she speaks (silence stays the calm dark rest look): (1) **speech energy focusing INTO her lips**
-     — "intelligent circuits focusing energy into her words." `LATTICE_VERT` contracts two half-offset
-     rings of light toward her mouth (`aLipDist` 1→0, `ringR = 1−fract(t·0.6)`), brightening as they
-     near it, and the lips themselves flare with each word (`smoothstep(0.22,0,aLipDist)·uSpeak`). Her
-     lip center is baked in `bakeUnifiedLattice` as the mean of face verts in the mouth-height band
-     (`aY≈0.20–0.40`); `aLipDist` = each face dot's normalized distance to it. Gated by `uTalk` (smoothed
-     `talkingRef`) + `aIsFace`. (2) the **substrate wireframe** (the ONLY thing that deforms with the
-     visemes → it carries the lip-sync) keeps a small jawOpen punch so the mouth stays readable even
-     though talking is dimmer overall (see brightness model below).
+   - **Talking = a BOTTOM→TOP light wave on the dots (DONE).** Per Joe ("the dots kind of light up some
+     of her mesh from bottom to top when she's talking"): `LATTICE_VERT` sweeps a bright band UP her
+     face dots — `wave = fract(uTime·0.5)` (0 bottom → 1 top, ~2 s), `band = exp(-(aFaceY-wave)²·55)`,
+     punched by jawOpen (`uSpeak`). `aFaceY` is each face dot's baked height (the `wipe` array; 0 chin/
+     neck … 1 crown). Gated by `uTalk` (smoothed `talkingRef`) + `aIsFace`, so only her face dots light
+     and only while talking. (The earlier mouth-glow pool and the lip-converging rings were removed.)
+     The substrate wireframe also keeps a small jawOpen punch so the mouth stays readable even though
+     talking is dimmer overall (see brightness model below).
    - **No BLEED-THROUGH / DEFORMING dark fill (DONE).** The wireframe is additive with `depthWrite:false`,
      so with nothing solid behind it you see straight THROUGH to the interior/back mesh (the visible
      "bleed-through": a second layer of wireframe showing through the front). The dark fill must occlude
@@ -268,10 +266,9 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      front. It writes depth at the ACTUAL (deformed) face surface, so the front wireframe stays a clean
      single layer everywhere (mouth open included) and the interior/background are occluded — no
      bleed-through, no black cull, no x-ray. `occluderMat` (one shared material) carries the opacity/
-     depthWrite/teal-lift in `useFrame`. A `mouthGlow` (broad additive aura-pool at the lip center,
-     `depthTest:off`, scaled by jawOpen) still adds energy light in the open mouth. **The occluder is
-     EAR-CLIPPED** with the same `earPlanes` as the substrate — otherwise the dark fill writes depth at
-     the ears and punches them through the (translucent) hair; clipping lets the hair cover the ears.
+     depthWrite/teal-lift in `useFrame`. **The occluder is EAR-CLIPPED** with the same `earPlanes` as the
+     substrate — otherwise the dark fill writes depth at the ears and punches them through the
+     (translucent) hair; clipping lets the hair cover the ears.
    - **Brightness model — BRIGHTER when SILENT, DIMMER when TALKING (DONE).** Per Joe: she was too
      bright talking. `quiet = 1 − talk`. The wireframe lifts when silent (`subA = (0.18 + 0.18·quiet +
      0.05·speak·talk)·seg`; edges `(0.30 + 0.12·quiet)·seg`) and the occluder FILL glows a soft teal
@@ -280,8 +277,8 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
      span (`vW/vH × 2.0`) + greedy claim + the lip-band (`aY 0.20–0.40`), `LATTICE_VERT` `uSwirl/uUpdraft/
      uInfall` + the `fly·0.9` pinch, the `uPulse` curve + `basePx`, the lip energy (`uTime·0.6` ring rate,
-     `42` ring width, the `uSpeak` lip flare) + the `quiet` brightness coefficients (`subA`/edges/fill),
-     `bakeStreamField` count, the `seg(...)`.
+     the speech wave (`uTime·0.5` rise rate, `55` band width, `uSpeak` punch) + the `quiet` brightness
+     coefficients (`subA`/edges/fill), `bakeStreamField` count, the `seg(...)`.
    - **⚠ Sync point:** the Skia look now lives in **TWO** places — `dot-field-scene.tsx` (SKSL, still the
      app-wide Account/Market/Account background via `<AppBackground>`) and `venus-points.ts`
      `SKIA_CHUNK` (the GLSL port). If the dot-field look is retuned, change BOTH (the constants are

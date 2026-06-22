@@ -149,7 +149,6 @@ type Rig = {
   edgeCoreMat?: THREE.LineBasicMaterial;
   edgeHaloMat?: THREE.LineBasicMaterial; // reveal fade
   occluderMat?: THREE.MeshBasicMaterial; // deforming dark face fill (shared by the mesh clones)
-  mouthGlow?: THREE.Mesh;                // light that fills her open mouth while speaking
   streamMat?: THREE.ShaderMaterial;      // persistent dot-field pulsing toward her
   eyeObjs: THREE.Object3D[];             // iris/sclera sprites — hidden until formed
   cycleMats: THREE.Material[]; // edges — narrow hue drift
@@ -554,22 +553,15 @@ function bakeUnifiedLattice(
   const M = fpos.count;
 
   // face vertices → GROUP (world) space + their centroid (= grid center AND funnel axis).
-  // Also accumulate her LIP CENTER: the mean of verts in the mouth-height band (aY≈0.20–0.40,
-  // chin 0 … crown 1) — the focal point the speech energy converges into.
   const fv = new Float32Array(M * 3);
   const centroid = new THREE.Vector3();
-  const lips = new THREE.Vector3();
-  let lipsN = 0;
   const tmp = new THREE.Vector3();
   for (let k = 0; k < M; k++) {
     tmp.set(fpos.getX(k), fpos.getY(k), fpos.getZ(k)).applyMatrix4(headToGroup);
     fv[k * 3] = tmp.x; fv[k * 3 + 1] = tmp.y; fv[k * 3 + 2] = tmp.z;
     centroid.add(tmp);
-    const ay = faY ? faY.getX(k) : 0.5;
-    if (ay > 0.20 && ay < 0.40) { lips.add(tmp); lipsN++; }
   }
   centroid.multiplyScalar(1 / Math.max(1, M));
-  if (lipsN > 0) lips.multiplyScalar(1 / lipsN); else lips.copy(centroid);
 
   const N = LAT_COLS * LAT_ROWS;
   const spanX = view.vW * 2.0, spanY = view.vH * 2.0; // fills the viewport, centered on her
@@ -639,23 +631,11 @@ function bakeUnifiedLattice(
     delay[i] = Math.min(0.55, 0.22 * (1 - wipe[i]) + 0.2 * span[i] + 0.13 * rand[i]);
   }
 
-  // distance from each FACE dot to her lips → the speech-energy focal field (0 at the
-  // mouth … 1 at the far face edge). Ambient dots stay 1 (shader gates by aIsFace anyway).
-  const lipD = new Float32Array(N).fill(1);
-  let maxLipD = 1e-4;
-  for (let i = 0; i < N; i++) {
-    if (!isFace[i]) continue;
-    const dx = target[i * 3] - lips.x, dy = target[i * 3 + 1] - lips.y, dz = target[i * 3 + 2] - lips.z;
-    const d = Math.hypot(dx, dy, dz);
-    lipD[i] = d; if (d > maxLipD) maxLipD = d;
-  }
-  for (let i = 0; i < N; i++) if (isFace[i]) lipD[i] /= maxLipD;
-
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(home.slice(), 3)); // for bbox/culling
   g.setAttribute('aHome', new THREE.BufferAttribute(home, 3));
   g.setAttribute('aTarget', new THREE.BufferAttribute(target, 3));
-  g.setAttribute('aLipDist', new THREE.BufferAttribute(lipD, 1)); // → speech energy focuses on the lips
+  g.setAttribute('aFaceY', new THREE.BufferAttribute(wipe, 1)); // face height → bottom-to-top speech wave
   g.setAttribute('aCell', new THREE.BufferAttribute(cell, 2));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setAttribute('aDelay', new THREE.BufferAttribute(delay, 1));
@@ -913,7 +893,6 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         let edgeCoreMat: THREE.LineBasicMaterial | undefined;
         let edgeHaloMat: THREE.LineBasicMaterial | undefined;
         let occluderMat: THREE.MeshBasicMaterial | undefined; // shared dark fill (deforming clones)
-        let mouthGlow: THREE.Mesh | undefined; // light pours out of her open mouth (fills the cavity)
         let streamMat: THREE.ShaderMaterial | undefined;
         let aura: THREE.Object3D | undefined;
         let bob: THREE.Mesh | undefined;
@@ -1064,34 +1043,6 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
               (src.parent ?? bones.head).add(occ);
             }
 
-            // (f2) MOUTH ENERGY — light pours out of her mouth as she speaks. The dark fill is
-            //   the STATIC closed-mouth shape and writes depth; when the jaw drops, the deforming
-            //   wireframe of the open mouth falls BEHIND that closed-mouth depth and gets culled →
-            //   a black cavity. This additive glow (depthTest OFF, drawn in front) fills that
-            //   cavity with energy, scaled/brightened by jawOpen — so the void reads as her words
-            //   lighting up, not a hole. Head-local mouth center = mean of the mouth-band verts.
-            const mouthLocal = new THREE.Vector3();
-            {
-              const pp = faceDots.attributes.position, ay = faceDots.attributes.aY;
-              let mn = 0;
-              for (let k = 0; k < pp.count; k++) {
-                const hY = ay ? ay.getX(k) : 0.5;
-                if (hY > 0.20 && hY < 0.40) { mouthLocal.x += pp.getX(k); mouthLocal.y += pp.getY(k); mouthLocal.z += pp.getZ(k); mn++; }
-              }
-              if (mn > 0) mouthLocal.multiplyScalar(1 / mn); else mouthLocal.copy(fcHead);
-            }
-            mouthGlow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
-              map: makeAuraTexture(), color: new THREE.Color('#bdeeff'), // broad soft pool, not a tight dot
-              transparent: true, opacity: 0,
-              depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
-            }));
-            mouthGlow.position.copy(mouthLocal);
-            mouthGlow.position.y -= faceSize.y * 0.04; // sit INTO the cavity (it opens downward)
-            mouthGlow.position.z += faceSize.z * 0.18; // nudge forward to the lip surface
-            mouthGlow.renderOrder = 6; // over the dark fill + wireframe
-            mouthGlow.userData = { w: faceSize.x * 0.62, h: faceSize.y * 0.24 };
-            bones.head.add(mouthGlow);
-
             // start the substrate hidden too — the reveal clock fades it in
             for (const m of meshes) (m.material as THREE.MeshBasicMaterial).opacity = 0;
 
@@ -1109,7 +1060,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
           }
         }
 
-        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluderMat, mouthGlow, eyeObjs, cycleMats, aura, shell, bob, hairMat, streamMat };
+        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluderMat, eyeObjs, cycleMats, aura, shell, bob, hairMat, streamMat };
 
         // clip the dim SUBSTRATE at the ear line so the ears don't poke out from under
         // the hair (the bright shell already dropped them; the bob covers the area).
@@ -1217,16 +1168,6 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     // even though talking is dimmer overall.
     const subA = (0.18 + 0.18 * quiet + 0.05 * speak * talk) * seg(0.62, 0.78);
     for (const m of r.meshes) (m.material as THREE.MeshBasicMaterial).opacity = subA;
-    // mouth energy — fills the open-mouth cavity with light as she speaks (jawOpen), so the
-    // depth-culled wireframe void reads as her words lighting up instead of a black hole.
-    if (r.mouthGlow) {
-      const mat = r.mouthGlow.material as THREE.MeshBasicMaterial;
-      const open = THREE.MathUtils.clamp(speak, 0, 1);
-      // a soft base so the closed mouth isn't black either, surging as the jaw drops
-      mat.opacity = THREE.MathUtils.damp(mat.opacity, (0.22 + 0.85 * open) * talk * seg(0.72, 0.95), 14, delta);
-      const ud = r.mouthGlow.userData as { w: number; h: number };
-      r.mouthGlow.scale.set(ud.w * (0.85 + 0.4 * open), ud.h * (0.55 + 1.5 * open), 1);
-    }
     if (r.coreMat) r.coreMat.uniforms.uOpacity.value = (0.5 + 0.1 * Math.sin(t * 0.5)) * seg(0.72, 0.9);
     if (r.occluderMat) {
       const om = r.occluderMat;
