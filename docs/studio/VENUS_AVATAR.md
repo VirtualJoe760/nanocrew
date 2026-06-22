@@ -256,17 +256,22 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      0.45·speak·talk)·seg(0.62,0.78)` — so the articulating mouth reads against the dark fill instead of
      being lost in it (fixes "very black / can't see the lips"). Bright structure (edges/dots) is STATIC,
      so the substrate is what shows the mouth move.
-   - **No black mouth-void (DONE).** Only the substrate wireframe DEFORMS; the dark fill/occluder is the
-     STATIC closed-mouth `rawFace` and it WRITES DEPTH (to stop back-hair/dots showing through her face).
-     So the depth buffer holds a *closed* mouth: when the jaw drops, the deforming lower-face/mouth
-     wireframe moves behind that closed-mouth depth and gets depth-CULLED → black patches around the
-     mouth (the fibermesh "disappears"). Fix: the occluder's `polygonOffsetFactor/Units` are large
-     (6/28) — this pushes only its DEPTH well back (geometry unmoved, silhouette unchanged) so the
-     open-mouth wireframe stays in front and keeps drawing, while far-behind hair/dots are still
-     occluded (no x-ray). Plus a `mouthGlow` (a broad additive aura-pool at the lip center, `depthTest:
-     off`, scaled/brightened by jawOpen) fills the open cavity with light — her words light up instead
-     of a hole. (Single-sided culling of the inner mouth + triangle stretch also darken it; the offset
-     is the main fix.)
+   - **No BLEED-THROUGH / DEFORMING dark fill (DONE).** The wireframe is additive with `depthWrite:false`,
+     so with nothing solid behind it you see straight THROUGH to the interior/back mesh (the visible
+     "bleed-through": a second layer of wireframe showing through the front). The dark fill must occlude
+     that interior — but a **static** fill (the old closed-mouth `rawFace`) stops matching the face the
+     moment the jaw moves, so the interior bleeds through (and a big polygon-offset hack to keep the
+     open-mouth wireframe drawing just pushed the fill's depth so far back that the **background dots
+     bled through her face** — wrong fix, reverted). The real fix: the occluder is now a **dark-fill
+     DUPLICATE of each face mesh** (`for (src of meshes) src.clone()` — `clone()` shares the skeleton for
+     SkinnedMesh — set `occluderMat`, and **share `morphTargetInfluences`** so it deforms identically),
+     `side: DoubleSide` (so the open mouth shows dark interior, not background), `renderOrder -10`,
+     `depthWrite` gated `R>0.5`, small `polygonOffset 4/4` to keep the coincident wireframe just in
+     front. It writes depth at the ACTUAL (deformed) face surface, so the front wireframe stays a clean
+     single layer everywhere (mouth open included) and the interior/background are occluded — no
+     bleed-through, no black cull, no x-ray. `occluderMat` (one shared material) carries the opacity/
+     depthWrite/teal-lift in `useFrame`. A `mouthGlow` (broad additive aura-pool at the lip center,
+     `depthTest:off`, scaled by jawOpen) still adds energy light in the open mouth.
    - **Lit-from-within while speaking (DONE).** Even with the wireframe intact, the near-black FILL
      (`#05090f`) shows through the triangle gaps and reads too dark when she talks. So while speaking
      the occluder's COLOR lifts toward a lit teal — `lift = talk·(0.7 + 0.3·jawOpen)` (steady base so

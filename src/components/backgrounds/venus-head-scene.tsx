@@ -148,7 +148,7 @@ type Rig = {
   coreMat?: THREE.ShaderMaterial;
   edgeCoreMat?: THREE.LineBasicMaterial;
   edgeHaloMat?: THREE.LineBasicMaterial; // reveal fade
-  occluder?: THREE.Mesh;                 // dark face fill — reveal fade
+  occluderMat?: THREE.MeshBasicMaterial; // deforming dark face fill (shared by the mesh clones)
   mouthGlow?: THREE.Mesh;                // light that fills her open mouth while speaking
   streamMat?: THREE.ShaderMaterial;      // persistent dot-field pulsing toward her
   eyeObjs: THREE.Object3D[];             // iris/sclera sprites — hidden until formed
@@ -912,7 +912,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         let coreMat: THREE.ShaderMaterial | undefined;
         let edgeCoreMat: THREE.LineBasicMaterial | undefined;
         let edgeHaloMat: THREE.LineBasicMaterial | undefined;
-        let occluder: THREE.Mesh | undefined;
+        let occluderMat: THREE.MeshBasicMaterial | undefined; // shared dark fill (deforming clones)
         let mouthGlow: THREE.Mesh | undefined; // light pours out of her open mouth (fills the cavity)
         let streamMat: THREE.ShaderMaterial | undefined;
         let aura: THREE.Object3D | undefined;
@@ -1039,26 +1039,30 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             cycleMats.push(edgeCoreMat, edgeHaloMat);
 
             // solid dark FILL of the face + neck (the "blackness") — also the depth
-            // occluder: writes depth so hair BEHIND the face is hidden, front hair
-            // (bangs/sides) covers the face, and flowing bottom strands still draw.
-            // polygonOffset pushes its depth back so the (skinned) glowing wireframe
-            // sits cleanly in front of it; the dark fill shows through the wire gaps.
-            // The dark fill is the STATIC (closed-mouth) face + it writes depth. With only a small
-            // offset, when the jaw drops the DEFORMING lower-face wireframe falls behind this closed
-            // surface and gets depth-culled → black patches around the mouth. A big polygon offset
-            // pushes the fill's DEPTH well back (the geometry doesn't move, so the silhouette/edges
-            // are unchanged) so the open-mouth wireframe stays IN FRONT and keeps drawing — while the
-            // far-behind back-hair/dots are still occluded.
-            occluder = new THREE.Mesh(rawFace, new THREE.MeshBasicMaterial({
+            // (f) DEFORMING dark fill — the solid backing that stops BLEED-THROUGH. The wireframe is
+            //   additive with depthWrite OFF, so with nothing solid behind it you see straight THROUGH
+            //   to the interior/back mesh. The fill must DEFORM with the visemes (a STATIC fill stops
+            //   matching the face the moment the jaw moves → the interior bleeds through). So we make a
+            //   dark-fill DUPLICATE of each face mesh — sharing geometry + skeleton (via clone) + the
+            //   morph-influence array — that writes depth just behind the front wireframe everywhere
+            //   (even mouth-open), occluding the interior + background. DoubleSide so the open mouth
+            //   shows dark interior, not the background. polygonOffset keeps the wireframe in front.
+            occluderMat = new THREE.MeshBasicMaterial({
               color: new THREE.Color('#05090f'),
               transparent: true,
               opacity: 0, // reveal fades the dark fill in (depthWrite gated in useFrame)
+              side: THREE.DoubleSide,
               polygonOffset: true,
-              polygonOffsetFactor: 6,
-              polygonOffsetUnits: 28,
-            }));
-            occluder.renderOrder = -10;
-            bones.head.add(occluder);
+              polygonOffsetFactor: 4,
+              polygonOffsetUnits: 4, // small: just enough to keep the coincident wireframe in front
+            });
+            for (const src of meshes) {
+              const occ = src.clone() as THREE.Mesh;       // clone() shares the skeleton for SkinnedMesh
+              occ.material = occluderMat;
+              occ.morphTargetInfluences = src.morphTargetInfluences; // SHARE → deforms with the wireframe
+              occ.renderOrder = -10;
+              (src.parent ?? bones.head).add(occ);
+            }
 
             // (f2) MOUTH ENERGY — light pours out of her mouth as she speaks. The dark fill is
             //   the STATIC closed-mouth shape and writes depth; when the jaw drops, the deforming
@@ -1105,7 +1109,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
           }
         }
 
-        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluder, mouthGlow, eyeObjs, cycleMats, aura, shell, bob, hairMat, streamMat };
+        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluderMat, mouthGlow, eyeObjs, cycleMats, aura, shell, bob, hairMat, streamMat };
 
         // clip the dim SUBSTRATE at the ear line so the ears don't poke out from under
         // the hair (the bright shell already dropped them; the bob covers the area).
@@ -1216,8 +1220,8 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       r.mouthGlow.scale.set(ud.w * (0.85 + 0.4 * open), ud.h * (0.55 + 1.5 * open), 1);
     }
     if (r.coreMat) r.coreMat.uniforms.uOpacity.value = (0.5 + 0.1 * Math.sin(t * 0.5)) * seg(0.72, 0.9);
-    if (r.occluder) {
-      const om = r.occluder.material as THREE.MeshBasicMaterial;
+    if (r.occluderMat) {
+      const om = r.occluderMat;
       om.opacity = seg(0.5, 0.66);
       om.depthWrite = R > 0.5; // only occlude once the face forms (else it clips the cloud)
       // While she SPEAKS, lift the near-black face FILL toward a lit teal (glow from within), so the
