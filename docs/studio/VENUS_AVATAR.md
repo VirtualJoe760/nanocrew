@@ -2,8 +2,9 @@
 
 > **Status: POC, in progress.** Branch `feature/welcome-onboarding`. Verified on the web
 > preview AND on a native iOS dev build (expo-gl). Surfaced in-app as a gated test tool on the
-> Account screen. This doc is the source of truth for the Venus-avatar work — read it before
-> continuing.
+> Account screen, AND now live (behind `VENUS_IN_INTERVIEW`) as the full-bleed avatar in the Studio
+> build-a-brand voice interview, replacing the SVG orb. This doc is the source of truth for the
+> Venus-avatar work — read it before continuing.
 
 ## 🛠 THE VENUS LAB — where we work on her appearance (read this first)
 **When the user says we're going to edit / work on Venus's appearance, come HERE — this is our
@@ -302,9 +303,14 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      face dots sit in the static group while the wireframe sways ±2° — fine because they fade at land,
      but head-parenting the landed subset (keeping them sparkling on the moving mesh) is a future option.
 4. **Swap in the user's own RPM Venus avatar** (URL swap; commercial license).
-5. **Integrate into Studio**: replace the orb (`src/components/venus-orb.tsx` / the nucleus in
-   `studio.tsx`); drive from **real Gemini Live audio**; show her while she speaks (push-to-talk
-   already gates *when*). **Verify on a native dev build** (R3F-native + expo-gl).
+5. **Integrate into Studio** — ✅ DONE (first pass). The voice **build-a-brand interview** now renders
+   `<VenusAvatar>` full-bleed behind the controls instead of the SVG nucleus orb, gated by
+   `VENUS_IN_INTERVIEW` in `studio.tsx`. Her `VenusStage` is derived from the interview's
+   `EntityState` (`venusStageFor`): `speaking → talking`, everything else → `silence`, with a
+   one-shot `morphing` materialize when she enters the view. The dark `venusBackdrop` hides the
+   screen-level Skia field so only her lattice shows. **Remaining:** drive lip-sync from the real
+   Gemini Live PCM on native (today `venus-lipsync` is web-only → `NullDriver` on device, so her
+   mouth is idle on the phone); a tap-to-pause hit-target on her face; tune the framing/controls.
 
 ## Gotchas (read before editing)
 - **The Venus Lab is opened from the Account screen** (Developer → "Venus Lab (test)", gated to
@@ -358,8 +364,12 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   (scatter↔face + wireframe). Reference for the dots-morph reveal.
 - `src/components/backgrounds/face-mesh.ts` — canonical face mesh data (FACE_VERTS/EDGES/DOTS).
 - `src/components/venus-lab-screen.tsx` — the Lab UI (4-stage toggle + back); opened from Account.
-- `src/components/venus-lab.tsx` / `.web.tsx` — the `<VenusLab>` component split (native expo-gl /
-  web R3F) that renders `venus-head-scene`, keeping three out of the native bundle until mounted.
+- `src/components/venus-avatar.tsx` / `.web.tsx` — the `<VenusAvatar>` component split (native
+  expo-gl / web R3F) that renders `venus-head-scene`, keeping three out of the native bundle until
+  mounted. Used by BOTH the Lab and the Studio interview.
+- `src/app/studio.tsx` — the **build-a-brand interview** mounts `<VenusAvatar>` full-bleed in voice
+  mode (`VENUS_IN_INTERVIEW` flag, `venusStageFor` maps live state → stage). Legacy SVG orb
+  (`NCNucleus`/`Nucleus`) still in-file as the `false` fallback.
 - `src/components/backgrounds/dot-field-scene.tsx` + `app-background.tsx` — the **Skia dot-field
   background** (separate, shipped: global continuous bg behind the tabs, scrim, focus, etc. — see
   the `skia-playground` memory).

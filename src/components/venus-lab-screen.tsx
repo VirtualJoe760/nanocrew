@@ -2,13 +2,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState } from 'react';
 
-import VenusLab, { type VenusStage } from '@/components/venus-lab';
+import VenusAvatar, { type VenusStage } from '@/components/venus-avatar';
 
 // THE VENUS LAB — the live venus-head-scene full-screen, for iterating on Venus's appearance in
 // isolation. Now surfaced as a TEST tool from the Account screen (gated to the Venus-Lab tester
 // email), not a tab. `onBack` returns to wherever it was opened from (the Account page). The avatar
-// comes from <VenusLab>, a COMPONENT split: venus-lab.web.tsx renders the real R3F scene on web,
-// venus-lab.tsx on native (expo-gl). Full guide: docs/studio/VENUS_AVATAR.md.
+// comes from <VenusAvatar>, a COMPONENT split: venus-avatar.web.tsx renders the real R3F scene on
+// web, venus-avatar.tsx on native (expo-gl). Full guide: docs/studio/VENUS_AVATAR.md.
 
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
 
@@ -20,7 +20,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   // dot-field background (one field that becomes her), over the near-black bed.
   return (
     <View style={styles.root}>
-      <VenusLab stage={stage} />
+      <VenusAvatar stage={stage} />
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">

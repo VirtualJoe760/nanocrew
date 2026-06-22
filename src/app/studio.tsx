@@ -41,6 +41,7 @@ import { glow } from '@/constants/glow';
 
 import { BrandReview } from '@/components/brand-review';
 import { ChatInterview } from '@/components/chat-interview';
+import VenusAvatar, { type VenusStage } from '@/components/venus-avatar';
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
@@ -61,6 +62,18 @@ const LIVE_VOICE = 'Aoede'; // warm Gemini voice — Venus's single voice (no pi
 // listens + replies in realtime over Gemini Live (open-mic); tap the orb to pause.
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
+
+// Venus's 3D avatar replaces the SVG orb in the voice interview (the build-a-brand flow). Flip to
+// `false` to fall back to the legacy nucleus orb. She renders full-bleed behind the controls and is
+// driven by the live `state`. Source of truth for her look: docs/studio/VENUS_AVATAR.md.
+const VENUS_IN_INTERVIEW = true;
+
+// Map the interview's EntityState → the avatar's lifecycle stage. She's formed + listening at rest;
+// `talking` only while Venus speaks. The materialize (`morphing`) plays as an intro on entry.
+function venusStageFor(state: EntityState, intro: boolean): VenusStage {
+  if (intro) return 'morphing';
+  return state === 'speaking' ? 'talking' : 'silence';
+}
 
 // Dark ink used for text ON the gold accent buttons — gold is light, so dark text reads in
 // both modes. (The screen background comes from the palette below.)
@@ -570,6 +583,9 @@ function StudioScreen() {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  // Plays the avatar's materialize (`morphing`) once when she first appears in the voice interview,
+  // then settles to silence/talking. (No-op unless VENUS_IN_INTERVIEW.)
+  const [venusIntro, setVenusIntro] = useState(false);
 
   const messages = useRef<ChatMessage[]>([]);
   const playCount = useRef(0);
@@ -1007,12 +1023,34 @@ function StudioScreen() {
   const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
   const aiName = 'Venus'; // the only consultant — no picker
 
+  // Voice interview = Venus's on-screen build-a-brand view (not the dashboard, primer, keyboard
+  // chat, or brand review). This is the one place her 3D avatar renders full-bleed.
+  const voiceInterview = !!session && voiceResolved && mode === 'interview' && !brand && !keyboardMode;
+  const showVenusAvatar = VENUS_IN_INTERVIEW && voiceInterview;
+  // Play her materialize (`morphing`) for ~4.2s each time she (re)enters the voice view, then settle.
+  useEffect(() => {
+    if (!showVenusAvatar) { setVenusIntro(false); return; }
+    setVenusIntro(true);
+    const t = setTimeout(() => setVenusIntro(false), 4200);
+    return () => clearTimeout(t);
+  }, [showVenusAvatar]);
+  const venusStage = venusStageFor(state, venusIntro);
+
   // First-launch welcome: a full-screen Modal presented ABOVE the tab bar so it owns its own swipe
   // gestures (no tab-navigator conflict) and hides the bottom bar during onboarding.
   const welcomeVisible = welcomeChecked && !loading && !session && showWelcome;
 
   return (
     <View style={styles.container}>
+      {/* Venus's 3D avatar, full-bleed behind the (transparent) header + controls. The dark backing
+          hides the screen-level Skia dot-field so only HER lattice shows — she IS the background here,
+          materializing from the dots (see docs/studio/VENUS_AVATAR.md). pointerEvents none so taps
+          fall through to the controls layered above. */}
+      {showVenusAvatar ? (
+        <View style={[StyleSheet.absoluteFill, styles.venusBackdrop]} pointerEvents="none">
+          <VenusAvatar stage={venusStage} />
+        </View>
+      ) : null}
       <Modal
         visible={welcomeVisible}
         animationType="fade"
@@ -1203,8 +1241,10 @@ function StudioScreen() {
           null
         ) : (
           <>
-            <View style={styles.entityArea}>
-              <NCNucleus size={232} p={p} level={level} state={state} onPress={onOrbPress} />
+            <View style={[styles.entityArea, showVenusAvatar && styles.entityAreaAvatar]}>
+              {showVenusAvatar ? null : (
+                <NCNucleus size={232} p={p} level={level} state={state} onPress={onOrbPress} />
+              )}
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
                 {hint}
               </ThemedText>
@@ -1299,6 +1339,10 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   markBadge: { transform: [{ scale: 0.32 }], width: 28, height: 28, marginLeft: -28, marginRight: -22 },
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.four },
+  // Avatar mode: she fills the upper screen, so push the hint/pause/build controls to the bottom.
+  entityAreaAvatar: { justifyContent: 'flex-end' },
+  venusBackdrop: { backgroundColor: '#06080f' }, // dark bed under her transparent lattice canvas
+
   nucleusWrap: { width: WEB_SIZE, height: WEB_SIZE, alignItems: 'center', justifyContent: 'center' },
   web: { position: 'absolute', width: WEB_SIZE, height: WEB_SIZE },
   waveBar: { position: 'absolute', width: 2, height: 20, borderRadius: 1, opacity: 0.8 },
