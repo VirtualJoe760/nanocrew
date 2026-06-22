@@ -712,7 +712,7 @@ function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: bool
             color: '#2C5C66',
             wireframe: true,
             transparent: true,
-            opacity: 0.085, // faint — smoother, less "anatomical" up close (still carries lip-sync)
+            opacity: 0.16, // carries the lip-sync — bright enough that the mouth visibly moves
             side: THREE.FrontSide, // cull the back of the skull → reads as a face, not an x-ray
             blending: THREE.AdditiveBlending,
             depthWrite: false,
@@ -949,7 +949,7 @@ function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: bool
     if (r.glowMat) r.glowMat.opacity = 0.12 * seg(0.45, 0.66);
     if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.36 * seg(0.62, 0.78) * blip;
     if (r.edgeHaloMat) r.edgeHaloMat.opacity = 0.1 * seg(0.62, 0.78);
-    const subA = 0.085 * seg(0.62, 0.78);
+    const subA = 0.16 * seg(0.62, 0.78);
     for (const m of r.meshes) (m.material as THREE.MeshBasicMaterial).opacity = subA;
     if (r.coreMat) r.coreMat.uniforms.uOpacity.value = (0.5 + 0.1 * Math.sin(t * 0.5)) * seg(0.72, 0.9);
     if (r.occluder) {
@@ -1045,6 +1045,18 @@ function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: bool
     const lip = lipRef.current;
     if (lip) {
       const targets = lip.sample();
+      // DEV fallback: when no real audio is driving (test clip autoplay/CORS-blocked, or
+      // before Gemini is wired), drive a gentle SYNTHETIC "talk" so she visibly speaks.
+      if (DEV_LIPSYNC_TEST && (lip.debug?.rms ?? 0) < 0.008) {
+        const env = 0.55 + 0.45 * Math.sin(t * 1.7);              // syllable envelope
+        const o = Math.max(0, Math.sin(t * 6.5)) * env;           // mouth opens in bursts
+        targets.viseme_sil = 0;
+        targets.jawOpen = o * 0.9;
+        targets.mouthOpen = o * 0.55;
+        targets.viseme_aa = o * (0.6 + 0.4 * Math.sin(t * 3.1));
+        targets.viseme_O = (1 - o) * 0.4;
+        targets.viseme_E = o * 0.4 * (0.5 + 0.5 * Math.sin(t * 5.3));
+      }
       lipTargets.current = targets;
       for (const name of LIPSYNC_MORPHS) {
         for (const m of r.meshes) {

@@ -124,9 +124,13 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     not off into space. (The old approach — a fixed `+z` offset on the eye bone — read as "looking up"
     because the bone's local axis doesn't point at the camera.) Additive, `depthTest:false` over the
     dark face fill; the alpha-0 pupil stays dark; hidden until `R>0.66` during the reveal.
-  - **Two-layer render:** a DIM constant-color morph-driven substrate (`MeshBasicMaterial`
-    wireframe, opacity 0.12, all 4 face meshes) carries lip-sync + blink, UNDER a **bright static
-    glow shell** parented to the `Head` bone (built once via `bakeHeadLocal` → head-local geometry →
+  - **Two-layer render:** a constant-color morph-driven substrate (`MeshBasicMaterial` wireframe,
+    opacity **0.16**, all 4 face meshes) carries lip-sync + blink — this is the ONLY layer that
+    actually deforms (the bright shell is static/bind-pose), so its opacity is what makes the **mouth
+    visibly move when she speaks**; if the face reads too busy, the cleaner alternative is a targeted
+    mouth-only brighten (`onBeforeCompile` modulating alpha by rest-position near the mouth) instead of
+    raising the whole substrate. UNDER a **bright static glow shell** parented to the `Head` bone
+    (built once via `bakeHeadLocal` → head-local geometry →
     `mergeVertices`): aurora-gradient **nodes** (a `ShaderMaterial` carrying the thought-pulse) +
     node halo + `EdgesGeometry` lines + a fresnel **core-glow** sphere; plus a billboarded
     **aura pool**. All additive (no postprocessing); GLSL is ES2/expo-gl-safe.
