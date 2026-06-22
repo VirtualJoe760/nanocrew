@@ -970,7 +970,7 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scle
   return [haloMat];
 }
 
-function Avatar({ url, stage = 'talking', onReveal, bubble = false }: { url: string; stage?: VenusStage; onReveal?: (r: number) => void; bubble?: boolean }) {
+function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: VenusStage; onReveal?: (r: number) => void }) {
   const { camera, gl } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
   const rig = useRef<Rig | null>(null);
@@ -1090,17 +1090,13 @@ function Avatar({ url, stage = 'talking', onReveal, bubble = false }: { url: str
         // z=1.04 frames her HEIGHT (tuned on web's wide aspect). A phone is tall/narrow, so the
         // horizontal extent shrinks and she'd be oversized/cropped — on PORTRAIT aspect, pull back far
         // enough to also fit her WIDTH. Wide aspect (web) keeps the original 1.04 framing exactly.
-        // BUBBLE framing (the small editor avatar): pull WAY back + aim lower so the whole mini-Venus
-        // (head + bob + shoulders) sits inside the little circle — a small version of the full avatar,
-        // not a tight face crop. HERO framing (Lab/Studio) keeps the original close head framing.
-        const distH = bubble ? 1.78 : 1.04;
-        const camAimY = bubble ? eyeY - 0.26 : eyeY; // aim at the neck so the head rides high + shoulders show
+        const distH = 1.04;
         // On a tall/narrow (portrait/phone) screen the head fills the width and reads oversized; pull
         // the camera back proportionally to how narrow the aspect is. (Can't use the bbox width here —
         // it's the full body's shoulders, not the face.) Tuned visually at phone aspect (~0.46).
         const dist = cam.aspect < 1 ? distH * (1 + (1 - cam.aspect) * 0.9) : distH;
-        cam.position.set(0, camAimY, dist);
-        cam.lookAt(0, camAimY, 0);
+        cam.position.set(0, eyeY, dist);
+        cam.lookAt(0, eyeY, 0);
         cam.updateProjectionMatrix();
         // half-extents of the view frustum at the head plane (head ≈ world z=0)
         const headDist = Math.abs(cam.position.z);
@@ -1569,13 +1565,13 @@ function Avatar({ url, stage = 'talking', onReveal, bubble = false }: { url: str
 // `stage` drives her lifecycle (pre-render → morphing → silence → talking). The Lab toggles
 // it; Studio will map its flow onto these (e.g. 'morphing' on brand-create, 'talking' when
 // Venus speaks, 'silence' when listening).
-export default function VenusHeadScene({ stage = 'talking', onReveal, bubble = false }: { stage?: VenusStage; onReveal?: (r: number) => void; bubble?: boolean }) {
+export default function VenusHeadScene({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (r: number) => void }) {
   // TRANSPARENT canvas (no opaque background) so the app's dot-field can show THROUGH
   // behind her — the pre-render background that she morphs out of. `onReveal` reports the
   // assembly progress each frame so the parent can crossfade that background.
   return (
     <Canvas camera={{ position: [0, 0, 2], fov: 22 }} style={{ flex: 1 }} gl={{ alpha: true }}>
-      <Avatar url={AVATAR_URL} stage={stage} onReveal={onReveal} bubble={bubble} />
+      <Avatar url={AVATAR_URL} stage={stage} onReveal={onReveal} />
     </Canvas>
   );
 }

@@ -408,7 +408,9 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   mounted. Used by the Lab, the Studio interview, AND the editor bubble.
 - `src/components/venus-bubble.tsx` — `<VenusBubble>`: Venus's avatar as a circular, tappable bubble
   with a reactive halo, for the site-critique editor (`site-preview.tsx`, replaced the NC `VenusOrb`).
-  `speaking` → stage; the disc bg matches the panel so the square GL canvas reads as a circle.
+  `speaking` → stage. **Native gotcha:** the avatar `GLView` is rendered UNCLIPPED — wrapping a
+  `GLView` in `overflow:hidden`/`borderRadius` blanks it on iOS — and made circular by a panel-coloured
+  SVG inverse-circle mask over the square GL corners (works on web + native, no GL clipping).
 - `src/app/studio.tsx` — the **build-a-brand interview** mounts `<VenusAvatar>` full-bleed in voice
   mode (`VENUS_IN_INTERVIEW` flag, `venusStageFor` maps live state → stage). Legacy SVG orb
   (`NCNucleus`/`Nucleus`) still in-file as the `false` fallback.

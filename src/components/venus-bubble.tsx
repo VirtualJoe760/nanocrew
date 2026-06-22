@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import VenusAvatar, { type VenusStage } from '@/components/venus-avatar';
 
@@ -85,9 +85,18 @@ export function VenusBubble({
         </Svg>
       </Animated.View>
 
-      {/* her face, clipped to a circle (web) / blended via matching bg (native) */}
-      <View style={[styles.disc, { width: disc, height: disc, borderRadius: disc / 2 }]}>
-        <VenusAvatar stage={stage} bubble />
+      {/* her face — rendered UNCLIPPED (wrapping a GLView in overflow:hidden/borderRadius blanks it
+          on native expo-gl), then masked to a circle by the panel-coloured inverse-circle overlay so
+          the square GL corners read as a circle on BOTH platforms. */}
+      <View style={[styles.disc, { width: disc, height: disc }]}>
+        <VenusAvatar stage={stage} />
+        <Svg width={disc} height={disc} style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Path
+            d={`M0 0 H${disc} V${disc} H0 Z M0 ${disc / 2} a ${disc / 2} ${disc / 2} 0 1 0 ${disc} 0 a ${disc / 2} ${disc / 2} 0 1 0 ${-disc} 0 Z`}
+            fill={PANEL}
+            fillRule="evenodd"
+          />
+        </Svg>
       </View>
 
       {/* faint spinning dashed ring + a solid rim to crisp the circle edge */}
@@ -103,7 +112,6 @@ export function VenusBubble({
 
 const styles = StyleSheet.create({
   disc: {
-    overflow: 'hidden',
     backgroundColor: PANEL,
     alignItems: 'center',
     justifyContent: 'center',
