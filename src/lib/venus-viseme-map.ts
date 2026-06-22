@@ -54,17 +54,18 @@ export const MOUTH_MORPHS: readonly string[] = [
 export const SILENCE_RMS = 0.012; // below → mouth closed (viseme_sil)
 export const FRICATIVE_HF = 0.45; // hf above this (and unvoiced) → sibilant/fricative
 
-export const jawGain = 1.0; // overall jaw magnitude scale (raise for more articulation)
-export const JAW_BASE = 0.22; // jaw opening on ANY voiced frame (close vowels still part the lips)
+export const jawGain = 0.6; // overall jaw magnitude scale (raise for more articulation / more gape)
+export const JAW_BASE = 0.12; // jaw opening on ANY voiced frame (close vowels still part the lips)
 export const JAW_SPAN = 0.62; // extra jaw from vowel openness (F1). BASE+SPAN = max jaw on an open vowel
-export const JAW_LOUD_FLOOR = 0.7; // jaw retained when quiet-but-voiced (loudness modulates 0.7..1.0)
+export const JAW_LOUD_FLOOR = 0.6; // jaw retained when quiet-but-voiced (loudness modulates 0.6..1.0)
 export const FUNNEL = 0.85; // round → mouthFunnel
 export const PUCKER = 0.7; // round → mouthPucker
 export const STRETCH = 0.9; // spread → mouthStretchL/R
 
-// vowel-axis anchors (Hz)
-export const F1_CLOSED = 300; // F1 at/below → jaw shut
-export const F1_OPEN = 800; // F1 at/above → jaw fully open (real speech rarely exceeds ~800)
+// vowel-axis anchors (Hz) — calibrated to an adult FEMALE voice (Venus's TTS), whose vowel F1 runs
+// ~430 (close: ee/oo) to ~940 (open: aa). A male voice sits lower; if you swap voices, re-anchor.
+export const F1_CLOSED = 350; // F1 at/below → jaw shut
+export const F1_OPEN = 900; // F1 at/above → jaw fully open (female open-vowel F1 ≈ 936)
 export const F2_ROUND = 1500; // F2 at/below → fully rounded
 export const F2_ROUND_MIN = 950; // floor of the rounding ramp
 export const F2_SPREAD_LO = 1900; // F2 above this → spread begins
