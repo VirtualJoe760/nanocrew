@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 
 import { NCMark, type Palette, usePalette } from '@/components/nc-screen';
 import { AppBackground } from '@/components/backgrounds/app-background';
+import PhoneScene from '@/components/phone-scene';
 import { ThemedText } from '@/components/themed-text';
 import { glow, textGlow } from '@/constants/glow';
 
@@ -181,9 +182,9 @@ export function Welcome({
         onScroll={onScroll}
         scrollEventThrottle={16}
         style={s.pager}>
-        {SLIDES.map((slide) => (
+        {SLIDES.map((slide, i) => (
           <View key={slide.key} style={[s.slide, { width }]}>
-            <PhoneFrame kind={slide.screen} p={p} />
+            <PhoneFrame kind={slide.screen} p={p} active={i === page} />
             <View style={s.copy}>
               <ThemedText type="code" style={[s.eyebrow, { color: p.accent }, textGlow(p.accent, 7)]}>{slide.eyebrow}</ThemedText>
               <ThemedText type="title" style={[s.title, { color: p.ink }, textGlow('rgba(205,209,217,0.55)', 16)]}>{slide.title}</ThemedText>
@@ -275,11 +276,25 @@ export function Welcome({
   );
 }
 
-/** A tall iPhone-shaped frame holding the slide's screenshot (placeholder until real captures land). */
-function PhoneFrame({ kind, p }: { kind: ScreenKind; p: Palette }) {
+/**
+ * The hero phone for a slide. On WEB the active slide shows a softly-spinning 3D iPhone
+ * (PhoneScene — R3F web entry, like the Venus Lab); inactive slides + all of native fall back to a
+ * static iPhone frame until the expo-gl/native R3F swap lands. Real per-slide app captures replace
+ * the 3D screen texture once we have the screenshots (see the TODO above SLIDES).
+ */
+function PhoneFrame({ kind, p, active }: { kind: ScreenKind; p: Palette; active: boolean }) {
   const s = makeStyles(p);
   const h = Math.min(Dimensions.get('window').height * 0.5, 540);
   const w = h * 0.46;
+  if (Platform.OS === 'web' && active) {
+    return (
+      <View style={s.previewWrap}>
+        <View style={{ width: w * 1.6, height: h }}>
+          <PhoneScene />
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={s.previewWrap}>
       <View style={[s.phone, { width: w, height: h, borderColor: p.faint, backgroundColor: p.dark ? '#0c0c0f' : '#ffffff' }]}>
