@@ -245,18 +245,21 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      longer renders the Skia `<AppBackground>`** — the lattice IS the background inside the transparent
      canvas, over the `#06080f` bed.
    - **Talking = she lights up + speaks (DONE).** Two talking-only effects make her clearly readable
-     as she speaks (silence stays the calm dark rest look): (1) a **speech pulse** — `LATTICE_VERT`
-     sweeps a bright gaussian band DOWN her face dots (`aFaceY` crown→chin via `wavePos = 1−fract(t·0.6)`),
-     gated by `uTalk` (the smoothed talking flag) and punched by `uSpeak` (jawOpen). (2) the **substrate
-     wireframe** (the ONLY thing that deforms with the visemes → it carries the lip-sync) brightens hard
-     while talking: `subA = (0.16 + 0.30·talk + 0.45·speak·talk)·seg(0.62,0.78)` — so the articulating
-     mouth reads against the dark fill instead of being lost in it (fixes "very black / can't see the
-     lips"). `uTalk` is damped from `talkingRef`; `aFaceY` is baked from the face vertex height (the
-     `wipe` array). Bright structure (edges/dots) is STATIC, so the substrate is what shows the mouth.
+     as she speaks (silence stays the calm dark rest look): (1) **speech energy focusing INTO her lips**
+     — "intelligent circuits focusing energy into her words." `LATTICE_VERT` contracts two half-offset
+     rings of light toward her mouth (`aLipDist` 1→0, `ringR = 1−fract(t·0.6)`), brightening as they
+     near it, and the lips themselves flare with each word (`smoothstep(0.22,0,aLipDist)·uSpeak`). Her
+     lip center is baked in `bakeUnifiedLattice` as the mean of face verts in the mouth-height band
+     (`aY≈0.20–0.40`); `aLipDist` = each face dot's normalized distance to it. Gated by `uTalk` (smoothed
+     `talkingRef`) + `aIsFace`. (2) the **substrate wireframe** (the ONLY thing that deforms with the
+     visemes → it carries the lip-sync) brightens hard while talking: `subA = (0.16 + 0.30·talk +
+     0.45·speak·talk)·seg(0.62,0.78)` — so the articulating mouth reads against the dark fill instead of
+     being lost in it (fixes "very black / can't see the lips"). Bright structure (edges/dots) is STATIC,
+     so the substrate is what shows the mouth move.
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
-     span (`vW/vH × 2.0`) + greedy claim, `LATTICE_VERT` `uSwirl/uUpdraft/uInfall` + the `fly·0.9` pinch,
-     the `uPulse` curve + `basePx`, the speech pulse (`uTime·0.6` rate, `120` band width, `uSpeak` punch)
-     + `subA` talk boost, `bakeStreamField` count, the per-layer `seg(...)` windows.
+     span (`vW/vH × 2.0`) + greedy claim + the lip-band (`aY 0.20–0.40`), `LATTICE_VERT` `uSwirl/uUpdraft/
+     uInfall` + the `fly·0.9` pinch, the `uPulse` curve + `basePx`, the lip energy (`uTime·0.6` ring rate,
+     `42` ring width, the `uSpeak` lip flare) + `subA` talk boost, `bakeStreamField` count, the `seg(...)`.
    - **⚠ Sync point:** the Skia look now lives in **TWO** places — `dot-field-scene.tsx` (SKSL, still the
      app-wide Account/Market/Account background via `<AppBackground>`) and `venus-points.ts`
      `SKIA_CHUNK` (the GLSL port). If the dot-field look is retuned, change BOTH (the constants are

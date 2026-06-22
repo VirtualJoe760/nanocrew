@@ -74,7 +74,7 @@ export const LATTICE_VERT = /* glsl */ `
   attribute vec2  aCell;        // integer grid coords (Skia hue/energy)
   attribute vec3  aHome;        // resting lattice position (group-local)
   attribute vec3  aTarget;      // face-vertex landing position (group-local); =aHome for ambient
-  attribute float aFaceY;       // face-vertex height (chin 0 … crown 1); 0 for ambient dots
+  attribute float aLipDist;     // normalized distance to her lips: 0 at the mouth … 1 far; 1 for ambient
   attribute float aDelay, aRadius, aSpan, aRand, aIsFace, aDCenter;
   varying vec3  vColor;
   varying float vGlow;
@@ -126,14 +126,19 @@ export const LATTICE_VERT = /* glsl */ `
     vColor = mix(ambColor, faceColor, peel);
     vGlow  = (ambVal + peel * faceGlow * landFade) * tw * (1.0 + uSpeak * 0.4);
 
-    // ---------- SPEECH PULSE — a bright band sweeping DOWN her face while talking ----
-    // wavePos travels crown(1) → chin(0), repeating; the gaussian band lights up the face
-    // dots it passes. Gated to her face dots (aIsFace) and to talking (uTalk); jawOpen
-    // energy (uSpeak) punches each pulse so it tracks her speech.
-    float wavePos   = 1.0 - fract(uTime * 0.6);
-    float band      = exp(-(aFaceY - wavePos) * (aFaceY - wavePos) * 120.0);
-    float talkPulse = band * aIsFace * uTalk * (0.7 + 2.3 * uSpeak);
-    vColor = mix(vColor, vec3(0.80, 0.95, 1.0), clamp(talkPulse, 0.0, 0.7)); // band flares brighter
+    // ---------- SPEECH ENERGY — intelligent circuits focusing INTO her lips ---------
+    // Rings of light CONTRACT toward her mouth (aLipDist 1→0) and brighten as they near
+    // it — two half-offset rings so the energy streams continuously inward. The lips
+    // themselves flare with each word (uSpeak). Gated to her face dots + talking (uTalk).
+    float ph1 = fract(uTime * 0.6);
+    float ph2 = fract(uTime * 0.6 + 0.5);
+    float r1  = 1.0 - ph1, r2 = 1.0 - ph2;                  // outer face → lips
+    float flow = max(exp(-(aLipDist - r1) * (aLipDist - r1) * 42.0),
+                     exp(-(aLipDist - r2) * (aLipDist - r2) * 42.0));
+    flow *= (0.35 + 0.65 * (1.0 - aLipDist));               // energy intensifies toward the mouth
+    float lipGlow   = smoothstep(0.22, 0.0, aLipDist) * (0.6 + 2.6 * uSpeak); // words flare at the lips
+    float talkPulse = (flow * 0.9 + lipGlow) * aIsFace * uTalk;
+    vColor = mix(vColor, vec3(0.80, 0.95, 1.0), clamp(talkPulse, 0.0, 0.75)); // circuits read brighter
     vGlow += talkPulse;
 
     vec4 mv = modelViewMatrix * vec4(p, 1.0);

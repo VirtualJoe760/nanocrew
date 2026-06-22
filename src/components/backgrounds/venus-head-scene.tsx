@@ -552,16 +552,23 @@ function bakeUnifiedLattice(
   const faY = faceDots.attributes.aY;
   const M = fpos.count;
 
-  // face vertices → GROUP (world) space + their centroid (= grid center AND funnel axis)
+  // face vertices → GROUP (world) space + their centroid (= grid center AND funnel axis).
+  // Also accumulate her LIP CENTER: the mean of verts in the mouth-height band (aY≈0.20–0.40,
+  // chin 0 … crown 1) — the focal point the speech energy converges into.
   const fv = new Float32Array(M * 3);
   const centroid = new THREE.Vector3();
+  const lips = new THREE.Vector3();
+  let lipsN = 0;
   const tmp = new THREE.Vector3();
   for (let k = 0; k < M; k++) {
     tmp.set(fpos.getX(k), fpos.getY(k), fpos.getZ(k)).applyMatrix4(headToGroup);
     fv[k * 3] = tmp.x; fv[k * 3 + 1] = tmp.y; fv[k * 3 + 2] = tmp.z;
     centroid.add(tmp);
+    const ay = faY ? faY.getX(k) : 0.5;
+    if (ay > 0.20 && ay < 0.40) { lips.add(tmp); lipsN++; }
   }
   centroid.multiplyScalar(1 / Math.max(1, M));
+  if (lipsN > 0) lips.multiplyScalar(1 / lipsN); else lips.copy(centroid);
 
   const N = LAT_COLS * LAT_ROWS;
   const spanX = view.vW * 2.0, spanY = view.vH * 2.0; // fills the viewport, centered on her
@@ -631,11 +638,23 @@ function bakeUnifiedLattice(
     delay[i] = Math.min(0.55, 0.22 * (1 - wipe[i]) + 0.2 * span[i] + 0.13 * rand[i]);
   }
 
+  // distance from each FACE dot to her lips → the speech-energy focal field (0 at the
+  // mouth … 1 at the far face edge). Ambient dots stay 1 (shader gates by aIsFace anyway).
+  const lipD = new Float32Array(N).fill(1);
+  let maxLipD = 1e-4;
+  for (let i = 0; i < N; i++) {
+    if (!isFace[i]) continue;
+    const dx = target[i * 3] - lips.x, dy = target[i * 3 + 1] - lips.y, dz = target[i * 3 + 2] - lips.z;
+    const d = Math.hypot(dx, dy, dz);
+    lipD[i] = d; if (d > maxLipD) maxLipD = d;
+  }
+  for (let i = 0; i < N; i++) if (isFace[i]) lipD[i] /= maxLipD;
+
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(home.slice(), 3)); // for bbox/culling
   g.setAttribute('aHome', new THREE.BufferAttribute(home, 3));
   g.setAttribute('aTarget', new THREE.BufferAttribute(target, 3));
-  g.setAttribute('aFaceY', new THREE.BufferAttribute(wipe, 1)); // face-vertex height → speech pulse
+  g.setAttribute('aLipDist', new THREE.BufferAttribute(lipD, 1)); // → speech energy focuses on the lips
   g.setAttribute('aCell', new THREE.BufferAttribute(cell, 2));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setAttribute('aDelay', new THREE.BufferAttribute(delay, 1));
