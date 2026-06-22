@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { NCMark, usePalette } from '@/components/nc-screen';
+import { AppBackground } from '@/components/backgrounds/app-background';
 import { withScreenFade } from '@/components/screen-fade';
 import { GlowButton } from '@/components/glow-button';
 import { GlowInput } from '@/components/glow-input';
@@ -280,6 +281,7 @@ function AccountScreen() {
 
   return (
     <View style={styles.container}>
+      <AppBackground />
       <SafeAreaView edges={['top']} style={styles.flex}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
           <ScrollView

@@ -18,6 +18,7 @@ import { BrandStore } from '@/components/brand-store';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { NCMark, usePalette } from '@/components/nc-screen';
+import { AppBackground } from '@/components/backgrounds/app-background';
 import { withScreenFade } from '@/components/screen-fade';
 import { GlowInput } from '@/components/glow-input';
 import { apiUrl } from '@/lib/api';
@@ -187,6 +188,7 @@ function MarketScreen() {
 
   return (
     <View style={styles.container}>
+      <AppBackground />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.inner}>
           <View style={styles.header}>

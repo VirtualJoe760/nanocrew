@@ -5,7 +5,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
-import { AppBackground } from '@/components/backgrounds/app-background';
 import Playground from './playground'; // the VENUS LAB (see VENUS_LAB below)
 import { attachReviewDeepLink } from '@/lib/push';
 
@@ -47,7 +46,9 @@ export default function TabLayout() {
         <Playground />
       ) : (
         <>
-          <AppBackground />
+          {/* The dot-field background is rendered INSIDE each tab screen (studio/market/account),
+              not here — on native the NativeTabs (UITabBarController) owns the screen and would cover
+              a background placed behind it. */}
           <AnimatedSplashOverlay />
           <AppTabs />
         </>
