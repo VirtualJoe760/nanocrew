@@ -59,6 +59,12 @@ const EAR_DROP_FRAC = 0.82;
 const DEV_LIPSYNC_TEST = true;
 const DEV_SAMPLE_URL = 'https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg';
 
+// Venus's lifecycle stages (drives the avatar; the Lab toggles between them, and Studio
+// will map its flow onto these): pre-render = the dot/grid background before she forms;
+// morphing = the dots assembling↔dispersing; silence = formed + listening (mouth at rest);
+// talking = formed + lips moving (where Gemini audio drives the lip-sync).
+export type VenusStage = 'pre-render' | 'morphing' | 'silence' | 'talking';
+
 // ─── shaders (ES2-safe: precision mediump, no #version 300, no dynamic loops) ──
 const NODE_VERT = /* glsl */ `
   precision mediump float;
@@ -641,18 +647,28 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scle
   return [haloMat];
 }
 
-function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: boolean }) {
+function Avatar({ url, stage = 'talking' }: { url: string; stage?: VenusStage }) {
   const { camera, gl } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
   const rig = useRef<Rig | null>(null);
   const a = useRef({ nextBlink: 1.2, blinkAt: -1, nextSacc: 0.6, gx: 0, gy: 0, nextBrow: 2.5, browAt: -1, browAmt: 0 });
 
-  // ── reveal clock (0 = scattered dust-cloud, 1 = fully assembled) ───────────
-  const reveal = useRef(0);
-  const revealTarget = useRef(revealProp ? 1 : 0);
-  useEffect(() => { revealTarget.current = revealProp ? 1 : 0; }, [revealProp]);
-  // assemble from scratch each time she (re)loads — the dots-morph reveal
-  useEffect(() => { if (root) { reveal.current = 0; revealTarget.current = revealProp ? 1 : 0; } }, [root]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── stage → reveal clock (0 = scattered dust, 1 = formed) + talking flag ───
+  const reveal = useRef(0);          // eased value, driven in useFrame
+  const revealTarget = useRef(stage === 'pre-render' ? 0 : 1);
+  const talkingRef = useRef(stage === 'talking');
+  useEffect(() => {
+    talkingRef.current = stage === 'talking';
+    if (stage === 'morphing') {
+      // ping-pong the morph so we can watch dots↔face repeatedly
+      revealTarget.current = reveal.current >= 0.5 ? 0 : 1;
+      const id = setInterval(() => { revealTarget.current = revealTarget.current >= 0.5 ? 0 : 1; }, 4500);
+      return () => clearInterval(id);
+    }
+    revealTarget.current = stage === 'pre-render' ? 0 : 1; // silence/talking = formed
+  }, [stage]);
+  // re-assemble from scratch when she (re)loads
+  useEffect(() => { if (root) reveal.current = 0; }, [root]);
 
   // ── lip-sync driver (created once) ────────────────────────────────────────
   const lipRef = useRef<VenusLipsync | null>(null);
@@ -1041,13 +1057,13 @@ function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: bool
     set('mouthSmileLeft', 0.1);
     set('mouthSmileRight', 0.1);
 
-    // ── REAL audio → visemes (lip-sync owns ONLY jaw/mouth/viseme morphs) ───
+    // ── lip-sync (owns ONLY jaw/mouth/viseme morphs) — only when TALKING; else rest closed ──
     const lip = lipRef.current;
     if (lip) {
-      const targets = lip.sample();
-      // DEV fallback: when no real audio is driving (test clip autoplay/CORS-blocked, or
-      // before Gemini is wired), drive a gentle SYNTHETIC "talk" so she visibly speaks.
-      if (DEV_LIPSYNC_TEST && (lip.debug?.rms ?? 0) < 0.008) {
+      const targets: VisemeWeights = talkingRef.current ? lip.sample() : {};
+      // DEV fallback: when talking but no real audio is driving (test clip autoplay/CORS-
+      // blocked, or before Gemini is wired), drive a gentle SYNTHETIC "talk" so she speaks.
+      if (talkingRef.current && DEV_LIPSYNC_TEST && (lip.debug?.rms ?? 0) < 0.008) {
         const env = 0.55 + 0.45 * Math.sin(t * 1.7);              // syllable envelope
         const o = Math.max(0, Math.sin(t * 6.5)) * env;           // mouth opens in bursts
         targets.viseme_sil = 0;
@@ -1076,13 +1092,14 @@ function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: bool
   return root ? <primitive object={root} /> : null;
 }
 
-// `reveal` drives the dots-morph: true = assemble from the dust-cloud, false = disperse.
-// Wire it to the Studio brand create/edit flow later (e.g. reveal={isBuilding}).
-export default function VenusHeadScene({ reveal = true }: { reveal?: boolean }) {
+// `stage` drives her lifecycle (pre-render → morphing → silence → talking). The Lab toggles
+// it; Studio will map its flow onto these (e.g. 'morphing' on brand-create, 'talking' when
+// Venus speaks, 'silence' when listening).
+export default function VenusHeadScene({ stage = 'talking' }: { stage?: VenusStage }) {
   return (
     <Canvas camera={{ position: [0, 0, 2], fov: 22 }} style={{ flex: 1 }}>
       <color attach="background" args={['#06080f']} />
-      <Avatar url={AVATAR_URL} reveal={reveal} />
+      <Avatar url={AVATAR_URL} stage={stage} />
     </Canvas>
   );
 }

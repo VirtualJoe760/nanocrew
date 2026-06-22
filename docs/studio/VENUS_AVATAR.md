@@ -213,13 +213,18 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    reveal clock in `useFrame` (damp toward `revealTarget`, faster disperse) then **fades each layer in
    on a timing table** — nodes (0.10–0.62) → node-halo/edges/substrate (0.45–0.78) → hair (`uFade`
    0.68–0.92) + core → aura (0.85–1.0); the eyes (`eyeObjs`) + human micro-life gate on until she's
-   formed; resting state (`R=1`) is exactly today's look. Triggered by the **`reveal` prop** on
-   `VenusHeadScene` (true=assemble / false=disperse); the **Lab loops it** (`playground.tsx`). Tune:
-   the swirl radians (`7.0` in `NODE_VERT`), scatter radii (`bakeAssemble` `rx/ry/rz`), `aDelay`
-   spread, the damp rates, and the per-layer `seg(...)` windows. **Remaining:** wire it to the Studio
-   brand create/edit flow (`reveal={isBuilding}`), and the Skia dot-field → R3F **crossfade** handoff
-   (deferred; lives in `app-background.tsx` — fade the Skia field out over `R∈[0,0.12]` as the R3F
-   sparks take over; the empty `venus-points.ts` is the long-term zero-seam Option C).
+   formed; resting state (`R=1`) is exactly today's look. Tune: the swirl radians (`7.0` in
+   `NODE_VERT`), scatter radii (`bakeAssemble` `rx/ry/rz`), `aDelay` spread, the damp rates, and the
+   per-layer `seg(...)` windows.
+   - **Driven by the `VenusStage` prop** (exported): `pre-render` (scattered dust / the future grid
+     background, `revealTarget 0`) · `morphing` (the assembly, ping-ponged) · `silence` (formed +
+     listening, mouth at rest) · `talking` (formed + lip-sync driving the mouth). `VenusHeadScene
+     stage={...}` → `Avatar` maps it to `revealTarget` + a `talking` flag. **The Lab has a 4-stage
+     toggle row** (`playground.tsx`) to test each phase; Studio will map its flow onto these later.
+   - **Remaining:** (a) the **pre-render** state should become the **dot/grid background** (currently a
+     random scatter cloud) and the **morphing** should destructure the face into the background's lined
+     grid; (b) the Skia dot-field → R3F **crossfade** handoff (deferred; `app-background.tsx` — fade the
+     Skia field out over `R∈[0,0.12]`; the empty `venus-points.ts` is the long-term zero-seam Option C).
 4. **Swap in the user's own RPM Venus avatar** (URL swap; commercial license).
 5. **Integrate into Studio**: replace the orb (`src/components/venus-orb.tsx` / the nucleus in
    `studio.tsx`); drive from **real Gemini Live audio**; show her while she speaks (push-to-talk
