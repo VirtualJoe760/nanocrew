@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Dimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Constants from 'expo-constants';
 
-import { FabricBackground, NCMark, type Palette, usePalette } from '@/components/nc-screen';
+import { NCMark, type Palette, usePalette } from '@/components/nc-screen';
+import { AppBackground } from '@/components/backgrounds/app-background';
 import { ThemedText } from '@/components/themed-text';
 import { glow, textGlow } from '@/constants/glow';
 
@@ -159,11 +160,12 @@ export function Welcome({
 
   return (
     <View style={s.root}>
-      <FabricBackground p={p} />
+      {/* App-wide dot-field background (the welcome is a Modal, a separate layer, so the root one
+          isn't behind it — render our own here). It carries its own scrim for text contrast. */}
+      <AppBackground />
 
-      {/* Top bar: brand mark + log in */}
+      {/* Top bar: just log in (brand mark removed per design) */}
       <View style={[s.topBar, { paddingTop: topInset + 14 }]}>
-        <NCMark size={64} color={p.ink} />
         <Pressable onPress={() => onChoose('login')} hitSlop={8}>
           <ThemedText type="code" style={[s.loginLink, { color: p.accent }, textGlow(p.accent, 8)]}>Log in</ThemedText>
         </Pressable>
@@ -292,7 +294,7 @@ function PhoneFrame({ kind, p }: { kind: ScreenKind; p: Palette }) {
 function makeStyles(p: Palette) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: p.bg },
-    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 14, paddingBottom: 4 },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 22, paddingTop: 14, paddingBottom: 4 },
     loginLink: { fontSize: 13, letterSpacing: 0.5 },
     pager: { flex: 1 },
     slide: { flex: 1, paddingHorizontal: 28, justifyContent: 'center' },
