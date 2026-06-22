@@ -31,6 +31,10 @@ const AVATAR_URL = 'https://raw.githubusercontent.com/met4citizen/TalkingHead/ma
 const DEG = Math.PI / 180;
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
 const _hairMV = new THREE.Matrix4(); // scratch for the hair object→view rotation
+// scratch for aiming the eyes at the camera each frame
+const _eyePos = new THREE.Vector3(), _eyeTgt = new THREE.Vector3(), _eyeDir = new THREE.Vector3();
+const _eyeQ = new THREE.Quaternion();
+const EYE_R = 0.013; // eyeball radius — the iris sits this far from the eye centre
 
 // The 4 morph-rigged meshes that make up the visible face (verified from the GLB).
 const FACE_NAMES = ['Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'];
@@ -603,12 +607,13 @@ function makeScleraTexture(): THREE.Texture {
   return tex;
 }
 
-// An iris parented to an eye bone — a readable iris (ring + dark pupil + catchlight)
-// over a faint halo + a SCLERA (eye-white), so she has an expressive gaze.
+// An eye parented to an eye bone — a readable iris (ring + dark pupil + catchlight) over
+// a faint halo + a SCLERA (eye-white), grouped at the origin so `useFrame` can AIM the whole
+// eye at the camera (so she looks at the user, not off into space).
 function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scleraTex: THREE.Texture, dotTex: THREE.Texture, eyeObjs: THREE.Object3D[]): THREE.Material[] {
   if (!bone) return [];
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0.014]), 3));
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3)); // at the group origin; the group is aimed each frame
   const scleraMat = new THREE.PointsMaterial({
     size: 0.058, map: scleraTex, color: new THREE.Color(SCLERA_COLOR), opacity: 0.75,
     transparent: true, sizeAttenuation: true, blending: THREE.AdditiveBlending,
@@ -627,9 +632,12 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scle
   const sclera = new THREE.Points(g, scleraMat); sclera.renderOrder = 2;
   const halo = new THREE.Points(g, haloMat); halo.renderOrder = 3;
   const iris = new THREE.Points(g, irisMat); iris.renderOrder = 4;
-  sclera.visible = halo.visible = iris.visible = false; // reveal shows them once she's formed
-  bone.add(sclera, halo, iris);
-  eyeObjs.push(sclera, halo, iris);
+  const eye = new THREE.Group();
+  eye.add(sclera, halo, iris);
+  eye.position.set(0, 0, EYE_R); // initial; useFrame re-aims it at the camera each frame
+  eye.visible = false;           // reveal shows it once she's formed
+  bone.add(eye);
+  eyeObjs.push(eye);             // the group: aimed + visibility-gated in useFrame
   return [haloMat];
 }
 
@@ -951,7 +959,18 @@ function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: bool
     }
     if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.7, 0.9)));
     if (r.hairMat) r.hairMat.uniforms.uFade.value = seg(0.68, 0.92); // whole hair (rim incl.) fades in
-    for (const o of r.eyeObjs) o.visible = R > 0.66; // eyes appear once she's formed (no floating eyes)
+    // ── eyes look AT the user (camera) with a gentle saccade drift (not a fixed stare) ──
+    for (const eye of r.eyeObjs) {
+      eye.visible = R > 0.66; // appear once she's formed (no floating eyes mid-cloud)
+      const eb = eye.parent;
+      if (!eb) continue;
+      eb.getWorldPosition(_eyePos);
+      _eyeTgt.copy(camera.position).add(_eyeDir.set(s.gx * 0.06, s.gy * 0.045, 0)); // drift AROUND the user
+      _eyeDir.copy(_eyeTgt).sub(_eyePos).normalize();   // world-space gaze direction
+      eb.getWorldQuaternion(_eyeQ).invert();
+      _eyeDir.applyQuaternion(_eyeQ);                    // into the eye-bone local frame
+      eye.position.copy(_eyeDir).multiplyScalar(EYE_R);  // iris on the eyeball, facing the user
+    }
 
     // ── shell parallax + aura billboard/breath (aura blooms in last) ────────
     if (r.shell) {
@@ -995,14 +1014,13 @@ function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: bool
     sway(r.bones.head, Math.sin(t * 0.7) * 2 * DEG, Math.sin(t * 0.53) * 2.4 * DEG, Math.sin(t * 0.37) * 1 * DEG);
     sway(r.bones.neck, Math.sin(t * 0.7) * 1 * DEG, Math.sin(t * 0.53) * 1.2 * DEG, 0);
 
-    // eye saccades — small darts, new target every ~0.3-1.2s
+    // eye saccades — pick a new gaze drift every ~0.3-1.2s; the gaze itself is
+    // aimed at the camera up top (so she looks at the user, drifting around them).
     if (t > s.nextSacc) {
       s.gx = (Math.random() - 0.5) * 2;
       s.gy = (Math.random() - 0.5) * 1.2;
       s.nextSacc = t + 0.3 + Math.random() * 0.9;
     }
-    sway(r.bones.leftEye, s.gy * 4 * DEG, s.gx * 5 * DEG, 0);
-    sway(r.bones.rightEye, s.gy * 4 * DEG, s.gx * 5 * DEG, 0);
 
     // brow micro-flashes over a faint baseline
     if (s.browAt < 0 && t > s.nextBrow) {

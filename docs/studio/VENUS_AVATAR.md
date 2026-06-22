@@ -115,12 +115,15 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     ear line (two world-space `THREE.Plane`s on the substrate materials, `gl.localClippingEnabled`).
     **Note:** the procedural bob is the demo workaround — the user's own RPM Venus with a real bob asset
     (URL swap) is the production answer; RPM was unreachable when built.
-  - **Eyes — a SCLERA + readable IRIS:** parented to the `LeftEye`/`RightEye` bones (so the gaze
-    **tracks the saccades**): a **sclera** (eye-white) sprite — a soft almond *ring* (`makeScleraTexture`,
-    hole in the centre so the iris/pupil show through), color `SCLERA_COLOR` — behind an **iris** sprite
-    (`makeIrisTexture`: dark pupil + bright limbal ring + striations + catchlight) over a faint halo.
-    Additive, `depthTest:false` so they read over the dark face fill; the alpha-0 pupil stays dark.
-    Sized to read at the **portrait camera crop** (camera pulled to ~0.99 on the eyes).
+  - **Eyes — a SCLERA + readable IRIS that LOOK AT the user:** a **sclera** (eye-white) sprite — a
+    soft almond *ring* (`makeScleraTexture`, hole in the centre so the iris/pupil show through), color
+    `SCLERA_COLOR` — behind an **iris** sprite (`makeIrisTexture`: dark pupil + bright limbal ring +
+    striations + catchlight) over a faint halo. The three are **grouped at the origin and the group is
+    AIMED at the camera each frame** (in `useFrame`: world gaze dir → eye-bone local → `position =
+    dir·EYE_R`), with a small **saccade drift** added to the target so she looks *at/around* the user,
+    not off into space. (The old approach — a fixed `+z` offset on the eye bone — read as "looking up"
+    because the bone's local axis doesn't point at the camera.) Additive, `depthTest:false` over the
+    dark face fill; the alpha-0 pupil stays dark; hidden until `R>0.66` during the reveal.
   - **Two-layer render:** a DIM constant-color morph-driven substrate (`MeshBasicMaterial`
     wireframe, opacity 0.12, all 4 face meshes) carries lip-sync + blink, UNDER a **bright static
     glow shell** parented to the `Head` bone (built once via `bakeHeadLocal` → head-local geometry →
