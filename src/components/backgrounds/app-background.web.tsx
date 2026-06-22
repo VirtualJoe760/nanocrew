@@ -1,4 +1,5 @@
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 
 // WEB build of the app-wide animated background. Skia on web needs the CanvasKit WASM, lazy-loaded
 // via WithSkiaWeb. This file is web-only (Metro resolves app-background.tsx on native) so the native
@@ -23,9 +24,22 @@ function Scene() {
 }
 
 export function AppBackground() {
+  // Only mount the CanvasKit scene once the container has a real, non-zero layout size. On web,
+  // expo-router keeps EVERY tab screen mounted and hides the inactive ones with `display:none` —
+  // which collapses this absoluteFill (and its CanvasKit <canvas>) to 0×0 while the Skia clock keeps
+  // ticking. CanvasKit calls `abort()` when it tries to draw onto a 0×0 surface, flooding the console
+  // with stack-traceless `Aborted()` once per frame for each hidden tab. The dot-field-scene guard
+  // can't catch this: it reads useWindowDimensions() (the WINDOW stays 812px even when the screen is
+  // hidden), not this element's own collapsed size. Gating on the measured size fixes both the hidden
+  // tabs and the brief 0×0 first mount. Web-only — native (app-background.tsx) is untouched.
+  const [ready, setReady] = useState(false);
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setReady(width > 0 && height > 0);
+  };
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: BASE }]} pointerEvents="none">
-      <Scene />
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: BASE }]} pointerEvents="none" onLayout={onLayout}>
+      {ready ? <Scene /> : null}
       {/* scrim — sits over the dots, under everything else, so text always pops */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: SCRIM }]} />
     </View>
