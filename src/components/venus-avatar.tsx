@@ -7,7 +7,7 @@
 // venus-avatar.web.tsx. `stage` drives her lifecycle (pre-render → morphing → silence → talking).
 export type VenusStage = 'pre-render' | 'morphing' | 'silence' | 'talking';
 
-export default function VenusAvatar({ stage }: { stage: VenusStage }) {
+export default function VenusAvatar({ stage, bubble }: { stage: VenusStage; bubble?: boolean }) {
   const VenusHeadScene = require('@/components/backgrounds/venus-head-scene').default;
-  return <VenusHeadScene stage={stage} />;
+  return <VenusHeadScene stage={stage} bubble={bubble} />;
 }

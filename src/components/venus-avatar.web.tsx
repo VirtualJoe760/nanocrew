@@ -5,6 +5,6 @@ import VenusHeadScene, { type VenusStage } from '@/components/backgrounds/venus-
 // module load — see that file. Mounted by the gated Lab (Account) and the Studio interview.
 export type { VenusStage };
 
-export default function VenusAvatar({ stage }: { stage: VenusStage }) {
-  return <VenusHeadScene stage={stage} />;
+export default function VenusAvatar({ stage, bubble }: { stage: VenusStage; bubble?: boolean }) {
+  return <VenusHeadScene stage={stage} bubble={bubble} />;
 }

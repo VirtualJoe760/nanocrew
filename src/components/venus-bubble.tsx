@@ -87,7 +87,7 @@ export function VenusBubble({
 
       {/* her face, clipped to a circle (web) / blended via matching bg (native) */}
       <View style={[styles.disc, { width: disc, height: disc, borderRadius: disc / 2 }]}>
-        <VenusAvatar stage={stage} />
+        <VenusAvatar stage={stage} bubble />
       </View>
 
       {/* faint spinning dashed ring + a solid rim to crisp the circle edge */}
