@@ -90,7 +90,12 @@ export function VenusBubble({
           honor — blanks/covers it on expo-gl); the transparent GL corners fall on the panel-coloured
           backing + editor panel, and the ring/rim define the circle. */}
       <View style={[styles.disc, { width: disc, height: disc, borderRadius: disc / 2 }]}>
-        <VenusAvatar stage={stage} />
+        {/* Explicit full-size box: the R3F <Canvas> is flex:1 with no width, so a CENTERED flex
+            parent gave it width 0 on native (Yoga) → a zero-area GLView → blank. absoluteFill forces
+            the GLView to the disc's real size. */}
+        <View style={StyleSheet.absoluteFill}>
+          <VenusAvatar stage={stage} />
+        </View>
       </View>
 
       {/* faint spinning dashed ring + a solid rim to crisp the circle edge */}
@@ -107,10 +112,10 @@ export function VenusBubble({
 const styles = StyleSheet.create({
   disc: {
     // Web clips the canvas to the circle; native must NOT (overflow:hidden blanks the GLView on iOS).
+    // NO alignItems/justifyContent here — centering a flex:1 <Canvas> with no width gave it 0 width
+    // on native (the avatar fills via the absoluteFill wrapper instead).
     overflow: Platform.OS === 'web' ? 'hidden' : 'visible',
     backgroundColor: PANEL,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   rim: {
     position: 'absolute',
