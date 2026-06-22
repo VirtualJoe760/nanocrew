@@ -216,15 +216,20 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    formed; resting state (`R=1`) is exactly today's look. Tune: the swirl radians (`7.0` in
    `NODE_VERT`), scatter radii (`bakeAssemble` `rx/ry/rz`), `aDelay` spread, the damp rates, and the
    per-layer `seg(...)` windows.
-   - **Driven by the `VenusStage` prop** (exported): `pre-render` (scattered dust / the future grid
-     background, `revealTarget 0`) · `morphing` (the assembly, ping-ponged) · `silence` (formed +
-     listening, mouth at rest) · `talking` (formed + lip-sync driving the mouth). `VenusHeadScene
-     stage={...}` → `Avatar` maps it to `revealTarget` + a `talking` flag. **The Lab has a 4-stage
-     toggle row** (`playground.tsx`) to test each phase; Studio will map its flow onto these later.
-   - **Remaining:** (a) the **pre-render** state should become the **dot/grid background** (currently a
-     random scatter cloud) and the **morphing** should destructure the face into the background's lined
-     grid; (b) the Skia dot-field → R3F **crossfade** handoff (deferred; `app-background.tsx` — fade the
-     Skia field out over `R∈[0,0.12]`; the empty `venus-points.ts` is the long-term zero-seam Option C).
+   - **Driven by the `VenusStage` prop** (exported): `pre-render` (the **app dot-field background**,
+     `revealTarget 0`) · `morphing` (the assembly, ping-ponged) · `silence` (formed + listening, mouth
+     at rest) · `talking` (formed + lip-sync driving the mouth). `VenusHeadScene stage={...}` → `Avatar`
+     maps it to `revealTarget` + a `talking` flag. **The Lab has a 4-stage toggle row** (`playground.tsx`)
+     to test each phase; Studio will map its flow onto these later.
+   - **App-background crossfade (DONE):** the avatar `<Canvas>` is **transparent** (`gl.alpha`, no
+     `<color>`) so the app's `<AppBackground>` (the `dot-field-scene` on Account/Studio) renders BEHIND
+     it; `VenusHeadScene onReveal={r⇒…}` reports the live reveal each frame and the Lab fades the
+     dot-field out as she assembles (`opacity = 1 − r/0.5`) — so pre-render **is** the app background and
+     she morphs out of it. (Studio gets the same for free: it already shows `<AppBackground>` behind
+     transparent screens; just drop the avatar canvas on top.)
+   - **Remaining:** the **morphing** should destructure the face *into the dot-field's grid* (today the
+     scatter `aHome` is a random cloud — make it resolve to the background dot positions for a seamless
+     hand-off). The empty `venus-points.ts` is the long-term zero-seam Option C (the field as R3F points).
 4. **Swap in the user's own RPM Venus avatar** (URL swap; commercial license).
 5. **Integrate into Studio**: replace the orb (`src/components/venus-orb.tsx` / the nucleus in
    `studio.tsx`); drive from **real Gemini Live audio**; show her while she speaks (push-to-talk

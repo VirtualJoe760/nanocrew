@@ -647,10 +647,12 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scle
   return [haloMat];
 }
 
-function Avatar({ url, stage = 'talking' }: { url: string; stage?: VenusStage }) {
+function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: VenusStage; onReveal?: (r: number) => void }) {
   const { camera, gl } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
   const rig = useRef<Rig | null>(null);
+  const onRevealRef = useRef(onReveal);
+  onRevealRef.current = onReveal;
   const a = useRef({ nextBlink: 1.2, blinkAt: -1, nextSacc: 0.6, gx: 0, gy: 0, nextBrow: 2.5, browAt: -1, browAmt: 0 });
 
   // ── stage → reveal clock (0 = scattered dust, 1 = formed) + talking flag ───
@@ -940,6 +942,7 @@ function Avatar({ url, stage = 'talking' }: { url: string; stage?: VenusStage })
     const inbound = revealTarget.current > reveal.current;
     reveal.current = THREE.MathUtils.damp(reveal.current, revealTarget.current, inbound ? 3.0 : 4.5, delta);
     const R = reveal.current;
+    onRevealRef.current?.(R); // report progress so the parent can crossfade the app background
     const seg = (lo: number, hi: number) => { const x = THREE.MathUtils.clamp((R - lo) / (hi - lo), 0, 1); return x * x * (3 - 2 * x); };
     const alive = R > 0.6; // gate the human micro-life until she's formed
 
@@ -1095,11 +1098,13 @@ function Avatar({ url, stage = 'talking' }: { url: string; stage?: VenusStage })
 // `stage` drives her lifecycle (pre-render → morphing → silence → talking). The Lab toggles
 // it; Studio will map its flow onto these (e.g. 'morphing' on brand-create, 'talking' when
 // Venus speaks, 'silence' when listening).
-export default function VenusHeadScene({ stage = 'talking' }: { stage?: VenusStage }) {
+export default function VenusHeadScene({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (r: number) => void }) {
+  // TRANSPARENT canvas (no opaque background) so the app's dot-field can show THROUGH
+  // behind her — the pre-render background that she morphs out of. `onReveal` reports the
+  // assembly progress each frame so the parent can crossfade that background.
   return (
-    <Canvas camera={{ position: [0, 0, 2], fov: 22 }} style={{ flex: 1 }}>
-      <color attach="background" args={['#06080f']} />
-      <Avatar url={AVATAR_URL} stage={stage} />
+    <Canvas camera={{ position: [0, 0, 2], fov: 22 }} style={{ flex: 1 }} gl={{ alpha: true }}>
+      <Avatar url={AVATAR_URL} stage={stage} onReveal={onReveal} />
     </Canvas>
   );
 }

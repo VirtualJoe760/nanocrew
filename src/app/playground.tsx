@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { AppBackground } from '@/components/backgrounds/app-background';
 import type { VenusStage } from '@/components/backgrounds/venus-head-scene';
 
 // THE VENUS LAB — our dedicated, permanent dev playground for iterating on Venus's appearance.
@@ -12,20 +13,30 @@ import type { VenusStage } from '@/components/backgrounds/venus-head-scene';
 // The 4 testable lifecycle stages (the control row toggles between them).
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
 
-function Scene({ stage }: { stage: VenusStage }) {
+function Scene({ stage, onReveal }: { stage: VenusStage; onReveal?: (r: number) => void }) {
   // R3F renders on web (plain three/WebGL) and native (expo-gl) — no CanvasKit loader.
   const VenusHeadScene = require('@/components/backgrounds/venus-head-scene').default;
-  return <VenusHeadScene stage={stage} />;
+  return <VenusHeadScene stage={stage} onReveal={onReveal} />;
 }
 
 export default function Playground() {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
+  // The app's dot-field background (the Account/Studio background) sits BEHIND the
+  // transparent avatar canvas and fades out as she assembles — so pre-render IS the
+  // app background, and she morphs out of it. Driven by the live reveal value.
+  const bgOpacity = useRef(new Animated.Value(1)).current;
+  const onReveal = useCallback((r: number) => {
+    bgOpacity.setValue(1 - Math.min(1, r / 0.5)); // full at the dust-field, gone by r≈0.5
+  }, [bgOpacity]);
   if (!__DEV__) return null; // dev-only — never ships in a production build
 
   return (
     <View style={styles.root}>
-      <Scene stage={stage} />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: bgOpacity }]} pointerEvents="none">
+        <AppBackground />
+      </Animated.View>
+      <Scene stage={stage} onReveal={onReveal} />
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
@@ -55,7 +66,7 @@ export default function Playground() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+  root: { flex: 1, backgroundColor: '#06080f' }, // brand navy — shows once the dot-field fades
   topBar: {
     position: 'absolute',
     top: 0,
