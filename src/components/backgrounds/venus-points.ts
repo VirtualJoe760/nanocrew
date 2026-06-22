@@ -64,6 +64,7 @@ export const LATTICE_VERT = /* glsl */ `
   uniform float uReveal;        // = raw R 0..1
   uniform float uPulse;         // residual inward-pulse strength (rises after she forms)
   uniform float uSpeak;         // jawOpen energy (twinkle/pulse boost)
+  uniform float uTalk;          // 0..1 talking gate — drives the speech pulse down her face
   uniform float uBlip;          // rare holographic instability
   uniform float uSelA, uSelB, uFade;   // Skia 12s pattern-crossfade (JS-computed)
   uniform vec2  uDrift;         // = (t*0.010, t*0.006) — Skia parallax, uv units
@@ -73,6 +74,7 @@ export const LATTICE_VERT = /* glsl */ `
   attribute vec2  aCell;        // integer grid coords (Skia hue/energy)
   attribute vec3  aHome;        // resting lattice position (group-local)
   attribute vec3  aTarget;      // face-vertex landing position (group-local); =aHome for ambient
+  attribute float aFaceY;       // face-vertex height (chin 0 … crown 1); 0 for ambient dots
   attribute float aDelay, aRadius, aSpan, aRand, aIsFace, aDCenter;
   varying vec3  vColor;
   varying float vGlow;
@@ -123,6 +125,16 @@ export const LATTICE_VERT = /* glsl */ `
     // ambient brightness for BOTH kinds; face dots add their flight term, scaled by peel:
     vColor = mix(ambColor, faceColor, peel);
     vGlow  = (ambVal + peel * faceGlow * landFade) * tw * (1.0 + uSpeak * 0.4);
+
+    // ---------- SPEECH PULSE — a bright band sweeping DOWN her face while talking ----
+    // wavePos travels crown(1) → chin(0), repeating; the gaussian band lights up the face
+    // dots it passes. Gated to her face dots (aIsFace) and to talking (uTalk); jawOpen
+    // energy (uSpeak) punches each pulse so it tracks her speech.
+    float wavePos   = 1.0 - fract(uTime * 0.6);
+    float band      = exp(-(aFaceY - wavePos) * (aFaceY - wavePos) * 120.0);
+    float talkPulse = band * aIsFace * uTalk * (0.7 + 2.3 * uSpeak);
+    vColor = mix(vColor, vec3(0.80, 0.95, 1.0), clamp(talkPulse, 0.0, 0.7)); // band flares brighter
+    vGlow += talkPulse;
 
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     float flightSize = 1.0 + fly * 0.9 * aIsFace;

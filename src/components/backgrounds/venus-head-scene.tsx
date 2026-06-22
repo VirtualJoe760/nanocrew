@@ -635,6 +635,7 @@ function bakeUnifiedLattice(
   g.setAttribute('position', new THREE.BufferAttribute(home.slice(), 3)); // for bbox/culling
   g.setAttribute('aHome', new THREE.BufferAttribute(home, 3));
   g.setAttribute('aTarget', new THREE.BufferAttribute(target, 3));
+  g.setAttribute('aFaceY', new THREE.BufferAttribute(wipe, 1)); // face-vertex height → speech pulse
   g.setAttribute('aCell', new THREE.BufferAttribute(cell, 2));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setAttribute('aDelay', new THREE.BufferAttribute(delay, 1));
@@ -927,7 +928,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             latticeMat = new THREE.ShaderMaterial({
               uniforms: {
                 uTime: { value: 0 }, uMorph: { value: 0 }, uReveal: { value: 0 },
-                uPulse: { value: 0.12 }, uSpeak: { value: 0 }, uBlip: { value: 1 },
+                uPulse: { value: 0.12 }, uSpeak: { value: 0 }, uTalk: { value: 0 }, uBlip: { value: 1 },
                 uSelA: { value: 0 }, uSelB: { value: 0 }, uFade: { value: 0 },
                 uDrift: { value: new THREE.Vector2() }, uCellScale: { value: LAT_ROWS / 2.0 },
                 uCenter: { value: fcGroup.clone() }, // funnel axis (group/world space)
@@ -1121,6 +1122,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       u.uSelA.value = selA; u.uSelB.value = selB; u.uFade.value = fade;
       (u.uDrift.value as THREE.Vector2).set(t * 0.010, t * 0.006); // Skia parallax (pattern only)
       u.uSpeak.value = THREE.MathUtils.damp(u.uSpeak.value, speak * 1.2, 8, delta);
+      u.uTalk.value = THREE.MathUtils.damp(u.uTalk.value, talkingRef.current ? 1 : 0, 5, delta); // speech pulse gate
       // residual inward-pulse: gentle breath at rest → ramps with the morph → eases to ~0.5 formed
       const pulseTarget = 0.12 + 0.88 * seg(0.18, 0.5) * (1 - 0.5 * seg(0.7, 0.95)) + 0.5 * seg(0.7, 0.95);
       u.uPulse.value = THREE.MathUtils.damp(u.uPulse.value, pulseTarget, 3, delta);
@@ -1142,7 +1144,11 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     // ── structure layers fade in AFTER the face dots land (the choreography) ────
     if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.36 * seg(0.62, 0.78) * blip;
     if (r.edgeHaloMat) r.edgeHaloMat.opacity = 0.1 * seg(0.62, 0.78);
-    const subA = 0.16 * seg(0.62, 0.78);
+    // The substrate wireframe is the ONLY thing that deforms with the visemes, so it carries
+    // the lip-sync. Keep it dim at rest, but brighten it HARD while talking (+ a jawOpen punch)
+    // so the articulating mouth/jaw reads clearly against the dark fill — "see her talk".
+    const talk = talkingRef.current ? 1 : 0;
+    const subA = (0.16 + 0.30 * talk + 0.45 * speak * talk) * seg(0.62, 0.78);
     for (const m of r.meshes) (m.material as THREE.MeshBasicMaterial).opacity = subA;
     if (r.coreMat) r.coreMat.uniforms.uOpacity.value = (0.5 + 0.1 * Math.sin(t * 0.5)) * seg(0.72, 0.9);
     if (r.occluder) {

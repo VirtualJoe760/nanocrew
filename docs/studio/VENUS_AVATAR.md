@@ -244,9 +244,19 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      `talking` (formed + lip-sync). The **Lab** (`playground.tsx`) has the 4-stage toggle row and **no
      longer renders the Skia `<AppBackground>`** — the lattice IS the background inside the transparent
      canvas, over the `#06080f` bed.
+   - **Talking = she lights up + speaks (DONE).** Two talking-only effects make her clearly readable
+     as she speaks (silence stays the calm dark rest look): (1) a **speech pulse** — `LATTICE_VERT`
+     sweeps a bright gaussian band DOWN her face dots (`aFaceY` crown→chin via `wavePos = 1−fract(t·0.6)`),
+     gated by `uTalk` (the smoothed talking flag) and punched by `uSpeak` (jawOpen). (2) the **substrate
+     wireframe** (the ONLY thing that deforms with the visemes → it carries the lip-sync) brightens hard
+     while talking: `subA = (0.16 + 0.30·talk + 0.45·speak·talk)·seg(0.62,0.78)` — so the articulating
+     mouth reads against the dark fill instead of being lost in it (fixes "very black / can't see the
+     lips"). `uTalk` is damped from `talkingRef`; `aFaceY` is baked from the face vertex height (the
+     `wipe` array). Bright structure (edges/dots) is STATIC, so the substrate is what shows the mouth.
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
      span (`vW/vH × 2.0`) + greedy claim, `LATTICE_VERT` `uSwirl/uUpdraft/uInfall` + the `fly·0.9` pinch,
-     the `uPulse` curve + `basePx`, `bakeStreamField` count, the per-layer `seg(...)` windows.
+     the `uPulse` curve + `basePx`, the speech pulse (`uTime·0.6` rate, `120` band width, `uSpeak` punch)
+     + `subA` talk boost, `bakeStreamField` count, the per-layer `seg(...)` windows.
    - **⚠ Sync point:** the Skia look now lives in **TWO** places — `dot-field-scene.tsx` (SKSL, still the
      app-wide Account/Market/Account background via `<AppBackground>`) and `venus-points.ts`
      `SKIA_CHUNK` (the GLSL port). If the dot-field look is retuned, change BOTH (the constants are
