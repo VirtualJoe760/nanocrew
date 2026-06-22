@@ -84,12 +84,16 @@ const effect = Skia.RuntimeEffect.Make(SKSL);
 export default function DotFieldScene() {
   const { width, height } = useWindowDimensions();
   const clock = useClock(); // elapsed ms, as a shared value
+  // Clamp the resolution to >= 1 so the shader never divides by zero. useWindowDimensions returns
+  // 0x0 on the first frame before layout settles; an unclamped 0 height makes `uv / u_resolution.y`
+  // produce NaN/Inf, which CanvasKit (web) aborts on every frame and which renders blank on native.
   const uniforms = useDerivedValue(
-    () => ({ u_time: clock.value / 1000, u_resolution: [width, height] }),
+    () => ({ u_time: clock.value / 1000, u_resolution: [Math.max(1, width), Math.max(1, height)] }),
     [width, height],
   );
 
-  if (!effect) return null;
+  // Don't mount the canvas until we have real dimensions — avoids the 0x0 first frame entirely.
+  if (!effect || width < 1 || height < 1) return null;
 
   return (
     <Canvas style={{ flex: 1 }}>
