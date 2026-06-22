@@ -6,23 +6,20 @@
 // does, it pushes each chunk here. The native lip-sync driver (src/lib/venus-lipsync.ts) reads
 // speechFrameAt() once per render frame to set jaw/viseme targets.
 //
-// Pure JS, ZERO deps on purpose: both the audio layer (react-native-audio-api, Gemini SDK) and the
-// avatar (three/expo-gl) import this without pulling each other's heavy modules in.
+// Pure JS, near-ZERO deps on purpose (only the pure feature extractor venus-formants): both the
+// audio layer (react-native-audio-api, Gemini SDK) and the avatar (three/expo-gl) import this
+// without pulling each other's heavy modules in.
 //
 // How the sync works: each chunk enters the playback queue at a known wall-clock time and has a
-// known duration (sample-count / 24 kHz). We slice it into ~40 ms windows, store each window's RMS
-// (loudness) + zero-crossing-rate (brightness ≈ vowel vs. sibilant) against the wall-clock instant
-// it will be AUDIBLE, then look up "what's playing right now" each frame. LATENCY_MS shifts the
-// windows forward to compensate for output (queue + hardware) latency so the lips match the ear.
+// known duration (sample-count / 24 kHz). We slice it into ~40 ms windows, run the FFT/formant
+// extractor (venus-formants) on each, and store the resulting AcousticFeatures (F1/F2 + bands +
+// rms/zcr/voicing) against the wall-clock instant it will be AUDIBLE — then look up "what's playing
+// right now" each frame. LATENCY_MS shifts the windows forward to compensate for output (queue +
+// hardware) latency so the lips match the ear. The FFT runs HERE, at push time, OFF the render loop.
 
-export type SpeechFrame = {
-  /** Normalized loudness 0..1 (RMS of the window). 0 ⇒ silent. */
-  level: number;
-  /** Zero-crossing rate 0..1 — low for voiced vowels, high for fricatives/sibilants ("s","f"). */
-  zcr: number;
-};
+import { analyzeWindow, type AcousticFeatures } from '@/lib/venus-formants';
 
-type Seg = { t0: number; t1: number; level: number; zcr: number };
+type Seg = { t0: number; t1: number; feat: AcousticFeatures };
 
 const WINDOW_MS = 40; // envelope granularity (~25 windows/sec — finer than syllables)
 const KEEP_MS = 700; // drop windows older than this
@@ -57,28 +54,14 @@ export function pushSpeechChunk(pcm: Int16Array, startAtMs: number, durMs: numbe
   if (n === 0 || durMs <= 0) return;
   const base = startAtMs + LATENCY_MS;
   const msPerSample = durMs / n;
+  const sampleRate = Math.round(1000 / msPerSample); // = n/durMs*1000 ≈ 24000
   const winSamples = Math.max(1, Math.round(WINDOW_MS / msPerSample));
 
   for (let i = 0; i < n; i += winSamples) {
     const end = Math.min(n, i + winSamples);
-    let sumSq = 0;
-    let crossings = 0;
-    let prev = pcm[i];
-    for (let j = i; j < end; j++) {
-      const s = pcm[j];
-      const v = s / 32768;
-      sumSq += v * v;
-      // sign change → a zero crossing (count voiced-vs-fricative brightness, cheaply, no FFT)
-      if ((s >= 0) !== (prev >= 0)) crossings++;
-      prev = s;
-    }
-    const len = end - i;
-    SEG.push({
-      t0: base + i * msPerSample,
-      t1: base + end * msPerSample,
-      level: Math.sqrt(sumSq / len),
-      zcr: crossings / len,
-    });
+    // FFT + formant extraction on this window's exact samples (off the render loop).
+    const feat = analyzeWindow(pcm.subarray(i, end), sampleRate);
+    SEG.push({ t0: base + i * msPerSample, t1: base + end * msPerSample, feat });
   }
   lastEnd = Math.max(lastEnd, base + durMs);
   prune();
@@ -91,14 +74,16 @@ function prune() {
   }
 }
 
-const SILENT: SpeechFrame = { level: 0, zcr: 0 };
+const SILENT: AcousticFeatures = {
+  rms: 0, zcr: 0, f1: 0, f2: 0, voiced: false, hf: 0, bandLow: 0, bandMid: 0, bandHigh: 0,
+};
 
-/** What's audible right now (loudness + brightness). Returns silence when nothing is playing. */
-export function speechFrameAt(t = nowMs()): SpeechFrame {
+/** The acoustic features audible right now (F1/F2 + bands + rms/zcr/voicing). Silence when idle. */
+export function speechFrameAt(t = nowMs()): AcousticFeatures {
   // Segments are appended in playback order, so scan newest→oldest and stop once we pass `t`.
   for (let k = SEG.length - 1; k >= 0; k--) {
     const s = SEG[k];
-    if (t >= s.t0 && t < s.t1) return { level: s.level, zcr: s.zcr };
+    if (t >= s.t0 && t < s.t1) return s.feat;
     if (s.t1 <= t) break; // everything earlier is older than t → t sits in a gap / the future
   }
   return SILENT;
@@ -106,7 +91,7 @@ export function speechFrameAt(t = nowMs()): SpeechFrame {
 
 /** Convenience: just the loudness. */
 export function speechLevelAt(t = nowMs()): number {
-  return speechFrameAt(t).level;
+  return speechFrameAt(t).rms;
 }
 
 /** True while real spoken audio is playing (plus a short tail so brief gaps don't blink it off). */

@@ -145,24 +145,33 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     substrate (clean sockets, no bright eye-blobs); **edges lead** (opacity 0.36) over a sparser
     (`subsample` stride 3), smaller node field; tighter halo (0.12), subtler pulse crest, dimmer
     core/aura/hair. The tuning lives in a few constants — easy to push back toward "vivid."
-  - **Real lip-sync** (`src/lib/venus-lipsync.ts`): the driver returns `viseme_*`+jaw target weights
-    each frame; `useFrame` damps them onto the substrate. Strict ownership (lip-sync owns ONLY
-    jaw/mouth/viseme). Two real sources, by platform:
-    - **Native (Studio interview)** — `SpeechLevelDriver` reads `src/lib/venus-speech-level.ts`, a
-      time-synced envelope of Venus's ACTUAL spoken PCM. `live-voice.ts` pushes every decoded 24 kHz
-      chunk (the exact samples it enqueues for playback) into that module aligned to when it becomes
-      audible; the driver maps **loudness (RMS) → jaw openness** (silent between words ⇒ mouth closed)
-      and **brightness (zero-crossing-rate) → vowel SHAPE** — a crossfade dark→rounded `O`,
-      mid→open `aa`, bright→spread `E`, plus vowel-vs-sibilant (so it doesn't round into "O" on every
-      syllable; the mouth shape follows the real sound). `setVenusSpeechLatency(ms)` (default 120) shifts
-      the envelope to match ear-to-lip; tune on device. No FFT, no second audio graph — it analyses
-      the bytes being played. (Lip-sync keeps running while her buffered audio finishes, even after
-      the turn-complete flips state to listening.)
-    - **Web (test harness)** — a zero-dep Web-Audio `AnalyserNode` driver (RMS→jaw,
-      spectral-centroid→vowel, HF-ratio→fricative). A `DEV_LIPSYNC_TEST` flag plays a sample clip so
-      the mouth moves on web AND drives a SYNTHETIC flap in the Lab when there's no real audio (it is
-      suppressed whenever a real source is `speaking()`, so it never desyncs Studio). `wawa-lipsync`
-      adapter behind an inert `USE_WAWA` flag — flip after `npm i wawa-lipsync`.
+  - **Real lip-sync — FORMANT-based** (the "as real as possible" pass). Vowel identity lives in the
+    **formants** (F1 ≈ jaw openness, F2 ≈ front-spread vs. back-round), NOT in loudness/brightness —
+    which is why the earlier RMS/ZCR/centroid approaches rounded every syllable into "O". The pipeline
+    is now three pure, **Node-tested** modules feeding a shared mapper:
+    - **`src/lib/venus-formants.ts`** — a real radix-2 FFT (1024, Hann) + a smoothed spectral envelope
+      (suppresses female-f0 harmonics) → `analyzeWindow()` reports F1 (200–1100 Hz), F2 (800–3000 Hz),
+      band energies, HF/sibilance, rms, zcr, voicing.
+    - **`src/lib/venus-viseme-map.ts`** — `mapFeaturesToWeights()` (a JALI-style jaw-vs-lip split):
+      **F1 → `jawOpen`** (level-independent; loudness only modulates ±30%), **low F2 → `mouthFunnel`/
+      `mouthPucker`** (round), **high F2 → `mouthStretchL/R`** (spread). Round and spread are mutually
+      exclusive by the mid-F2 gap, so the mouth only rounds on genuinely back vowels — **never by
+      default**. Vowel `viseme_O/U/E/I` are intentionally NOT used (they bundle their own rounding);
+      visemes are kept only for consonants (SS/FF/CH/TH sibilants, PP bilabial) + silence.
+    - **Native (Studio):** `live-voice.ts` pushes each decoded 24 kHz chunk into
+      `venus-speech-level.ts`, which runs `analyzeWindow` per 40 ms window **at push time (off the
+      render loop)** and time-syncs the features to playback; `SpeechLevelDriver` reads
+      `speechFrameAt()` and maps it. `setVenusSpeechLatency(ms)` (default 120) aligns ear-to-lip.
+    - **Web:** `AnalyserDriver` runs the SAME `analyzeWindow` + mapper on the AnalyserNode's
+      time-domain buffer, so the Lab is a faithful preview of native. `DEV_LIPSYNC_TEST` plays a clip
+      (and a synthetic flap only when no real source is `speaking()`). `wawa-lipsync` behind `USE_WAWA`.
+    - **Smoothing:** the driver emits instantaneous targets; the scene's `useFrame` damps with
+      **asymmetric attack/decay** (fast open ~18/16, slow close ~12/10) so consonants stay crisp and
+      vowels don't buzz. Lip-sync keeps running while buffered audio finishes after turn-complete.
+    - **Tuning knobs** (`venus-viseme-map.ts`): `jawGain`, `JAW_BASE`/`JAW_SPAN`/`JAW_LOUD_FLOOR`,
+      `F1_OPEN`, `F2_ROUND`/`F2_SPREAD_*`, `FUNNEL`/`PUCKER`/`STRETCH`, `FRICATIVE_HF`. Formant Hz are
+      voice-dependent — calibrate to Venus's TTS on device. Tests: `npm run test:lipsync` (47 cases,
+      incl. an anti-O histogram); a real-speech sanity check decodes a clip and runs the live pipeline.
   - **Liveliness** (unchanged): blink, eye saccades, Head/Neck sway, brow flashes, resting smile.
   - **Verified on web** (two-frame capture): a clean, clearly-female glowing plexus face; the
     thought-pulse visibly travels (crown→jaw between frames); eyes/lips luminous.
@@ -320,9 +329,9 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    `VENUS_IN_INTERVIEW` in `studio.tsx`. Her `VenusStage` is derived from the interview's
    `EntityState` (`venusStageFor`): `speaking → talking`, everything else → `silence`, with a
    one-shot `morphing` materialize when she enters the view. The dark `venusBackdrop` hides the
-   screen-level Skia field so only her lattice shows. **Native lip-sync is wired** (her mouth tracks
-   the real Gemini PCM — see "Real lip-sync" above). **Remaining:** tune `setVenusSpeechLatency` on
-   device; a tap-to-pause hit-target on her face; tune the framing/controls.
+   screen-level Skia field so only her lattice shows. **Native lip-sync is FORMANT-based** (F1→jaw,
+   F2→round/spread — see "Real lip-sync" above). **Remaining:** calibrate the formant knobs +
+   `setVenusSpeechLatency` to Venus's TTS on device; a tap-to-pause hit-target on her face.
 
 ## Gotchas (read before editing)
 - **The Venus Lab is opened from the Account screen** (Developer → "Venus Lab (test)", gated to
@@ -365,18 +374,26 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   Native gotchas that bit us: hair shaders need `precision highp` (mediump underflowed → hair vanished);
   GPU clip planes don't apply reliably on expo-gl (use geometry/`polygonOffset`, not `clippingPlanes`);
   `three`'s ES static class blocks need `@babel/plugin-transform-class-static-block` (`babel.config.js`);
-  and Web Audio is web-only — on native, lip-sync runs off the real spoken-audio envelope
-  (`venus-speech-level.ts` fed by `live-voice.ts`), not an `AnalyserNode`.
+  and Web Audio is web-only — on native, lip-sync runs a pure-JS FFT/formant extractor
+  (`venus-formants.ts`) over the real PCM via `venus-speech-level.ts`, not an `AnalyserNode`. The two
+  feature/mapping modules are pure + Node-tested precisely BECAUSE the device is the only real test
+  surface (the web preview's native-audio path doesn't run).
 
 ## File map
 - `src/components/backgrounds/venus-head-scene.tsx` — **the live R3F POC** ("Ascendant Cortana":
   clean female face, glow shell + thought-pulse, liveliness, real lip-sync wiring). ← work here.
-- `src/lib/venus-lipsync.ts` — the **audio→viseme driver**: `SpeechLevelDriver` (native, reads the
-  real-PCM envelope) / Web-Audio `AnalyserNode` driver (web) / wawa adapter behind `USE_WAWA`.
-  Returns `viseme_*`+jaw target weights for `useFrame` to damp. `speaking()` tells the scene a real
-  source is active (so the synthetic flap stays off).
-- `src/lib/venus-speech-level.ts` — zero-dep, time-synced **loudness+ZCR envelope** of Venus's
-  spoken PCM. `live-voice.ts` pushes each enqueued chunk; the native driver reads `speechFrameAt()`.
+- `src/lib/venus-formants.ts` — pure **FFT + formant extractor** (`analyzeWindow` → F1/F2 + bands +
+  rms/zcr/voicing). Zero-dep, Hermes-safe, Node-tested. Shared by both drivers.
+- `src/lib/venus-viseme-map.ts` — pure **`mapFeaturesToWeights`** (the F1/F2 → ARKit jaw/funnel/
+  stretch mapping that fixes "too much O"). All the tuning knobs live here.
+- `src/lib/__tests__/venus-formants.test.ts` — 47 Node tests (`npm run test:lipsync`): FFT vs naive
+  DFT, synthetic female vowels, f0-harmonic guard, anti-O histogram, sibilants, ranges, determinism.
+- `src/lib/venus-lipsync.ts` — the **driver**: `SpeechLevelDriver` (native, reads the formant
+  envelope) / `AnalyserDriver` (web, same extractor+mapper) / wawa behind `USE_WAWA`. Returns target
+  weights for `useFrame` to damp. `speaking()` tells the scene a real source is active.
+- `src/lib/venus-speech-level.ts` — zero-dep, time-synced **formant envelope** of Venus's spoken PCM:
+  runs `analyzeWindow` per 40 ms window at push time, stores `AcousticFeatures` against the audible
+  instant. `live-voice.ts` pushes each enqueued chunk; the driver reads `speechFrameAt()`.
   `setVenusSpeechLatency(ms)` aligns lips to the ear.
 - `src/lib/live-voice.ts` — the **Gemini Live session** (mic up / 24 kHz PCM playback via
   react-native-audio-api). Feeds `venus-speech-level.ts` as it enqueues her audio.

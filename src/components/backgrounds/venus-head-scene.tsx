@@ -1548,7 +1548,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
           const target = targets[name] ?? 0;
           const cur = m.morphTargetInfluences[i];
           const isJaw = name === 'jawOpen' || name === 'mouthOpen' || name === 'mouthClose';
-          const lambda = isJaw ? 16 : target > 0 ? 14 : 12;
+          // Asymmetric attack/decay: a FAST ATTACK (opening) keeps consonants crisp, a SLOWER DECAY
+          // (closing) stops vowels buzzing. Jaw is a touch slower than the lip shapes.
+          const opening = target > cur;
+          const lambda = isJaw ? (opening ? 18 : 12) : (opening ? 16 : 10);
           m.morphTargetInfluences[i] = THREE.MathUtils.damp(cur, target, lambda, delta);
         }
       }

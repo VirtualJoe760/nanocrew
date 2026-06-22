@@ -74,7 +74,8 @@
     "lint": "expo lint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test:lipsync": "tsx src/lib/__tests__/venus-formants.test.ts"
   },
   "private": true
 }

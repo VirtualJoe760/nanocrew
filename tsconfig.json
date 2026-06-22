@@ -19,6 +19,7 @@
   ],
   "exclude": [
     "platform-api",
-    "nanocrew-site"
+    "nanocrew-site",
+    "**/__tests__/**"
   ]
 }
