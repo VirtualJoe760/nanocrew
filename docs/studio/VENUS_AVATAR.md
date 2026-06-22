@@ -256,6 +256,17 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      0.45·speak·talk)·seg(0.62,0.78)` — so the articulating mouth reads against the dark fill instead of
      being lost in it (fixes "very black / can't see the lips"). Bright structure (edges/dots) is STATIC,
      so the substrate is what shows the mouth move.
+   - **No black mouth-void (DONE).** Only the substrate wireframe DEFORMS; the dark fill/occluder is the
+     STATIC closed-mouth `rawFace` and it WRITES DEPTH (to stop back-hair/dots showing through her face).
+     So the depth buffer holds a *closed* mouth: when the jaw drops, the deforming lower-face/mouth
+     wireframe moves behind that closed-mouth depth and gets depth-CULLED → black patches around the
+     mouth (the fibermesh "disappears"). Fix: the occluder's `polygonOffsetFactor/Units` are large
+     (6/28) — this pushes only its DEPTH well back (geometry unmoved, silhouette unchanged) so the
+     open-mouth wireframe stays in front and keeps drawing, while far-behind hair/dots are still
+     occluded (no x-ray). Plus a `mouthGlow` (a broad additive aura-pool at the lip center, `depthTest:
+     off`, scaled/brightened by jawOpen) fills the open cavity with light — her words light up instead
+     of a hole. (Single-sided culling of the inner mouth + triangle stretch also darken it; the offset
+     is the main fix.)
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
      span (`vW/vH × 2.0`) + greedy claim + the lip-band (`aY 0.20–0.40`), `LATTICE_VERT` `uSwirl/uUpdraft/
      uInfall` + the `fly·0.9` pinch, the `uPulse` curve + `basePx`, the lip energy (`uTime·0.6` ring rate,
