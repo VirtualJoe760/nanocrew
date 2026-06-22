@@ -70,11 +70,15 @@ function Phone() {
   const screenTex = useMemo(() => makeScreenTexture(), []);
   const frontZ = 0.09; // front of the body after centring (depth/2 + bevel)
 
-  useFrame((state, dt) => {
+  useFrame((state) => {
     const g = group.current;
     if (!g) return;
-    g.rotation.y += dt * 0.3; // soft, continuous spin
-    g.position.y = Math.sin(state.clock.elapsedTime * 0.6) * 0.03; // gentle float
+    const t = state.clock.elapsedTime;
+    // No full spin — the screen stays facing the viewer. Just a slow, slight sway + float so it
+    // feels alive and you can read what's on the screen.
+    g.rotation.y = Math.sin(t * 0.45) * 0.2; // gentle ±~11° left/right sway
+    g.rotation.x = 0.03 + Math.sin(t * 0.35) * 0.03; // subtle nod
+    g.position.y = Math.sin(t * 0.55) * 0.035; // soft float
   });
 
   return (
