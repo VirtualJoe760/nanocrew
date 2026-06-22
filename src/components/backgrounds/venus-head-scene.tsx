@@ -46,8 +46,10 @@ const SHELL_NAMES = ['Wolf3D_Head'];
 // ourselves: a stylized shell wrapping the head (covers the ears, fringe over the
 // brow, A-line length), rendered as a translucent volume + glowing rim. These tune
 // its shape relative to the head bounding box.
-const BOB_WIDEN = 1.0;       // shell width vs head half-width (hugs; covers ears)
-const BOB_DEPTH = 1.12;      // shell depth vs head half-width
+const BOB_WIDEN = 1.07;      // shell width vs head half-width — slightly OUTSIDE the head so the hair
+                            // sits in front of the scalp and occludes it (1.0 = coincident → head
+                            // wireframe z-fights/shows through the hair). Covers ears.
+const BOB_DEPTH = 1.18;      // shell depth vs head half-width (also outside the skull front/back)
 const BOB_FACE_OPEN = 0.6;   // half-width of the face opening (× head half-width)
 const BOB_FRINGE = 0.44;     // fringe ends this fraction of head height below the crown (~brow)
 const BOB_LEN = -0.2;        // bob bottom (fraction of head height; negative = below the chin)
@@ -245,6 +247,30 @@ function dropEars(geo: THREE.BufferGeometry, maxAbsX: number): THREE.BufferGeome
   return g;
 }
 
+// Drop everything ABOVE yMax (the forehead/scalp) — the hair owns the head above the brow line, so
+// the bright wireframe/dots only cover the face from ~the eyebrows down. Same vert-remap as dropEars.
+function dropAbove(geo: THREE.BufferGeometry, yMax: number): THREE.BufferGeometry {
+  const pos = geo.attributes.position;
+  const idx = geo.index;
+  const remap = new Int32Array(pos.count).fill(-1);
+  const newPos: number[] = [];
+  let nv = 0;
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getY(i) <= yMax) { remap[i] = nv++; newPos.push(pos.getX(i), pos.getY(i), pos.getZ(i)); }
+  }
+  const newIdx: number[] = [];
+  if (idx) {
+    for (let t = 0; t < idx.count; t += 3) {
+      const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2);
+      if (remap[a] >= 0 && remap[b] >= 0 && remap[c] >= 0) newIdx.push(remap[a], remap[b], remap[c]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(newPos), 3));
+  if (idx) g.setIndex(newIdx);
+  return g;
+}
+
 // Realistic stylized HAIR shader (Kajiya-Kay / Scheuermann dual anisotropic sheen +
 // strand striations + root→tip gradient + soft tapered hem + blunt-fringe edge). The
 // view-space hair TANGENT is derived from a baked object-space flow dir so the crown
@@ -364,7 +390,9 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
   // (parameterizing by hf, not the row index, keeps proportions stable as the hair lengthens.)
   const prof = (hf: number) => {
     const dome = 0.34, jaw = 0.58;
-    if (hf < dome) return 0.08 + 0.92 * Math.sin((hf / dome) * Math.PI * 0.5); // round crown (no pole)
+    // FULLER (hemisphere-ish) crown so the dome caps the head's rounded crown instead of pinching to
+    // a thin point that lets the scalp poke through. Small base avoids a degenerate pole.
+    if (hf < dome) { const u = hf / dome; return 0.06 + 0.94 * Math.sqrt(Math.max(0, 1 - (1 - u) * (1 - u))); }
     if (hf < jaw) return 1;                                                    // full width over the ears
     if (hf < 1) return 1 - 0.3 * ((hf - jaw) / (1 - jaw));                     // taper toward the jaw
     return 0.7 - 0.18 * (hf - 1);                                              // hang below the chin
@@ -875,10 +903,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         //    extents. (Before the shell/aura are added; they'd inflate the bbox.) ──
         const cam = camera as THREE.PerspectiveCamera;
         const box = new THREE.Box3().setFromObject(gltf.scene);
-        // Aim BELOW the crown by enough that the whole head has headroom (was 0.235 = near the eyes,
-        // which pushed the crown off the top). Higher aim → crown drops into frame + she centers.
-        const eyeY = box.max.y - 0.15;
-        cam.position.set(0, eyeY, 1.02);    // slight pull-back for top/bottom margin; head centered
+        // Aim below the crown so the whole head has a little headroom (0.235 clipped the crown; 0.15
+        // sat too low). ~0.18 keeps her high with the crown just inside the top; z pulls back for margin.
+        const eyeY = box.max.y - 0.18;
+        cam.position.set(0, eyeY, 1.04);
         cam.lookAt(0, eyeY, 0);
         cam.updateProjectionMatrix();
         // half-extents of the view frustum at the head plane (head ≈ world z=0)
@@ -900,6 +928,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         let bob: THREE.Mesh | undefined;
         let hairMat: THREE.ShaderMaterial | undefined;
         let earClipX = 0; // |x| beyond which the dim substrate ears are clipped
+        let browClipY = Infinity; // y above which the head is hidden (hair owns above the eyebrows)
 
         if (bones.head) {
           const dotTex = makeDotTexture();
@@ -910,7 +939,20 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             rawFace.computeBoundingBox();
             const halfW = Math.max(Math.abs(rawFace.boundingBox!.min.x), Math.abs(rawFace.boundingBox!.max.x));
             earClipX = halfW * EAR_DROP_FRAC;
-            const faceGeo = dropEars(rawFace, earClipX); // bright shell stops at the cheeks
+            // BROW LINE (head-local): the hair owns everything above the eyebrows, so the bright
+            // wireframe/dots only render from ~the brows down. Use the eye bones; brows sit just above.
+            const crownLocalY = rawFace.boundingBox!.max.y;
+            let eyeLineLocalY = (rawFace.boundingBox!.min.y + crownLocalY) / 2;
+            if (bones.leftEye && bones.rightEye) {
+              const le = new THREE.Vector3(), re = new THREE.Vector3();
+              bones.leftEye.getWorldPosition(le); bones.rightEye.getWorldPosition(re);
+              const mid = le.add(re).multiplyScalar(0.5);
+              bones.head.worldToLocal(mid);
+              eyeLineLocalY = mid.y;
+            }
+            browClipY = eyeLineLocalY + 0.05 * (crownLocalY - eyeLineLocalY); // just above the eyes
+            // bright shell stops at the cheeks (ears) AND at the brow (forehead/scalp → hair covers it)
+            const faceGeo = dropAbove(dropEars(rawFace, earClipX), browClipY);
             bakeAurora(faceGeo);
             const faceDots = subsample(faceGeo, 3); // ~face vertices: position + aurora color + aY
             faceDots.computeBoundingBox();
@@ -1009,6 +1051,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
               bones.head.worldToLocal(e); // eye line in head-local space
               bob = buildBobHair(rawFace.boundingBox, e.y);
               hairMat = bob.material as THREE.ShaderMaterial;
+              // Render the hair BEFORE the head wireframe (it writes depth) so the scalp/forehead
+              // BEHIND the hair is depth-culled — otherwise the translucent hair draws OVER the
+              // head and you see her head through it. (occluder -10 < hair -5 < wireframe/lattice 0.)
+              bob.renderOrder = -5;
               shell.add(bob);
             }
 
@@ -1072,9 +1118,13 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             new THREE.Plane(new THREE.Vector3(-1, 0, 0), earClipX), // keep x <= +earClipX
             new THREE.Plane(new THREE.Vector3(1, 0, 0), earClipX),  // keep x >= -earClipX
           ];
+          // the substrate wireframe ALSO clips at the BROW — above the eyebrows is hair, not head.
+          const headPlanes = browClipY < Infinity
+            ? [...earPlanes, new THREE.Plane(new THREE.Vector3(0, -1, 0), browClipY)] // keep y <= browClipY
+            : earPlanes;
           for (const mm of meshes) {
             const mat = mm.material as THREE.Material;
-            mat.clippingPlanes = earPlanes;
+            mat.clippingPlanes = headPlanes;
             mat.needsUpdate = true;
           }
           // ALSO clip the deforming dark FILL at the ears — otherwise it fills + depth-writes the
