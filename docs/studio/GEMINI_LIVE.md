@@ -59,13 +59,15 @@ does). This is Google's recommended client-to-server pattern.
   ≈ 600–800ms so Venus doesn't cut the creator off mid-thought.
 - **Interruption:** on `serverContent.interrupted` → `queue.clearBuffers()` + flip to listening.
 - **Transcription:** `inputAudioTranscription:{}` + `outputAudioTranscription:{}` → drive captions.
-- **Voice:** `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` — currently **`Sulafat`** (warm,
-  refined feminine) for a fashionable, British/European read. Set in TWO places that MUST match:
-  `LIVE_VOICE` in `src/app/studio.tsx` (the interview) + `VENUS_VOICE` in `src/app/api/say+api.ts` (the
-  launch fanfare), and the `LiveVoiceSession` default in `live-voice.ts`. `speechConfig.languageCode:
-  'en-GB'` biases the accent (native-audio may auto-detect, so the persona wording — "fashionable…
-  refined British/European sensibility" in `liveSystemInstruction` — is the reliable lever). ~30
-  prebuilt voices exist; audition in Google AI Studio to swap.
+- **Voice:** `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` — **`Aoede`** (the known-good
+  native-audio voice). Set in THREE places that MUST match: `LIVE_VOICE` in `src/app/studio.tsx`,
+  `VENUS_VOICE` in `src/app/api/say+api.ts`, and the `LiveVoiceSession` default in `live-voice.ts`.
+  ⚠️ **TWO native-audio footguns (both broke the session → NO AUDIO, 2026-06-22):** (1) do **NOT** put
+  `languageCode` in `speechConfig` — the native-audio model auto-detects language and rejects it;
+  (2) not every prebuilt voice from the ~30-voice TTS roster is valid on the native-audio model — a
+  switch to `Sulafat` silenced it. The fashionable/British TONE comes from the persona wording in
+  `liveSystemInstruction`, not these fields. To change her actual voice, pick from the native-audio-
+  supported set via the in-app voice sampler (which tests against the live model), not blindly.
 - **System instruction:** our `interviewSystem()` — but it must drop the JSON-output contract (Live is
   speech), and instruct Venus to **call the `save_brand` tool** when done.
 - **Tools:** one `save_brand` function declaration → maps to `BrandResult` (`toBrandResult`).

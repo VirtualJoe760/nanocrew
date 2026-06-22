@@ -229,7 +229,7 @@ export class LiveVoiceSession {
     this.accessToken = opts.accessToken;
     this.userName = opts.userName;
     this.firstTime = opts.firstTime;
-    this.voiceName = opts.voiceName ?? 'Sulafat'; // warm, refined feminine Gemini voice (fashionable/British vibe)
+    this.voiceName = opts.voiceName ?? 'Aoede'; // known-good native-audio voice (see speechConfig note below)
     this.instructionOverride = opts.instruction;
     this.greetingOverride = opts.greeting;
     this.enableBrandTool = opts.enableBrandTool ?? true;
@@ -310,9 +310,10 @@ export class LiveVoiceSession {
       config: {
         responseModalities: [Modality.AUDIO],
         systemInstruction: this.instructionOverride ?? liveSystemInstruction(this.userName, this.firstTime),
-        // languageCode biases the accent toward British English (the persona sets the fashionable
-        // tone). Native-audio may auto-detect language, so the persona wording is the reliable lever.
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } }, languageCode: 'en-GB' },
+        // NO languageCode: the native-audio model auto-detects language and REJECTS a languageCode in
+        // speechConfig (it broke the session → no audio). The persona wording carries the British/
+        // fashionable tone instead. Accent/voice is best locked via the voice sampler, not this field.
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } } },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         ...(this.enableBrandTool ? { tools: [{ functionDeclarations: [SAVE_BRAND] }] } : {}),

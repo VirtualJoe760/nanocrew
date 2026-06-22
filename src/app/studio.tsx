@@ -55,7 +55,7 @@ import { Welcome, type OnboardChoice } from '@/components/welcome';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
-const LIVE_VOICE = 'Sulafat'; // warm, refined feminine Gemini voice — fashionable/British vibe (no picker)
+const LIVE_VOICE = 'Aoede'; // known-good native-audio voice (Sulafat/en-GB broke the session → no audio); pick the fashionable voice via the sampler
 
 // The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
 // counter-rotating rings, digital rain behind — talks you through building your brand. Venus

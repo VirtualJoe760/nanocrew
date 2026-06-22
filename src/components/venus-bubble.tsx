@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import VenusAvatar, { type VenusStage } from '@/components/venus-avatar';
 
@@ -85,18 +85,12 @@ export function VenusBubble({
         </Svg>
       </Animated.View>
 
-      {/* her face — rendered UNCLIPPED (wrapping a GLView in overflow:hidden/borderRadius blanks it
-          on native expo-gl), then masked to a circle by the panel-coloured inverse-circle overlay so
-          the square GL corners read as a circle on BOTH platforms. */}
-      <View style={[styles.disc, { width: disc, height: disc }]}>
+      {/* her face. WEB clips to a circle with overflow+borderRadius. NATIVE renders the GLView
+          UNCLIPPED (clipping a GLView — overflow:hidden OR an evenodd SVG mask, which iOS doesn't
+          honor — blanks/covers it on expo-gl); the transparent GL corners fall on the panel-coloured
+          backing + editor panel, and the ring/rim define the circle. */}
+      <View style={[styles.disc, { width: disc, height: disc, borderRadius: disc / 2 }]}>
         <VenusAvatar stage={stage} />
-        <Svg width={disc} height={disc} style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Path
-            d={`M0 0 H${disc} V${disc} H0 Z M0 ${disc / 2} a ${disc / 2} ${disc / 2} 0 1 0 ${disc} 0 a ${disc / 2} ${disc / 2} 0 1 0 ${-disc} 0 Z`}
-            fill={PANEL}
-            fillRule="evenodd"
-          />
-        </Svg>
       </View>
 
       {/* faint spinning dashed ring + a solid rim to crisp the circle edge */}
@@ -112,6 +106,8 @@ export function VenusBubble({
 
 const styles = StyleSheet.create({
   disc: {
+    // Web clips the canvas to the circle; native must NOT (overflow:hidden blanks the GLView on iOS).
+    overflow: Platform.OS === 'web' ? 'hidden' : 'visible',
     backgroundColor: PANEL,
     alignItems: 'center',
     justifyContent: 'center',

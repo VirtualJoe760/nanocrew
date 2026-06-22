@@ -408,9 +408,11 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   mounted. Used by the Lab, the Studio interview, AND the editor bubble.
 - `src/components/venus-bubble.tsx` — `<VenusBubble>`: Venus's avatar as a circular, tappable bubble
   with a reactive halo, for the site-critique editor (`site-preview.tsx`, replaced the NC `VenusOrb`).
-  `speaking` → stage. **Native gotcha:** the avatar `GLView` is rendered UNCLIPPED — wrapping a
-  `GLView` in `overflow:hidden`/`borderRadius` blanks it on iOS — and made circular by a panel-coloured
-  SVG inverse-circle mask over the square GL corners (works on web + native, no GL clipping).
+  `speaking` → stage. **Native gotcha (two of them):** an expo-gl `GLView` BLANKS on iOS when clipped
+  by `overflow:hidden` OR covered by an SVG mask whose `fillRule="evenodd"` iOS doesn't honor (it
+  filled the whole disc). So: WEB clips with web-only `overflow:hidden`; NATIVE renders the GLView
+  UNCLIPPED and reads as a circle via the panel-matched disc bg + the ring/rim (no GL clipping, no SVG
+  mask). If square corners ever peek on device, the fallback is `@react-native-masked-view`.
 - `src/app/studio.tsx` — the **build-a-brand interview** mounts `<VenusAvatar>` full-bleed in voice
   mode (`VENUS_IN_INTERVIEW` flag, `venusStageFor` maps live state → stage). Legacy SVG orb
   (`NCNucleus`/`Nucleus`) still in-file as the `false` fallback.
