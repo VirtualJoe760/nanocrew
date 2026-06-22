@@ -16,7 +16,6 @@ import {
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePalette } from '@/components/nc-screen';
-import { AppBackground } from '@/components/backgrounds/app-background';
 import { withScreenFade } from '@/components/screen-fade';
 import Animated, {
   cancelAnimation,
@@ -148,7 +147,7 @@ let nodeCounter = 0;
 
 type Swatch = { color: string; colorCode: string; image: string };
 
-export default withScreenFade(DesignScreen);
+export default withScreenFade(DesignScreen, { background: true });
 
 function DesignScreen() {
   const theme = useTheme();
@@ -1122,11 +1121,9 @@ function DesignScreen() {
 
   if (!session) {
     return (
-      // The dot-field background is rendered HERE, inside the logged-out gate. On native the root
-      // background sits behind NativeTabs (UITabBarController) and is covered, so each screen renders
-      // its own. (The signed-in design canvas below stays opaque — no dots there.)
+      // Transparent so the dot-field (rendered OUTSIDE the fade by withScreenFade, like the other
+      // tabs) shows through. The signed-in canvas below is opaque (covers it → no dots there).
       <ThemedView style={[styles.container, { backgroundColor: 'transparent' }]}>
-        <AppBackground />
         <SafeAreaView style={styles.gateWrap}>
           <ThemedText type="title" style={styles.gateTitle}>
             Design your products

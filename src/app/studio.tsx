@@ -1016,6 +1016,7 @@ function StudioScreen() {
       <Modal
         visible={welcomeVisible}
         animationType="fade"
+        transparent
         onRequestClose={() => {
           setShowWelcome(false);
           AsyncStorage.setItem(ONBOARD_SEEN_KEY, '1').catch(() => {});

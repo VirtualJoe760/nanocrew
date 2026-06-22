@@ -32,16 +32,15 @@ export function withScreenFade<P extends object>(Screen: ComponentType<P>, opts?
       }, [opacity]),
     );
     const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-    const content = (
-      <Animated.View style={[{ flex: 1 }, style]}>
-        <Screen {...props} />
-      </Animated.View>
-    );
-    if (!opts?.background) return content;
+    // ALWAYS sit on a brand-dark bed (in front of the white iOS view-controller background, which a
+    // root-level dark colour can't cover) so the focus-fade never reveals white during a tab change.
+    // The dot-field (opt-in) layers on top of the bed; screens without it still fade over dark.
     return (
-      <View style={{ flex: 1 }}>
-        <AppBackground />
-        {content}
+      <View style={{ flex: 1, backgroundColor: '#08080a' }}>
+        {opts?.background ? <AppBackground /> : null}
+        <Animated.View style={[{ flex: 1 }, style]}>
+          <Screen {...props} />
+        </Animated.View>
       </View>
     );
   }
