@@ -1,6 +1,19 @@
+import type { ComponentType } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import DotFieldScene from './dot-field-scene';
+// Load the Skia scene defensively. If react-native-skia isn't in the native binary — e.g. a dev
+// build that predates it — the module's top-level Skia import throws (RNSkiaModule not found).
+// Catch it and degrade to a plain backdrop instead of crashing the entire app. Real builds (and any
+// rebuilt dev client) link Skia, so the dots render normally; this only bites a stale binary.
+let DotFieldScene: ComponentType | null = null;
+try {
+  DotFieldScene = require('./dot-field-scene').default;
+} catch (e) {
+  console.warn(
+    '[AppBackground] Skia native module unavailable — rendering a plain backdrop. Rebuild the dev client to enable the dot-field background.',
+    (e as Error)?.message,
+  );
+}
 
 // The app-wide animated background. Rendered ONCE at the root (behind the tabs in
 // _layout) so it's a single, continuous, indefinite loop that PERSISTS across view
@@ -23,7 +36,7 @@ const SCRIM = 'rgba(8,8,10,0.42)';
 export function AppBackground() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <DotFieldScene />
+      {DotFieldScene ? <DotFieldScene /> : null}
       {/* scrim — sits over the dots, under everything else, so text always pops */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: SCRIM }]} />
     </View>
