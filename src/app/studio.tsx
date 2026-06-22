@@ -1042,12 +1042,13 @@ function StudioScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Venus's 3D avatar, full-bleed behind the (transparent) header + controls. The dark backing
-          hides the screen-level Skia dot-field so only HER lattice shows — she IS the background here,
-          materializing from the dots (see docs/studio/VENUS_AVATAR.md). pointerEvents none so taps
-          fall through to the controls layered above. */}
+      {/* Venus's 3D avatar, full-bleed behind the (transparent) header + controls. Her canvas is
+          transparent (alpha) and sits over NOTHING of its own, so the screen-level Skia dot-field
+          (the same one on the Studio dashboard before her) shows straight through — entering the
+          interview must NOT darken or swap the background. pointerEvents none so taps fall through to
+          the controls layered above. */}
       {showVenusAvatar ? (
-        <View style={[StyleSheet.absoluteFill, styles.venusBackdrop]} pointerEvents="none">
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <VenusAvatar stage={venusStage} />
         </View>
       ) : null}
@@ -1341,7 +1342,6 @@ const styles = StyleSheet.create({
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.four },
   // Avatar mode: she fills the upper screen, so push the hint/pause/build controls to the bottom.
   entityAreaAvatar: { justifyContent: 'flex-end' },
-  venusBackdrop: { backgroundColor: '#06080f' }, // dark bed under her transparent lattice canvas
 
   nucleusWrap: { width: WEB_SIZE, height: WEB_SIZE, alignItems: 'center', justifyContent: 'center' },
   web: { position: 'absolute', width: WEB_SIZE, height: WEB_SIZE },
