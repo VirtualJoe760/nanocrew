@@ -6,7 +6,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
-import { VenusOrb } from '@/components/venus-orb';
+import { VenusBubble } from '@/components/venus-bubble';
 import { WebFrame } from '@/components/web-frame';
 import { Spacing } from '@/constants/theme';
 import { useLiveVoice } from '@/hooks/use-live-voice';
@@ -663,7 +663,7 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
                       <Path d="M3 13 Q 6 7 9 13 T 15 13 T 21 13" fill="none" stroke={armed ? BG : GOLD} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
                   </Pressable>
-                  <VenusOrb active={recording || speaking} level={level} size={86} onPress={toggleTalk} />
+                  <VenusBubble active={recording || speaking} speaking={speaking} level={level} size={96} onPress={toggleTalk} />
                   <Pressable onPress={() => setTyping(true)} hitSlop={12} style={styles.sideBtn}>
                     <Svg width={22} height={22}>
                       <Path d="M3 6 H19 a1 1 0 0 1 1 1 V15 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 V7 a1 1 0 0 1 1 -1 Z" fill="none" stroke={GOLD} strokeWidth={1.4} strokeLinejoin="round" />

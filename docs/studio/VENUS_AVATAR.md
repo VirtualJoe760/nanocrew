@@ -405,7 +405,10 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
 - `src/components/venus-lab-screen.tsx` — the Lab UI (4-stage toggle + back); opened from Account.
 - `src/components/venus-avatar.tsx` / `.web.tsx` — the `<VenusAvatar>` component split (native
   expo-gl / web R3F) that renders `venus-head-scene`, keeping three out of the native bundle until
-  mounted. Used by BOTH the Lab and the Studio interview.
+  mounted. Used by the Lab, the Studio interview, AND the editor bubble.
+- `src/components/venus-bubble.tsx` — `<VenusBubble>`: Venus's avatar as a circular, tappable bubble
+  with a reactive halo, for the site-critique editor (`site-preview.tsx`, replaced the NC `VenusOrb`).
+  `speaking` → stage; the disc bg matches the panel so the square GL canvas reads as a circle.
 - `src/app/studio.tsx` — the **build-a-brand interview** mounts `<VenusAvatar>` full-bleed in voice
   mode (`VENUS_IN_INTERVIEW` flag, `venusStageFor` maps live state → stage). Legacy SVG orb
   (`NCNucleus`/`Nucleus`) still in-file as the `false` fallback.
