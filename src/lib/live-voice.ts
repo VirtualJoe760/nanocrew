@@ -19,6 +19,7 @@ import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode, AudioManager }
 import { apiUrl } from '@/lib/api';
 import { type BrandResult, type ChatMessage } from '@/lib/interview';
 import { VOCABULARY_BRIEF } from '@/lib/site-vocabulary';
+import { pushSpeechChunk, resetSpeechLevel } from '@/lib/venus-speech-level';
 
 // Live (speech-to-speech) system prompt — the same warm, flowing brand interview as the turn-based
 // brain, but written for REAL-TIME SPEECH: no JSON contract, she just talks and calls save_brand.
@@ -205,6 +206,7 @@ export class LiveVoiceSession {
     if (m) {
       try { this.queue?.clearBuffers(); } catch {}
       this.playEndsAt = 0;
+      resetSpeechLevel();
     }
   }
 
@@ -367,6 +369,7 @@ export class LiveVoiceSession {
     if (sc?.interrupted) {
       this.queue?.clearBuffers();
       this.playEndsAt = 0; // her audio is gone — reopen the mic
+      resetSpeechLevel(); // her queued audio was flushed → close her mouth at once
       this.cb.onState?.('listening');
     }
     // streamed audio out → it lives in modelTurn.parts[].inlineData.data (base64 PCM 24k), not m.data.
@@ -385,7 +388,11 @@ export class LiveVoiceSession {
           // Extend the "she's still talking" window by this chunk's real duration (chunks arrive
           // faster than realtime, so accumulate from whichever is later: now or the prior end).
           const durMs = (pcm.length / OUT_RATE) * 1000;
-          this.playEndsAt = Math.max(this.playEndsAt, Date.now()) + durMs;
+          const startAt = Math.max(this.playEndsAt, Date.now()); // wall-clock this chunk starts playing
+          this.playEndsAt = startAt + durMs;
+          // Feed the lip-sync envelope: this exact PCM, aligned to when it becomes audible, so the
+          // avatar's mouth tracks the real sound (loudness → jaw, brightness → vowel vs. sibilant).
+          pushSpeechChunk(pcm, startAt, durMs);
           this.cb.onState?.('speaking');
         }
       } catch (e) {
@@ -497,6 +504,8 @@ export class LiveVoiceSession {
     this.closed = true;
     if (activeLiveSession === this) activeLiveSession = null; // release the single-session slot
     this.clearWatchdog();
+    resetSpeechLevel(); // no more audio → the avatar's mouth rests
+
     try {
       this.recorder?.stop();
     } catch {}

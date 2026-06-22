@@ -15,6 +15,8 @@
 // It only ever emits jaw/mouth/viseme_* morphs. It never touches eyes,
 // brows, or head — the idle/liveliness layer owns those.
 
+import { speechFrameAt, speechActiveAt } from '@/lib/venus-speech-level';
+
 // The 15 RPM Oculus visemes that exist on this avatar (verified from the GLB).
 export const VISEME_NAMES = [
   'viseme_sil', 'viseme_PP', 'viseme_FF', 'viseme_TH', 'viseme_DD',
@@ -40,6 +42,10 @@ export type VenusLipsync = {
   sample(): VisemeWeights;
   /** Resume a suspended AudioContext (call from a user gesture / play handler). */
   resume(): void;
+  /** True while REAL audio is actively driving the mouth (so the scene won't run a synthetic flap
+   *  over it, and keeps lip-syncing while her buffered audio finishes after the turn "completes").
+   *  Optional — drivers without a real source (web AnalyserNode test path) leave it undefined. */
+  speaking?(): boolean;
   /** Last debug snapshot (for the test harness HUD). */
   debug: { viseme: string; rms: number; centroid: number; hfRatio: number };
   dispose(): void;
@@ -197,9 +203,62 @@ class NullDriver implements VenusLipsync {
   dispose() {}
 }
 
+// ─── native driver: drives the mouth from Venus's REAL spoken audio ──────────────────────────────
+// React Native has no Web Audio AnalyserNode, but the live-voice layer already decodes Gemini's PCM
+// and feeds a time-synced loudness/brightness envelope into venus-speech-level.ts. This reads that
+// envelope each frame: loudness → jaw openness (silent ⇒ closed), zero-crossing-rate → vowel vs.
+// sibilant mouth shape. No FFT, no extra audio graph — it analyses the exact samples being played.
+const NATIVE_SILENCE = 0.012; // RMS below this ⇒ mouth closed (between words / at rest)
+const NATIVE_GAIN = 11; // RMS → jaw openness (normal speech RMS ~0.08–0.18 opens most of the way)
+const FRICATIVE_ZCR = 0.18; // zero-crossing rate above this ⇒ sibilant/fricative (teeth, near-closed)
+
+class SpeechLevelDriver implements VenusLipsync {
+  debug = { viseme: 'viseme_sil', rms: 0, centroid: 0, hfRatio: 0 };
+  private phase = 0;
+  connect() {}
+  async connectMicrophone() {}
+  resume() {}
+  dispose() {}
+  speaking(): boolean {
+    return speechActiveAt();
+  }
+  sample(): VisemeWeights {
+    const w = zeroWeights();
+    const { level, zcr } = speechFrameAt();
+    this.debug.rms = level;
+    this.debug.hfRatio = zcr;
+    if (level < NATIVE_SILENCE) {
+      w.viseme_sil = 1;
+      this.debug.viseme = 'viseme_sil';
+      return w;
+    }
+    const open = Math.min(1, level * NATIVE_GAIN);
+    if (zcr > FRICATIVE_ZCR) {
+      // sibilant/fricative — bright, near-closed with teeth, jaw barely parts
+      const v = zcr > 0.34 ? 'viseme_SS' : 'viseme_FF';
+      w[v] = Math.min(1, 0.5 + open * 0.4);
+      w.jawOpen = open * 0.28;
+      w.mouthOpen = open * 0.12;
+      this.debug.viseme = v;
+    } else {
+      // voiced vowel — amplitude opens the jaw; cycle the shape gently so it isn't a robotic flap
+      this.phase += 0.16;
+      const vow = 0.5 + 0.5 * Math.sin(this.phase);
+      w.jawOpen = open * 0.95;
+      w.mouthOpen = open * 0.5;
+      w.viseme_aa = open * (0.45 + 0.4 * vow);
+      w.viseme_O = open * 0.35 * (1 - vow);
+      w.viseme_E = open * 0.3 * vow;
+      this.debug.viseme = 'viseme_aa';
+    }
+    return w;
+  }
+}
+
 // ─── factory ─────────────────────────────────────────────────────────────────
 export function createVenusLipsync(): VenusLipsync {
-  if (!hasWebAudio()) return new NullDriver(); // native / no Web Audio — don't construct an AudioContext
+  // Native (no Web Audio): drive the mouth from the real spoken-audio envelope fed by live-voice.ts.
+  if (!hasWebAudio()) return new SpeechLevelDriver();
   if (USE_WAWA) {
     try {
       // Optional path. Only reached if you set USE_WAWA = true AND installed the

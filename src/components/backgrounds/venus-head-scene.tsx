@@ -1522,10 +1522,15 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     // ── lip-sync (owns ONLY jaw/mouth/viseme morphs) — only when TALKING; else rest closed ──
     const lip = lipRef.current;
     if (lip) {
-      const targets: VisemeWeights = talkingRef.current ? lip.sample() : {};
-      // DEV fallback: when talking but no real audio is driving (test clip autoplay/CORS-
-      // blocked, or before Gemini is wired), drive a gentle SYNTHETIC "talk" so she speaks.
-      if (talkingRef.current && DEV_LIPSYNC_TEST && (lip.debug?.rms ?? 0) < 0.008) {
+      // Real spoken audio (native Gemini PCM) keeps driving the mouth even after the turn "completes"
+      // — chunks buffer ahead, so her queued audio finishes playing AFTER the state flips to silence.
+      const realAudio = lip.speaking?.() ?? false;
+      const talking = talkingRef.current || realAudio;
+      const targets: VisemeWeights = talking ? lip.sample() : {};
+      // DEV fallback: when talking but there's NO real audio source (the Lab, or a CORS-blocked web
+      // test clip), drive a gentle SYNTHETIC "talk" so she moves. Never run it OVER real audio —
+      // that's what would desync her, and it'd flap during the real silences between words.
+      if (talkingRef.current && !realAudio && DEV_LIPSYNC_TEST && (lip.debug?.rms ?? 0) < 0.008) {
         const env = 0.55 + 0.45 * Math.sin(t * 1.7);              // syllable envelope
         const o = Math.max(0, Math.sin(t * 6.5)) * env;           // mouth opens in bursts
         targets.viseme_sil = 0;
