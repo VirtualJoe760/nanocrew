@@ -50,7 +50,10 @@ const BOB_WIDEN = 1.07;      // shell width vs head half-width — slightly OUTS
                             // sits in front of the scalp and occludes it (1.0 = coincident → head
                             // wireframe z-fights/shows through the hair). Covers ears.
 const BOB_DEPTH = 1.18;      // shell depth vs head half-width (also outside the skull front/back)
-const BOB_FACE_OPEN = 0.6;   // half-width of the face opening (× head half-width)
+const BOB_FACE_OPEN = 0.82;  // half-width of the face opening (× head half-width) — matches the face
+                            // clip (EAR_DROP_FRAC) so the hair frames the face AT its edge instead of
+                            // draping a strand across the cheek/jaw (that strand read as a discolored
+                            // layer over the face). Whole face now reads one cohesive colour.
 const BOB_FRINGE = 0.45;     // fringe ends this fraction of head height below the crown — at the
                             // eyebrows (just ABOVE the eyes, not below them).
 const BOB_LEN = -0.2;        // bob bottom (fraction of head height; negative = below the chin)
