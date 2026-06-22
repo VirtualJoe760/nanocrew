@@ -269,9 +269,10 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      is the main fix.)
    - **Lit-from-within while speaking (DONE).** Even with the wireframe intact, the near-black FILL
      (`#05090f`) shows through the triangle gaps and reads too dark when she talks. So while speaking
-     the occluder's COLOR lifts toward a dark-teal — `lift = talk·(0.45 + 0.55·jawOpen)`,
-     `rgb ≈ (0.02,0.035,0.06) → (0.07,0.15,0.23)` — so she glows from within as she speaks and the
-     dark areas stop reading as a void. Gated by `talk`, so silence stays the near-black rest look.
+     the occluder's COLOR lifts toward a lit teal — `lift = talk·(0.7 + 0.3·jawOpen)` (steady base so
+     it doesn't flicker), `rgb (0.02,0.04,0.065) → (0.105,0.24,0.345)` — so the fill between the lines
+     reads as a lit surface, not dark diamonds, and she glows from within. Gated by `talk`, so silence
+     stays the near-black rest look. (Brightness lives in this one formula — turn it up/down here.)
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
      span (`vW/vH × 2.0`) + greedy claim + the lip-band (`aY 0.20–0.40`), `LATTICE_VERT` `uSwirl/uUpdraft/
      uInfall` + the `fly·0.9` pinch, the `uPulse` curve + `basePx`, the lip energy (`uTime·0.6` ring rate,
