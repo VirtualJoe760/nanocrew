@@ -1226,8 +1226,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       const om = r.occluderMat;
       om.opacity = seg(0.5, 0.66);
       om.depthWrite = R > 0.5; // only occlude once the face forms (else it clips the cloud)
-      // Soft teal fill in BOTH states (a touch brighter speaking), so silence and talking sit close.
-      const lift = 0.34 * lit;
+      // Teal fill in BOTH states (a touch brighter speaking). The fill is the consistent base colour
+      // across the whole head, so lift it enough that the smooth cheek/jaw reads the same teal as the
+      // neck (not a dark navy) → cohesive face. (Diagnostic confirmed the fill covers face + neck.)
+      const lift = 0.6 * lit;
       om.color.setRGB(0.02 + 0.085 * lift, 0.04 + 0.2 * lift, 0.065 + 0.28 * lift);
     }
     if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.7, 0.9)));

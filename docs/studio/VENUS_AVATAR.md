@@ -275,8 +275,10 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      few passes): silence and talking should sit near the same brightness, just slightly brighter while
      speaking. One scalar drives it all: `lit = 0.88 + 0.12·talk + 0.06·speak·talk` (silent 0.88,
      talking ~1.0+). Applied to the wireframe (`subA = 0.32·lit·seg`), edges (`0.40·lit·seg`), and the
-     occluder fill (soft teal `lift = 0.34·lit` in BOTH states). Tune the `lit` constants / the per-
-     layer multipliers.
+     occluder fill (`lift = 0.6·lit`). The fill is the **consistent base colour** of the whole head, so
+     it's lifted enough that the smooth cheek/jaw reads the same teal as the neck (a dim fill made the
+     dense face areas look darker than the sparse-wireframe neck — "the face is darker"). Tune the `lit`
+     constants / the per-layer multipliers.
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
      span (`vW/vH × 2.0`) + greedy claim + the lip-band (`aY 0.20–0.40`), `LATTICE_VERT` `uSwirl/uUpdraft/
      uInfall` + the `fly·0.9` pinch, the `uPulse` curve + `basePx`, the lip energy (`uTime·0.6` ring rate,
