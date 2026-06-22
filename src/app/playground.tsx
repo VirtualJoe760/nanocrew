@@ -2,21 +2,21 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import type { VenusStage } from '@/components/backgrounds/venus-head-scene';
+
+import VenusLab, { type VenusStage } from '@/components/venus-lab';
 
 // THE VENUS LAB — our dedicated, permanent dev playground for iterating on Venus's appearance.
 // Renders the live venus-head-scene full-screen so we can work on her in isolation. Entered via
 // the `VENUS_LAB` flag in src/app/_layout.tsx (dev-only; never ships). Full guide: the "Venus Lab"
 // section of docs/studio/VENUS_AVATAR.md. Returns null in production builds.
+//
+// The avatar itself comes from <VenusLab>, which is a COMPONENT split: venus-lab.web.tsx renders
+// the real R3F scene (three) on web; venus-lab.tsx is a native no-op so three never enters the
+// native bundle. (A route-level .web split doesn't work — Expo Router's require.context globs
+// playground.web.tsx and bundles it on native too.)
 
 // The 4 testable lifecycle stages (the control row toggles between them).
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
-
-function Scene({ stage }: { stage: VenusStage }) {
-  // R3F renders on web (plain three/WebGL) and native (expo-gl) — no CanvasKit loader.
-  const VenusHeadScene = require('@/components/backgrounds/venus-head-scene').default;
-  return <VenusHeadScene stage={stage} />;
-}
 
 export default function Playground() {
   const insets = useSafeAreaInsets();
@@ -27,7 +27,7 @@ export default function Playground() {
   // IS the dot-field background now (it's one field that becomes her), over the near-black bed.
   return (
     <View style={styles.root}>
-      <Scene stage={stage} />
+      <VenusLab stage={stage} />
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
