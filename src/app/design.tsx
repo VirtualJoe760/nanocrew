@@ -16,6 +16,7 @@ import {
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NCMark, usePalette } from '@/components/nc-screen';
+import { AppBackground } from '@/components/backgrounds/app-background';
 import { withScreenFade } from '@/components/screen-fade';
 import Animated, {
   cancelAnimation,
@@ -1121,9 +1122,11 @@ function DesignScreen() {
 
   if (!session) {
     return (
-      // Transparent so the app-wide dot-field background (rendered at the root in _layout) shows
-      // through — the logged-out gate used to paint the OLD FabricBackground (gradient + waves) on top.
+      // The dot-field background is rendered HERE, inside the logged-out gate. On native the root
+      // background sits behind NativeTabs (UITabBarController) and is covered, so each screen renders
+      // its own. (The signed-in design canvas below stays opaque — no dots there.)
       <ThemedView style={[styles.container, { backgroundColor: 'transparent' }]}>
+        <AppBackground />
         <SafeAreaView style={styles.gateWrap}>
           <ThemedText type="title" style={styles.gateTitle}>
             Design your products
