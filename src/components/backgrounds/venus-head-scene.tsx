@@ -875,8 +875,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         //    extents. (Before the shell/aura are added; they'd inflate the bbox.) ──
         const cam = camera as THREE.PerspectiveCamera;
         const box = new THREE.Box3().setFromObject(gltf.scene);
-        const eyeY = box.max.y - 0.235;     // aim near the eyes/nose
-        cam.position.set(0, eyeY, 0.99);    // portrait crop — whole head + bob, eyes still read
+        // Aim BELOW the crown by enough that the whole head has headroom (was 0.235 = near the eyes,
+        // which pushed the crown off the top). Higher aim → crown drops into frame + she centers.
+        const eyeY = box.max.y - 0.15;
+        cam.position.set(0, eyeY, 1.02);    // slight pull-back for top/bottom margin; head centered
         cam.lookAt(0, eyeY, 0);
         cam.updateProjectionMatrix();
         // half-extents of the view frustum at the head plane (head ≈ world z=0)
