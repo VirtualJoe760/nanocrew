@@ -94,13 +94,13 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   - **Hair SHADER** (`HAIR_VERT`/`HAIR_FRAG`, realism pass): a **Kajiya-Kay / Scheuermann dual
     anisotropic sheen** (the bright highlight band that reads as hair — tangent = the baked flow
     projected onto the surface, lit by a faked view-space upper-front light fed per-frame via
-    `uViewRot`/`uTime`), over a **root→tip teal gradient**, **procedural strand striations**, a soft
-    **fresnel rim**, a **feathered A-line hem** + crisp fringe edge, and a **gentle WAVE** — body tips
-    sway (scaled by `aRoot²` so roots stay anchored) while the **FRINGE flutters at its bang-tips**
-    (mixed in by `aFringe`, sways where `aEdgeF`≈0), all off `uTime` (`uWaveAmp`/`uWaveSpeed`).
-    `NormalBlending`, `uBaseAlpha` ~0.5 — **translucent/holographic** like the rest of the mesh (the
-    wireframe shows through; the sheen + rim glints stay bright and keep it distinct from the dotty
-    skin). Length/shape
+    `uViewRot`/`uTime`), over a **root→tip PINK gradient** (`uTip #db6fae`, `uRim #ff9ed0`, plum root
+    — per Joe; the face stays blue so it's a pink-hair / blue-face contrast), **procedural strand
+    striations**, a soft **fresnel rim**, a **feathered A-line hem** + crisp fringe edge, and a
+    **gentle WAVE** — body tips sway (scaled by `aRoot²` so roots stay anchored) while the **FRINGE
+    flutters at its bang-tips** (mixed in by `aFringe`, sways where `aEdgeF`≈0), all off `uTime`
+    (`uWaveAmp`/`uWaveSpeed`). `NormalBlending`, `uBaseAlpha` 0.74 — fairly OPAQUE (0.5 left the crown,
+    where fresnel is weak, too see-through). Length/shape
     via the `BOB_*` consts (`BOB_LEN` negative = below the chin, `BOB_TILT` = A-line); the profile is
     parameterized by **head-fraction** so proportions stay stable as it lengthens. ES2/expo-gl-safe (no
     postprocessing, no loops/dFdx; `mediump`→`highp` if the crown band crawls). The 5 uniforms worth

@@ -54,8 +54,8 @@ const BOB_FACE_OPEN = 0.82;  // half-width of the face opening (× head half-wid
                             // clip (EAR_DROP_FRAC) so the hair frames the face AT its edge instead of
                             // draping a strand across the cheek/jaw (that strand read as a discolored
                             // layer over the face). Whole face now reads one cohesive colour.
-const BOB_FRINGE = 0.45;     // fringe ends this fraction of head height below the crown — at the
-                            // eyebrows (just ABOVE the eyes, not below them).
+const BOB_FRINGE = 0.41;     // fringe ends this fraction of head height below the crown — shorter
+                            // bangs, sitting a bit above the eyebrows.
 const BOB_LEN = -0.2;        // bob bottom (fraction of head height; negative = below the chin)
 const BOB_TILT = 0.65;       // A-line: front kept longer than the back (long-bob front pieces)
 // Drop the outermost (ear) verts from the bright face shell (hidden under the bob).
@@ -477,11 +477,11 @@ function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mes
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
-      uRoot: { value: new THREE.Color('#06141b') },
-      uTip: { value: new THREE.Color('#2f93a6') }, // medium teal hair (not neon cyan)
-      uRim: { value: new THREE.Color('#4ab6c4') },
-      uSpec1: { value: new THREE.Color('#bfeff7') }, // primary sheen — light cyan-white
-      uSpec2: { value: new THREE.Color('#37c2c8') }, // secondary — teal glint
+      uRoot: { value: new THREE.Color('#2a0a1e') }, // dark plum root
+      uTip: { value: new THREE.Color('#db6fae') },  // PINK hair (per Joe)
+      uRim: { value: new THREE.Color('#ff9ed0') },  // bright pink rim glow
+      uSpec1: { value: new THREE.Color('#ffe6f3') }, // primary sheen — light pink-white
+      uSpec2: { value: new THREE.Color('#ff79bd') }, // secondary — pink glint
       uLightVS: { value: new THREE.Vector3(0.15, 0.55, 0.85).normalize() },
       uExp1: { value: 50.0 },
       uExp2: { value: 120.0 },
@@ -492,7 +492,7 @@ function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mes
       uStrandCount: { value: 130.0 },
       uStrandWander: { value: 6.0 },
       uTipFade: { value: 0.05 * H },
-      uBaseAlpha: { value: 0.5 }, // translucent → holographic like the rest of the mesh (sheen stays bright)
+      uBaseAlpha: { value: 0.74 }, // more opaque — the crown (low fresnel) was too see-through at 0.5
       uFade: { value: 0 },        // reveal fade (0 hidden → 1 full); the whole hair, rim included
       uTime: { value: 0 },
       uWaveAmp: { value: 0.02 },     // tip sway amplitude (metres)
