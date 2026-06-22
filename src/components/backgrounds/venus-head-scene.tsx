@@ -46,10 +46,10 @@ const SHELL_NAMES = ['Wolf3D_Head'];
 // ourselves: a stylized shell wrapping the head (covers the ears, fringe over the
 // brow, A-line length), rendered as a translucent volume + glowing rim. These tune
 // its shape relative to the head bounding box.
-const BOB_WIDEN = 1.07;      // shell width vs head half-width — slightly OUTSIDE the head so the hair
-                            // sits in front of the scalp and occludes it (1.0 = coincident → head
-                            // wireframe z-fights/shows through the hair). Covers ears.
-const BOB_DEPTH = 1.18;      // shell depth vs head half-width (also outside the skull front/back)
+const BOB_WIDEN = 1.0;       // shell width vs head half-width — hugs the head (was 1.07 → too wide /
+                            // helmet). Just outside the scalp so it still occludes it; the opaque
+                            // crown cap + depth-write keep the wireframe from showing through.
+const BOB_DEPTH = 1.06;      // shell depth vs head half-width (also outside the skull front/back)
 const BOB_FACE_OPEN = 0.82;  // half-width of the face opening (× head half-width) — matches the face
                             // clip (EAR_DROP_FRAC) so the hair frames the face AT its edge instead of
                             // draping a strand across the cheek/jaw (that strand read as a discolored
@@ -162,6 +162,7 @@ type Rig = {
   shell?: THREE.Group;
   bob?: THREE.Mesh;            // procedural bob (per-frame hair-shader uniforms)
   hairMat?: THREE.ShaderMaterial;
+  strandHairMat?: THREE.ShaderMaterial; // the flowing-bristle line layer
 };
 
 // Soft round additive sprite — DataTexture (no DOM canvas → native-safe).
@@ -280,7 +281,7 @@ function dropAbove(geo: THREE.BufferGeometry, yMax: number): THREE.BufferGeometr
 // view-space hair TANGENT is derived from a baked object-space flow dir so the crown
 // sheen band slides naturally as the head sways. ES2-safe (mediump, no loops/dFdx).
 const HAIR_VERT = /* glsl */ `
-  precision mediump float;
+  precision highp float;
   attribute float aRoot;    // 0 crown → 1 tip
   attribute float aAround;  // 0..1 azimuth (strand index around the head)
   attribute float aEdge;    // metres above this vert's A-line cut (soft taper)
@@ -295,11 +296,14 @@ const HAIR_VERT = /* glsl */ `
     // gentle wave — body tips sway (aRoot² anchors roots); the FRINGE flutters at its
     // bang-tips (anchored at the scalp, swaying where aEdgeF≈0 just above the eyes).
     float bodyAmt = aRoot * aRoot * uWaveAmp;
-    float fringeAmt = uWaveAmp * 0.65 * smoothstep(0.08, 0.0, aEdgeF);
+    float fringeAmt = uWaveAmp * 0.28 * smoothstep(0.08, 0.0, aEdgeF); // bangs barely flutter (stay on the forehead)
     float amt = mix(bodyAmt, fringeAmt, aFringe);
     vec3 wpos = position;
-    wpos.x += sin(uTime * uWaveSpeed + aRoot * 7.0 + aAround * 11.0) * amt;
-    wpos.z += cos(uTime * uWaveSpeed * 0.85 + aRoot * 6.0 + aAround * 9.0) * amt * 0.7;
+    // multi-frequency, per-strand sway so locks drift INDEPENDENTLY — free-flowing, not a rigid helmet
+    float ph = aRoot * 7.0 + aAround * 11.0;
+    wpos.x += (sin(uTime * uWaveSpeed + ph) + 0.5 * sin(uTime * uWaveSpeed * 1.9 + ph * 2.1 + aAround * 5.0)) * amt;
+    wpos.z += (cos(uTime * uWaveSpeed * 0.85 + aRoot * 6.0 + aAround * 9.0) + 0.45 * sin(uTime * uWaveSpeed * 1.4 + aAround * 17.0)) * amt * 0.8;
+    wpos.y += sin(uTime * uWaveSpeed * 0.55 + aAround * 13.0) * amt * 0.4; // gentle lift/fall of the locks
     vec4 mv = modelViewMatrix * vec4(wpos, 1.0);
     vN = normalize(normalMatrix * normal);
     vV = normalize(-mv.xyz);
@@ -312,7 +316,7 @@ const HAIR_VERT = /* glsl */ `
   }
 `;
 const HAIR_FRAG = /* glsl */ `
-  precision mediump float;
+  precision highp float;
   uniform vec3  uRoot, uTip, uRim, uSpec1, uSpec2, uLightVS;
   uniform float uExp1, uExp2, uShift1, uShift2, uSpec1Str, uSpec2Str;
   uniform float uStrandCount, uStrandWander, uTipFade, uBaseAlpha, uTime, uFade;
@@ -337,25 +341,32 @@ const HAIR_FRAG = /* glsl */ `
     // root→tip color + brightness
     float g = smoothstep(0.05, 1.0, vRoot);
     vec3 col = mix(uRoot, uTip, g);
-    col += uTip * 0.35 * smoothstep(0.72, 1.0, vRoot);
-    col *= mix(0.7, 1.0, smoothstep(0.0, 0.18, vRoot));
+    col += uTip * 0.22 * smoothstep(0.72, 1.0, vRoot);
+    // DENSITY: keep most of the mass dark (deep plum), letting pink read only as highlights/sheen —
+    // a dark dense volume with light catching the strands looks thick; a uniform pink film looks thin.
+    col *= mix(0.32, 1.0, smoothstep(0.0, 0.22, vRoot));
     // strand striations (emerge toward the tips, calmed at the silhouette)
     float wander = (vnoise(vec2(vAround*18.0, vRoot*2.0)) - 0.5) * uStrandWander;
-    float bnd = pow(0.5 + 0.5*cos((vAround*uStrandCount + wander)*6.2831853), 1.6);
-    float clump = vnoise(vec2(vAround*26.0, vRoot*3.0))*0.6 + vnoise(vec2(vAround*60.0, vRoot*8.0))*0.4;
-    float strand = mix(0.82, 1.12, mix(bnd, clump, 0.35));
+    // sharper per-strand bands — the dark gaps BETWEEN strands are what break the "solid block" look
+    float bnd = pow(0.5 + 0.5*cos((vAround*uStrandCount + wander)*6.2831853), 2.6);
+    // two clump scales (broad locks + fine flyaways) so it reads as grouped strands, not a sheet
+    float clump = vnoise(vec2(vAround*26.0, vRoot*3.0))*0.55 + vnoise(vec2(vAround*60.0, vRoot*8.0))*0.45;
+    float strand = mix(0.32, 1.3, mix(bnd, clump, 0.5)); // deeper dark gaps between locks → denser
     float nv = max(dot(N, V), 0.0);
     strand = mix(1.0, strand, smoothstep(0.0, 0.4, nv));
-    col *= mix(1.0, strand, g);
+    // apply the striation EVERYWHERE (incl. crown/roots), strongest toward the tips — before, the
+    // roots got *1.0 so the whole top read as one flat pink dome.
+    col *= mix(mix(1.0, strand, 0.55), strand, g);
     // dual anisotropic Kajiya-Kay sheen
     float jit = (vnoise(vec2(vAround*uStrandCount, vRoot*4.0)) - 0.5) * 0.05;
     float s1 = strandSpec(shiftTangent(T, N, uShift1 + jit), V, L, uExp1) * uSpec1Str;
     float s2 = strandSpec(shiftTangent(T, N, uShift2 + jit), V, L, uExp2) * uSpec2Str;
     s2 *= mix(0.6, 1.4, hash21(floor(vec2(vAround*uStrandCount, vRoot*30.0)) + floor(uTime*6.0)));
     vec3 spec = uSpec1 * s1 + uSpec2 * s2;
-    // fresnel rim (smoothed normals → clean falloff that hides facets) — subtle
+    // fresnel rim (smoothed normals → clean falloff that hides facets) — softened so it reads as a
+    // sheen, not a neon outline
     float f = pow(1.0 - nv, 2.6);
-    col += spec + uRim * f * 0.5;
+    col += spec + uRim * f * 0.3;
     // soft tapered A-line hem (feathered), but NOT on the blunt fringe
     float wisp = vnoise(vec2(vAround*uStrandCount*0.5, 7.0)) * uTipFade * 0.9;
     float taper = smoothstep(0.0, uTipFade, vEdge - wisp);
@@ -365,11 +376,142 @@ const HAIR_FRAG = /* glsl */ `
     col += uTip * (1.0 - smoothstep(0.0, 0.012, vEdgeF)) * vFringe * 0.8;
     col *= mix(0.5, 1.0, facing); // the inside of the hair reads darker (but stays visible)
     float specLum = dot(spec, vec3(0.299, 0.587, 0.114));
-    float alpha = (uBaseAlpha + 0.30 * f + specLum * 0.9) * fade * tipStrands * uFade;
+    // wispy silhouette: at grazing angles (the hair's outline) break it into individual strands with
+    // gaps instead of a solid neon edge. The interior (low fresnel) stays fully opaque.
+    float edgeStrand = smoothstep(0.3, 0.86, vnoise(vec2(vAround * uStrandCount * 0.85, vRoot * 6.0)));
+    float edgeWisp = mix(1.0, edgeStrand, smoothstep(0.28, 0.9, f)); // more of the outline feathers to strands
+    float alpha = (uBaseAlpha + specLum * 0.7) * fade * tipStrands * uFade * edgeWisp;
     if (alpha < 0.12) discard;
     gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
   }
 `;
+
+// ─── FLOWING STRAND BRISTLES ─────────────────────────────────────────────────
+// A layer of ~1100 individual strand-lines over the dense shell so the hair reads as separate
+// bristles that flow INDEPENDENTLY (the shell alone looks like "one piece"). Additive glow; each
+// strand has its own sway phase. ES2-safe (highp, no loops/derivatives).
+const STRAND_VERT = /* glsl */ `
+  precision highp float;
+  attribute float aRoot;    // 0 root → 1 tip
+  attribute float aPhase;   // per-strand random sway phase
+  uniform float uTime, uWaveAmp, uWaveSpeed;
+  varying float vRoot;
+  void main() {
+    vec3 p = position;
+    float amt = aRoot * aRoot * uWaveAmp;            // tips sway, roots anchored
+    p.x += sin(uTime * uWaveSpeed + aPhase + aRoot * 4.0) * amt;
+    p.z += cos(uTime * uWaveSpeed * 0.9 + aPhase * 1.3 + aRoot * 3.0) * amt * 0.7;
+    p.y += sin(uTime * uWaveSpeed * 0.6 + aPhase) * amt * 0.25;
+    vRoot = aRoot;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  }
+`;
+const STRAND_FRAG = /* glsl */ `
+  precision highp float;
+  uniform vec3 uRoot, uTip;
+  uniform float uFade;
+  varying float vRoot;
+  void main() {
+    vec3 col = mix(uRoot, uTip, smoothstep(0.0, 1.0, vRoot));
+    col += uTip * 0.6 * smoothstep(0.55, 1.0, vRoot);      // bright bristle tips
+    float a = (0.32 + 0.42 * smoothstep(0.0, 0.25, vRoot)) // fade in off the root
+            * (1.0 - 0.72 * smoothstep(0.8, 1.0, vRoot))   // wispy fade at the very tip
+            * uFade;
+    gl_FragColor = vec4(col, a);
+  }
+`;
+
+// Build the strand-bristle LineSegments that hug the same shape as the bob shell.
+function buildHairStrands(bb: THREE.Box3, eyeY: number): THREE.LineSegments {
+  const cx = (bb.min.x + bb.max.x) / 2;
+  const cz = (bb.min.z + bb.max.z) / 2;
+  const w = bb.max.x - bb.min.x;
+  const crownY = bb.max.y;
+  const H = 2 * (crownY - eyeY);
+  const chinY = crownY - H;
+  const Rx = (w / 2) * BOB_WIDEN, Rz = (w / 2) * BOB_DEPTH;
+  const prof = (hf: number) => {
+    const dome = 0.34, jaw = 0.58;
+    if (hf < dome) { const u = hf / dome; return 0.08 + 0.92 * Math.sqrt(Math.max(0, 1 - (1 - u) * (1 - u))); }
+    if (hf < jaw) return 1;
+    if (hf < 1) return 1 - 0.3 * ((hf - jaw) / (1 - jaw));
+    return 0.7 - 0.18 * (hf - 1);
+  };
+  const faceHalfX = (w / 2) * BOB_FACE_OPEN;
+  const browY = crownY - BOB_FRINGE * H;
+  const jawY = chinY + BOB_LEN * H;
+  const cut = (x: number, z: number) => jawY - BOB_TILT * (z - cz);
+
+  const N = 1100, SEG = 18;
+  const pos: number[] = [], aR: number[] = [], aPh: number[] = [];
+  for (let i = 0; i < N; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const rootHf = 0.02 + Math.random() * 0.2;          // start near the crown/scalp
+    const ph = Math.random() * Math.PI * 2;
+    const wander = (Math.random() - 0.5) * 0.05;        // per-strand drift along its length
+    const outJit = 1 + (Math.random() - 0.5) * 0.1;     // some strands stick out (flyaways)
+    const maxHf = 1.0 + Math.random() * 0.5;            // tip length varies (uneven hem)
+    let px = 0, py = 0, pz = 0, pt = 0, started = false;
+    for (let j = 0; j <= SEG; j++) {
+      const t = j / SEG;
+      const hf = rootHf + t * (maxHf - rootHf);
+      const y = crownY - hf * H;
+      const r = prof(hf) * outJit;
+      const a = ang + wander * t * 8.0;
+      const x = cx + Rx * r * Math.cos(a);
+      const z = cz + Rz * r * Math.sin(a);
+      const inFace = z > cz && y < browY && Math.abs(x - cx) < faceHalfX; // no hair over the face
+      if (inFace || y < cut(x, z)) break;                                  // strand ends here
+      if (started) { pos.push(px, py, pz, x, y, z); aR.push(pt, t); aPh.push(ph, ph); }
+      px = x; py = y; pz = z; pt = t; started = true;
+    }
+  }
+
+  // a touch more strand texture ON THE BANGS (front fringe) — flow from the crown-front down to the
+  // blunt brow line. Kept light ("not by much"): ~170 short strands that fade out at the fringe tip.
+  const NB = 170;
+  const fringeArc = faceHalfX * 1.15;
+  for (let i = 0; i < NB; i++) {
+    const ang = Math.PI * 0.5 + (Math.random() - 0.5) * 1.5; // front arc
+    const ph = Math.random() * Math.PI * 2;
+    const wander = (Math.random() - 0.5) * 0.04;
+    const botHf = BOB_FRINGE + Math.random() * 0.03;         // ends ~at the brow (blunt fringe)
+    let px = 0, py = 0, pz = 0, pt = 0, started = false;
+    for (let j = 0; j <= SEG; j++) {
+      const t = j / SEG;
+      const hf = 0.02 + t * (botHf - 0.02);
+      const y = crownY - hf * H;
+      const r = prof(hf);
+      const a = ang + wander * t * 6.0;
+      const x = cx + Rx * r * Math.cos(a);
+      const z = cz + Rz * r * Math.sin(a);
+      if (z < cz || Math.abs(x - cx) > fringeArc) break;     // front fringe only
+      if (started) { pos.push(px, py, pz, x, y, z); aR.push(pt, t); aPh.push(ph, ph); }
+      px = x; py = y; pz = z; pt = t; started = true;
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('aRoot', new THREE.BufferAttribute(new Float32Array(aR), 1));
+  g.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(aPh), 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uRoot: { value: new THREE.Color('#3a0f28') }, // deep plum root
+      uTip: { value: new THREE.Color('#ff8fc8') },  // bright pink tip
+      uTime: { value: 0 }, uWaveAmp: { value: 0.03 }, uWaveSpeed: { value: 1.2 }, uFade: { value: 0 },
+    },
+    vertexShader: STRAND_VERT,
+    fragmentShader: STRAND_FRAG,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: true,
+  });
+  const lines = new THREE.LineSegments(g, mat);
+  lines.frustumCulled = false;
+  return lines;
+}
 
 // Build a stylized BOB hair shell — a BELL/HELMET profile (rounded crown that hugs
 // the skull, then vertical side panels hanging straight down to the jaw), NOT a round
@@ -385,7 +527,9 @@ function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mes
   const Rx = (w / 2) * BOB_WIDEN, Rz = (w / 2) * BOB_DEPTH;
   // The hair tops out a little above the bangs (topYCap), NOT at the crown — so it doesn't form the
   // full rounded dome over her head. Above it is just the faint substrate fibermesh.
-  const topY = topYCap !== undefined ? Math.min(crownY, topYCap) : crownY;
+  // Cap a little ABOVE the skull crown so the hair domes OVER the top of the head — the skull tip was
+  // still poking through a "bald spot" at the very top. (topYCap, when given, still caps below.)
+  const topY = topYCap !== undefined ? Math.min(crownY, topYCap) : crownY + 0.06 * H;
   const botY = chinY - 0.45 * H;            // grid extends well below the chin (long A-line front)
   const browY = crownY - BOB_FRINGE * H;    // fringe hangs to ~the brow
   const faceHalfX = (w / 2) * BOB_FACE_OPEN;
@@ -394,11 +538,12 @@ function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mes
   // profile radius (fraction of full width) vs HEAD-FRACTION hf (0 crown, 1 chin, >1 below):
   // rounded crown → full width over the ears → taper toward the jaw → hang below the chin.
   // (parameterizing by hf, not the row index, keeps proportions stable as the hair lengthens.)
+  const hairTopHf = (crownY - topY) / H; // <= 0 when the cap domes ABOVE the crown
   const prof = (hf: number) => {
     const dome = 0.34, jaw = 0.58;
-    // FULLER (hemisphere-ish) crown so the dome caps the head's rounded crown instead of pinching to
-    // a thin point that lets the scalp poke through. Small base avoids a degenerate pole.
-    if (hf < dome) { const u = hf / dome; return 0.06 + 0.94 * Math.sqrt(Math.max(0, 1 - (1 - u) * (1 - u))); }
+    // Hemisphere dome spanning from the RAISED top down to full width over the ears — mapping u from
+    // the actual hair top (not the crown) avoids a narrow stalk/nub poking up at the very top.
+    if (hf < dome) { const u = (hf - hairTopHf) / (dome - hairTopHf); return 0.05 + 0.95 * Math.sqrt(Math.max(0, 1 - (1 - u) * (1 - u))); }
     if (hf < jaw) return 1;                                                    // full width over the ears
     if (hf < 1) return 1 - 0.3 * ((hf - jaw) / (1 - jaw));                     // taper toward the jaw
     return 0.7 - 0.18 * (hf - 1);                                              // hang below the chin
@@ -464,6 +609,23 @@ function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mes
     }
   }
 
+  // ── CLOSE THE CROWN: a center pole + a fan to the top ring fills the hole at the very top of the
+  //    shell. Without it the substrate skull shows through that hole as a "bald spot" — the world clip
+  //    plane that was meant to hide the skull doesn't apply on the native GPU. DoubleSide → renders
+  //    regardless of winding.
+  {
+    const topY2 = grid[0][0].y;
+    const poleIdx = positions.length / 3;
+    positions.push(cx, topY2, cz);
+    aRoot.push(0);
+    aAround.push(0);
+    aEdge.push(topY2 - cutLine(new THREE.Vector3(cx, topY2, cz)));
+    aFringe.push(0);
+    aEdgeF.push(topY2 - browY);
+    aFlow.push(0, -1, 0);
+    for (let iu = 0; iu < cols; iu++) indices.push(poleIdx, vid(0, iu), vid(0, iu + 1));
+  }
+
   const bobGeo = new THREE.BufferGeometry();
   bobGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
   bobGeo.setAttribute('aRoot', new THREE.BufferAttribute(new Float32Array(aRoot), 1));
@@ -489,14 +651,14 @@ function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mes
       uShift2: { value: 0.04 },
       uSpec1Str: { value: 0.6 },
       uSpec2Str: { value: 0.65 },
-      uStrandCount: { value: 130.0 },
-      uStrandWander: { value: 6.0 },
+      uStrandCount: { value: 180.0 }, // finer bristle
+      uStrandWander: { value: 8.0 },  // more lock-to-lock wander (less uniform)
       uTipFade: { value: 0.05 * H },
-      uBaseAlpha: { value: 0.74 }, // more opaque — the crown (low fresnel) was too see-through at 0.5
+      uBaseAlpha: { value: 0.95 }, // near-opaque so the blue skull doesn't read THROUGH the crown
       uFade: { value: 0 },        // reveal fade (0 hidden → 1 full); the whole hair, rim included
       uTime: { value: 0 },
-      uWaveAmp: { value: 0.02 },     // tip sway amplitude (metres)
-      uWaveSpeed: { value: 1.1 },    // wave speed
+      uWaveAmp: { value: 0.022 },    // tip sway amplitude (metres) — gentle free-flow, not flailing
+      uWaveSpeed: { value: 1.2 },    // wave speed
       uViewRot: { value: new THREE.Matrix3() },
     },
     vertexShader: HAIR_VERT,
@@ -505,6 +667,12 @@ function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mes
     blending: THREE.NormalBlending,
     side: THREE.DoubleSide, // show the INSIDE too, so waving strands don't cull/vanish
     depthWrite: true,
+    // Pull the hair FORWARD in depth so it reliably occludes the coincident skull/substrate — on the
+    // mobile GPU the head wireframe was z-fighting THROUGH the hair (the "see the top of her head"
+    // bald spot). Lets us hug the head (BOB_WIDEN ~1.0) without the skull punching through.
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
   });
   const bob = new THREE.Mesh(bobGeo, mat);
   bob.renderOrder = 0;
@@ -856,9 +1024,23 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
 
   useEffect(() => {
     let alive = true;
+    // The remote GLB embeds its skin/face PNGs as data-URIs; native (Hermes) has no DOM image decoder,
+    // so three can't decode them and logs `THREE.GLTFLoader: Couldn't load texture ...`. We DON'T use
+    // the GLB's textures — we render the holographic wireframe + our own DataTextures and hide the
+    // original meshes — so the geometry still loads fine. Silence ONLY those expected texture errors
+    // (leave everything else intact) while the model loads.
+    const origError = console.error;
+    console.error = (...args: unknown[]) => {
+      if (typeof args[0] === 'string' && args[0].includes("Couldn't load texture")) return;
+      (origError as (...a: unknown[]) => void)(...args);
+    };
+    const restoreErr = () => { console.error = origError; };
+    const restoreTimer = setTimeout(restoreErr, 20000); // fallback if onLoad never fires
     new GLTFLoader().load(
       url,
       (gltf) => {
+        clearTimeout(restoreTimer);
+        restoreErr();
         if (!alive) return;
         const isHair = (n: string) => /hair/i.test(n);
         const isClutter = (n: string) =>
@@ -905,7 +1087,15 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         // Aim below the crown so the whole head has a little headroom (0.235 clipped the crown; 0.15
         // sat too low). ~0.18 keeps her high with the crown just inside the top; z pulls back for margin.
         const eyeY = box.max.y - 0.18;
-        cam.position.set(0, eyeY, 1.04);
+        // z=1.04 frames her HEIGHT (tuned on web's wide aspect). A phone is tall/narrow, so the
+        // horizontal extent shrinks and she'd be oversized/cropped — on PORTRAIT aspect, pull back far
+        // enough to also fit her WIDTH. Wide aspect (web) keeps the original 1.04 framing exactly.
+        const distH = 1.04;
+        // On a tall/narrow (portrait/phone) screen the head fills the width and reads oversized; pull
+        // the camera back proportionally to how narrow the aspect is. (Can't use the bbox width here —
+        // it's the full body's shoulders, not the face.) Tuned visually at phone aspect (~0.46).
+        const dist = cam.aspect < 1 ? distH * (1 + (1 - cam.aspect) * 0.9) : distH;
+        cam.position.set(0, eyeY, dist);
         cam.lookAt(0, eyeY, 0);
         cam.updateProjectionMatrix();
         // half-extents of the view frustum at the head plane (head ≈ world z=0)
@@ -926,6 +1116,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         let aura: THREE.Object3D | undefined;
         let bob: THREE.Mesh | undefined;
         let hairMat: THREE.ShaderMaterial | undefined;
+        let strandHairMat: THREE.ShaderMaterial | undefined;
         let earClipX = 0; // |x| beyond which the dim substrate ears are clipped
         let headClipPlane: THREE.Plane | undefined; // WORLD-space plane: cut the skull above the hairline
 
@@ -1061,6 +1252,12 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
               // head and you see her head through it. (occluder -10 < hair -5 < wireframe/lattice 0.)
               bob.renderOrder = -5;
               shell.add(bob);
+              // flowing bristle strands OVER the shell (renderOrder -3: after the shell -5, additive
+              // glow on top of the dense dark mass) so the hair reads as separate strands, not a block.
+              const strands = buildHairStrands(rawFace.boundingBox, e.y);
+              strandHairMat = strands.material as THREE.ShaderMaterial;
+              strands.renderOrder = -3;
+              shell.add(strands);
             }
 
             // (f) glowing irises — expressive gaze that tracks the saccades
@@ -1113,7 +1310,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
           }
         }
 
-        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluderMat, eyeObjs, cycleMats, aura, shell, bob, hairMat, streamMat };
+        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluderMat, eyeObjs, cycleMats, aura, shell, bob, hairMat, strandHairMat, streamMat };
 
         // clip the dim SUBSTRATE at the ear line so the ears don't poke out from under
         // the hair (the bright shell already dropped them; the bob covers the area).
@@ -1236,6 +1433,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     // the morph everything loads together instead of the hair popping in last.
     if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.55, 0.76)));
     if (r.hairMat) r.hairMat.uniforms.uFade.value = seg(0.55, 0.76); // whole hair (rim incl.) fades in
+    if (r.strandHairMat) {
+      r.strandHairMat.uniforms.uTime.value = t;
+      r.strandHairMat.uniforms.uFade.value = seg(0.55, 0.76); // bristles fade in with the shell
+    }
     // ── eyes look AT the user (camera) with a gentle saccade drift (not a fixed stare) ──
     for (const eye of r.eyeObjs) {
       eye.visible = R > 0.66; // appear once she's formed (no floating eyes mid-cloud)

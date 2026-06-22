@@ -6,16 +6,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
-import Playground from './playground'; // the VENUS LAB (see VENUS_LAB below)
 import { attachReviewDeepLink } from '@/lib/push';
 
-// ── THE VENUS LAB ────────────────────────────────────────────────────────────
-// Our dedicated, permanent playground for iterating on Venus's APPEARANCE. Flip the
-// `false` to `true` to enter it (renders the live venus-head-scene full-screen instead
-// of the app); flip back to `false` for the normal app. Gated by `__DEV__` so it can
-// NEVER ship to production. This is where we work on Venus — full guide + workflow in
-// docs/studio/VENUS_AVATAR.md ("The Venus Lab").
-const VENUS_LAB = __DEV__ && false;
+// The VENUS LAB — our tool for iterating on Venus's APPEARANCE — now opens as a gated full-screen
+// test tool from the Account screen (see src/components/venus-lab-screen.tsx), not from here. Full
+// guide + workflow in docs/studio/VENUS_AVATAR.md ("The Venus Lab").
 
 // Hold the native splash until General Sans (the brand sans) is loaded, so text never
 // flashes in the system font first.
@@ -47,17 +42,11 @@ export default function TabLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#08080a' }}>
-      {VENUS_LAB ? (
-        <Playground />
-      ) : (
-        <>
-          {/* The dot-field background is rendered INSIDE each tab screen (studio/market/account),
-              not here — on native the NativeTabs (UITabBarController) owns the screen and would cover
-              a background placed behind it. */}
-          <AnimatedSplashOverlay />
-          <AppTabs />
-        </>
-      )}
+      {/* The dot-field background is rendered INSIDE each tab screen (studio/market/account),
+          not here — on native the NativeTabs (UITabBarController) owns the screen and would cover
+          a background placed behind it. */}
+      <AnimatedSplashOverlay />
+      <AppTabs />
     </GestureHandlerRootView>
   );
 }

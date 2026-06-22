@@ -28,6 +28,7 @@ import { EarningsCockpit } from '@/components/earnings-cockpit';
 import { Purchases } from '@/components/purchases';
 import { Paywall } from '@/components/paywall';
 import { PlatformAdmin } from '@/components/platform-admin';
+import VenusLabScreen from '@/components/venus-lab-screen';
 import { useAuth } from '@/hooks/use-auth';
 import { TERMS_URL, TERMS_VERSION } from '@/lib/legal';
 import { useTheme } from '@/hooks/use-theme';
@@ -39,6 +40,9 @@ import { supabase } from '@/lib/supabase';
 type StoreRow = { id: string; name: string; slug: string; status: string };
 
 const DANGER = '#e24b4a';
+// Internal test tool: the Venus Lab (avatar appearance sandbox) is surfaced as a row on the Account
+// screen, visible ONLY to this tester account. Not a real feature — a private dev surface.
+const VENUS_LAB_EMAIL = 'josephsardella@gmail.com';
 const WORDMARK = 'Jost-Thin'; // the "Nano Crew" brand title — Thin 100
 const DISPLAY = 'Jost-Light'; // other display marks
 const PLAN_LABEL: Record<string, string> = { free: 'Free', starter: 'Starter', pro: 'Pro', advanced: 'Advanced' };
@@ -131,6 +135,7 @@ function AccountScreen() {
   const [payouts, setPayouts] = useState<{ connected: boolean; chargesEnabled: boolean } | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showVenusLab, setShowVenusLab] = useState(false);
 
   // Ensure the creators row exists + load this creator's stores; probe platform-admin access + plan.
   useEffect(() => {
@@ -277,6 +282,7 @@ function AccountScreen() {
   const initial = (emailAddr[0] ?? '?').toUpperCase();
   const planLabel = plan ? (PLAN_LABEL[plan] ?? plan) : null;
   const payoutTitle = payouts?.chargesEnabled ? 'Payouts active' : payouts?.connected ? 'Finish payout setup' : 'Set up payouts';
+  const isVenusTester = emailAddr.trim().toLowerCase() === VENUS_LAB_EMAIL;
 
   return (
     <View style={styles.container}>
@@ -379,6 +385,22 @@ function AccountScreen() {
                     <SectionLabel>Platform</SectionLabel>
                     <Card>
                       <Row first title="Platform admin" trailing="›" tint onPress={() => setShowAdmin(true)} />
+                    </Card>
+                  </>
+                ) : null}
+
+                {isVenusTester ? (
+                  <>
+                    <SectionLabel>Developer</SectionLabel>
+                    <Card>
+                      <Row
+                        first
+                        title="Venus Lab (test)"
+                        subtitle="Preview & iterate on Venus’s avatar"
+                        trailing="›"
+                        tint
+                        onPress={() => setShowVenusLab(true)}
+                      />
                     </Card>
                   </>
                 ) : null}
@@ -521,6 +543,16 @@ function AccountScreen() {
       {session ? <Purchases visible={showPurchases} onClose={() => setShowPurchases(false)} /> : null}
       {session ? <Paywall visible={showPaywall} onClose={() => setShowPaywall(false)} token={session.access_token} reason="manage" /> : null}
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
+      {/* Gated internal test tool — full-screen Venus avatar Lab. "‹ back" returns here to Account. */}
+      {isVenusTester ? (
+        <Modal
+          visible={showVenusLab}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowVenusLab(false)}>
+          <VenusLabScreen onBack={() => setShowVenusLab(false)} />
+        </Modal>
+      ) : null}
     </View>
   );
 }

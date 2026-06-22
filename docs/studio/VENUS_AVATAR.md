@@ -1,24 +1,27 @@
 # Venus — the talking 3D avatar (live build)
 
 > **Status: POC, in progress.** Branch `feature/welcome-onboarding`. Verified on the web
-> preview only (not yet on a native dev build). This doc is the source of truth for the
-> Venus-avatar work — read it before continuing.
+> preview AND on a native iOS dev build (expo-gl). Surfaced in-app as a gated test tool on the
+> Account screen. This doc is the source of truth for the Venus-avatar work — read it before
+> continuing.
 
 ## 🛠 THE VENUS LAB — where we work on her appearance (read this first)
 **When the user says we're going to edit / work on Venus's appearance, come HERE — this is our
-dedicated, permanent playground for it.**
-- **What it is:** a dev-only full-screen render of the live avatar (`src/components/backgrounds/
-  venus-head-scene.tsx`) via the `/playground` screen (`src/app/playground.tsx`), so we iterate on
-  her in isolation (no app chrome).
-- **How to enter it:** flip `VENUS_LAB` in **`src/app/_layout.tsx`** from `__DEV__ && false` →
-  `__DEV__ && true`, then reload the web preview. Flip it back to `false` when done. It's gated by
-  `__DEV__`, so it can **never ship to production**. Keep it committed as `false`.
-- **The iteration loop:** edit `venus-head-scene.tsx` (and the hair/eye/shader helpers in the same
-  file) → `npx tsc --noEmit` → reload the `web-preview` server → screenshot to verify. Almost all
-  of Venus's look lives in that ONE file (shaders, the procedural bob, the eyes, the liveliness).
+dedicated, permanent tool for it.**
+- **What it is:** a full-screen render of the live avatar (`src/components/backgrounds/
+  venus-head-scene.tsx`) with a 4-stage toggle row, so we iterate on her in isolation (no app
+  chrome). The screen is `src/components/venus-lab-screen.tsx`; the avatar comes from `<VenusLab>`
+  (`src/components/venus-lab.tsx` native / `.web.tsx` web — a component split that keeps three/R3F
+  out of the native bundle until the Lab is opened).
+- **How to enter it (in the app):** Account screen → **Developer → "Venus Lab (test)"** opens it as
+  a full-screen Modal; the **"‹ back"** button returns to Account. The row is gated to the tester
+  account (`VENUS_LAB_EMAIL = josephsardella@gmail.com` in `src/app/account.tsx`) — invisible to
+  everyone else. It works on a native dev build AND in production builds for that one email.
+- **How to view it live on web (fast iteration loop):** the avatar renders in the `web-preview`
+  server. Edit `venus-head-scene.tsx` (and the hair/eye/shader helpers in the same file) →
+  `npx tsc --noEmit` → reload the preview → screenshot to verify. Almost all of Venus's look lives
+  in that ONE file (shaders, the procedural bob, the eyes, the liveliness).
 - **Commit cadence:** commit at each visual milestone; this doc gets updated in the same change.
-- **Don't ship the lab:** before any build/PR, `VENUS_LAB` must be `false` (the app must render
-  `<AppBackground/><AnimatedSplashOverlay/><AppTabs/>`, not `<Playground/>`).
 
 ## The vision
 Venus is the AI a creator talks to in **Studio**. Today she's a monochrome orb/nucleus.
@@ -150,7 +153,8 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   - **Liveliness** (unchanged): blink, eye saccades, Head/Neck sway, brow flashes, resting smile.
   - **Verified on web** (two-frame capture): a clean, clearly-female glowing plexus face; the
     thought-pulse visibly travels (crown→jaw between frames); eyes/lips luminous.
-- Reached via the dev-only **"Lab"** tab → `/playground` (renders `venus-head-scene`).
+- Reached via the gated **Account → Developer → "Venus Lab (test)"** tool (`venus-lab-screen.tsx`
+  renders `venus-head-scene`).
 
 ### The avatar
 - **Demo (POC only):** `https://raw.githubusercontent.com/met4citizen/TalkingHead/main/avatars/brunette.glb`
@@ -245,8 +249,8 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      `a += 0.4·a²`); `NODE_VERT/FRAG` and `bakeAssemble` are removed.
    - **Driven by the `VenusStage` prop** (exported): `pre-render` (`revealTarget 0`, the full ambient
      field) · `morphing` (peel + cyclone, ping-ponged every 4.5 s) · `silence` (formed + listening) ·
-     `talking` (formed + lip-sync). The **Lab** (`playground.tsx`) has the 4-stage toggle row and **no
-     longer renders the Skia `<AppBackground>`** — the lattice IS the background inside the transparent
+     `talking` (formed + lip-sync). The **Lab** (`venus-lab-screen.tsx`) has the 4-stage toggle row and
+     **no longer renders the Skia `<AppBackground>`** — the lattice IS the background inside the transparent
      canvas, over the `#06080f` bed.
    - **Talking = a BOTTOM→TOP light wave on the dots (DONE).** Per Joe ("the dots kind of light up some
      of her mesh from bottom to top when she's talking"): `LATTICE_VERT` sweeps a bright band UP her
@@ -303,11 +307,12 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    already gates *when*). **Verify on a native dev build** (R3F-native + expo-gl).
 
 ## Gotchas (read before editing)
-- **The Venus Lab is entered via the `VENUS_LAB` flag** in `src/app/_layout.tsx` (see "The Venus
-  Lab" section above) — `__DEV__ && true` renders `<Playground/>` (the avatar) instead of the app.
-  We route the Lab this way because NativeTabs-web only renders the *initial* tab, so navigating to
-  `/playground` won't show otherwise. **Keep it committed as `false`; it must be `false` before any
-  build/PR** (gated by `__DEV__` so it can't ship even if left on, but keep the repo clean).
+- **The Venus Lab is opened from the Account screen** (Developer → "Venus Lab (test)", gated to
+  `VENUS_LAB_EMAIL`) as a full-screen Modal rendering `venus-lab-screen.tsx` — see "The Venus Lab"
+  section above. It's a real (if gated) surface now, so `<VenusLab>` is a **component split**
+  (`venus-lab.tsx` native / `.web.tsx` web): the native `require` of `venus-head-scene` (three/R3F)
+  is paid for only when the Lab is mounted. No more `_layout` flag — the old `/playground` route is
+  gone.
 - **drei `useGLTF` breaks under Metro** — it wires DRACO/meshopt loaders that use `import.meta`,
   which Metro can't eval ("Cannot use 'import.meta' outside a module"). Use a **plain three
   `GLTFLoader`** (`three/examples/jsm/loaders/GLTFLoader.js`). RPM GLBs aren't draco-compressed.
@@ -338,7 +343,11 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   If the app screen shows the marketing landing, the Expo server on :19010 is down — restart the
   `web-preview` preview server.
 - R3F renders on web via WebGL with no special loader; **native** uses `expo-gl` and needs a
-  **dev build** (Skia + expo-gl are native modules) — not yet verified on device.
+  **dev build** (Skia + expo-gl are native modules) — now verified running on a native iOS dev build.
+  Native gotchas that bit us: hair shaders need `precision highp` (mediump underflowed → hair vanished);
+  GPU clip planes don't apply reliably on expo-gl (use geometry/`polygonOffset`, not `clippingPlanes`);
+  `three`'s ES static class blocks need `@babel/plugin-transform-class-static-block` (`babel.config.js`);
+  and Web Audio is web-only — `venus-lipsync.ts` falls back to a `NullDriver` on native.
 
 ## File map
 - `src/components/backgrounds/venus-head-scene.tsx` — **the live R3F POC** ("Ascendant Cortana":
@@ -348,7 +357,9 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
 - `src/components/backgrounds/venus-field-scene.tsx` — earlier Skia canonical-mesh dots-morph
   (scatter↔face + wireframe). Reference for the dots-morph reveal.
 - `src/components/backgrounds/face-mesh.ts` — canonical face mesh data (FACE_VERTS/EDGES/DOTS).
-- `src/app/playground.tsx` — the Lab; renders `venus-head-scene`. Dev-only, `__DEV__` guarded.
+- `src/components/venus-lab-screen.tsx` — the Lab UI (4-stage toggle + back); opened from Account.
+- `src/components/venus-lab.tsx` / `.web.tsx` — the `<VenusLab>` component split (native expo-gl /
+  web R3F) that renders `venus-head-scene`, keeping three out of the native bundle until mounted.
 - `src/components/backgrounds/dot-field-scene.tsx` + `app-background.tsx` — the **Skia dot-field
   background** (separate, shipped: global continuous bg behind the tabs, scrim, focus, etc. — see
   the `skia-playground` memory).
@@ -358,6 +369,7 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   → `eeaa481` (dense dots, superseded) → `5528225` (R3F+GLTF wireframe) → `9967677` (RPM head +
   viseme) → `3c263f2` (female head + liveliness). Background-system commits: `66b0535`, `672578a`,
   `84b087a`, `91d9002`.
-- Verify on web: start the `web-preview` preview server; with the `_layout` bypass on, the Lab
-  (`venus-head-scene`) renders. `npx tsc --noEmit` must pass before committing; `git push` only
-  when the user asks.
+- Verify on web: start the `web-preview` preview server; the Lab avatar (`venus-head-scene`)
+  renders directly. `npx tsc --noEmit` must pass before committing. Verify the native bundle with
+  `npx expo export --platform ios` (three is now reachable in the production bundle via the gated
+  Lab, so the babel static-block plugin must compile it).

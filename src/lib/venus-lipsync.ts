@@ -178,8 +178,28 @@ class AnalyserDriver implements VenusLipsync {
   }
 }
 
+// Web Audio API present? It's web-only — React Native has no AudioContext, so the analyser driver
+// (which does `new AudioContext()`) would crash with "Cannot read property 'prototype' of undefined".
+function hasWebAudio(): boolean {
+  return typeof window !== 'undefined' && !!((window as any).AudioContext || (window as any).webkitAudioContext);
+}
+
+// No-op driver for platforms without Web Audio (native). The avatar still renders and animates; it
+// just isn't driven by real audio amplitude. A native audio-analysis path can replace this later.
+class NullDriver implements VenusLipsync {
+  debug = { viseme: 'viseme_sil', rms: 0, centroid: 0, hfRatio: 0 };
+  connect() {}
+  async connectMicrophone() {}
+  sample(): VisemeWeights {
+    return zeroWeights();
+  }
+  resume() {}
+  dispose() {}
+}
+
 // ─── factory ─────────────────────────────────────────────────────────────────
 export function createVenusLipsync(): VenusLipsync {
+  if (!hasWebAudio()) return new NullDriver(); // native / no Web Audio — don't construct an AudioContext
   if (USE_WAWA) {
     try {
       // Optional path. Only reached if you set USE_WAWA = true AND installed the

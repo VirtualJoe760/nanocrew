@@ -1,37 +1,30 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { useState } from 'react';
 
 import VenusLab, { type VenusStage } from '@/components/venus-lab';
 
-// THE VENUS LAB — our dedicated, permanent dev playground for iterating on Venus's appearance.
-// Renders the live venus-head-scene full-screen so we can work on her in isolation. Entered via
-// the `VENUS_LAB` flag in src/app/_layout.tsx (dev-only; never ships). Full guide: the "Venus Lab"
-// section of docs/studio/VENUS_AVATAR.md. Returns null in production builds.
-//
-// The avatar itself comes from <VenusLab>, which is a COMPONENT split: venus-lab.web.tsx renders
-// the real R3F scene (three) on web; venus-lab.tsx is a native no-op so three never enters the
-// native bundle. (A route-level .web split doesn't work — Expo Router's require.context globs
-// playground.web.tsx and bundles it on native too.)
+// THE VENUS LAB — the live venus-head-scene full-screen, for iterating on Venus's appearance in
+// isolation. Now surfaced as a TEST tool from the Account screen (gated to the Venus-Lab tester
+// email), not a tab. `onBack` returns to wherever it was opened from (the Account page). The avatar
+// comes from <VenusLab>, a COMPONENT split: venus-lab.web.tsx renders the real R3F scene on web,
+// venus-lab.tsx on native (expo-gl). Full guide: docs/studio/VENUS_AVATAR.md.
 
-// The 4 testable lifecycle stages (the control row toggles between them).
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
 
-export default function Playground() {
+export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
-  if (!__DEV__) return null; // dev-only — never ships in a production build
 
-  // No Skia <AppBackground> here: the UNIFIED LATTICE inside the transparent avatar canvas
-  // IS the dot-field background now (it's one field that becomes her), over the near-black bed.
+  // No Skia <AppBackground> here: the UNIFIED LATTICE inside the transparent avatar canvas IS the
+  // dot-field background (one field that becomes her), over the near-black bed.
   return (
     <View style={styles.root}>
       <VenusLab stage={stage} />
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
-        <Pressable onPress={() => router.back()} hitSlop={16} style={styles.back}>
+        <Pressable onPress={onBack} hitSlop={16} style={styles.back}>
           <Text style={styles.backText}>‹ back</Text>
         </Pressable>
         <Text style={styles.title}>VENUS · LAB</Text>
@@ -50,7 +43,7 @@ export default function Playground() {
       </View>
 
       <Text style={[styles.foot, { bottom: insets.bottom + 16 }]}>
-        venus avatar playground · docs/studio/VENUS_AVATAR.md
+        venus avatar lab · docs/studio/VENUS_AVATAR.md
       </Text>
     </View>
   );
