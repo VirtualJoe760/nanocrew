@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FabricBackground, NCMark, usePalette } from '@/components/nc-screen';
+import { NCMark, usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import Animated, {
   cancelAnimation,
@@ -1121,8 +1121,9 @@ function DesignScreen() {
 
   if (!session) {
     return (
-      <ThemedView style={[styles.container, { backgroundColor: p.bg }]}>
-        <FabricBackground p={p} />
+      // Transparent so the app-wide dot-field background (rendered at the root in _layout) shows
+      // through — the logged-out gate used to paint the OLD FabricBackground (gradient + waves) on top.
+      <ThemedView style={[styles.container, { backgroundColor: 'transparent' }]}>
         <SafeAreaView style={styles.gateWrap}>
           <ThemedText style={[styles.gateSpark, { color: theme.tint }]}>✦</ThemedText>
           <ThemedText type="title" style={styles.gateTitle}>
