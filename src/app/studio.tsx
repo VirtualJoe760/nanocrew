@@ -36,7 +36,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { NCMark, type Palette, usePalette } from '@/components/nc-screen';
-import { AppBackground } from '@/components/backgrounds/app-background';
 import { withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';
 
@@ -556,7 +555,7 @@ function Nucleus({
 
 // ---------- Screen ----------
 
-export default withScreenFade(StudioScreen);
+export default withScreenFade(StudioScreen, { background: true });
 
 function StudioScreen() {
   const insets = useSafeAreaInsets();
@@ -1014,10 +1013,6 @@ function StudioScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Render the dot-field INSIDE the screen. On native the root <AppBackground/> in _layout sits
-          behind the NativeTabs (UITabBarController), which owns the screen and covers it — so the bg
-          must live inside each tab screen to be visible. */}
-      <AppBackground />
       <Modal
         visible={welcomeVisible}
         animationType="fade"

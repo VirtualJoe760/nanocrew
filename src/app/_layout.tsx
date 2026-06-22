@@ -1,5 +1,6 @@
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -19,6 +20,10 @@ const VENUS_LAB = __DEV__ && false;
 // Hold the native splash until General Sans (the brand sans) is loaded, so text never
 // flashes in the system font first.
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Paint the native root view brand-dark so tab transitions never flash white (the iOS root/scene
+// background defaults to white; the RN content can't cover the instant a screen swaps in).
+SystemUI.setBackgroundColorAsync('#08080a').catch(() => {});
 
 export default function TabLayout() {
   const [fontsLoaded] = useFonts({
@@ -41,7 +46,7 @@ export default function TabLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#08080a' }}>
       {VENUS_LAB ? (
         <Playground />
       ) : (
