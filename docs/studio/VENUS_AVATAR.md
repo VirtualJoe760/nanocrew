@@ -56,9 +56,11 @@ user's *other* (Windows) machine — unusable from here.
 ## Aesthetic direction — "Ascendant Cortana"
 User's north star: **"cyberpunk, Cortana, super-intelligence."** Translated (via an art-direction
 workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` workflow synthesis**:
-- **Palette** — one hue family, **cyan→periwinkle→violet** (185°→280°), never warm/gold (brand
-  rule). Positional aurora: front/low = cyan `#5BD8E6`, cheek/mouth band = periwinkle `#7C9BF0`,
-  high/grazing = violet `#B97CF2`, crown = teal-white `#CFF6FF`. Navy-black bg `#06080f`.
+- **Palette** — one hue family, cyan/teal, never warm/gold (brand rule). The FACE is a **single
+  consistent cyan `#5BD8E6`** (`bakeAurora`) — the old positional aurora (cyan→periwinkle→violet by
+  height + a grazing-normal violet shift) discoloured the neck/sides vs the front of the face, so it
+  was flattened to one colour per Joe ("keep a consistent color throughout the face"). Navy-black bg
+  `#06080f`.
 - **Signature = the travelling THOUGHT-PULSE** — waves of brightness sweep up the wireframe
   (jaw→crown) like neural activation, so you *see her think*. Height-driven in the node vertex
   shader (one `uTime` uniform; zero per-frame CPU). Idle period ~3.5 s; cascades faster while she

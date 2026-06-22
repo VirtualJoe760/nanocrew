@@ -508,28 +508,21 @@ function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mes
   return bob;
 }
 
-// Bake the positional aurora gradient + height + per-node phase onto faceGeo.
+// Bake the (now consistent) face colour + height + per-node random onto faceGeo.
 function bakeAurora(geo: THREE.BufferGeometry) {
-  geo.computeVertexNormals();
   const pos = geo.attributes.position;
-  const nrm = geo.attributes.normal;
   const N = pos.count;
   const colA = new Float32Array(N * 3), aY = new Float32Array(N), aRand = new Float32Array(N);
   const bb = new THREE.Box3().setFromBufferAttribute(pos as THREE.BufferAttribute);
   const span = Math.max(1e-6, bb.max.y - bb.min.y);
-  const cyan = new THREE.Color('#5BD8E6'), peri = new THREE.Color('#7C9BF0');
-  const viol = new THREE.Color('#B97CF2'), white = new THREE.Color('#CFF6FF');
+  // CONSISTENT face colour — no height/grazing-normal gradient (the old cyan→periwinkle→violet by
+  // height + a (1-nz)·0.5 violet shift on grazing faces is what discoloured the neck/sides vs the
+  // front of the face). One cyan everywhere so the whole face reads as a single colour.
+  const face = new THREE.Color('#5BD8E6');
   for (let i = 0; i < N; i++) {
-    const y = (pos.getY(i) - bb.min.y) / span;
-    aY[i] = y;
+    aY[i] = (pos.getY(i) - bb.min.y) / span; // still drives the speech wave + cyclone delay
     aRand[i] = Math.random();
-    const nz = Math.abs(nrm.getZ(i)); // 1 = front, 0 = grazing
-    const c = cyan.clone();
-    if (y > 0.62) c.lerp(viol, THREE.MathUtils.clamp((y - 0.62) / 0.38, 0, 1));
-    else if (y > 0.32) c.lerp(peri, (y - 0.32) / 0.3);
-    c.lerp(viol, (1 - nz) * 0.5);
-    if (y > 0.9) c.lerp(white, (y - 0.9) / 0.1);
-    colA[i * 3] = c.r; colA[i * 3 + 1] = c.g; colA[i * 3 + 2] = c.b;
+    colA[i * 3] = face.r; colA[i * 3 + 1] = face.g; colA[i * 3 + 2] = face.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colA, 3));
   geo.setAttribute('aY', new THREE.BufferAttribute(aY, 1));
