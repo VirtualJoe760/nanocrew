@@ -1221,19 +1221,21 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     if (r.edgeHaloMat) r.edgeHaloMat.opacity = 0.12 * lit * seg(0.62, 0.78);
     const subA = 0.32 * lit * seg(0.62, 0.78);
     for (const m of r.meshes) (m.material as THREE.MeshBasicMaterial).opacity = subA;
-    if (r.coreMat) r.coreMat.uniforms.uOpacity.value = (0.5 + 0.1 * Math.sin(t * 0.5)) * seg(0.72, 0.9);
+    if (r.coreMat) r.coreMat.uniforms.uOpacity.value = (0.5 + 0.1 * Math.sin(t * 0.5)) * seg(0.6, 0.8);
     if (r.occluderMat) {
       const om = r.occluderMat;
       om.opacity = seg(0.5, 0.66);
       om.depthWrite = R > 0.5; // only occlude once the face forms (else it clips the cloud)
-      // Teal fill in BOTH states (a touch brighter speaking). The fill is the consistent base colour
-      // across the whole head, so lift it enough that the smooth cheek/jaw reads the same teal as the
-      // neck (not a dark navy) → cohesive face. (Diagnostic confirmed the fill covers face + neck.)
-      const lift = 0.6 * lit;
-      om.color.setRGB(0.02 + 0.085 * lift, 0.04 + 0.2 * lift, 0.065 + 0.28 * lift);
+      // FULL BLUE fill — the consistent base colour of the whole head. A dim teal lift left the smooth
+      // cheek/jaw reading dark vs the neck; a solid blue tint (the red-diagnostic showed the fill covers
+      // the whole face+neck) makes the entire head one cohesive colour. Scaled by `lit` (a touch
+      // brighter speaking).
+      om.color.setRGB(0.05 * lit, 0.21 * lit, 0.46 * lit);
     }
-    if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.7, 0.9)));
-    if (r.hairMat) r.hairMat.uniforms.uFade.value = seg(0.68, 0.92); // whole hair (rim incl.) fades in
+    // Hair fades in WITH the face structure (edges/substrate at 0.62–0.78), not after it — so during
+    // the morph everything loads together instead of the hair popping in last.
+    if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.55, 0.76)));
+    if (r.hairMat) r.hairMat.uniforms.uFade.value = seg(0.55, 0.76); // whole hair (rim incl.) fades in
     // ── eyes look AT the user (camera) with a gentle saccade drift (not a fixed stare) ──
     for (const eye of r.eyeObjs) {
       eye.visible = R > 0.66; // appear once she's formed (no floating eyes mid-cloud)

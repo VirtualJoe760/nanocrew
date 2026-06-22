@@ -237,8 +237,10 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    - **One reveal clock** in `useFrame` drives `uMorph = seg(0.10,0.62)` (the peel/cyclone window) + the
      `uPulse` ramp (0.12 at rest → ~1.0 mid-morph → ~0.5 formed) + Skia's 12-s pattern crossfade
      (`motionSelect(t)` → `uSelA/uSelB/uFade`) + `uDrift`. Then the structure layers fade in on the
-     existing timing table — edges/substrate (0.62–0.78) → hair (`uFade` 0.68–0.92) + core → aura
-     (0.85–1.0); eyes + micro-life gate on when formed; **`R=1` is byte-for-byte the approved look**
+     existing timing table — edges/substrate (0.62–0.78), hair (`uFade` 0.55–0.76) + core (0.6–0.8)
+     fade in TOGETHER with the structure (was 0.68–0.92 — the hair popped in last; per Joe everything
+     loads together now) → aura (0.85–1.0); eyes + micro-life gate on when formed; **`R=1` is the
+     approved look**
      (carried by the untouched swaying meshes). `glowPts` is gone (its bloom is `LATTICE_FRAG`'s
      `a += 0.4·a²`); `NODE_VERT/FRAG` and `bakeAssemble` are removed.
    - **Driven by the `VenusStage` prop** (exported): `pre-render` (`revealTarget 0`, the full ambient
@@ -275,10 +277,11 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      few passes): silence and talking should sit near the same brightness, just slightly brighter while
      speaking. One scalar drives it all: `lit = 0.88 + 0.12·talk + 0.06·speak·talk` (silent 0.88,
      talking ~1.0+). Applied to the wireframe (`subA = 0.32·lit·seg`), edges (`0.40·lit·seg`), and the
-     occluder fill (`lift = 0.6·lit`). The fill is the **consistent base colour** of the whole head, so
-     it's lifted enough that the smooth cheek/jaw reads the same teal as the neck (a dim fill made the
-     dense face areas look darker than the sparse-wireframe neck — "the face is darker"). Tune the `lit`
-     constants / the per-layer multipliers.
+     occluder fill — a **FULL BLUE** `rgb(0.05, 0.21, 0.46)·lit`. The fill is the **consistent base
+     colour** of the whole head: a dim teal lift left the dense-wireframe cheek/jaw reading darker than
+     the sparse-wireframe neck ("the face is darker"), so a solid blue tint (the red-fill diagnostic
+     proved the fill covers the whole face+neck) makes the entire head one cohesive colour. Tune the
+     `lit` constants / the fill rgb.
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
      span (`vW/vH × 2.0`) + greedy claim + the lip-band (`aY 0.20–0.40`), `LATTICE_VERT` `uSwirl/uUpdraft/
      uInfall` + the `fly·0.9` pinch, the `uPulse` curve + `basePx`, the lip energy (`uTime·0.6` ring rate,
