@@ -59,7 +59,13 @@ does). This is Google's recommended client-to-server pattern.
   ≈ 600–800ms so Venus doesn't cut the creator off mid-thought.
 - **Interruption:** on `serverContent.interrupted` → `queue.clearBuffers()` + flip to listening.
 - **Transcription:** `inputAudioTranscription:{}` + `outputAudioTranscription:{}` → drive captions.
-- **Voice:** `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` (e.g. `Aoede` — warm/calm; audition in AI Studio).
+- **Voice:** `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` — currently **`Sulafat`** (warm,
+  refined feminine) for a fashionable, British/European read. Set in TWO places that MUST match:
+  `LIVE_VOICE` in `src/app/studio.tsx` (the interview) + `VENUS_VOICE` in `src/app/api/say+api.ts` (the
+  launch fanfare), and the `LiveVoiceSession` default in `live-voice.ts`. `speechConfig.languageCode:
+  'en-GB'` biases the accent (native-audio may auto-detect, so the persona wording — "fashionable…
+  refined British/European sensibility" in `liveSystemInstruction` — is the reliable lever). ~30
+  prebuilt voices exist; audition in Google AI Studio to swap.
 - **System instruction:** our `interviewSystem()` — but it must drop the JSON-output contract (Live is
   speech), and instruct Venus to **call the `save_brand` tool** when done.
 - **Tools:** one `save_brand` function declaration → maps to `BrandResult` (`toBrandResult`).

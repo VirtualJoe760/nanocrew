@@ -225,11 +225,11 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   [0,1]; zero the losing side of antagonist pairs (eyeLookIn/Out, browUp/Down, smile/frown).
 
 ## What's next (the runway, in priority order)
-1. ✅ **DONE — Real lip-sync driver** (`src/lib/venus-lipsync.ts`) + the **"Ascendant Cortana" look**
-   (aurora duotone, thought-pulse, core glow, aura, blip) + the **hair/face clean-up**. Verified on
-   web. Remaining within these: tune the lip-sync thresholds to Venus's actual TTS voice (the test
-   clip is generic), and the **N1 reactive coupling** is only lightly wired (`uSpeak` from jaw
-   energy) — deepen it when live audio lands (listening/thinking vs speaking states).
+1. ✅ **DONE — Formant-based lip-sync** (`venus-formants.ts` + `venus-viseme-map.ts` +
+   `venus-lipsync.ts`) + the **"Ascendant Cortana" look** + the **hair/face clean-up**. Lip-sync is
+   **good enough for now** (real formant mouth shapes, jaw tuned to the female voice; knobs exposed
+   for any future retune). The **N1 reactive coupling** is lightly wired (`uSpeak` from jaw energy) —
+   deepen it later (listening/thinking vs speaking states) if desired.
 2. **Wire Gemini Live PCM → the driver**: we already receive/play her audio — tap those chunks.
    On web that's `connect(htmlAudioElement)`. On **native** there is no `AudioContext`, so this is a
    separate bridge (render the avatar in a WebView, or compute visemes from PCM frames with a tiny
@@ -330,8 +330,10 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    `EntityState` (`venusStageFor`): `speaking → talking`, everything else → `silence`, with a
    one-shot `morphing` materialize when she enters the view. The dark `venusBackdrop` hides the
    screen-level Skia field so only her lattice shows. **Native lip-sync is FORMANT-based** (F1→jaw,
-   F2→round/spread — see "Real lip-sync" above). **Remaining:** calibrate the formant knobs +
-   `setVenusSpeechLatency` to Venus's TTS on device; a tap-to-pause hit-target on her face.
+   F2→round/spread — see "Real lip-sync" above). **Lip-sync is GOOD ENOUGH for now** (verified on
+   device: varied formant-driven mouth shapes, no "O" smear, jaw recalibrated to the female voice so
+   it doesn't gape). Further fine-tuning is just the exported knobs (`jawGain`, the F1/F2 anchors,
+   `setVenusSpeechLatency`) if a future voice needs it. Open polish: a tap-to-pause hit-target on her face.
 
 ## Gotchas (read before editing)
 - **The Venus Lab is opened from the Account screen** (Developer → "Venus Lab (test)", gated to

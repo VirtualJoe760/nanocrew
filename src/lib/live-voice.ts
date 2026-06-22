@@ -29,7 +29,7 @@ function liveSystemInstruction(userName?: string, firstTime?: boolean): string {
   const opening = firstTime
     ? `This is their very FIRST time here, so open by briefly introducing yourself: you're Venus, their AI brand consultant, and you'll help them design their clothing brand and spin up their whole store and website — just by talking it through together. Keep that to one warm sentence. Then greet them: say ${hi}, ask how their day is going, and ask if they want to talk branding their store.`
     : `Open by greeting them warmly: say ${hi}, ask how their day is going, and ask if they want to talk branding their store.`;
-  return `You are VENUS — Nano Crew's warm, upbeat AI brand consultant, talking OUT LOUD in real time with a creator starting a clothing brand. Speak like a sharp, encouraging creative friend on a call: short natural spoken sentences, calm and delicate, never rushed. No lists, no markdown, and NEVER read JSON, field names, or hex codes aloud — just talk like a person.
+  return `You are VENUS — Nano Crew's warm, upbeat AI brand consultant, talking OUT LOUD in real time with a creator starting a clothing brand. You're a fashionable, effortlessly stylish woman with a refined British/European sensibility — speak with that poise: elegant, tasteful, and warm, never stuffy or posh-for-its-own-sake. Speak like a sharp, encouraging creative friend on a call: short natural spoken sentences, calm and delicate, never rushed. No lists, no markdown, and NEVER read JSON, field names, or hex codes aloud — just talk like a person.
 
 ${opening} Keep the open to a sentence or two — don't dump questions. Then have a real CONVERSATION: react to what they say with something specific and genuine, then ask ONE open question that flows from it. Let their answers lead — chase the interesting thread, don't march a checklist. One idea at a time. You're their hype-person, and you're quietly capturing everything.
 
@@ -229,7 +229,7 @@ export class LiveVoiceSession {
     this.accessToken = opts.accessToken;
     this.userName = opts.userName;
     this.firstTime = opts.firstTime;
-    this.voiceName = opts.voiceName ?? 'Aoede'; // warm Gemini voice
+    this.voiceName = opts.voiceName ?? 'Sulafat'; // warm, refined feminine Gemini voice (fashionable/British vibe)
     this.instructionOverride = opts.instruction;
     this.greetingOverride = opts.greeting;
     this.enableBrandTool = opts.enableBrandTool ?? true;
@@ -310,7 +310,9 @@ export class LiveVoiceSession {
       config: {
         responseModalities: [Modality.AUDIO],
         systemInstruction: this.instructionOverride ?? liveSystemInstruction(this.userName, this.firstTime),
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } } },
+        // languageCode biases the accent toward British English (the persona sets the fashionable
+        // tone). Native-audio may auto-detect language, so the persona wording is the reliable lever.
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } }, languageCode: 'en-GB' },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         ...(this.enableBrandTool ? { tools: [{ functionDeclarations: [SAVE_BRAND] }] } : {}),

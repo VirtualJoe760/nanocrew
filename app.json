@@ -44,12 +44,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#08080a",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "backgroundColor": "#000000",
+          "image": "./assets/brand/venus-portrait.png",
+          "resizeMode": "cover",
           "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 200
+            "image": "./assets/brand/venus-portrait.png",
+            "resizeMode": "cover",
+            "backgroundColor": "#000000"
           }
         }
       ],

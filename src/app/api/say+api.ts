@@ -12,7 +12,7 @@ import { guardRate } from '@/lib/rate-limit';
 // straight from a .wav file. Body: { text }. Returns: { audio: base64 WAV }.
 
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
-const VENUS_VOICE = 'Aoede'; // MUST match LiveVoiceSession's default voiceName
+const VENUS_VOICE = 'Sulafat'; // MUST match LiveVoiceSession's default voiceName
 const RATE = 24000; // Gemini TTS PCM sample rate (Hz), mono, 16-bit
 
 /** Wrap raw PCM16 mono into a minimal 44-byte WAV container so any audio player can decode it. */
