@@ -1220,6 +1220,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       const om = r.occluder.material as THREE.MeshBasicMaterial;
       om.opacity = seg(0.5, 0.66);
       om.depthWrite = R > 0.5; // only occlude once the face forms (else it clips the cloud)
+      // While she SPEAKS, lift the near-black face FILL toward a lit dark-teal (glow from within),
+      // so the dark areas between the wireframe lines stop reading as a black void. Silence = dark.
+      const lift = talk * (0.45 + 0.55 * THREE.MathUtils.clamp(speak, 0, 1));
+      om.color.setRGB(0.02 + 0.05 * lift, 0.035 + 0.12 * lift, 0.06 + 0.17 * lift);
     }
     if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.7, 0.9)));
     if (r.hairMat) r.hairMat.uniforms.uFade.value = seg(0.68, 0.92); // whole hair (rim incl.) fades in
