@@ -1124,6 +1124,12 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             mat.clippingPlanes = earPlanes;
             mat.needsUpdate = true;
           }
+          // ALSO clip the deforming dark FILL at the ears — otherwise it fills + depth-writes the
+          // ears, punching them through the (translucent) hair. Now the hair covers the ear area.
+          if (occluderMat) {
+            occluderMat.clippingPlanes = earPlanes;
+            occluderMat.needsUpdate = true;
+          }
         }
 
         if (aura) gltf.scene.add(aura);
@@ -1201,13 +1207,15 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     }
 
     // ── structure layers fade in AFTER the face dots land (the choreography) ────
-    if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.36 * seg(0.62, 0.78) * blip;
-    if (r.edgeHaloMat) r.edgeHaloMat.opacity = 0.1 * seg(0.62, 0.78);
-    // The substrate wireframe is the ONLY thing that deforms with the visemes, so it carries
-    // the lip-sync. Keep it dim at rest, but brighten it HARD while talking (+ a jawOpen punch)
-    // so the articulating mouth/jaw reads clearly against the dark fill — "see her talk".
+    // BRIGHTER when SILENT (present / listening), DIMMER when TALKING (calmer — the lip energy
+    // carries the speech). quiet = 1 when silent, 0 when talking.
     const talk = talkingRef.current ? 1 : 0;
-    const subA = (0.16 + 0.30 * talk + 0.45 * speak * talk) * seg(0.62, 0.78);
+    const quiet = 1 - talk;
+    if (r.edgeCoreMat) r.edgeCoreMat.opacity = (0.30 + 0.12 * quiet) * seg(0.62, 0.78) * blip;
+    if (r.edgeHaloMat) r.edgeHaloMat.opacity = (0.10 + 0.04 * quiet) * seg(0.62, 0.78);
+    // The substrate wireframe carries the lip-sync; a small jawOpen punch keeps the mouth readable
+    // even though talking is dimmer overall.
+    const subA = (0.18 + 0.18 * quiet + 0.05 * speak * talk) * seg(0.62, 0.78);
     for (const m of r.meshes) (m.material as THREE.MeshBasicMaterial).opacity = subA;
     // mouth energy — fills the open-mouth cavity with light as she speaks (jawOpen), so the
     // depth-culled wireframe void reads as her words lighting up instead of a black hole.
@@ -1224,10 +1232,9 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       const om = r.occluderMat;
       om.opacity = seg(0.5, 0.66);
       om.depthWrite = R > 0.5; // only occlude once the face forms (else it clips the cloud)
-      // While she SPEAKS, lift the near-black face FILL toward a lit teal (glow from within), so the
-      // fill between the wireframe lines reads as a lit surface, not dark diamonds. Steady base while
-      // talking (+ a jawOpen surge), so it doesn't flicker. Silence = the near-black rest look.
-      const lift = talk * (0.7 + 0.3 * THREE.MathUtils.clamp(speak, 0, 1));
+      // When SILENT she glows from within (soft teal fill = present/listening); when TALKING the
+      // fill goes dark so she's calmer/dimmer and the lip energy reads.
+      const lift = quiet * 0.5;
       om.color.setRGB(0.02 + 0.085 * lift, 0.04 + 0.2 * lift, 0.065 + 0.28 * lift);
     }
     if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.7, 0.9)));

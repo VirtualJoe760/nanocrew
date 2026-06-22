@@ -252,10 +252,8 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      lip center is baked in `bakeUnifiedLattice` as the mean of face verts in the mouth-height band
      (`aY≈0.20–0.40`); `aLipDist` = each face dot's normalized distance to it. Gated by `uTalk` (smoothed
      `talkingRef`) + `aIsFace`. (2) the **substrate wireframe** (the ONLY thing that deforms with the
-     visemes → it carries the lip-sync) brightens hard while talking: `subA = (0.16 + 0.30·talk +
-     0.45·speak·talk)·seg(0.62,0.78)` — so the articulating mouth reads against the dark fill instead of
-     being lost in it (fixes "very black / can't see the lips"). Bright structure (edges/dots) is STATIC,
-     so the substrate is what shows the mouth move.
+     visemes → it carries the lip-sync) keeps a small jawOpen punch so the mouth stays readable even
+     though talking is dimmer overall (see brightness model below).
    - **No BLEED-THROUGH / DEFORMING dark fill (DONE).** The wireframe is additive with `depthWrite:false`,
      so with nothing solid behind it you see straight THROUGH to the interior/back mesh (the visible
      "bleed-through": a second layer of wireframe showing through the front). The dark fill must occlude
@@ -271,17 +269,19 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      single layer everywhere (mouth open included) and the interior/background are occluded — no
      bleed-through, no black cull, no x-ray. `occluderMat` (one shared material) carries the opacity/
      depthWrite/teal-lift in `useFrame`. A `mouthGlow` (broad additive aura-pool at the lip center,
-     `depthTest:off`, scaled by jawOpen) still adds energy light in the open mouth.
-   - **Lit-from-within while speaking (DONE).** Even with the wireframe intact, the near-black FILL
-     (`#05090f`) shows through the triangle gaps and reads too dark when she talks. So while speaking
-     the occluder's COLOR lifts toward a lit teal — `lift = talk·(0.7 + 0.3·jawOpen)` (steady base so
-     it doesn't flicker), `rgb (0.02,0.04,0.065) → (0.105,0.24,0.345)` — so the fill between the lines
-     reads as a lit surface, not dark diamonds, and she glows from within. Gated by `talk`, so silence
-     stays the near-black rest look. (Brightness lives in this one formula — turn it up/down here.)
+     `depthTest:off`, scaled by jawOpen) still adds energy light in the open mouth. **The occluder is
+     EAR-CLIPPED** with the same `earPlanes` as the substrate — otherwise the dark fill writes depth at
+     the ears and punches them through the (translucent) hair; clipping lets the hair cover the ears.
+   - **Brightness model — BRIGHTER when SILENT, DIMMER when TALKING (DONE).** Per Joe: she was too
+     bright talking. `quiet = 1 − talk`. The wireframe lifts when silent (`subA = (0.18 + 0.18·quiet +
+     0.05·speak·talk)·seg`; edges `(0.30 + 0.12·quiet)·seg`) and the occluder FILL glows a soft teal
+     when silent (`lift = quiet·0.5`, dark when talking). So she's present/lit while listening and
+     calmer/dimmer while speaking (the lip energy carries the speech). Tune the `quiet` coefficients.
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
      span (`vW/vH × 2.0`) + greedy claim + the lip-band (`aY 0.20–0.40`), `LATTICE_VERT` `uSwirl/uUpdraft/
      uInfall` + the `fly·0.9` pinch, the `uPulse` curve + `basePx`, the lip energy (`uTime·0.6` ring rate,
-     `42` ring width, the `uSpeak` lip flare) + `subA` talk boost, `bakeStreamField` count, the `seg(...)`.
+     `42` ring width, the `uSpeak` lip flare) + the `quiet` brightness coefficients (`subA`/edges/fill),
+     `bakeStreamField` count, the `seg(...)`.
    - **⚠ Sync point:** the Skia look now lives in **TWO** places — `dot-field-scene.tsx` (SKSL, still the
      app-wide Account/Market/Account background via `<AppBackground>`) and `venus-points.ts`
      `SKIA_CHUNK` (the GLSL port). If the dot-field look is retuned, change BOTH (the constants are
