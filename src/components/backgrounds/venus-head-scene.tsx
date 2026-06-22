@@ -9,6 +9,7 @@ import {
   type VenusLipsync,
   type VisemeWeights,
 } from '@/lib/venus-lipsync';
+import { LATTICE_VERT, LATTICE_FRAG, motionSelect } from './venus-points';
 
 // ── Venus head — "Ascendant Cortana" (R3F) ──────────────────────────────────
 // A FEMALE Ready Player Me head rendered as a glowing "plexus" wireframe FACE,
@@ -66,77 +67,8 @@ const DEV_SAMPLE_URL = 'https://upload.wikimedia.org/wikipedia/commons/c/c8/Exam
 export type VenusStage = 'pre-render' | 'morphing' | 'silence' | 'talking';
 
 // ─── shaders (ES2-safe: precision mediump, no #version 300, no dynamic loops) ──
-const NODE_VERT = /* glsl */ `
-  precision mediump float;
-  uniform float uTime, uPeriod, uSpeak;
-  uniform float uReveal;       // already seg(0.1,0.62)-remapped 0..1
-  uniform float uSwirl, uUpdraft, uInfall;
-  uniform vec3  uCenter;       // funnel axis (head-local)
-  attribute float aY;
-  attribute float aRand;
-  attribute vec3  aHome;       // GRID start
-  attribute float aDelay;
-  attribute float aRadius;     // start radius from axis
-  attribute float aSpan;       // 0 inner … 1 edge
-  varying vec3 vColor;
-  varying float vGlow;
-  mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
-  void main() {
-    float lp   = clamp((uReveal - aDelay) / max(1e-3, 1.0 - aDelay), 0.0, 1.0);
-    float ease = lp * lp * (3.0 - 2.0 * lp);
-    float land = smoothstep(0.82, 1.0, lp);
-    float fly  = sin(lp * 3.14159);                 // 0 → 1 → 0 over the flight
-
-    float rNow = mix(aRadius, aRadius * (1.0 - uInfall), ease);
-    vec3  p = mix(aHome, position, ease);
-
-    // coherent tornado: ONE rotation sense, faster near the axis, gone on landing
-    float spinFall = 1.0 / (0.35 + rNow * 2.5);
-    float ang = uSwirl * fly * spinFall + uTime * (1.0 - ease) * 0.6;
-    p.xz = rot(ang) * (p.xz - uCenter.xz) + uCenter.xz;
-
-    // inward spiral — narrow HARD into the funnel column mid-flight, release on landing
-    vec2 rel = p.xz - uCenter.xz;
-    float curR = max(length(rel), 1e-4);
-    vec2 dir = rel / curR;
-    float pinch = mix(curR, rNow, fly * 0.9);
-    p.xz = uCenter.xz + dir * pinch;
-
-    // vertical updraft — peaks mid-flight, zero on land (settles onto the real vertex)
-    p.y += fly * uUpdraft * (0.4 + 0.6 * aSpan) * (1.0 - land);
-
-    // thought-pulse (unchanged; gated to land)
-    float wave  = fract(uTime / uPeriod);
-    float d     = aY - wave;
-    float pulse = exp(-d * d * 140.0);
-    float w2    = fract(uTime / 9.0 + 0.5);
-    pulse += 0.5 * exp(-(aY - w2) * (aY - w2) * 60.0);
-    float tw    = 0.9 + 0.1 * sin(uTime * 2.0 + aRand * 6.2831);
-
-    // MATERIAL TRANSFORM — invisible at the grid, hot-white spark in flight, aurora at landing
-    float lift = smoothstep(0.0, 0.22, lp);
-    float matT = smoothstep(0.55, 1.0, lp);
-    vColor = mix(vec3(0.85, 0.95, 1.0), color, matT);
-    float spark = 0.6 + 1.4 * fly;
-    vGlow = lift * ((0.5 * matT + spark * (1.0 - matT)) + (1.5 + uSpeak) * pulse * land) * tw;
-
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    float flightSize = 1.0 + fly * 0.9;
-    gl_PointSize = clamp(6.0 * vGlow * flightSize * (1.0 / -mv.z), 3.0, 16.0);
-    gl_Position  = projectionMatrix * mv;
-  }
-`;
-const NODE_FRAG = /* glsl */ `
-  precision mediump float;
-  uniform sampler2D uDot;
-  uniform float uBlip;
-  varying vec3 vColor;
-  varying float vGlow;
-  void main() {
-    float a = texture2D(uDot, gl_PointCoord).a;
-    gl_FragColor = vec4(vColor * vGlow * uBlip, a);  // additive → brightness = energy
-  }
-`;
+// NOTE: the face-node cyclone shader now lives in venus-points.ts as part of LATTICE_VERT
+// (her dots are tagged cells of the unified background lattice, not a separate grid).
 
 // ── the persistent dot-field that PULSES TOWARD her: a hollow shell of dots that loops
 //    outer→inner (streaming into her surface) — the cyclone source during the morph, a
@@ -212,11 +144,10 @@ type Rig = {
   meshes: THREE.Mesh[];
   bones: { head?: THREE.Object3D; neck?: THREE.Object3D; leftEye?: THREE.Object3D; rightEye?: THREE.Object3D };
   rest: Map<THREE.Object3D, THREE.Euler>;
-  nodeMat?: THREE.ShaderMaterial;
+  latticeMat?: THREE.ShaderMaterial;     // THE unified field — ambient background + her face dots
   coreMat?: THREE.ShaderMaterial;
   edgeCoreMat?: THREE.LineBasicMaterial;
   edgeHaloMat?: THREE.LineBasicMaterial; // reveal fade
-  glowMat?: THREE.PointsMaterial;        // node halo — reveal fade
   occluder?: THREE.Mesh;                 // dark face fill — reveal fade
   streamMat?: THREE.ShaderMaterial;      // persistent dot-field pulsing toward her
   eyeObjs: THREE.Object3D[];             // iris/sclera sprites — hidden until formed
@@ -601,43 +532,118 @@ function subsample(geo: THREE.BufferGeometry, stride: number): THREE.BufferGeome
 // GRID lifting off — a screen-facing lattice at the head's depth, spanning > the view,
 // with light z + jitter — plus aDelay (stagger), aRadius/aSpan (the cyclone funnel).
 // `position` is the TARGET face vertex. Returns the face centroid (= the funnel axis).
-function bakeAssemble(geo: THREE.BufferGeometry, view: { vW: number; vH: number }): THREE.Vector3 {
-  geo.computeBoundingBox();
-  const c = geo.boundingBox!.getCenter(new THREE.Vector3());
-  const size = geo.boundingBox!.getSize(new THREE.Vector3());
-  const pos = geo.attributes.position;
-  const aYattr = geo.attributes.aY, rand = geo.attributes.aRand;
-  const N = pos.count;
-  const home = new Float32Array(N * 3);
-  const delay = new Float32Array(N);
-  const aRadius = new Float32Array(N); // start radius from the funnel axis
-  const aSpan = new Float32Array(N);   // 0 inner … 1 grid edge (drives spin/updraft)
-  const spanX = view.vW * 1.7, spanY = view.vH * 1.7; // mild overscan — dots stay near the funnel
-  const gridN = Math.max(2, Math.round(Math.sqrt(N)));
-  const zPlane = c.z;
-  const maxR = Math.hypot(spanX, spanY) * 0.5;
-  for (let i = 0; i < N; i++) {
-    const gx = i % gridN, gy = Math.floor(i / gridN) % gridN;
-    const cellX = (gx + 0.5) / gridN - 0.5;
-    const cellY = (gy + 0.5) / gridN - 0.5;
-    const hx = c.x + cellX * spanX + ((Math.random() - 0.5) * spanX) / gridN;
-    const hy = c.y + cellY * spanY + ((Math.random() - 0.5) * spanY) / gridN;
-    const hz = zPlane + (Math.random() - 0.5) * size.z * 0.6 + size.z * 0.15;
-    home[i * 3] = hx; home[i * 3 + 1] = hy; home[i * 3 + 2] = hz;
-    const dx = hx - c.x, dz = hz - c.z;
-    const r = Math.hypot(dx, dz);
-    aRadius[i] = r;
-    aSpan[i] = THREE.MathUtils.clamp(r / maxR, 0, 1);
-    // stagger: outer grid sucked in LAST (draining funnel) + chin→crown wipe + jitter
-    const wipe = aYattr ? aYattr.getX(i) : Math.random(); // 0 chin … 1 crown
-    const rnd = rand ? rand.getX(i) : Math.random();
-    delay[i] = Math.min(0.55, 0.22 * (1 - wipe) + 0.2 * aSpan[i] + 0.13 * rnd);
+// ── THE UNIFIED LATTICE ───────────────────────────────────────────────────────
+// ONE points buffer that IS the ambient background AND her face dots. Ambient dots
+// (aIsFace=0) sit at a screen-filling grid doing the Skia dot-field look; a subset
+// (aIsFace=1) is greedily tagged to the nearest grid cell of each face vertex — so her
+// dots are LITERALLY background dots that PEEL UP and cyclone onto the exact face vertex
+// (aTarget) on reveal, leaving a gap where they were. The residual stays a living
+// background pulsing toward her. Lives in a scene-root group (world space), centered on
+// the face's world position. (Replaces the old separate node grid — see venus-points.ts
+// for the LATTICE shaders + the Skia-look port.)
+const LAT_COLS = 84, LAT_ROWS = 56; // 4704 dots; drop to 60×40 if a low-end device drops frames
+function bakeUnifiedLattice(
+  faceDots: THREE.BufferGeometry,
+  view: { vW: number; vH: number },
+  headToGroup: THREE.Matrix4,
+): { geometry: THREE.BufferGeometry; faceCentroid: THREE.Vector3 } {
+  const fpos = faceDots.attributes.position;
+  const fcol = faceDots.attributes.color;
+  const faY = faceDots.attributes.aY;
+  const M = fpos.count;
+
+  // face vertices → GROUP (world) space + their centroid (= grid center AND funnel axis)
+  const fv = new Float32Array(M * 3);
+  const centroid = new THREE.Vector3();
+  const tmp = new THREE.Vector3();
+  for (let k = 0; k < M; k++) {
+    tmp.set(fpos.getX(k), fpos.getY(k), fpos.getZ(k)).applyMatrix4(headToGroup);
+    fv[k * 3] = tmp.x; fv[k * 3 + 1] = tmp.y; fv[k * 3 + 2] = tmp.z;
+    centroid.add(tmp);
   }
-  geo.setAttribute('aHome', new THREE.BufferAttribute(home, 3));
-  geo.setAttribute('aDelay', new THREE.BufferAttribute(delay, 1));
-  geo.setAttribute('aRadius', new THREE.BufferAttribute(aRadius, 1));
-  geo.setAttribute('aSpan', new THREE.BufferAttribute(aSpan, 1));
-  return c;
+  centroid.multiplyScalar(1 / Math.max(1, M));
+
+  const N = LAT_COLS * LAT_ROWS;
+  const spanX = view.vW * 2.0, spanY = view.vH * 2.0; // fills the viewport, centered on her
+  const maxR = Math.hypot(spanX, spanY) * 0.5;
+
+  const home = new Float32Array(N * 3);
+  const target = new Float32Array(N * 3);
+  const cell = new Float32Array(N * 2);
+  const col = new Float32Array(N * 3);
+  const delay = new Float32Array(N);
+  const radius = new Float32Array(N);
+  const span = new Float32Array(N);
+  const rand = new Float32Array(N);
+  const isFace = new Float32Array(N);
+  const dCenter = new Float32Array(N);
+  const wipe = new Float32Array(N); // landed vertex aY (chin 0 … crown 1) for the delay stagger
+
+  const BASE: [number, number, number] = [0.012, 0.013, 0.02]; // Skia near-black bed
+  for (let i = 0; i < N; i++) {
+    const gx = i % LAT_COLS, gy = Math.floor(i / LAT_COLS);
+    const cellX = (gx + 0.5) / LAT_COLS - 0.5;
+    const cellY = (gy + 0.5) / LAT_ROWS - 0.5;
+    const hx = centroid.x + cellX * spanX;
+    const hy = centroid.y + cellY * spanY;
+    const hz = centroid.z + (Math.random() - 0.5) * 0.01; // tiny z-jitter → flight depth
+    home[i * 3] = hx; home[i * 3 + 1] = hy; home[i * 3 + 2] = hz;
+    target[i * 3] = hx; target[i * 3 + 1] = hy; target[i * 3 + 2] = hz; // ambient: target = home
+    cell[i * 2] = gx - LAT_COLS / 2; cell[i * 2 + 1] = gy - LAT_ROWS / 2; // small ints (mediump-safe)
+    col[i * 3] = BASE[0]; col[i * 3 + 1] = BASE[1]; col[i * 3 + 2] = BASE[2];
+    rand[i] = Math.random();
+    dCenter[i] = Math.hypot(cellX * spanX, cellY * spanY) / view.vH; // Skia vignette distance
+    isFace[i] = 0; delay[i] = 0; radius[i] = 0; span[i] = 0; wipe[i] = 0;
+  }
+
+  // deterministic greedy tagging: face verts sorted (group-space y desc, x asc); each claims
+  // the nearest UNCLAIMED grid cell by XY → her dots ARE real background dots.
+  const order = Array.from({ length: M }, (_, k) => k).sort((a, b) => {
+    const dy = fv[b * 3 + 1] - fv[a * 3 + 1];
+    if (Math.abs(dy) > 1e-6) return dy;
+    return fv[a * 3] - fv[b * 3];
+  });
+  const claimed = new Uint8Array(N);
+  for (const k of order) {
+    const vx = fv[k * 3], vy = fv[k * 3 + 1], vz = fv[k * 3 + 2];
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < N; i++) {
+      if (claimed[i]) continue;
+      const dx = home[i * 3] - vx, dy = home[i * 3 + 1] - vy;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) break;
+    claimed[best] = 1;
+    isFace[best] = 1;
+    target[best * 3] = vx; target[best * 3 + 1] = vy; target[best * 3 + 2] = vz; // EXACT face vertex
+    if (fcol) { col[best * 3] = fcol.getX(k); col[best * 3 + 1] = fcol.getY(k); col[best * 3 + 2] = fcol.getZ(k); }
+    if (faY) wipe[best] = faY.getX(k);
+  }
+
+  // cyclone attrs for the tagged face dots (IDENTICAL recipe to the old bakeAssemble)
+  for (let i = 0; i < N; i++) {
+    if (!isFace[i]) continue;
+    const dx = home[i * 3] - centroid.x, dz = home[i * 3 + 2] - centroid.z;
+    const r = Math.hypot(dx, dz);
+    radius[i] = r;
+    span[i] = THREE.MathUtils.clamp(r / maxR, 0, 1);
+    delay[i] = Math.min(0.55, 0.22 * (1 - wipe[i]) + 0.2 * span[i] + 0.13 * rand[i]);
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(home.slice(), 3)); // for bbox/culling
+  g.setAttribute('aHome', new THREE.BufferAttribute(home, 3));
+  g.setAttribute('aTarget', new THREE.BufferAttribute(target, 3));
+  g.setAttribute('aCell', new THREE.BufferAttribute(cell, 2));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('aDelay', new THREE.BufferAttribute(delay, 1));
+  g.setAttribute('aRadius', new THREE.BufferAttribute(radius, 1));
+  g.setAttribute('aSpan', new THREE.BufferAttribute(span, 1));
+  g.setAttribute('aRand', new THREE.BufferAttribute(rand, 1));
+  g.setAttribute('aIsFace', new THREE.BufferAttribute(isFace, 1));
+  g.setAttribute('aDCenter', new THREE.BufferAttribute(dCenter, 1));
+  return { geometry: g, faceCentroid: centroid };
 }
 
 // Build the persistent "stream" field: a hollow ellipsoidal shell of dots, each with an
@@ -881,11 +887,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         const cycleMats: THREE.Material[] = [];
         const eyeObjs: THREE.Object3D[] = [];
         let shell: THREE.Group | undefined;
-        let nodeMat: THREE.ShaderMaterial | undefined;
+        let latticeMat: THREE.ShaderMaterial | undefined;
         let coreMat: THREE.ShaderMaterial | undefined;
         let edgeCoreMat: THREE.LineBasicMaterial | undefined;
         let edgeHaloMat: THREE.LineBasicMaterial | undefined;
-        let glowMat: THREE.PointsMaterial | undefined;
         let occluder: THREE.Mesh | undefined;
         let streamMat: THREE.ShaderMaterial | undefined;
         let aura: THREE.Object3D | undefined;
@@ -904,56 +909,61 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             earClipX = halfW * EAR_DROP_FRAC;
             const faceGeo = dropEars(rawFace, earClipX); // bright shell stops at the cheeks
             bakeAurora(faceGeo);
-            const dotGeo = subsample(faceGeo, 3); // sparser, more deliberate nodes
-            const fc = bakeAssemble(dotGeo, { vW, vH }); // grid aHome + funnel attrs + axis
+            const faceDots = subsample(faceGeo, 3); // ~face vertices: position + aurora color + aY
+            faceDots.computeBoundingBox();
+            const fcHead = faceDots.boundingBox!.getCenter(new THREE.Vector3()); // head-local centroid
+            const faceSize = faceDots.boundingBox!.getSize(new THREE.Vector3());
 
-            // (a) signature NODES — aurora gradient + thought-pulse + reveal/vortex morph
-            nodeMat = new THREE.ShaderMaterial({
+            // (a) THE UNIFIED LATTICE — ONE points buffer = ambient background + her face dots.
+            //     Lives in its OWN scene-root group (world space): the FIXED camera looks down -Z,
+            //     so the group is a screen-facing plane needing no per-frame billboard. Her dots
+            //     PEEL UP from real background cells; the residual stays a living background pulsing
+            //     toward her. (Shaders + Skia-look port: venus-points.ts.)
+            const latticeGroup = new THREE.Group();
+            gltf.scene.add(latticeGroup);
+            bones.head.updateWorldMatrix(true, true);
+            const headToGroup = latticeGroup.matrixWorld.clone().invert().multiply(bones.head.matrixWorld);
+            const { geometry: latGeo, faceCentroid: fcGroup } = bakeUnifiedLattice(faceDots, { vW, vH }, headToGroup);
+            latticeMat = new THREE.ShaderMaterial({
               uniforms: {
-                uTime: { value: 0 },
-                uPeriod: { value: 3.5 },
-                uSpeak: { value: 0 },
-                uBlip: { value: 1 },
+                uTime: { value: 0 }, uMorph: { value: 0 }, uReveal: { value: 0 },
+                uPulse: { value: 0.12 }, uSpeak: { value: 0 }, uBlip: { value: 1 },
+                uSelA: { value: 0 }, uSelB: { value: 0 }, uFade: { value: 0 },
+                uDrift: { value: new THREE.Vector2() }, uCellScale: { value: LAT_ROWS / 2.0 },
+                uCenter: { value: fcGroup.clone() }, // funnel axis (group/world space)
+                uSwirl: { value: 18.0 }, uUpdraft: { value: 0.72 }, uInfall: { value: 0.85 },
                 uDot: { value: dotTex },
-                uReveal: { value: 0 },          // start scattered
-                uCenter: { value: fc.clone() }, // face centroid = funnel axis
-                uSwirl: { value: 18.0 },        // cyclone wind-up
-                uUpdraft: { value: 0.72 },      // funnel updraft height (taller tornado column)
-                uInfall: { value: 0.85 },       // how tight the funnel necks down
               },
-              vertexShader: NODE_VERT,
-              fragmentShader: NODE_FRAG,
+              vertexShader: LATTICE_VERT,
+              fragmentShader: LATTICE_FRAG,
               vertexColors: true,
               transparent: true,
               depthTest: true,
               depthWrite: false,
               blending: THREE.AdditiveBlending,
             });
-            const corePts = new THREE.Points(dotGeo, nodeMat);
+            const latticePts = new THREE.Points(latGeo, latticeMat);
+            latticePts.renderOrder = 0;
+            latticePts.frustumCulled = false; // dots move in-shader; never cull the whole field
+            latticeGroup.add(latticePts);
 
-            // (a2) the persistent dot-field that pulses TOWARD her (cyclone source +
-            //      a quiet inward feed when formed). Parented to Head → inherits fc.
-            const faceSize = dotGeo.boundingBox!.getSize(new THREE.Vector3());
+            // (a2) the residual STREAM shell — the 3D volumetric depth-feed pulsing TOWARD her
+            //      (the in-plane pulse is the lattice's job; this adds depth). Head-local.
             streamMat = new THREE.ShaderMaterial({
               uniforms: {
-                uTime: { value: 0 }, uReveal: { value: 0 }, uCenter: { value: fc.clone() },
+                uTime: { value: 0 }, uReveal: { value: 0 }, uCenter: { value: fcHead.clone() },
                 uDot: { value: dotTex }, uFlow: { value: 0.15 }, uIntake: { value: 0.15 }, uSpeak: { value: 0 },
               },
               vertexShader: STREAM_VERT, fragmentShader: STREAM_FRAG,
               vertexColors: true, transparent: true, depthTest: true, depthWrite: false,
               blending: THREE.AdditiveBlending,
             });
-            const streamPts = new THREE.Points(bakeStreamField(1500, fc, faceSize), streamMat);
-            streamPts.renderOrder = 1; // above occluder(-10), below corePts/shell(2)
+            const streamPts = new THREE.Points(bakeStreamField(700, fcHead, faceSize), streamMat);
+            streamPts.renderOrder = 1; // above occluder(-10), below shell(2)
             bones.head.add(streamPts);
 
-            // (b) node halo — fake bloom, tighter so it reads clean (not washy)
-            glowMat = new THREE.PointsMaterial({
-              size: 0.034, map: dotTex, vertexColors: true, opacity: 0, // reveal fades it in
-              transparent: true, sizeAttenuation: true,
-              blending: THREE.AdditiveBlending, depthWrite: false,
-            });
-            const glowPts = new THREE.Points(dotGeo, glowMat);
+            // (b) node halo is GONE — the lattice's LATTICE_FRAG inner-bloom (a += 0.4*a*a)
+            //     replaces glowPts, one fewer Points draw.
 
             // (c) structural edges LEAD the look (+ scaled halo clone = fake thickness)
             const edgesGeo = new THREE.EdgesGeometry(faceGeo, 16);
@@ -967,7 +977,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             const edgeHalo = new THREE.LineSegments(edgesGeo, edgeHaloMat);
             edgeHalo.scale.setScalar(1.012);
 
-            // (d) core glow — light from within (fresnel sphere behind the face; fc from bakeAssemble)
+            // (d) core glow — light from within (fresnel sphere behind the face; head-local centroid)
             coreMat = new THREE.ShaderMaterial({
               uniforms: { uColor: { value: new THREE.Color('#3FA6C8') }, uOpacity: { value: 0 } },
               vertexShader: CORE_VERT,
@@ -978,11 +988,11 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
               blending: THREE.AdditiveBlending,
             });
             const coreSphere = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 2), coreMat);
-            coreSphere.position.set(fc.x, fc.y, fc.z - 0.03);
+            coreSphere.position.set(fcHead.x, fcHead.y, fcHead.z - 0.03);
             coreSphere.renderOrder = 0;
 
             shell = new THREE.Group();
-            shell.add(coreSphere, edgeHalo, glowPts, edgeCore, corePts); // back→front
+            shell.add(coreSphere, edgeHalo, edgeCore); // back→front (nodes/halo now in the lattice)
             shell.renderOrder = 2;
 
             // (e) procedural BOB hair — a stylized shell (covers ears, fringe, A-line)
@@ -1039,7 +1049,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
           }
         }
 
-        rig.current = { meshes, bones, rest, nodeMat, coreMat, edgeCoreMat, edgeHaloMat, glowMat, occluder, eyeObjs, cycleMats, aura, shell, bob, hairMat, streamMat };
+        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluder, eyeObjs, cycleMats, aura, shell, bob, hairMat, streamMat };
 
         // clip the dim SUBSTRATE at the ear line so the ears don't poke out from under
         // the hair (the bright shell already dropped them; the bob covers the area).
@@ -1099,15 +1109,21 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     // ── rare holographic blip (the ONE instability) ────────────────────────
     const blip = Math.random() < 0.003 ? 0.82 : 1.0;
 
-    // ── nodes: thought-pulse + speak energy + the reveal/vortex morph ───────
+    // ── THE UNIFIED LATTICE: ambient Skia-look background + her face dots peeling up ──
     const speak = lipTargets.current.jawOpen ?? 0;
-    if (r.nodeMat) {
-      const u = r.nodeMat.uniforms;
+    if (r.latticeMat) {
+      const u = r.latticeMat.uniforms;
+      const { selA, selB, fade } = motionSelect(t); // Skia 12s pattern crossfade (JS-side)
       u.uTime.value = t;
       u.uBlip.value = blip;
-      u.uReveal.value = seg(0.1, 0.62); // gather → spin → stream → snap
+      u.uReveal.value = R;
+      u.uMorph.value = seg(0.1, 0.62);      // the cyclone window — her dots peel + gather + snap
+      u.uSelA.value = selA; u.uSelB.value = selB; u.uFade.value = fade;
+      (u.uDrift.value as THREE.Vector2).set(t * 0.010, t * 0.006); // Skia parallax (pattern only)
       u.uSpeak.value = THREE.MathUtils.damp(u.uSpeak.value, speak * 1.2, 8, delta);
-      u.uPeriod.value = THREE.MathUtils.damp(u.uPeriod.value, speak > 0.06 ? 1.4 : 3.5, 4, delta);
+      // residual inward-pulse: gentle breath at rest → ramps with the morph → eases to ~0.5 formed
+      const pulseTarget = 0.12 + 0.88 * seg(0.18, 0.5) * (1 - 0.5 * seg(0.7, 0.95)) + 0.5 * seg(0.7, 0.95);
+      u.uPulse.value = THREE.MathUtils.damp(u.uPulse.value, pulseTarget, 3, delta);
     }
 
     // ── persistent stream field: heavy intake during the morph, quiet feed once formed ──
@@ -1123,8 +1139,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       u.uSpeak.value = THREE.MathUtils.damp(u.uSpeak.value, speak * 1.0, 6, delta);
     }
 
-    // ── structure layers fade in AFTER the nodes land (the choreography) ────
-    if (r.glowMat) r.glowMat.opacity = 0.12 * seg(0.45, 0.66);
+    // ── structure layers fade in AFTER the face dots land (the choreography) ────
     if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.36 * seg(0.62, 0.78) * blip;
     if (r.edgeHaloMat) r.edgeHaloMat.opacity = 0.1 * seg(0.62, 0.78);
     const subA = 0.16 * seg(0.62, 0.78);

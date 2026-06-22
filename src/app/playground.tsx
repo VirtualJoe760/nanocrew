@@ -1,8 +1,7 @@
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import { AppBackground } from '@/components/backgrounds/app-background';
+import { useState } from 'react';
 import type { VenusStage } from '@/components/backgrounds/venus-head-scene';
 
 // THE VENUS LAB — our dedicated, permanent dev playground for iterating on Venus's appearance.
@@ -13,33 +12,22 @@ import type { VenusStage } from '@/components/backgrounds/venus-head-scene';
 // The 4 testable lifecycle stages (the control row toggles between them).
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
 
-function Scene({ stage, onReveal }: { stage: VenusStage; onReveal?: (r: number) => void }) {
+function Scene({ stage }: { stage: VenusStage }) {
   // R3F renders on web (plain three/WebGL) and native (expo-gl) — no CanvasKit loader.
   const VenusHeadScene = require('@/components/backgrounds/venus-head-scene').default;
-  return <VenusHeadScene stage={stage} onReveal={onReveal} />;
+  return <VenusHeadScene stage={stage} />;
 }
 
 export default function Playground() {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
-  // The app's dot-field background (the Account/Studio background) sits BEHIND the
-  // transparent avatar canvas and fades out as she assembles — so pre-render IS the
-  // app background, and she morphs out of it. Driven by the live reveal value.
-  const bgOpacity = useRef(new Animated.Value(1)).current;
-  const onReveal = useCallback((r: number) => {
-    // full at the dust-field; dips to 0.28 mid-morph so the active R3F cyclone leads,
-    // recovers to 0.35 once formed (the dots remain as a background behind her).
-    const floor = 0.28 + 0.07 * Math.max(0, (r - 0.7) / 0.3);
-    bgOpacity.setValue(Math.max(floor, 1 - r / 0.5));
-  }, [bgOpacity]);
   if (!__DEV__) return null; // dev-only — never ships in a production build
 
+  // No Skia <AppBackground> here: the UNIFIED LATTICE inside the transparent avatar canvas
+  // IS the dot-field background now (it's one field that becomes her), over the near-black bed.
   return (
     <View style={styles.root}>
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: bgOpacity }]} pointerEvents="none">
-        <AppBackground />
-      </Animated.View>
-      <Scene stage={stage} onReveal={onReveal} />
+      <Scene stage={stage} />
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">

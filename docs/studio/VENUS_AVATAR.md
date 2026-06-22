@@ -206,51 +206,57 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    On web that's `connect(htmlAudioElement)`. On **native** there is no `AudioContext`, so this is a
    separate bridge (render the avatar in a WebView, or compute visemes from PCM frames with a tiny
    FFT — `sample()`'s math ports; `connect(HTMLMediaElement)` does not).
-3. ✅ **DONE (v1) — the CYCLONE morph (starts at the background layer).** Per Joe: "the dots come
-   together in a cyclone like manner, then transform into the same material Venus can materialize
-   with. also we will have the dots as background still but will be pulsing towards Venus." Two
-   cooperating point systems, both parented to the Head bone and sharing the funnel axis `uCenter`
-   (the baked face centroid `fc`):
-   - **The face NODES (`corePts`, `NODE_VERT`)** — `bakeAssemble` now bakes a **screen-facing GRID**
-     `aHome` (a lattice across `spanX/Y = vW/vH × 1.7`, on the camera's z-plane — i.e. the dots
-     *start as the background field*, not a random cloud), plus per-node `aDelay`, `aRadius` (start
-     radius from the axis), `aSpan` (0 inner … 1 edge). `NODE_VERT` lifts each node off the grid and
-     runs it through a **tornado**: one coherent rotation sense (`uSwirl`, faster near the axis via
-     `1/(0.35+r·2.5)`), an **inward pinch** to the funnel neck (`mix(curR, rNow, fly·0.9)`), and a
-     mid-flight **updraft** (`uUpdraft·(0.4+0.6·aSpan)`), all gated by `fly = sin(lp·π)` so they
-     resolve **exactly to 0 on landing**. The **material transform** rides the same `lp`: invisible
-     at the grid → hot-white spark in flight → aurora `color` at the surface (`matT =
-     smoothstep(0.55,1,lp)`). Driven by one `uReveal` clock = `seg(0.10,0.62)` of `R`.
-   - **The persistent STREAM field (`streamPts`, `STREAM_VERT/FRAG`)** — a hollow ellipsoidal shell
-     of dots (`bakeStreamField`) that **loops outer→inner, pulsing toward her surface** (`aInner`
-     sink). Heavy **intake** during the morph (it *is* the cyclone's in-rush), then settles to a
-     quiet inward feed once formed (`uFlow` damps down, `uIntake` peaks mid-morph then eases) — so
-     "the dots remain as a background, still pulsing towards Venus." `uSpeak` gives it a breath on
-     talk. This is what keeps the dust alive behind the formed face.
-   - **One reveal clock** in `useFrame` (damp toward `revealTarget`, faster disperse) **fades each
-     layer in on a timing table** — nodes (0.10–0.62) → node-halo/edges/substrate (0.45–0.78) → hair
-     (`uFade` 0.68–0.92) + core → aura (0.85–1.0); the eyes (`eyeObjs`) + human micro-life gate on
-     until she's formed; resting state (`R=1`) is exactly the approved look. Tune: `uSwirl`/`uUpdraft`/
-     `uInfall` + the `fly·0.9` pinch (`NODE_VERT`), the grid `×1.7` overscan + `aDelay` spread
-     (`bakeAssemble`), `bakeStreamField` count/shell size, the damp rates, and the per-layer `seg(...)`.
-   - **Driven by the `VenusStage` prop** (exported): `pre-render` (the **app dot-field background**,
-     `revealTarget 0`) · `morphing` (the cyclone, ping-ponged every 4.5 s) · `silence` (formed +
-     listening, mouth at rest) · `talking` (formed + lip-sync driving the mouth). `VenusHeadScene
-     stage={...}` → `Avatar` maps it to `revealTarget` + a `talking` flag. **The Lab has a 4-stage
-     toggle row** (`playground.tsx`) to test each phase; Studio will map its flow onto these later.
-   - **App-background crossfade (DONE):** the avatar `<Canvas>` is **transparent** (`gl.alpha`, no
-     `<color>`) so the app's `<AppBackground>` (the `dot-field-scene` on Account/Studio) renders BEHIND
-     it; `VenusHeadScene onReveal={r⇒…}` reports the live reveal each frame and the Lab fades the
-     dot-field — **dipping to a 0.28 floor mid-morph** so the active R3F cyclone leads, recovering to
-     0.35 once formed (the background dots never fully vanish). So pre-render **is** the app
-     background, and she literally morphs out of it. (Studio gets the same for free: it already shows
-     `<AppBackground>` behind transparent screens; just drop the avatar canvas on top.)
-   - **NOTE — judge the morph LIVE, not from stills:** the cyclone is a *motion* effect (swirl +
-     in-rush over ~1.3 s); a single screenshot only ever shows one frame of the gather. Use the Lab's
-     **morphing** toggle (or scrub reveal) to evaluate it.
-   - **Remaining polish:** the long-term zero-seam Option C — render the *app background itself* as the
-     same R3F point system (a `venus-points` field) so there is literally one buffer of dots that
-     becomes her (today the node grid is a faithful *match* of the background, not the same buffer).
+3. ✅ **DONE (v2) — the UNIFIED LATTICE: one field that IS the background AND becomes her.** Per Joe:
+   "Venus and the background are part of one singular superintelligence… our background needs to morph
+   with it into her." The old design was two *renderers* (a Skia background that just faded + a separate
+   R3F grid that merely *matched* it). Now there is **one R3F points buffer** (`bakeUnifiedLattice` +
+   `LATTICE_VERT/FRAG` in **`venus-points.ts`**) that is the ambient dot-field at rest and reorganises
+   into Venus on morph — the dots that become her are **literally background dots that peel up**.
+   - **One lattice, `aIsFace` branches the two behaviours.** A screen-filling grid (`LAT_COLS×LAT_ROWS
+     = 84×56 = 4704` dots) lives in its OWN **scene-root group** in world space (the camera is FIXED at
+     `(0,eyeY,0.99)` looking down −Z, so the group is a screen-facing plane — no per-frame billboard).
+     Each dot bakes `aHome` (its grid cell), `aCell`/`aDCenter` (the Skia hue/energy/vignette inputs),
+     and `aTarget` (= `aHome` for ambient dots). A ~`subsample(faceGeo,3)` subset (~900 dots) is tagged
+     `aIsFace=1` by **greedy nearest-unclaimed-cell** (face verts sorted deterministically by group-space
+     y/x), each claiming the nearest grid cell and storing the **exact face vertex** as `aTarget` + the
+     aurora `color` + the cyclone attrs (`aDelay`/`aRadius`/`aSpan`, identical formula to the old
+     `bakeAssemble`). So her dots are real cells of the field that **detach, leaving a gap**.
+   - **The shader computes BOTH branches and blends — never a divergent `if`.** `pAmb` = the Skia look
+     at `aHome` (the ported `SKIA_CHUNK`: hash/hsv/5-pattern `motionEnergy`, drift scrolls the *pattern*
+     via `cell`, NOT the dot positions — translating finite points would march them off-screen) + a
+     ≤10% inward **pulse** toward `uCenter`. `pCyc` = the tornado (today's cyclone verbatim, `aHome→
+     aTarget`). `peel = smoothstep(0,0.18,lp)·aIsFace`; `p = mix(pAmb, pCyc, peel)`. **The invisibility-
+     bug fix:** `vGlow` *starts* at the ambient `ambVal` and *adds* the flight spark/aurora as it peels
+     — dots brighten and lift, they do **not** pop in. At land, `landFade = 1−land·0.85` fades the dot
+     glow so the formed look hands off to the (byte-for-byte unchanged) swaying edges/occluder/bob.
+   - **The residual STREAM shell (`bakeStreamField`, 700 dots, head-local)** is kept as the **3D depth-
+     feed** — the lattice gives the in-plane pulse, the shell adds volumetric inflow. Together: "dots as
+     background still, pulsing towards Venus."
+   - **One reveal clock** in `useFrame` drives `uMorph = seg(0.10,0.62)` (the peel/cyclone window) + the
+     `uPulse` ramp (0.12 at rest → ~1.0 mid-morph → ~0.5 formed) + Skia's 12-s pattern crossfade
+     (`motionSelect(t)` → `uSelA/uSelB/uFade`) + `uDrift`. Then the structure layers fade in on the
+     existing timing table — edges/substrate (0.62–0.78) → hair (`uFade` 0.68–0.92) + core → aura
+     (0.85–1.0); eyes + micro-life gate on when formed; **`R=1` is byte-for-byte the approved look**
+     (carried by the untouched swaying meshes). `glowPts` is gone (its bloom is `LATTICE_FRAG`'s
+     `a += 0.4·a²`); `NODE_VERT/FRAG` and `bakeAssemble` are removed.
+   - **Driven by the `VenusStage` prop** (exported): `pre-render` (`revealTarget 0`, the full ambient
+     field) · `morphing` (peel + cyclone, ping-ponged every 4.5 s) · `silence` (formed + listening) ·
+     `talking` (formed + lip-sync). The **Lab** (`playground.tsx`) has the 4-stage toggle row and **no
+     longer renders the Skia `<AppBackground>`** — the lattice IS the background inside the transparent
+     canvas, over the `#06080f` bed.
+   - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
+     span (`vW/vH × 2.0`) + greedy claim, `LATTICE_VERT` `uSwirl/uUpdraft/uInfall` + the `fly·0.9` pinch,
+     the `uPulse` curve + `basePx`, `bakeStreamField` count, the per-layer `seg(...)` windows.
+   - **⚠ Sync point:** the Skia look now lives in **TWO** places — `dot-field-scene.tsx` (SKSL, still the
+     app-wide Account/Market/Account background via `<AppBackground>`) and `venus-points.ts`
+     `SKIA_CHUNK` (the GLSL port). If the dot-field look is retuned, change BOTH (the constants are
+     copied verbatim, so the diff is mechanical).
+   - **NOTE — judge the morph LIVE, not from stills:** the peel + cyclone is a *motion* effect (~1.3 s);
+     a single screenshot is one frame. Use the Lab's **morphing** toggle to evaluate it.
+   - **Remaining polish:** make the *app-wide* background this same R3F field (today only the Lab/Venus
+     screens use the lattice; the rest of the app keeps the cheap Skia `<AppBackground>`). The landed
+     face dots sit in the static group while the wireframe sways ±2° — fine because they fade at land,
+     but head-parenting the landed subset (keeping them sparkling on the moving mesh) is a future option.
 4. **Swap in the user's own RPM Venus avatar** (URL swap; commercial license).
 5. **Integrate into Studio**: replace the orb (`src/components/venus-orb.tsx` / the nucleus in
    `studio.tsx`); drive from **real Gemini Live audio**; show her while she speaks (push-to-talk
