@@ -1,6 +1,7 @@
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 
 // THE VENUS LAB — our dedicated, permanent dev playground for iterating on Venus's appearance.
 // Renders the live venus-head-scene full-screen so we can work on her in isolation. Entered via
@@ -19,7 +20,18 @@ function Loading() {
 function Scene() {
   // R3F renders on web (plain three/WebGL) and native (expo-gl) — no CanvasKit loader.
   const VenusHeadScene = require('@/components/backgrounds/venus-head-scene').default;
-  return <VenusHeadScene />;
+  // Lab loop: ping-pong the dots-morph reveal so we can iterate it hands-free.
+  // The first toggle waits LONGER so the GLB has time to load + do its first assemble.
+  const [reveal, setReveal] = useState(true);
+  useEffect(() => {
+    let id: ReturnType<typeof setInterval>;
+    const warmup = setTimeout(() => {
+      setReveal(false);
+      id = setInterval(() => setReveal((v) => !v), 5500);
+    }, 8000); // assemble on load, hold ~8s, then ping-pong every 5.5s
+    return () => { clearTimeout(warmup); if (id) clearInterval(id); };
+  }, []);
+  return <VenusHeadScene reveal={reveal} />;
 }
 
 export default function Playground() {

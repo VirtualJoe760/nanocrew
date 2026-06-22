@@ -199,10 +199,20 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    On web that's `connect(htmlAudioElement)`. On **native** there is no `AudioContext`, so this is a
    separate bridge (render the avatar in a WebView, or compute visemes from PCM frames with a tiny
    FFT — `sample()`'s math ports; `connect(HTMLMediaElement)` does not).
-3. **The dots-morph reveal**: she **assembles from the background dot field** (scatter→face),
-   talks, disperses. Either combine with the Skia dot field (`dot-field-scene.tsx`) or do the
-   morph in R3F by lerping the head's vertices from scattered homes → bind positions. The Skia
-   morph already exists in `venus-field-scene.tsx` (canonical-mesh version) as a reference.
+3. ✅ **DONE (v1) — the dots-morph WHIRLWIND reveal.** She assembles from a scattered dust-field:
+   the face NODES bake a scattered `aHome` + per-node `aDelay` (`bakeAssemble`); `NODE_VERT` lerps
+   home→target with a staggered ease + a **vortex swirl** (`sin(ease·π)` hump → resolves exactly to
+   0 on landing) about the face centroid (`uCenter`), driven by **one `uReveal` clock**. A single
+   reveal clock in `useFrame` (damp toward `revealTarget`, faster disperse) then **fades each layer in
+   on a timing table** — nodes (0.10–0.62) → node-halo/edges/substrate (0.45–0.78) → hair (`uFade`
+   0.68–0.92) + core → aura (0.85–1.0); the eyes (`eyeObjs`) + human micro-life gate on until she's
+   formed; resting state (`R=1`) is exactly today's look. Triggered by the **`reveal` prop** on
+   `VenusHeadScene` (true=assemble / false=disperse); the **Lab loops it** (`playground.tsx`). Tune:
+   the swirl radians (`7.0` in `NODE_VERT`), scatter radii (`bakeAssemble` `rx/ry/rz`), `aDelay`
+   spread, the damp rates, and the per-layer `seg(...)` windows. **Remaining:** wire it to the Studio
+   brand create/edit flow (`reveal={isBuilding}`), and the Skia dot-field → R3F **crossfade** handoff
+   (deferred; lives in `app-background.tsx` — fade the Skia field out over `R∈[0,0.12]` as the R3F
+   sparks take over; the empty `venus-points.ts` is the long-term zero-seam Option C).
 4. **Swap in the user's own RPM Venus avatar** (URL swap; commercial license).
 5. **Integrate into Studio**: replace the orb (`src/components/venus-orb.tsx` / the nucleus in
    `studio.tsx`); drive from **real Gemini Live audio**; show her while she speaks (push-to-talk

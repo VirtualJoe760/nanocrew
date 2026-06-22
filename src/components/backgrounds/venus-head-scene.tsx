@@ -59,21 +59,42 @@ const DEV_SAMPLE_URL = 'https://upload.wikimedia.org/wikipedia/commons/c/c8/Exam
 const NODE_VERT = /* glsl */ `
   precision mediump float;
   uniform float uTime, uPeriod, uSpeak;
-  attribute float aY;     // baked normalized height 0..1
-  attribute float aRand;  // baked per-node phase
+  uniform float uReveal;      // 0 = scattered field, 1 = fully her
+  uniform vec3  uCenter;      // face centroid (head-local) — vortex axis
+  attribute float aY;         // baked normalized height 0..1
+  attribute float aRand;      // baked per-node phase
+  attribute vec3  aHome;      // scattered start (head-local)
+  attribute float aDelay;     // staggers arrival (0..~0.55)
   varying vec3 vColor;
   varying float vGlow;
+  mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
   void main() {
-    float wave  = fract(uTime / uPeriod);            // primary jaw->crown wavefront
+    // per-node staggered progress, eased
+    float lp   = clamp((uReveal - aDelay) / max(1e-3, 1.0 - aDelay), 0.0, 1.0);
+    float ease = lp * lp * (3.0 - 2.0 * lp);
+    float land = smoothstep(0.78, 1.0, lp);          // "click into place" gate
+
+    // travel home → target, with a VORTEX that resolves to 0 exactly on landing
+    vec3 p = mix(aHome, position, ease);
+    float spin = sin(ease * 3.14159);                // 0 → 1 → 0 over the flight
+    float dirS = aRand < 0.5 ? -1.0 : 1.0;           // mostly-shared sense → coherent swirl
+    float ang  = 7.0 * spin * dirS + uTime * (1.0 - ease) * 1.2;
+    p.xz = rot(ang) * (p.xz - uCenter.xz) + uCenter.xz;
+    p.y += spin * 0.10 * (aRand - 0.5);              // slight tornado updraft, gone on land
+
+    // thought-pulse (UNCHANGED math; gated so it lights only once landed)
+    float wave  = fract(uTime / uPeriod);
     float d     = aY - wave;
-    float pulse = exp(-d * d * 140.0);               // tight travelling band
-    float w2    = fract(uTime / 9.0 + 0.5);          // slow counter-wave (depth)
+    float pulse = exp(-d * d * 140.0);
+    float w2    = fract(uTime / 9.0 + 0.5);
     pulse += 0.5 * exp(-(aY - w2) * (aY - w2) * 60.0);
-    float tw    = 0.9 + 0.1 * sin(uTime * 2.0 + aRand * 6.2831); // tiny twinkle
-    vGlow  = (0.5 + (1.5 + uSpeak) * pulse) * tw;    // resting 0.5, subtler crest
-    vColor = color;                                  // baked aurora gradient
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = clamp(6.0 * vGlow * (1.0 / -mv.z), 3.0, 15.0); // smaller, refined
+    float tw    = 0.9 + 0.1 * sin(uTime * 2.0 + aRand * 6.2831);
+    vGlow = (0.5 + (1.5 + uSpeak) * pulse * land) * tw;
+
+    vColor = mix(vec3(0.85, 0.95, 1.0), color, ease); // hot-white spark → aurora color
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    float flight = 1.0 + (1.0 - ease) * 0.8 * spin;   // bigger/brighter mid-flight
+    gl_PointSize = clamp(6.0 * vGlow * flight * (1.0 / -mv.z), 3.0, 16.0);
     gl_Position  = projectionMatrix * mv;
   }
 `;
@@ -116,6 +137,10 @@ type Rig = {
   nodeMat?: THREE.ShaderMaterial;
   coreMat?: THREE.ShaderMaterial;
   edgeCoreMat?: THREE.LineBasicMaterial;
+  edgeHaloMat?: THREE.LineBasicMaterial; // reveal fade
+  glowMat?: THREE.PointsMaterial;        // node halo — reveal fade
+  occluder?: THREE.Mesh;                 // dark face fill — reveal fade
+  eyeObjs: THREE.Object3D[];             // iris/sclera sprites — hidden until formed
   cycleMats: THREE.Material[]; // edges — narrow hue drift
   aura?: THREE.Object3D;       // billboarded aura pool
   shell?: THREE.Group;
@@ -250,7 +275,7 @@ const HAIR_FRAG = /* glsl */ `
   precision mediump float;
   uniform vec3  uRoot, uTip, uRim, uSpec1, uSpec2, uLightVS;
   uniform float uExp1, uExp2, uShift1, uShift2, uSpec1Str, uSpec2Str;
-  uniform float uStrandCount, uStrandWander, uTipFade, uBaseAlpha, uTime;
+  uniform float uStrandCount, uStrandWander, uTipFade, uBaseAlpha, uTime, uFade;
   varying vec3  vN, vV, vT;
   varying float vRoot, vAround, vEdge, vFringe, vEdgeF;
   float hash21(vec2 p){ p=fract(p*vec2(123.34,345.45)); p+=dot(p,p+34.345); return fract(p.x*p.y); }
@@ -300,7 +325,7 @@ const HAIR_FRAG = /* glsl */ `
     col += uTip * (1.0 - smoothstep(0.0, 0.012, vEdgeF)) * vFringe * 0.8;
     col *= mix(0.5, 1.0, facing); // the inside of the hair reads darker (but stays visible)
     float specLum = dot(spec, vec3(0.299, 0.587, 0.114));
-    float alpha = (uBaseAlpha + 0.30 * f + specLum * 0.9) * fade * tipStrands;
+    float alpha = (uBaseAlpha + 0.30 * f + specLum * 0.9) * fade * tipStrands * uFade;
     if (alpha < 0.12) discard;
     gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
   }
@@ -424,6 +449,7 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
       uStrandWander: { value: 6.0 },
       uTipFade: { value: 0.05 * H },
       uBaseAlpha: { value: 0.5 }, // translucent → holographic like the rest of the mesh (sheen stays bright)
+      uFade: { value: 0 },        // reveal fade (0 hidden → 1 full); the whole hair, rim included
       uTime: { value: 0 },
       uWaveAmp: { value: 0.02 },     // tip sway amplitude (metres)
       uWaveSpeed: { value: 1.1 },    // wave speed
@@ -492,6 +518,39 @@ function subsample(geo: THREE.BufferGeometry, stride: number): THREE.BufferGeome
   return g;
 }
 
+// Bake the REVEAL attributes onto the node geo: aHome (a scattered "swarm cloud" start
+// position, head-local) + aDelay (per-node stagger). `position` is the TARGET face vertex.
+// Call AFTER subsample, BEFORE building nodeMat. Returns the face centroid (the vortex axis).
+function bakeAssemble(geo: THREE.BufferGeometry): THREE.Vector3 {
+  geo.computeBoundingBox();
+  const c = geo.boundingBox!.getCenter(new THREE.Vector3());
+  const size = geo.boundingBox!.getSize(new THREE.Vector3());
+  const pos = geo.attributes.position;
+  const aYattr = geo.attributes.aY, rand = geo.attributes.aRand;
+  const N = pos.count;
+  const home = new Float32Array(N * 3);
+  const delay = new Float32Array(N);
+  const v = new THREE.Vector3();
+  const rx = size.x * 3.2, ry = size.y * 2.8, rz = Math.max(size.z, size.y) * 2.6;
+  for (let i = 0; i < N; i++) {
+    // direction on a sphere, biased taller than wide → a column of dust, not a ball
+    const u = Math.random() * 2 - 1, phi = Math.random() * Math.PI * 2;
+    const sxy = Math.sqrt(1 - u * u);
+    v.set(sxy * Math.cos(phi), sxy * Math.sin(phi) * 1.5, u);
+    const shell = 0.8 + Math.random() * 0.3; // hollow band → collapses inward as a swarm
+    home[i * 3] = c.x + v.x * rx * shell;
+    home[i * 3 + 1] = c.y + v.y * ry * shell;
+    home[i * 3 + 2] = c.z + v.z * rz * shell + rz * 0.3; // bias toward camera → flies "through" the viewer
+    // stagger: chin→crown wipe blended with per-node randomness (reuse aY + aRand)
+    const wipe = aYattr ? aYattr.getX(i) : Math.random(); // 0 chin … 1 crown
+    const rnd = rand ? rand.getX(i) : Math.random();
+    delay[i] = Math.min(0.55, 0.5 * (1 - wipe) + 0.25 * rnd);
+  }
+  geo.setAttribute('aHome', new THREE.BufferAttribute(home, 3));
+  geo.setAttribute('aDelay', new THREE.BufferAttribute(delay, 1));
+  return c;
+}
+
 // An IRIS sprite texture — dark pupil, a bright limbal ring, striated cyan iris,
 // and a catchlight. Additive: the alpha-0 pupil reads dark, so you SEE the iris.
 function makeIrisTexture(): THREE.Texture {
@@ -546,7 +605,7 @@ function makeScleraTexture(): THREE.Texture {
 
 // An iris parented to an eye bone — a readable iris (ring + dark pupil + catchlight)
 // over a faint halo + a SCLERA (eye-white), so she has an expressive gaze.
-function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scleraTex: THREE.Texture, dotTex: THREE.Texture): THREE.Material[] {
+function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scleraTex: THREE.Texture, dotTex: THREE.Texture, eyeObjs: THREE.Object3D[]): THREE.Material[] {
   if (!bone) return [];
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0.014]), 3));
@@ -568,15 +627,24 @@ function makeIris(bone: THREE.Object3D | undefined, irisTex: THREE.Texture, scle
   const sclera = new THREE.Points(g, scleraMat); sclera.renderOrder = 2;
   const halo = new THREE.Points(g, haloMat); halo.renderOrder = 3;
   const iris = new THREE.Points(g, irisMat); iris.renderOrder = 4;
+  sclera.visible = halo.visible = iris.visible = false; // reveal shows them once she's formed
   bone.add(sclera, halo, iris);
+  eyeObjs.push(sclera, halo, iris);
   return [haloMat];
 }
 
-function Avatar({ url }: { url: string }) {
+function Avatar({ url, reveal: revealProp = true }: { url: string; reveal?: boolean }) {
   const { camera, gl } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
   const rig = useRef<Rig | null>(null);
   const a = useRef({ nextBlink: 1.2, blinkAt: -1, nextSacc: 0.6, gx: 0, gy: 0, nextBrow: 2.5, browAt: -1, browAmt: 0 });
+
+  // ── reveal clock (0 = scattered dust-cloud, 1 = fully assembled) ───────────
+  const reveal = useRef(0);
+  const revealTarget = useRef(revealProp ? 1 : 0);
+  useEffect(() => { revealTarget.current = revealProp ? 1 : 0; }, [revealProp]);
+  // assemble from scratch each time she (re)loads — the dots-morph reveal
+  useEffect(() => { if (root) { reveal.current = 0; revealTarget.current = revealProp ? 1 : 0; } }, [root]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── lip-sync driver (created once) ────────────────────────────────────────
   const lipRef = useRef<VenusLipsync | null>(null);
@@ -651,10 +719,14 @@ function Avatar({ url }: { url: string }) {
 
         // ── build the glowing plexus shell ONCE (bind-pose; off the loop) ───
         const cycleMats: THREE.Material[] = [];
+        const eyeObjs: THREE.Object3D[] = [];
         let shell: THREE.Group | undefined;
         let nodeMat: THREE.ShaderMaterial | undefined;
         let coreMat: THREE.ShaderMaterial | undefined;
         let edgeCoreMat: THREE.LineBasicMaterial | undefined;
+        let edgeHaloMat: THREE.LineBasicMaterial | undefined;
+        let glowMat: THREE.PointsMaterial | undefined;
+        let occluder: THREE.Mesh | undefined;
         let aura: THREE.Object3D | undefined;
         let bob: THREE.Mesh | undefined;
         let hairMat: THREE.ShaderMaterial | undefined;
@@ -672,8 +744,9 @@ function Avatar({ url }: { url: string }) {
             const faceGeo = dropEars(rawFace, earClipX); // bright shell stops at the cheeks
             bakeAurora(faceGeo);
             const dotGeo = subsample(faceGeo, 3); // sparser, more deliberate nodes
+            const fc = bakeAssemble(dotGeo); // reveal attrs (aHome/aDelay) + the vortex axis
 
-            // (a) signature NODES — aurora gradient + travelling thought-pulse
+            // (a) signature NODES — aurora gradient + thought-pulse + reveal/vortex morph
             nodeMat = new THREE.ShaderMaterial({
               uniforms: {
                 uTime: { value: 0 },
@@ -681,6 +754,8 @@ function Avatar({ url }: { url: string }) {
                 uSpeak: { value: 0 },
                 uBlip: { value: 1 },
                 uDot: { value: dotTex },
+                uReveal: { value: 0 },          // start scattered
+                uCenter: { value: fc.clone() }, // face centroid = vortex axis
               },
               vertexShader: NODE_VERT,
               fragmentShader: NODE_FRAG,
@@ -693,8 +768,8 @@ function Avatar({ url }: { url: string }) {
             const corePts = new THREE.Points(dotGeo, nodeMat);
 
             // (b) node halo — fake bloom, tighter so it reads clean (not washy)
-            const glowMat = new THREE.PointsMaterial({
-              size: 0.034, map: dotTex, vertexColors: true, opacity: 0.12,
+            glowMat = new THREE.PointsMaterial({
+              size: 0.034, map: dotTex, vertexColors: true, opacity: 0, // reveal fades it in
               transparent: true, sizeAttenuation: true,
               blending: THREE.AdditiveBlending, depthWrite: false,
             });
@@ -703,20 +778,18 @@ function Avatar({ url }: { url: string }) {
             // (c) structural edges LEAD the look (+ scaled halo clone = fake thickness)
             const edgesGeo = new THREE.EdgesGeometry(faceGeo, 16);
             edgeCoreMat = new THREE.LineBasicMaterial({
-              color: new THREE.Color('#3a6f8a'), transparent: true, opacity: 0.36,
+              color: new THREE.Color('#3a6f8a'), transparent: true, opacity: 0, // reveal fades it in
               blending: THREE.AdditiveBlending, depthWrite: false,
             });
             const edgeCore = new THREE.LineSegments(edgesGeo, edgeCoreMat);
-            const edgeHaloMat = edgeCoreMat.clone();
-            edgeHaloMat.opacity = 0.1;
+            edgeHaloMat = edgeCoreMat.clone();
+            edgeHaloMat.opacity = 0;
             const edgeHalo = new THREE.LineSegments(edgesGeo, edgeHaloMat);
             edgeHalo.scale.setScalar(1.012);
 
-            // (d) core glow — light from within (fresnel sphere behind the face)
-            faceGeo.computeBoundingBox();
-            const fc = faceGeo.boundingBox!.getCenter(new THREE.Vector3());
+            // (d) core glow — light from within (fresnel sphere behind the face; fc from bakeAssemble)
             coreMat = new THREE.ShaderMaterial({
-              uniforms: { uColor: { value: new THREE.Color('#3FA6C8') }, uOpacity: { value: 0.9 } },
+              uniforms: { uColor: { value: new THREE.Color('#3FA6C8') }, uOpacity: { value: 0 } },
               vertexShader: CORE_VERT,
               fragmentShader: CORE_FRAG,
               transparent: true,
@@ -747,8 +820,8 @@ function Avatar({ url }: { url: string }) {
             }
 
             // (f) glowing irises — expressive gaze that tracks the saccades
-            cycleMats.push(...makeIris(bones.leftEye, irisTex, scleraTex, dotTex));
-            cycleMats.push(...makeIris(bones.rightEye, irisTex, scleraTex, dotTex));
+            cycleMats.push(...makeIris(bones.leftEye, irisTex, scleraTex, dotTex, eyeObjs));
+            cycleMats.push(...makeIris(bones.rightEye, irisTex, scleraTex, dotTex, eyeObjs));
 
             bones.head.add(shell);
             cycleMats.push(edgeCoreMat, edgeHaloMat);
@@ -758,14 +831,19 @@ function Avatar({ url }: { url: string }) {
             // (bangs/sides) covers the face, and flowing bottom strands still draw.
             // polygonOffset pushes its depth back so the (skinned) glowing wireframe
             // sits cleanly in front of it; the dark fill shows through the wire gaps.
-            const occluder = new THREE.Mesh(rawFace, new THREE.MeshBasicMaterial({
+            occluder = new THREE.Mesh(rawFace, new THREE.MeshBasicMaterial({
               color: new THREE.Color('#05090f'),
+              transparent: true,
+              opacity: 0, // reveal fades the dark fill in (depthWrite gated in useFrame)
               polygonOffset: true,
               polygonOffsetFactor: 4,
               polygonOffsetUnits: 4,
             }));
             occluder.renderOrder = -10;
             bones.head.add(occluder);
+
+            // start the substrate hidden too — the reveal clock fades it in
+            for (const m of meshes) (m.material as THREE.MeshBasicMaterial).opacity = 0;
 
             // (g) aura pool — she sits in her own light (billboarded, behind head)
             const auraMat = new THREE.MeshBasicMaterial({
@@ -781,7 +859,7 @@ function Avatar({ url }: { url: string }) {
           }
         }
 
-        rig.current = { meshes, bones, rest, nodeMat, coreMat, edgeCoreMat, cycleMats, aura, shell, bob, hairMat };
+        rig.current = { meshes, bones, rest, nodeMat, coreMat, edgeCoreMat, edgeHaloMat, glowMat, occluder, eyeObjs, cycleMats, aura, shell, bob, hairMat };
 
         // frame the face off the known avatar scale (head at the top, face at +z).
         // NOTE: frame BEFORE adding the aura plane — it would inflate the bbox.
@@ -834,33 +912,57 @@ function Avatar({ url }: { url: string }) {
       b.rotation.set(rr.x + x, rr.y + y, rr.z + z);
     };
 
+    // ── reveal clock (0 = scattered dust-cloud → 1 = fully her; faster disperse) ──
+    const inbound = revealTarget.current > reveal.current;
+    reveal.current = THREE.MathUtils.damp(reveal.current, revealTarget.current, inbound ? 3.0 : 4.5, delta);
+    const R = reveal.current;
+    const seg = (lo: number, hi: number) => { const x = THREE.MathUtils.clamp((R - lo) / (hi - lo), 0, 1); return x * x * (3 - 2 * x); };
+    const alive = R > 0.6; // gate the human micro-life until she's formed
+
     // ── narrow hue drift (cyan→violet arc, ±14°, ~28s) — EDGES + hair only ──
     const h = 0.52 + 0.04 * Math.sin(t * 0.045);
     for (const m of r.cycleMats) (m as THREE.LineBasicMaterial).color?.setHSL(h, 0.5, 0.55);
 
     // ── rare holographic blip (the ONE instability) ────────────────────────
     const blip = Math.random() < 0.003 ? 0.82 : 1.0;
-    if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.36 * blip;
 
-    // ── node uniforms: thought-pulse time + reactive speak energy + blip ────
+    // ── nodes: thought-pulse + speak energy + the reveal/vortex morph ───────
     const speak = lipTargets.current.jawOpen ?? 0;
     if (r.nodeMat) {
       const u = r.nodeMat.uniforms;
       u.uTime.value = t;
       u.uBlip.value = blip;
+      u.uReveal.value = seg(0.1, 0.62); // gather → spin → stream → snap
       u.uSpeak.value = THREE.MathUtils.damp(u.uSpeak.value, speak * 1.2, 8, delta);
       u.uPeriod.value = THREE.MathUtils.damp(u.uPeriod.value, speak > 0.06 ? 1.4 : 3.5, 4, delta);
     }
-    if (r.coreMat) r.coreMat.uniforms.uOpacity.value = 0.5 + 0.1 * Math.sin(t * 0.5);
 
-    // ── shell parallax + aura billboard/breath ─────────────────────────────
+    // ── structure layers fade in AFTER the nodes land (the choreography) ────
+    if (r.glowMat) r.glowMat.opacity = 0.12 * seg(0.45, 0.66);
+    if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.36 * seg(0.62, 0.78) * blip;
+    if (r.edgeHaloMat) r.edgeHaloMat.opacity = 0.1 * seg(0.62, 0.78);
+    const subA = 0.085 * seg(0.62, 0.78);
+    for (const m of r.meshes) (m.material as THREE.MeshBasicMaterial).opacity = subA;
+    if (r.coreMat) r.coreMat.uniforms.uOpacity.value = (0.5 + 0.1 * Math.sin(t * 0.5)) * seg(0.72, 0.9);
+    if (r.occluder) {
+      const om = r.occluder.material as THREE.MeshBasicMaterial;
+      om.opacity = seg(0.5, 0.66);
+      om.depthWrite = R > 0.5; // only occlude once the face forms (else it clips the cloud)
+    }
+    if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.7, 0.9)));
+    if (r.hairMat) r.hairMat.uniforms.uFade.value = seg(0.68, 0.92); // whole hair (rim incl.) fades in
+    for (const o of r.eyeObjs) o.visible = R > 0.66; // eyes appear once she's formed (no floating eyes)
+
+    // ── shell parallax + aura billboard/breath (aura blooms in last) ────────
     if (r.shell) {
       r.shell.rotation.y = Math.sin(t * 0.18) * 0.05;
       r.shell.position.y = Math.sin(t * 0.5) * 0.003;
     }
     if (r.aura) {
+      const aA = seg(0.85, 1);
+      ((r.aura as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.1 * aA;
       r.aura.quaternion.copy(camera.quaternion);
-      r.aura.scale.setScalar(0.95 * (1 + 0.03 * Math.sin(t * 0.25)));
+      r.aura.scale.setScalar(THREE.MathUtils.lerp(0.7, 0.95, aA) * (1 + 0.03 * Math.sin(t * 0.25)));
     }
 
     // ── hair: object→view rotation (anisotropic sheen band) + time + breathing light ──
@@ -875,6 +977,7 @@ function Avatar({ url }: { url: string }) {
         .normalize();
     }
 
+    if (alive) {
     // blink — eyelids close + open (0→1→0)
     if (s.blinkAt < 0 && t > s.nextBlink) s.blinkAt = t;
     let blink = 0;
@@ -937,16 +1040,19 @@ function Avatar({ url }: { url: string }) {
         }
       }
     }
+    } // end if (alive) — the human micro-life only runs once she's formed
   });
 
   return root ? <primitive object={root} /> : null;
 }
 
-export default function VenusHeadScene() {
+// `reveal` drives the dots-morph: true = assemble from the dust-cloud, false = disperse.
+// Wire it to the Studio brand create/edit flow later (e.g. reveal={isBuilding}).
+export default function VenusHeadScene({ reveal = true }: { reveal?: boolean }) {
   return (
     <Canvas camera={{ position: [0, 0, 2], fov: 22 }} style={{ flex: 1 }}>
       <color attach="background" args={['#06080f']} />
-      <Avatar url={AVATAR_URL} />
+      <Avatar url={AVATAR_URL} reveal={reveal} />
     </Canvas>
   );
 }
