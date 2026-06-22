@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NCMark, usePalette } from '@/components/nc-screen';
+import { usePalette } from '@/components/nc-screen';
 import { AppBackground } from '@/components/backgrounds/app-background';
 import { withScreenFade } from '@/components/screen-fade';
 import Animated, {
@@ -1160,7 +1160,6 @@ function DesignScreen() {
       {/* Top: designs history bar */}
       <SafeAreaView edges={['top']}>
         <View style={styles.topBar}>
-          <NCMark size={20} color={theme.text} />
           <Pressable
             onPress={() => {
               setSetupStep('brand');

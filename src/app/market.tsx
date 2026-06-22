@@ -17,7 +17,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BrandStore } from '@/components/brand-store';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { NCMark, usePalette } from '@/components/nc-screen';
+import { usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import { GlowInput } from '@/components/glow-input';
 import { apiUrl } from '@/lib/api';
@@ -191,7 +191,6 @@ function MarketScreen() {
         <View style={styles.inner}>
           <View style={styles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
-              <NCMark size={22} color={theme.text} />
               <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>
                 MARKET
               </ThemedText>

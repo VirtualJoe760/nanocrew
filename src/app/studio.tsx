@@ -1029,7 +1029,6 @@ function StudioScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <View style={styles.headerRow}>
-          <NCMark size={22} color={p.ink} metallic={p.dark} />
           <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>
             STUDIO
           </ThemedText>

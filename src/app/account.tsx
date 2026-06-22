@@ -293,7 +293,6 @@ function AccountScreen() {
               <>
                 {/* Branded chrome header — matches Studio/Market (NC serif mark + eyebrow) */}
                 <View style={styles.brandHeader}>
-                  <NCMark size={22} color={theme.text} />
                   <ThemedText type="code" themeColor="textSecondary" style={styles.eyebrow}>ACCOUNT</ThemedText>
                 </View>
 
