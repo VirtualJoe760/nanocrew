@@ -18,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { NCMark, usePalette } from '@/components/nc-screen';
+import { usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import { GlowButton } from '@/components/glow-button';
 import { GlowInput } from '@/components/glow-input';
@@ -407,7 +407,6 @@ function AccountScreen() {
               <View style={styles.authWrap}>
                 {/* Branded join hero — first impression before anyone has an account. */}
                 <View style={styles.joinHero}>
-                  <NCMark size={52} color={theme.text} />
                   <ThemedText glow style={[styles.joinWordmark, { color: theme.text }]}>Nano Crew</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary" style={styles.joinSub}>
                     {isSignup
