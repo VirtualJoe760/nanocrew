@@ -1,4 +1,5 @@
 import { Canvas, Fill, Shader, Skia, useClock } from '@shopify/react-native-skia';
+import { useMemo } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useDerivedValue } from 'react-native-reanimated';
 
@@ -79,11 +80,13 @@ half4 main(float2 fragCoord) {
 }
 `;
 
-const effect = Skia.RuntimeEffect.Make(SKSL);
-
 export default function DotFieldScene() {
   const { width, height } = useWindowDimensions();
   const clock = useClock(); // elapsed ms, as a shared value
+  // Compile the shader at render time, NOT module-load time. At module load (when _layout first
+  // imports this on native) the Skia runtime may not be ready yet, so a top-level
+  // Skia.RuntimeEffect.Make(SKSL) returns null once and the scene renders nothing forever.
+  const effect = useMemo(() => Skia.RuntimeEffect.Make(SKSL), []);
   // Clamp the resolution to >= 1 so the shader never divides by zero. useWindowDimensions returns
   // 0x0 on the first frame before layout settles; an unclamped 0 height makes `uv / u_resolution.y`
   // produce NaN/Inf, which CanvasKit (web) aborts on every frame and which renders blank on native.

@@ -12,6 +12,9 @@ const CK_OPTS = {
 // A dark veil over the dots so text always has a consistent bed of contrast. The colour is the brand
 // background (#08080a); raise/lower the alpha to make the dots quieter/livelier behind content.
 const SCRIM = 'rgba(8,8,10,0.42)';
+// Opaque brand-dark base BEHIND the dot canvas, so the background is never white while CanvasKit is
+// loading or if it renders nothing.
+const BASE = '#08080a';
 
 function Scene() {
   // Load CanvasKit, then the scene module. Required lazily so it's only ever evaluated on web.
@@ -21,7 +24,7 @@ function Scene() {
 
 export function AppBackground() {
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: BASE }]} pointerEvents="none">
       <Scene />
       {/* scrim — sits over the dots, under everything else, so text always pops */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: SCRIM }]} />

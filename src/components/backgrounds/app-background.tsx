@@ -32,10 +32,14 @@ try {
 // A dark veil over the dots so text always has a consistent bed of contrast. The colour is the brand
 // background (#08080a); raise/lower the alpha to make the dots quieter/livelier behind content.
 const SCRIM = 'rgba(8,8,10,0.42)';
+// Opaque brand-dark base BEHIND the dot canvas, so the background is never the platform-default
+// white if Skia renders nothing (a blank canvas would otherwise show white and make the dark-mode
+// text invisible).
+const BASE = '#08080a';
 
 export function AppBackground() {
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: BASE }]} pointerEvents="none">
       {DotFieldScene ? <DotFieldScene /> : null}
       {/* scrim — sits over the dots, under everything else, so text always pops */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: SCRIM }]} />
