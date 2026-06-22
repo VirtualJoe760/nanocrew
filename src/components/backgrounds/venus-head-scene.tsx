@@ -51,7 +51,8 @@ const BOB_WIDEN = 1.07;      // shell width vs head half-width — slightly OUTS
                             // wireframe z-fights/shows through the hair). Covers ears.
 const BOB_DEPTH = 1.18;      // shell depth vs head half-width (also outside the skull front/back)
 const BOB_FACE_OPEN = 0.6;   // half-width of the face opening (× head half-width)
-const BOB_FRINGE = 0.44;     // fringe ends this fraction of head height below the crown (~brow)
+const BOB_FRINGE = 0.45;     // fringe ends this fraction of head height below the crown — at the
+                            // eyebrows (just ABOVE the eyes, not below them).
 const BOB_LEN = -0.2;        // bob bottom (fraction of head height; negative = below the chin)
 const BOB_TILT = 0.65;       // A-line: front kept longer than the back (long-bob front pieces)
 // Drop the outermost (ear) verts from the bright face shell (hidden under the bob).
@@ -371,7 +372,7 @@ const HAIR_FRAG = /* glsl */ `
 // the skull, then vertical side panels hanging straight down to the jaw), NOT a round
 // ball. Carved for a face opening + A-line bottom; smooth fresnel-glow volume.
 // `eyeY` (head-local) anchors the sizing to real proportions.
-function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
+function buildBobHair(bb: THREE.Box3, eyeY: number, topYCap?: number): THREE.Mesh {
   const cx = (bb.min.x + bb.max.x) / 2;
   const cz = (bb.min.z + bb.max.z) / 2;
   const w = bb.max.x - bb.min.x;            // head width (incl. ears)
@@ -379,7 +380,9 @@ function buildBobHair(bb: THREE.Box3, eyeY: number): THREE.Mesh {
   const H = 2 * (crownY - eyeY);            // head height (crown→chin); eyes ≈ halfway
   const chinY = crownY - H;
   const Rx = (w / 2) * BOB_WIDEN, Rz = (w / 2) * BOB_DEPTH;
-  const topY = crownY;                      // the crown
+  // The hair tops out a little above the bangs (topYCap), NOT at the crown — so it doesn't form the
+  // full rounded dome over her head. Above it is just the faint substrate fibermesh.
+  const topY = topYCap !== undefined ? Math.min(crownY, topYCap) : crownY;
   const botY = chinY - 0.45 * H;            // grid extends well below the chin (long A-line front)
   const browY = crownY - BOB_FRINGE * H;    // fringe hangs to ~the brow
   const faceHalfX = (w / 2) * BOB_FACE_OPEN;
@@ -928,7 +931,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         let bob: THREE.Mesh | undefined;
         let hairMat: THREE.ShaderMaterial | undefined;
         let earClipX = 0; // |x| beyond which the dim substrate ears are clipped
-        let browClipY = Infinity; // y above which the head is hidden (hair owns above the eyebrows)
+        let headClipPlane: THREE.Plane | undefined; // WORLD-space plane: cut the skull above the hairline
 
         if (bones.head) {
           const dotTex = makeDotTexture();
@@ -939,8 +942,11 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             rawFace.computeBoundingBox();
             const halfW = Math.max(Math.abs(rawFace.boundingBox!.min.x), Math.abs(rawFace.boundingBox!.max.x));
             earClipX = halfW * EAR_DROP_FRAC;
-            // BROW LINE (head-local): the hair owns everything above the eyebrows, so the bright
-            // wireframe/dots only render from ~the brows down. Use the eye bones; brows sit just above.
+            // We don't want the whole rounded head above the bangs — only a little fibermesh. So the
+            // BRIGHT shell (edges + lattice dots) stops a bit above the brows; above that is just the
+            // faint substrate + the bangs. (HEAD-LOCAL geometry drop — NOT a world clip plane, which
+            // shatters on a full-body avatar whose head sits at world y≈1.5.)
+            bones.head.updateWorldMatrix(true, true);
             const crownLocalY = rawFace.boundingBox!.max.y;
             let eyeLineLocalY = (rawFace.boundingBox!.min.y + crownLocalY) / 2;
             if (bones.leftEye && bones.rightEye) {
@@ -950,9 +956,12 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
               bones.head.worldToLocal(mid);
               eyeLineLocalY = mid.y;
             }
-            browClipY = eyeLineLocalY + 0.05 * (crownLocalY - eyeLineLocalY); // just above the eyes
-            // bright shell stops at the cheeks (ears) AND at the brow (forehead/scalp → hair covers it)
-            const faceGeo = dropAbove(dropEars(rawFace, earClipX), browClipY);
+            const headTopY = eyeLineLocalY + 0.30 * (crownLocalY - eyeLineLocalY); // a little above the bangs
+            const faceGeo = dropAbove(dropEars(rawFace, earClipX), headTopY); // bright shell: no skull above
+            // the substrate skull (a SkinnedMesh we can't drop verts from) is cut by a WORLD-space plane
+            // at the same head-local height — transformed via the head matrix so it cuts at the real
+            // hairline (NOT at world y≈0, which is what shattered it before).
+            headClipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), headTopY).applyMatrix4(bones.head.matrixWorld);
             bakeAurora(faceGeo);
             const faceDots = subsample(faceGeo, 3); // ~face vertices: position + aurora color + aY
             faceDots.computeBoundingBox();
@@ -1049,7 +1058,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
               bones.rightEye.getWorldPosition(eR);
               e.add(eR).multiplyScalar(0.5);
               bones.head.worldToLocal(e); // eye line in head-local space
-              bob = buildBobHair(rawFace.boundingBox, e.y);
+              bob = buildBobHair(rawFace.boundingBox, e.y); // full bob — covers the crown (no cap)
               hairMat = bob.material as THREE.ShaderMaterial;
               // Render the hair BEFORE the head wireframe (it writes depth) so the scalp/forehead
               // BEHIND the hair is depth-culled — otherwise the translucent hair draws OVER the
@@ -1118,13 +1127,11 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             new THREE.Plane(new THREE.Vector3(-1, 0, 0), earClipX), // keep x <= +earClipX
             new THREE.Plane(new THREE.Vector3(1, 0, 0), earClipX),  // keep x >= -earClipX
           ];
-          // the substrate wireframe ALSO clips at the BROW — above the eyebrows is hair, not head.
-          const headPlanes = browClipY < Infinity
-            ? [...earPlanes, new THREE.Plane(new THREE.Vector3(0, -1, 0), browClipY)] // keep y <= browClipY
-            : earPlanes;
+          // substrate also cut ABOVE the hairline (no bare skull above the hair). World-space plane.
+          const subPlanes = headClipPlane ? [...earPlanes, headClipPlane] : earPlanes;
           for (const mm of meshes) {
             const mat = mm.material as THREE.Material;
-            mat.clippingPlanes = headPlanes;
+            mat.clippingPlanes = subPlanes;
             mat.needsUpdate = true;
           }
           // ALSO clip the deforming dark FILL at the ears — otherwise it fills + depth-writes the
