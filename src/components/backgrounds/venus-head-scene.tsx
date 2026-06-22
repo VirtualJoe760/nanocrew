@@ -1158,24 +1158,21 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     }
 
     // ── structure layers fade in AFTER the face dots land (the choreography) ────
-    // BRIGHTER when SILENT (present / listening), DIMMER when TALKING (calmer — the lip energy
-    // carries the speech). quiet = 1 when silent, 0 when talking.
+    // Silent and talking sit at a SIMILAR brightness — just a little brighter when SPEAKING.
+    // `lit`: silent 0.88, talking ~1.0 (+ a touch on jawOpen).
     const talk = talkingRef.current ? 1 : 0;
-    const quiet = 1 - talk;
-    if (r.edgeCoreMat) r.edgeCoreMat.opacity = (0.30 + 0.12 * quiet) * seg(0.62, 0.78) * blip;
-    if (r.edgeHaloMat) r.edgeHaloMat.opacity = (0.10 + 0.04 * quiet) * seg(0.62, 0.78);
-    // The substrate wireframe carries the lip-sync; a small jawOpen punch keeps the mouth readable
-    // even though talking is dimmer overall.
-    const subA = (0.18 + 0.18 * quiet + 0.05 * speak * talk) * seg(0.62, 0.78);
+    const lit = 0.88 + 0.12 * talk + 0.06 * speak * talk;
+    if (r.edgeCoreMat) r.edgeCoreMat.opacity = 0.40 * lit * seg(0.62, 0.78) * blip;
+    if (r.edgeHaloMat) r.edgeHaloMat.opacity = 0.12 * lit * seg(0.62, 0.78);
+    const subA = 0.32 * lit * seg(0.62, 0.78);
     for (const m of r.meshes) (m.material as THREE.MeshBasicMaterial).opacity = subA;
     if (r.coreMat) r.coreMat.uniforms.uOpacity.value = (0.5 + 0.1 * Math.sin(t * 0.5)) * seg(0.72, 0.9);
     if (r.occluderMat) {
       const om = r.occluderMat;
       om.opacity = seg(0.5, 0.66);
       om.depthWrite = R > 0.5; // only occlude once the face forms (else it clips the cloud)
-      // When SILENT she glows from within (soft teal fill = present/listening); when TALKING the
-      // fill goes dark so she's calmer/dimmer and the lip energy reads.
-      const lift = quiet * 0.5;
+      // Soft teal fill in BOTH states (a touch brighter speaking), so silence and talking sit close.
+      const lift = 0.34 * lit;
       om.color.setRGB(0.02 + 0.085 * lift, 0.04 + 0.2 * lift, 0.065 + 0.28 * lift);
     }
     if (r.bob) r.bob.scale.setScalar(THREE.MathUtils.lerp(0.92, 1, seg(0.7, 0.9)));

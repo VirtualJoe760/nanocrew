@@ -269,16 +269,17 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      depthWrite/teal-lift in `useFrame`. **The occluder is EAR-CLIPPED** with the same `earPlanes` as the
      substrate — otherwise the dark fill writes depth at the ears and punches them through the
      (translucent) hair; clipping lets the hair cover the ears.
-   - **Brightness model — BRIGHTER when SILENT, DIMMER when TALKING (DONE).** Per Joe: she was too
-     bright talking. `quiet = 1 − talk`. The wireframe lifts when silent (`subA = (0.18 + 0.18·quiet +
-     0.05·speak·talk)·seg`; edges `(0.30 + 0.12·quiet)·seg`) and the occluder FILL glows a soft teal
-     when silent (`lift = quiet·0.5`, dark when talking). So she's present/lit while listening and
-     calmer/dimmer while speaking (the lip energy carries the speech). Tune the `quiet` coefficients.
+   - **Brightness model — both states CLOSE, a touch brighter SPEAKING (DONE).** Per Joe (after a
+     few passes): silence and talking should sit near the same brightness, just slightly brighter while
+     speaking. One scalar drives it all: `lit = 0.88 + 0.12·talk + 0.06·speak·talk` (silent 0.88,
+     talking ~1.0+). Applied to the wireframe (`subA = 0.32·lit·seg`), edges (`0.40·lit·seg`), and the
+     occluder fill (soft teal `lift = 0.34·lit` in BOTH states). Tune the `lit` constants / the per-
+     layer multipliers.
    - **Tuning knobs:** `LAT_COLS/LAT_ROWS` (density; drop to 60×40 on a slow device), `bakeUnifiedLattice`
      span (`vW/vH × 2.0`) + greedy claim + the lip-band (`aY 0.20–0.40`), `LATTICE_VERT` `uSwirl/uUpdraft/
      uInfall` + the `fly·0.9` pinch, the `uPulse` curve + `basePx`, the lip energy (`uTime·0.6` ring rate,
-     the speech wave (`uTime·0.5` rise rate, `55` band width, `uSpeak` punch) + the `quiet` brightness
-     coefficients (`subA`/edges/fill), `bakeStreamField` count, the `seg(...)`.
+     the speech wave (`uTime·0.5` rise rate, `55` band width, `uSpeak` punch) + the `lit` brightness
+     factor (`subA`/edges/fill multipliers), `bakeStreamField` count, the `seg(...)`.
    - **⚠ Sync point:** the Skia look now lives in **TWO** places — `dot-field-scene.tsx` (SKSL, still the
      app-wide Account/Market/Account background via `<AppBackground>`) and `venus-points.ts`
      `SKIA_CHUNK` (the GLSL port). If the dot-field look is retuned, change BOTH (the constants are
