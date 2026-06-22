@@ -206,30 +206,51 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    On web that's `connect(htmlAudioElement)`. On **native** there is no `AudioContext`, so this is a
    separate bridge (render the avatar in a WebView, or compute visemes from PCM frames with a tiny
    FFT — `sample()`'s math ports; `connect(HTMLMediaElement)` does not).
-3. ✅ **DONE (v1) — the dots-morph WHIRLWIND reveal.** She assembles from a scattered dust-field:
-   the face NODES bake a scattered `aHome` + per-node `aDelay` (`bakeAssemble`); `NODE_VERT` lerps
-   home→target with a staggered ease + a **vortex swirl** (`sin(ease·π)` hump → resolves exactly to
-   0 on landing) about the face centroid (`uCenter`), driven by **one `uReveal` clock**. A single
-   reveal clock in `useFrame` (damp toward `revealTarget`, faster disperse) then **fades each layer in
-   on a timing table** — nodes (0.10–0.62) → node-halo/edges/substrate (0.45–0.78) → hair (`uFade`
-   0.68–0.92) + core → aura (0.85–1.0); the eyes (`eyeObjs`) + human micro-life gate on until she's
-   formed; resting state (`R=1`) is exactly today's look. Tune: the swirl radians (`7.0` in
-   `NODE_VERT`), scatter radii (`bakeAssemble` `rx/ry/rz`), `aDelay` spread, the damp rates, and the
-   per-layer `seg(...)` windows.
+3. ✅ **DONE (v1) — the CYCLONE morph (starts at the background layer).** Per Joe: "the dots come
+   together in a cyclone like manner, then transform into the same material Venus can materialize
+   with. also we will have the dots as background still but will be pulsing towards Venus." Two
+   cooperating point systems, both parented to the Head bone and sharing the funnel axis `uCenter`
+   (the baked face centroid `fc`):
+   - **The face NODES (`corePts`, `NODE_VERT`)** — `bakeAssemble` now bakes a **screen-facing GRID**
+     `aHome` (a lattice across `spanX/Y = vW/vH × 1.7`, on the camera's z-plane — i.e. the dots
+     *start as the background field*, not a random cloud), plus per-node `aDelay`, `aRadius` (start
+     radius from the axis), `aSpan` (0 inner … 1 edge). `NODE_VERT` lifts each node off the grid and
+     runs it through a **tornado**: one coherent rotation sense (`uSwirl`, faster near the axis via
+     `1/(0.35+r·2.5)`), an **inward pinch** to the funnel neck (`mix(curR, rNow, fly·0.9)`), and a
+     mid-flight **updraft** (`uUpdraft·(0.4+0.6·aSpan)`), all gated by `fly = sin(lp·π)` so they
+     resolve **exactly to 0 on landing**. The **material transform** rides the same `lp`: invisible
+     at the grid → hot-white spark in flight → aurora `color` at the surface (`matT =
+     smoothstep(0.55,1,lp)`). Driven by one `uReveal` clock = `seg(0.10,0.62)` of `R`.
+   - **The persistent STREAM field (`streamPts`, `STREAM_VERT/FRAG`)** — a hollow ellipsoidal shell
+     of dots (`bakeStreamField`) that **loops outer→inner, pulsing toward her surface** (`aInner`
+     sink). Heavy **intake** during the morph (it *is* the cyclone's in-rush), then settles to a
+     quiet inward feed once formed (`uFlow` damps down, `uIntake` peaks mid-morph then eases) — so
+     "the dots remain as a background, still pulsing towards Venus." `uSpeak` gives it a breath on
+     talk. This is what keeps the dust alive behind the formed face.
+   - **One reveal clock** in `useFrame` (damp toward `revealTarget`, faster disperse) **fades each
+     layer in on a timing table** — nodes (0.10–0.62) → node-halo/edges/substrate (0.45–0.78) → hair
+     (`uFade` 0.68–0.92) + core → aura (0.85–1.0); the eyes (`eyeObjs`) + human micro-life gate on
+     until she's formed; resting state (`R=1`) is exactly the approved look. Tune: `uSwirl`/`uUpdraft`/
+     `uInfall` + the `fly·0.9` pinch (`NODE_VERT`), the grid `×1.7` overscan + `aDelay` spread
+     (`bakeAssemble`), `bakeStreamField` count/shell size, the damp rates, and the per-layer `seg(...)`.
    - **Driven by the `VenusStage` prop** (exported): `pre-render` (the **app dot-field background**,
-     `revealTarget 0`) · `morphing` (the assembly, ping-ponged) · `silence` (formed + listening, mouth
-     at rest) · `talking` (formed + lip-sync driving the mouth). `VenusHeadScene stage={...}` → `Avatar`
-     maps it to `revealTarget` + a `talking` flag. **The Lab has a 4-stage toggle row** (`playground.tsx`)
-     to test each phase; Studio will map its flow onto these later.
+     `revealTarget 0`) · `morphing` (the cyclone, ping-ponged every 4.5 s) · `silence` (formed +
+     listening, mouth at rest) · `talking` (formed + lip-sync driving the mouth). `VenusHeadScene
+     stage={...}` → `Avatar` maps it to `revealTarget` + a `talking` flag. **The Lab has a 4-stage
+     toggle row** (`playground.tsx`) to test each phase; Studio will map its flow onto these later.
    - **App-background crossfade (DONE):** the avatar `<Canvas>` is **transparent** (`gl.alpha`, no
      `<color>`) so the app's `<AppBackground>` (the `dot-field-scene` on Account/Studio) renders BEHIND
      it; `VenusHeadScene onReveal={r⇒…}` reports the live reveal each frame and the Lab fades the
-     dot-field out as she assembles (`opacity = 1 − r/0.5`) — so pre-render **is** the app background and
-     she morphs out of it. (Studio gets the same for free: it already shows `<AppBackground>` behind
-     transparent screens; just drop the avatar canvas on top.)
-   - **Remaining:** the **morphing** should destructure the face *into the dot-field's grid* (today the
-     scatter `aHome` is a random cloud — make it resolve to the background dot positions for a seamless
-     hand-off). The empty `venus-points.ts` is the long-term zero-seam Option C (the field as R3F points).
+     dot-field — **dipping to a 0.28 floor mid-morph** so the active R3F cyclone leads, recovering to
+     0.35 once formed (the background dots never fully vanish). So pre-render **is** the app
+     background, and she literally morphs out of it. (Studio gets the same for free: it already shows
+     `<AppBackground>` behind transparent screens; just drop the avatar canvas on top.)
+   - **NOTE — judge the morph LIVE, not from stills:** the cyclone is a *motion* effect (swirl +
+     in-rush over ~1.3 s); a single screenshot only ever shows one frame of the gather. Use the Lab's
+     **morphing** toggle (or scrub reveal) to evaluate it.
+   - **Remaining polish:** the long-term zero-seam Option C — render the *app background itself* as the
+     same R3F point system (a `venus-points` field) so there is literally one buffer of dots that
+     becomes her (today the node grid is a faithful *match* of the background, not the same buffer).
 4. **Swap in the user's own RPM Venus avatar** (URL swap; commercial license).
 5. **Integrate into Studio**: replace the orb (`src/components/venus-orb.tsx` / the nucleus in
    `studio.tsx`); drive from **real Gemini Live audio**; show her while she speaks (push-to-talk

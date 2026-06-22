@@ -69,42 +69,60 @@ export type VenusStage = 'pre-render' | 'morphing' | 'silence' | 'talking';
 const NODE_VERT = /* glsl */ `
   precision mediump float;
   uniform float uTime, uPeriod, uSpeak;
-  uniform float uReveal;      // 0 = scattered field, 1 = fully her
-  uniform vec3  uCenter;      // face centroid (head-local) — vortex axis
-  attribute float aY;         // baked normalized height 0..1
-  attribute float aRand;      // baked per-node phase
-  attribute vec3  aHome;      // scattered start (head-local)
-  attribute float aDelay;     // staggers arrival (0..~0.55)
+  uniform float uReveal;       // already seg(0.1,0.62)-remapped 0..1
+  uniform float uSwirl, uUpdraft, uInfall;
+  uniform vec3  uCenter;       // funnel axis (head-local)
+  attribute float aY;
+  attribute float aRand;
+  attribute vec3  aHome;       // GRID start
+  attribute float aDelay;
+  attribute float aRadius;     // start radius from axis
+  attribute float aSpan;       // 0 inner … 1 edge
   varying vec3 vColor;
   varying float vGlow;
   mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
   void main() {
-    // per-node staggered progress, eased
     float lp   = clamp((uReveal - aDelay) / max(1e-3, 1.0 - aDelay), 0.0, 1.0);
     float ease = lp * lp * (3.0 - 2.0 * lp);
-    float land = smoothstep(0.78, 1.0, lp);          // "click into place" gate
+    float land = smoothstep(0.82, 1.0, lp);
+    float fly  = sin(lp * 3.14159);                 // 0 → 1 → 0 over the flight
 
-    // travel home → target, with a VORTEX that resolves to 0 exactly on landing
-    vec3 p = mix(aHome, position, ease);
-    float spin = sin(ease * 3.14159);                // 0 → 1 → 0 over the flight
-    float dirS = aRand < 0.5 ? -1.0 : 1.0;           // mostly-shared sense → coherent swirl
-    float ang  = 7.0 * spin * dirS + uTime * (1.0 - ease) * 1.2;
+    float rNow = mix(aRadius, aRadius * (1.0 - uInfall), ease);
+    vec3  p = mix(aHome, position, ease);
+
+    // coherent tornado: ONE rotation sense, faster near the axis, gone on landing
+    float spinFall = 1.0 / (0.35 + rNow * 2.5);
+    float ang = uSwirl * fly * spinFall + uTime * (1.0 - ease) * 0.6;
     p.xz = rot(ang) * (p.xz - uCenter.xz) + uCenter.xz;
-    p.y += spin * 0.10 * (aRand - 0.5);              // slight tornado updraft, gone on land
 
-    // thought-pulse (UNCHANGED math; gated so it lights only once landed)
+    // inward spiral — narrow HARD into the funnel column mid-flight, release on landing
+    vec2 rel = p.xz - uCenter.xz;
+    float curR = max(length(rel), 1e-4);
+    vec2 dir = rel / curR;
+    float pinch = mix(curR, rNow, fly * 0.9);
+    p.xz = uCenter.xz + dir * pinch;
+
+    // vertical updraft — peaks mid-flight, zero on land (settles onto the real vertex)
+    p.y += fly * uUpdraft * (0.4 + 0.6 * aSpan) * (1.0 - land);
+
+    // thought-pulse (unchanged; gated to land)
     float wave  = fract(uTime / uPeriod);
     float d     = aY - wave;
     float pulse = exp(-d * d * 140.0);
     float w2    = fract(uTime / 9.0 + 0.5);
     pulse += 0.5 * exp(-(aY - w2) * (aY - w2) * 60.0);
     float tw    = 0.9 + 0.1 * sin(uTime * 2.0 + aRand * 6.2831);
-    vGlow = (0.5 + (1.5 + uSpeak) * pulse * land) * tw;
 
-    vColor = mix(vec3(0.85, 0.95, 1.0), color, ease); // hot-white spark → aurora color
+    // MATERIAL TRANSFORM — invisible at the grid, hot-white spark in flight, aurora at landing
+    float lift = smoothstep(0.0, 0.22, lp);
+    float matT = smoothstep(0.55, 1.0, lp);
+    vColor = mix(vec3(0.85, 0.95, 1.0), color, matT);
+    float spark = 0.6 + 1.4 * fly;
+    vGlow = lift * ((0.5 * matT + spark * (1.0 - matT)) + (1.5 + uSpeak) * pulse * land) * tw;
+
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    float flight = 1.0 + (1.0 - ease) * 0.8 * spin;   // bigger/brighter mid-flight
-    gl_PointSize = clamp(6.0 * vGlow * flight * (1.0 / -mv.z), 3.0, 16.0);
+    float flightSize = 1.0 + fly * 0.9;
+    gl_PointSize = clamp(6.0 * vGlow * flightSize * (1.0 / -mv.z), 3.0, 16.0);
     gl_Position  = projectionMatrix * mv;
   }
 `;
@@ -117,6 +135,56 @@ const NODE_FRAG = /* glsl */ `
   void main() {
     float a = texture2D(uDot, gl_PointCoord).a;
     gl_FragColor = vec4(vColor * vGlow * uBlip, a);  // additive → brightness = energy
+  }
+`;
+
+// ── the persistent dot-field that PULSES TOWARD her: a hollow shell of dots that loops
+//    outer→inner (streaming into her surface) — the cyclone source during the morph, a
+//    quiet inward pulse once formed. uFlow = stream strength, uIntake = swirl/pull-in. ──
+const STREAM_VERT = /* glsl */ `
+  precision mediump float;
+  uniform float uTime, uReveal, uFlow, uIntake, uSpeak;
+  uniform vec3  uCenter;
+  attribute vec3  aInner;
+  attribute float aPhase;
+  attribute float aRand;
+  attribute float aY;
+  varying vec3  vColor;
+  varying float vGlow;
+  mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+  void main() {
+    vec3 outer = position;
+    float speed = mix(0.06, 0.34, uFlow) + uSpeak * 0.12;
+    float j = fract(aPhase + uTime * speed);
+    float ji = j * j * (1.6 - 0.6 * j);
+    vec3 p = mix(outer, aInner, ji * uFlow);
+    float swirl = (0.6 + 3.0 * (1.0 - j)) * (0.3 + uIntake * 1.6);
+    float dirS  = aRand < 0.5 ? -1.0 : 1.0;
+    p.xz = rot(uTime * swirl * dirS) * (p.xz - uCenter.xz) + uCenter.xz;
+    p = mix(p, uCenter, uIntake * 0.35 * (1.0 - ji));
+    float wavePhase = fract(uTime * 0.5 - aPhase);
+    float wave = exp(-(j - wavePhase) * (j - wavePhase) * 30.0);
+    float arrive = smoothstep(0.55, 1.0, ji);
+    float spawn  = smoothstep(0.0, 0.12, j);
+    float die    = 1.0 - smoothstep(0.92, 1.0, j);
+    float tw = 0.85 + 0.15 * sin(uTime * 2.0 + aRand * 6.2831);
+    vGlow = (0.35 + 0.9 * wave + 1.1 * arrive * uFlow) * spawn * die * tw;
+    vGlow *= (0.5 + 0.9 * uReveal);
+    vGlow *= (1.0 + uSpeak * 0.8);
+    vColor = mix(color, vec3(0.85, 0.95, 1.0), arrive * uFlow * 0.6);
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_PointSize = clamp(3.0 * vGlow * (1.0 + arrive) * (1.0 / -mv.z), 1.5, 9.0);
+    gl_Position  = projectionMatrix * mv;
+  }
+`;
+const STREAM_FRAG = /* glsl */ `
+  precision mediump float;
+  uniform sampler2D uDot;
+  varying vec3  vColor;
+  varying float vGlow;
+  void main() {
+    float a = texture2D(uDot, gl_PointCoord).a;
+    gl_FragColor = vec4(vColor * vGlow, a);
   }
 `;
 const CORE_VERT = /* glsl */ `
@@ -150,6 +218,7 @@ type Rig = {
   edgeHaloMat?: THREE.LineBasicMaterial; // reveal fade
   glowMat?: THREE.PointsMaterial;        // node halo — reveal fade
   occluder?: THREE.Mesh;                 // dark face fill — reveal fade
+  streamMat?: THREE.ShaderMaterial;      // persistent dot-field pulsing toward her
   eyeObjs: THREE.Object3D[];             // iris/sclera sprites — hidden until formed
   cycleMats: THREE.Material[]; // edges — narrow hue drift
   aura?: THREE.Object3D;       // billboarded aura pool
@@ -528,10 +597,11 @@ function subsample(geo: THREE.BufferGeometry, stride: number): THREE.BufferGeome
   return g;
 }
 
-// Bake the REVEAL attributes onto the node geo: aHome (a scattered "swarm cloud" start
-// position, head-local) + aDelay (per-node stagger). `position` is the TARGET face vertex.
-// Call AFTER subsample, BEFORE building nodeMat. Returns the face centroid (the vortex axis).
-function bakeAssemble(geo: THREE.BufferGeometry): THREE.Vector3 {
+// Bake the REVEAL attributes onto the node geo: aHome now reads as the BACKGROUND dot
+// GRID lifting off — a screen-facing lattice at the head's depth, spanning > the view,
+// with light z + jitter — plus aDelay (stagger), aRadius/aSpan (the cyclone funnel).
+// `position` is the TARGET face vertex. Returns the face centroid (= the funnel axis).
+function bakeAssemble(geo: THREE.BufferGeometry, view: { vW: number; vH: number }): THREE.Vector3 {
   geo.computeBoundingBox();
   const c = geo.boundingBox!.getCenter(new THREE.Vector3());
   const size = geo.boundingBox!.getSize(new THREE.Vector3());
@@ -540,25 +610,76 @@ function bakeAssemble(geo: THREE.BufferGeometry): THREE.Vector3 {
   const N = pos.count;
   const home = new Float32Array(N * 3);
   const delay = new Float32Array(N);
-  const v = new THREE.Vector3();
-  const rx = size.x * 3.2, ry = size.y * 2.8, rz = Math.max(size.z, size.y) * 2.6;
+  const aRadius = new Float32Array(N); // start radius from the funnel axis
+  const aSpan = new Float32Array(N);   // 0 inner … 1 grid edge (drives spin/updraft)
+  const spanX = view.vW * 1.7, spanY = view.vH * 1.7; // mild overscan — dots stay near the funnel
+  const gridN = Math.max(2, Math.round(Math.sqrt(N)));
+  const zPlane = c.z;
+  const maxR = Math.hypot(spanX, spanY) * 0.5;
   for (let i = 0; i < N; i++) {
-    // direction on a sphere, biased taller than wide → a column of dust, not a ball
-    const u = Math.random() * 2 - 1, phi = Math.random() * Math.PI * 2;
-    const sxy = Math.sqrt(1 - u * u);
-    v.set(sxy * Math.cos(phi), sxy * Math.sin(phi) * 1.5, u);
-    const shell = 0.8 + Math.random() * 0.3; // hollow band → collapses inward as a swarm
-    home[i * 3] = c.x + v.x * rx * shell;
-    home[i * 3 + 1] = c.y + v.y * ry * shell;
-    home[i * 3 + 2] = c.z + v.z * rz * shell + rz * 0.3; // bias toward camera → flies "through" the viewer
-    // stagger: chin→crown wipe blended with per-node randomness (reuse aY + aRand)
+    const gx = i % gridN, gy = Math.floor(i / gridN) % gridN;
+    const cellX = (gx + 0.5) / gridN - 0.5;
+    const cellY = (gy + 0.5) / gridN - 0.5;
+    const hx = c.x + cellX * spanX + ((Math.random() - 0.5) * spanX) / gridN;
+    const hy = c.y + cellY * spanY + ((Math.random() - 0.5) * spanY) / gridN;
+    const hz = zPlane + (Math.random() - 0.5) * size.z * 0.6 + size.z * 0.15;
+    home[i * 3] = hx; home[i * 3 + 1] = hy; home[i * 3 + 2] = hz;
+    const dx = hx - c.x, dz = hz - c.z;
+    const r = Math.hypot(dx, dz);
+    aRadius[i] = r;
+    aSpan[i] = THREE.MathUtils.clamp(r / maxR, 0, 1);
+    // stagger: outer grid sucked in LAST (draining funnel) + chin→crown wipe + jitter
     const wipe = aYattr ? aYattr.getX(i) : Math.random(); // 0 chin … 1 crown
     const rnd = rand ? rand.getX(i) : Math.random();
-    delay[i] = Math.min(0.55, 0.5 * (1 - wipe) + 0.25 * rnd);
+    delay[i] = Math.min(0.55, 0.22 * (1 - wipe) + 0.2 * aSpan[i] + 0.13 * rnd);
   }
   geo.setAttribute('aHome', new THREE.BufferAttribute(home, 3));
   geo.setAttribute('aDelay', new THREE.BufferAttribute(delay, 1));
+  geo.setAttribute('aRadius', new THREE.BufferAttribute(aRadius, 1));
+  geo.setAttribute('aSpan', new THREE.BufferAttribute(aSpan, 1));
   return c;
+}
+
+// Build the persistent "stream" field: a hollow ellipsoidal shell of dots, each with an
+// OUTER spawn (position) and an INNER sink (aInner, just at her surface), looping inward.
+function bakeStreamField(count: number, c: THREE.Vector3, size: THREE.Vector3): THREE.BufferGeometry {
+  const pos = new Float32Array(count * 3);
+  const inner = new Float32Array(count * 3);
+  const phase = new Float32Array(count);
+  const rand = new Float32Array(count);
+  const yN = new Float32Array(count);
+  const col = new Float32Array(count * 3);
+  const rx = size.x * 3.6, ry = size.y * 3.2, rz = Math.max(size.z, size.y) * 3.0;
+  const cyan = new THREE.Color('#5BD8E6'), peri = new THREE.Color('#7C9BF0'), viol = new THREE.Color('#B97CF2');
+  const v = new THREE.Vector3();
+  for (let i = 0; i < count; i++) {
+    const u = Math.random() * 2 - 1, p = Math.random() * Math.PI * 2;
+    const sxy = Math.sqrt(1 - u * u);
+    v.set(sxy * Math.cos(p), sxy * Math.sin(p) * 1.35, u);
+    const shell = 0.78 + Math.random() * 0.42;
+    pos[i * 3] = c.x + v.x * rx * shell;
+    pos[i * 3 + 1] = c.y + v.y * ry * shell;
+    pos[i * 3 + 2] = c.z + v.z * rz * shell + rz * 0.12;
+    const su = Math.random() * 2 - 1, sp = Math.random() * Math.PI * 2;
+    const ss = Math.sqrt(1 - su * su);
+    inner[i * 3] = c.x + ss * Math.cos(sp) * size.x * 0.55;
+    inner[i * 3 + 1] = c.y + ss * Math.sin(sp) * size.y * 0.6;
+    inner[i * 3 + 2] = c.z + su * size.z * 0.5 + size.z * 0.2;
+    phase[i] = Math.random();
+    rand[i] = Math.random();
+    const yy = THREE.MathUtils.clamp(0.5 + v.y * 0.7, 0, 1);
+    yN[i] = yy;
+    const cc = cyan.clone().lerp(peri, yy).lerp(viol, (1 - Math.abs(v.z)) * 0.5);
+    col[i * 3] = cc.r; col[i * 3 + 1] = cc.g; col[i * 3 + 2] = cc.b;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aInner', new THREE.BufferAttribute(inner, 3));
+  g.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+  g.setAttribute('aRand', new THREE.BufferAttribute(rand, 1));
+  g.setAttribute('aY', new THREE.BufferAttribute(yN, 1));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
 }
 
 // An IRIS sprite texture — dark pupil, a bright limbal ring, striated cyan iris,
@@ -743,6 +864,19 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         const rest = new Map<THREE.Object3D, THREE.Euler>();
         Object.values(bones).forEach((b) => b && rest.set(b, b.rotation.clone()));
 
+        // ── frame the camera on the face FIRST — the cyclone grid bake needs the view
+        //    extents. (Before the shell/aura are added; they'd inflate the bbox.) ──
+        const cam = camera as THREE.PerspectiveCamera;
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        const eyeY = box.max.y - 0.235;     // aim near the eyes/nose
+        cam.position.set(0, eyeY, 0.99);    // portrait crop — whole head + bob, eyes still read
+        cam.lookAt(0, eyeY, 0);
+        cam.updateProjectionMatrix();
+        // half-extents of the view frustum at the head plane (head ≈ world z=0)
+        const headDist = Math.abs(cam.position.z);
+        const vH = Math.tan((cam.fov * DEG) / 2) * headDist;
+        const vW = vH * cam.aspect;
+
         // ── build the glowing plexus shell ONCE (bind-pose; off the loop) ───
         const cycleMats: THREE.Material[] = [];
         const eyeObjs: THREE.Object3D[] = [];
@@ -753,6 +887,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         let edgeHaloMat: THREE.LineBasicMaterial | undefined;
         let glowMat: THREE.PointsMaterial | undefined;
         let occluder: THREE.Mesh | undefined;
+        let streamMat: THREE.ShaderMaterial | undefined;
         let aura: THREE.Object3D | undefined;
         let bob: THREE.Mesh | undefined;
         let hairMat: THREE.ShaderMaterial | undefined;
@@ -770,7 +905,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
             const faceGeo = dropEars(rawFace, earClipX); // bright shell stops at the cheeks
             bakeAurora(faceGeo);
             const dotGeo = subsample(faceGeo, 3); // sparser, more deliberate nodes
-            const fc = bakeAssemble(dotGeo); // reveal attrs (aHome/aDelay) + the vortex axis
+            const fc = bakeAssemble(dotGeo, { vW, vH }); // grid aHome + funnel attrs + axis
 
             // (a) signature NODES — aurora gradient + thought-pulse + reveal/vortex morph
             nodeMat = new THREE.ShaderMaterial({
@@ -781,7 +916,10 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
                 uBlip: { value: 1 },
                 uDot: { value: dotTex },
                 uReveal: { value: 0 },          // start scattered
-                uCenter: { value: fc.clone() }, // face centroid = vortex axis
+                uCenter: { value: fc.clone() }, // face centroid = funnel axis
+                uSwirl: { value: 18.0 },        // cyclone wind-up
+                uUpdraft: { value: 0.72 },      // funnel updraft height (taller tornado column)
+                uInfall: { value: 0.85 },       // how tight the funnel necks down
               },
               vertexShader: NODE_VERT,
               fragmentShader: NODE_FRAG,
@@ -792,6 +930,22 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
               blending: THREE.AdditiveBlending,
             });
             const corePts = new THREE.Points(dotGeo, nodeMat);
+
+            // (a2) the persistent dot-field that pulses TOWARD her (cyclone source +
+            //      a quiet inward feed when formed). Parented to Head → inherits fc.
+            const faceSize = dotGeo.boundingBox!.getSize(new THREE.Vector3());
+            streamMat = new THREE.ShaderMaterial({
+              uniforms: {
+                uTime: { value: 0 }, uReveal: { value: 0 }, uCenter: { value: fc.clone() },
+                uDot: { value: dotTex }, uFlow: { value: 0.15 }, uIntake: { value: 0.15 }, uSpeak: { value: 0 },
+              },
+              vertexShader: STREAM_VERT, fragmentShader: STREAM_FRAG,
+              vertexColors: true, transparent: true, depthTest: true, depthWrite: false,
+              blending: THREE.AdditiveBlending,
+            });
+            const streamPts = new THREE.Points(bakeStreamField(1500, fc, faceSize), streamMat);
+            streamPts.renderOrder = 1; // above occluder(-10), below corePts/shell(2)
+            bones.head.add(streamPts);
 
             // (b) node halo — fake bloom, tighter so it reads clean (not washy)
             glowMat = new THREE.PointsMaterial({
@@ -885,15 +1039,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
           }
         }
 
-        rig.current = { meshes, bones, rest, nodeMat, coreMat, edgeCoreMat, edgeHaloMat, glowMat, occluder, eyeObjs, cycleMats, aura, shell, bob, hairMat };
-
-        // frame the face off the known avatar scale (head at the top, face at +z).
-        // NOTE: frame BEFORE adding the aura plane — it would inflate the bbox.
-        const box = new THREE.Box3().setFromObject(gltf.scene);
-        const eyeY = box.max.y - 0.235;       // aim near the eyes/nose
-        camera.position.set(0, eyeY, 0.99);   // portrait crop — whole head + the bob, eyes still read
-        camera.lookAt(0, eyeY, 0);
-        camera.updateProjectionMatrix();
+        rig.current = { meshes, bones, rest, nodeMat, coreMat, edgeCoreMat, edgeHaloMat, glowMat, occluder, eyeObjs, cycleMats, aura, shell, bob, hairMat, streamMat };
 
         // clip the dim SUBSTRATE at the ear line so the ears don't poke out from under
         // the hair (the bright shell already dropped them; the bob covers the area).
@@ -962,6 +1108,19 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       u.uReveal.value = seg(0.1, 0.62); // gather → spin → stream → snap
       u.uSpeak.value = THREE.MathUtils.damp(u.uSpeak.value, speak * 1.2, 8, delta);
       u.uPeriod.value = THREE.MathUtils.damp(u.uPeriod.value, speak > 0.06 ? 1.4 : 3.5, 4, delta);
+    }
+
+    // ── persistent stream field: heavy intake during the morph, quiet feed once formed ──
+    if (r.streamMat) {
+      const u = r.streamMat.uniforms;
+      u.uTime.value = t;
+      u.uReveal.value = R;
+      const baseFlow = 0.15 + 0.85 * seg(0.1, 0.5);
+      const settle = 0.55 * seg(0.66, 0.92);
+      u.uFlow.value = THREE.MathUtils.damp(u.uFlow.value, baseFlow - settle, 3, delta);
+      const intake = 0.15 + 1.0 * seg(0.18, 0.5) * (1 - seg(0.55, 0.85));
+      u.uIntake.value = THREE.MathUtils.damp(u.uIntake.value, intake, 3.5, delta);
+      u.uSpeak.value = THREE.MathUtils.damp(u.uSpeak.value, speak * 1.0, 6, delta);
     }
 
     // ── structure layers fade in AFTER the nodes land (the choreography) ────

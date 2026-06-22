@@ -27,7 +27,10 @@ export default function Playground() {
   // app background, and she morphs out of it. Driven by the live reveal value.
   const bgOpacity = useRef(new Animated.Value(1)).current;
   const onReveal = useCallback((r: number) => {
-    bgOpacity.setValue(1 - Math.min(1, r / 0.5)); // full at the dust-field, gone by r≈0.5
+    // full at the dust-field; dips to 0.28 mid-morph so the active R3F cyclone leads,
+    // recovers to 0.35 once formed (the dots remain as a background behind her).
+    const floor = 0.28 + 0.07 * Math.max(0, (r - 0.7) / 0.3);
+    bgOpacity.setValue(Math.max(floor, 1 - r / 0.5));
   }, [bgOpacity]);
   if (!__DEV__) return null; // dev-only — never ships in a production build
 
