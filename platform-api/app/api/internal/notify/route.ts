@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import {
   sendBrandLive,
+  sendContentReport,
   sendPayoutNotification,
   sendReturnApproved,
   sendReturnDeclined,
@@ -25,10 +26,12 @@ import {
 //  - returns:   { action: 'approved'|'declined', returnId, reason? }  → buyer email (per-brand)
 //  - brand-live:{ action: 'brand_live', slug }                        → creator email (from Nano Crew)
 //  - payout:    { action: 'payout', orderId }                         → creator email (from Nano Crew)
+//  - report:    { action: 'report', targetType, slug, reason, reporter? } → ops email (Market UGC)
 type NotifyBody =
   | { action: 'approved' | 'declined'; returnId: string; reason?: string }
   | { action: 'brand_live'; slug: string }
-  | { action: 'payout'; orderId: string };
+  | { action: 'payout'; orderId: string }
+  | { action: 'report'; targetType: string; slug: string; reason: string; reporter?: string };
 
 function authorized(req: Request): boolean {
   const expected = process.env.INTERNAL_API_KEY;
@@ -54,6 +57,18 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as NotifyBody | null;
   if (!body || typeof body.action !== 'string') {
     return Response.json({ ok: false, error: 'action is required' }, { status: 400 });
+  }
+
+  // ── Market content report (Apple 1.2 / INFORM) → ops email. ─────────────────────────────────────
+  if (body.action === 'report') {
+    if (!body.slug || !body.reason) return Response.json({ ok: false, error: 'slug + reason required' }, { status: 400 });
+    await sendContentReport({
+      targetType: body.targetType || 'brand',
+      slug: body.slug,
+      reason: String(body.reason).slice(0, 1000),
+      reporter: body.reporter,
+    });
+    return Response.json({ ok: true }, { status: 202 });
   }
 
   // ── Brand went live → tell the creator (FROM Nano Crew). ────────────────────────────────────────

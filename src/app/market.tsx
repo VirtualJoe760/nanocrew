@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +15,7 @@ import { openBrowserAsync } from 'expo-web-browser';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BrandStore } from '@/components/brand-store';
+import { getBlockedBrands } from '@/lib/blocklist';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { withScreenFade } from '@/components/screen-fade';
@@ -149,6 +150,11 @@ function MarketScreen() {
   const [data, setData] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // Brands this viewer has blocked (Apple Guideline 1.2). Reloaded when the brand sheet closes so a
+  // block takes effect immediately on return to the Market.
+  const [blocked, setBlocked] = useState<Set<string>>(new Set());
+  const refreshBlocked = useCallback(() => { void getBlockedBrands().then((s) => setBlocked(new Set(s))); }, []);
+  useEffect(() => { refreshBlocked(); }, [refreshBlocked]);
 
   // A subtle fill/border that reads on either mode (no hardcoded greys).
   const fallback = theme.backgroundSelected;
@@ -172,8 +178,8 @@ function MarketScreen() {
     return () => clearTimeout(handle);
   }, [query, refreshing]);
 
-  const trending = data?.trending ?? [];
-  const brands = data?.brands ?? [];
+  const trending = (data?.trending ?? []).filter((t) => !blocked.has(t.storeSlug));
+  const brands = (data?.brands ?? []).filter((b) => !blocked.has(b.slug));
   const searching = query.trim().length > 0;
   const [storeSlug, setStoreSlug] = useState<string | null>(null);
 
@@ -257,7 +263,7 @@ function MarketScreen() {
           )}
         </View>
       </SafeAreaView>
-      <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
+      <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => { setStoreSlug(null); refreshBlocked(); }} />
     </View>
   );
 }

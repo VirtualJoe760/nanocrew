@@ -427,3 +427,30 @@ export async function sendBrandLive(opts: {
       p(`Share your link, post your products, and start selling. You can keep editing your site and adding products anytime — just talk to Venus.`, { muted: true }),
   });
 }
+
+/** A user reported Market content (Apple Guideline 1.2 + the INFORM consumer-report mechanism). Routes
+ *  to OPS_EMAIL; if unset it's logged so nothing is lost. Best-effort — never throws into the caller. */
+export async function sendContentReport(opts: {
+  targetType: string;
+  slug: string;
+  reason: string;
+  reporter?: string;
+}): Promise<void> {
+  const to = process.env.OPS_EMAIL;
+  if (!to) {
+    console.warn('[notify] content report (set OPS_EMAIL to receive these by email):', JSON.stringify(opts));
+    return;
+  }
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to,
+    subject: `⚑ Market report: ${opts.targetType} "${opts.slug}"`,
+    heading: 'Content reported',
+    preheader: `${opts.targetType} ${opts.slug}`,
+    body:
+      p(`A user reported content on the Market.`, { html: true }) +
+      p(`Type: ${esc(opts.targetType)}<br/>Slug: ${esc(opts.slug)}<br/>Reporter: ${esc(opts.reporter ?? 'unknown')}`, { html: true }) +
+      p(`Reason: ${esc(opts.reason)}`, { muted: true, html: true }),
+  });
+}

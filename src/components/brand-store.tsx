@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { openBrowserAsync } from 'expo-web-browser';
 
 import { Spacing } from '@/constants/theme';
 import { glow } from '@/constants/glow';
-import { apiUrl, readJson } from '@/lib/api';
+import { apiFetch, apiUrl, readJson } from '@/lib/api';
+import { blockBrand } from '@/lib/blocklist';
 import { SquareCarousel } from '@/components/square-carousel';
 import { ProductDetail } from '@/components/product-detail';
 
@@ -81,6 +82,39 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
     brand?.ogImageUrl ?? null,
     ...(data?.collections.flatMap((c) => c.products.map((p) => p.imageUrl)) ?? []),
   ].filter((u, i, a): u is string => !!u && a.indexOf(u) === i).slice(0, 8);
+
+  // ── Moderation (Apple Guideline 1.2): report a brand to ops, or block it on this device. ──
+  const reportBrand = useCallback(() => {
+    const s = slug;
+    if (!s) return;
+    const submit = async (reason: string) => {
+      try {
+        await apiFetch('/api/report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetType: 'brand', slug: s, reason }),
+        });
+      } catch {
+        /* best-effort — the report still logs server-side */
+      }
+      Alert.alert('Thanks for the report', 'Our team will review this brand.');
+    };
+    Alert.alert('Report this brand', 'Why are you reporting it?', [
+      { text: 'Offensive or inappropriate', onPress: () => void submit('offensive') },
+      { text: 'Spam or scam', onPress: () => void submit('spam') },
+      { text: 'Other', onPress: () => void submit('other') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [slug]);
+
+  const blockThisBrand = useCallback(() => {
+    const s = slug;
+    if (!s) return;
+    Alert.alert('Block this brand?', 'You won’t see this brand in the Market anymore.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Block', style: 'destructive', onPress: async () => { await blockBrand(s); onClose(); } },
+    ]);
+  }, [slug, onClose]);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -172,6 +206,16 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
                   <Text style={{ color: dim }}>This brand hasn’t dropped any pieces yet.</Text>
                 </View>
               )}
+
+              {/* Moderation footer (Apple Guideline 1.2) — report objectionable content or block. */}
+              <View style={styles.modRow}>
+                <Pressable onPress={reportBrand} hitSlop={8}>
+                  <Text style={[styles.modText, { color: dim }]}>⚑ Report this brand</Text>
+                </Pressable>
+                <Pressable onPress={blockThisBrand} hitSlop={8}>
+                  <Text style={[styles.modText, { color: dim }]}>Block</Text>
+                </Pressable>
+              </View>
             </ScrollView>
           )}
 
@@ -195,6 +239,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
   close: { fontSize: 13 },
   visit: { fontSize: 13, fontWeight: '600' },
+  modRow: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.five, paddingVertical: Spacing.five },
+  modText: { fontSize: 12 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.six },
   scroll: { paddingBottom: Spacing.six },
   header: { alignItems: 'center', paddingHorizontal: Spacing.four, paddingTop: Spacing.three, paddingBottom: Spacing.five, gap: Spacing.two },
