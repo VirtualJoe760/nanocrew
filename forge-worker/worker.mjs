@@ -268,7 +268,7 @@ async function processProvision(row) {
     payload = JSON.parse(row.requestMd);
   } catch {
     await sql`update store_revisions set status = 'failed', error_msg = 'bad provision payload' where id = ${row.id}`;
-    await sql`update stores set status = 'ready' where id = ${row.storeId}`.catch(() => {});
+    await sql`update stores set status = 'draft' where id = ${row.storeId}`.catch(() => {}); // not 'ready' — nothing built
     return;
   }
   const repo = `store-${payload.slug}`;
@@ -285,7 +285,16 @@ async function processProvision(row) {
     });
     const out = await run('bash', ['-s'], { input: script, timeoutMs: 45 * 60 * 1000 });
     if (!out.includes('FORGE_DONE')) throw new Error('forge provision did not complete');
-    if (out.includes('BUILD_FAILED')) log(`  build failing for ${repo}`);
+    // If the site's own `pnpm run build` failed (even after the robot's fix passes) do NOT present a
+    // broken build as 'ready'. Skip the (doomed) Vercel deploy, record the failure, and leave the store
+    // at 'draft' — retryable, NOT stuck on 'building' and NOT a false 'ready'. The creator is notified.
+    if (out.includes('BUILD_FAILED')) {
+      log(`✗ provision ${row.id} build FAILED — not deploying, not marking ready`);
+      await sql`update stores set status = 'draft' where id = ${row.storeId}`;
+      await sql`update store_revisions set status = 'failed', error_msg = 'site build failed' where id = ${row.id}`;
+      await notifyCreator(row.storeId, `${row.storeName} — build didn’t finish`, 'Your site build hit a snag. Open Studio to try again.', { kind: 'provision_failed', storeId: row.storeId });
+      return;
+    }
     const url = await deployToVercel(fullRepo, repo);
     await sql`update stores set deployment_url = ${url ?? `https://github.com/${fullRepo}`}, status = 'ready' where id = ${row.storeId}`;
     await sql`update store_revisions set status = 'ready', preview_url = ${url} where id = ${row.id}`;
@@ -294,7 +303,7 @@ async function processProvision(row) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'provision failed';
     log(`✗ provision ${row.id} failed — ${msg}`);
-    await sql`update stores set status = 'ready' where id = ${row.storeId}`.catch(() => {});
+    await sql`update stores set status = 'draft' where id = ${row.storeId}`.catch(() => {}); // not 'ready' — build errored
     await sql`update store_revisions set status = 'failed', error_msg = ${msg.slice(0, 500)} where id = ${row.id}`;
     await notifyCreator(row.storeId, `${row.storeName} — build didn’t finish`, 'Your site build hit a snag. Open Studio to try again.', { kind: 'provision_failed', storeId: row.storeId });
   }
