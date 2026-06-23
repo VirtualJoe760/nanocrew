@@ -49,7 +49,7 @@ import { apiUrl, readJson } from '@/lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Welcome, type OnboardChoice } from '@/components/welcome';
 import { InterviewTopics } from '@/components/interview-topics';
-import { OnboardingTour } from '@/components/onboarding-tour';
+import { OnboardingTour, TOUR_STEPS, JOURNEY_STEPS } from '@/components/onboarding-tour';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
@@ -79,6 +79,7 @@ const BG = '#08080a';
 const ONBOARD_SEEN_KEY = 'nc_welcome_seen';
 const ONBOARD_INTENT_KEY = 'nc_onboard_intent';
 const TOUR_SEEN_KEY = 'nc_tour_seen'; // the coachmark app tour — shown once on first sign-in, re-openable from "?"
+const JOURNEY_SEEN_KEY = 'nc_journey_seen'; // the post-brand build journey (act 2) — shown once after the first brand
 // idle → listening → thinking → speaking. Champagne gold resting, brightening to near-white
 // as Venus speaks — monochrome + gold, per the Nano Crew brand.
 const STATE_COLORS = ['#cdd1d9', '#e8eaee', '#dfe2e8', '#ffffff'];
@@ -613,7 +614,9 @@ function StudioScreen() {
   const [welcomeChecked, setWelcomeChecked] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showTour, setShowTour] = useState(false); // the coachmark app tour
+  const [tourSteps, setTourSteps] = useState(TOUR_STEPS); // which act: TOUR_STEPS (tabs) or JOURNEY_STEPS (post-brand)
   const tourCheckedRef = useRef(false);
+  const journeyCheckedRef = useRef(false);
   const [onboardIntent, setOnboardIntent] = useState<OnboardChoice | null>(null);
   const intentHandledRef = useRef(false);
   const pendingSubscribeGrantRef = useRef(false);
@@ -644,11 +647,24 @@ function StudioScreen() {
     AsyncStorage.getItem(TOUR_SEEN_KEY).then((seen) => { if (!seen) setShowTour(true); }).catch(() => {});
   }, [session, welcomeChecked, showWelcome]);
 
-  const openTour = useCallback(() => setShowTour(true), []);
+  // After the FIRST brand is built → continue the tutorial with Venus's build journey (act 2): hero →
+  // logo → products → publish → go-live. ONCE, and delayed so the brand-launch line + dashboard settle
+  // first (so her voice doesn't overlap itself).
+  useEffect(() => {
+    if (!session || !hasStore || journeyCheckedRef.current) return;
+    journeyCheckedRef.current = true;
+    AsyncStorage.getItem(JOURNEY_SEEN_KEY)
+      .then((seen) => {
+        if (!seen) setTimeout(() => { setTourSteps(JOURNEY_STEPS); setShowTour(true); }, 4500);
+      })
+      .catch(() => {});
+  }, [session, hasStore]);
+
+  const openTour = useCallback(() => { setTourSteps(TOUR_STEPS); setShowTour(true); }, []); // "?" re-runs the tab tour
   const closeTour = useCallback(() => {
     setShowTour(false);
-    AsyncStorage.setItem(TOUR_SEEN_KEY, '1').catch(() => {});
-  }, []);
+    AsyncStorage.setItem(tourSteps === JOURNEY_STEPS ? JOURNEY_SEEN_KEY : TOUR_SEEN_KEY, '1').catch(() => {});
+  }, [tourSteps]);
 
   // Welcome CTA: remember the choice, dismiss the panel, send them to auth (/account). The chosen
   // path is executed once they sign in (the effect below).
@@ -1112,8 +1128,9 @@ function StudioScreen() {
         </View>
       </Modal>
 
-      {/* Guided coachmark app tour — first sign-in (once) + re-openable from the "?" in the header. */}
-      <OnboardingTour visible={showTour} onClose={closeTour} accessToken={session?.access_token} />
+      {/* Guided coachmark tour — act 1 (tabs) on first sign-in + re-openable from "?"; act 2 (the build
+          journey: hero → logo → products → publish → go-live) once after the first brand is created. */}
+      <OnboardingTour visible={showTour} onClose={closeTour} accessToken={session?.access_token} steps={tourSteps} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

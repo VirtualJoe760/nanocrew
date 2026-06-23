@@ -20,7 +20,8 @@ const TAB_ORDER: TabKey[] = ['studio', 'design', 'market', 'account'];
 
 type Step = { tab?: TabKey; title: string; body: string; say: string };
 
-const STEPS: Step[] = [
+// ACT 1 — the first-run tab overview (runs on first sign-in).
+export const TOUR_STEPS: Step[] = [
   {
     title: 'Hi, I’m Venus',
     body: 'I’ll help you start a real clothing brand — right from your phone. Let me show you around in a few seconds.',
@@ -58,6 +59,44 @@ const STEPS: Step[] = [
   },
 ];
 
+// ACT 2 — the build journey, runs ONCE after the first brand is created. Walks through finishing the
+// store + site, in order. The "doing" happens via the Studio "Finish your site" checklist + the Design
+// tab, so these are mostly centered cards that point the creator at the right place, narrated by Venus.
+export const JOURNEY_STEPS: Step[] = [
+  {
+    title: 'Your brand is built 🎉',
+    body: 'This is your Studio dashboard — your command center. Let’s finish the important bits together, one at a time.',
+    say: 'Your brand is built! This is your Studio dashboard, your command center. Let’s finish the important bits together.',
+  },
+  {
+    title: 'Design your hero image',
+    body: 'Your site needs a hero — the big image up top. In “Finish your site” below, tap “Design your website hero” and I’ll generate it with you.',
+    say: 'First, your hero image — the big picture at the top of your site. In “Finish your site,” tap “Design your website hero,” and I’ll generate it with you.',
+  },
+  {
+    title: 'Add your logo',
+    body: 'Next, your logo. Tap “Add your logo” to drop in your own mark, or have me create one.',
+    say: 'Next, your logo. Tap “Add your logo” to drop in your own, or have me create one for you.',
+  },
+  {
+    tab: 'design',
+    title: 'Create your first products',
+    body: 'Open the Design tab, generate artwork or bring your own, drop it on a tee or hoodie, and publish it — print-ready, no inventory.',
+    say: 'Now, your first products. Open the Design tab, make some artwork, drop it on a tee or hoodie, and publish it. We print and ship every order.',
+  },
+  {
+    tab: 'market',
+    title: 'Publish to the Market',
+    body: 'Once you have a product, publish your store so people can find and buy it right inside the app’s Market.',
+    say: 'Once you have a product, publish your store to the Market, so people can find and buy it right here in the app.',
+  },
+  {
+    title: 'Take your website live',
+    body: 'Finally, go live on the web — connect a domain and flip your site on from your brand card. That’s the whole journey!',
+    say: 'And finally, take your website live. Connect a domain and flip your site on from your brand card. That’s the whole journey — you’ve got this.',
+  },
+];
+
 // Rough bottom-bar geometry — 4 evenly-spaced tabs across the width, ~49pt tall above the safe area.
 const TAB_BAR_H = 49;
 
@@ -65,10 +104,13 @@ export function OnboardingTour({
   visible,
   onClose,
   accessToken,
+  steps = TOUR_STEPS,
 }: {
   visible: boolean;
   onClose: () => void;
   accessToken?: string;
+  /** Which act to run — TOUR_STEPS (tab overview, default) or JOURNEY_STEPS (post-brand build journey). */
+  steps?: Step[];
 }) {
   const p = usePalette();
   const { width, height } = useWindowDimensions();
@@ -78,8 +120,8 @@ export function OnboardingTour({
   const playGen = useRef(0);
   const fileN = useRef(0);
 
-  const step = STEPS[i];
-  const last = i === STEPS.length - 1;
+  const step = steps[i];
+  const last = i === steps.length - 1;
 
   // Narrate the current step in Venus's voice (best-effort — the tour works silently if it fails).
   const narrate = useCallback(
@@ -182,7 +224,7 @@ export function OnboardingTour({
           <View style={styles.cardFoot}>
             {/* step dots */}
             <View style={styles.dots}>
-              {STEPS.map((_, n) => (
+              {steps.map((_, n) => (
                 <View key={n} style={[styles.dot, { backgroundColor: n === i ? p.accent : `${p.dim}55` }]} />
               ))}
             </View>
