@@ -77,6 +77,53 @@ function dominantMorph(w: VisemeWeights): string {
   return bv > 0 ? best : 'viseme_sil';
 }
 
+// ─── temporal feature smoother (anti-jitter, low-lag) ────────────────────────────────────────────
+// The mapper is pure/stateless and the features arrive raw — each ~40 ms window's F1/F2/rms can jump
+// from the one before, so the mouth chatters (and the round↔spread flip is especially twitchy).
+// Smooth the CONTINUOUS features with a short, frame-rate-aware EMA BEFORE mapping, so the render
+// damping follows a clean target instead of fighting noise. Two time-constants:
+//   • shape/level falling → SHAPE_TAU (gentle) kills chatter on vowels and during release
+//   • rms RISING          → ATTACK_TAU (near-instant) so jaw ONSETS stay crisp — smoothing the input
+//     must not blunt the start of a syllable, which is what reads as "laggy".
+// Categorical flags (voiced) pass through from the latest frame. Each driver owns one smoother.
+const SHAPE_TAU_MS = 55; // f1/f2/bands + falling rms — raise to quiet jitter, lower for snappier shapes
+const ATTACK_TAU_MS = 12; // rising rms — keep small so the mouth opens the instant sound starts
+
+class FeatureSmoother {
+  private s: AcousticFeatures | null = null;
+  private last = 0;
+  smooth(f: AcousticFeatures, now: number): AcousticFeatures {
+    if (!this.s) {
+      this.s = { ...f };
+      this.last = now;
+      return f;
+    }
+    const dt = Math.min(100, Math.max(1, now - this.last));
+    this.last = now;
+    const a = 1 - Math.exp(-dt / SHAPE_TAU_MS); // EMA factor for this dt (frame-rate independent)
+    const aRise = 1 - Math.exp(-dt / ATTACK_TAU_MS);
+    const s = this.s;
+    // rms: fast when getting LOUDER (crisp attack), gentle when getting quieter (no flutter on release)
+    s.rms += (f.rms - s.rms) * (f.rms > s.rms ? aRise : a);
+    s.f1 += (f.f1 - s.f1) * a;
+    s.f2 += (f.f2 - s.f2) * a;
+    s.zcr += (f.zcr - s.zcr) * a;
+    s.hf += (f.hf - s.hf) * a;
+    s.bandLow += (f.bandLow - s.bandLow) * a;
+    s.bandMid += (f.bandMid - s.bandMid) * a;
+    s.bandHigh += (f.bandHigh - s.bandHigh) * a;
+    s.voiced = f.voiced; // categorical — take the latest window's decision
+    return s;
+  }
+  reset() {
+    this.s = null;
+  }
+}
+
+function nowMs(): number {
+  return Date.now();
+}
+
 // Shared: run the formant→morph mapping and record the debug snapshot. Both drivers funnel here so
 // web and native produce identical poses from identical features.
 function applyFeatures(feat: AcousticFeatures, debug: VenusLipsync['debug']): VisemeWeights {
@@ -137,9 +184,10 @@ class AnalyserDriver implements VenusLipsync {
     this.srcNode = node;
   }
 
+  private smoother = new FeatureSmoother();
   sample(): VisemeWeights {
     this.analyser.getFloatTimeDomainData(this.time);
-    const feat = analyzeWindow(this.time, this.ctx.sampleRate);
+    const feat = this.smoother.smooth(analyzeWindow(this.time, this.ctx.sampleRate), nowMs());
     return applyFeatures(feat, this.debug);
   }
 
@@ -169,8 +217,9 @@ class SpeechLevelDriver implements VenusLipsync {
   speaking(): boolean {
     return speechActiveAt();
   }
+  private smoother = new FeatureSmoother();
   sample(): VisemeWeights {
-    return applyFeatures(speechFrameAt(), this.debug);
+    return applyFeatures(this.smoother.smooth(speechFrameAt(), nowMs()), this.debug);
   }
 }
 
