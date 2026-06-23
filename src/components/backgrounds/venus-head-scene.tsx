@@ -63,7 +63,7 @@ const EAR_DROP_FRAC = 0.82;
 
 // DEV: play a sample speech clip on load so the mouth moves (and the pulse reacts)
 // on web. Set false for production / live Gemini audio. (Guarded to web.)
-const DEV_LIPSYNC_TEST = true;
+const DEV_LIPSYNC_TEST = false;
 const DEV_SAMPLE_URL = 'https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg';
 
 // Venus's lifecycle stages (drives the avatar; the Lab toggles between them, and Studio
