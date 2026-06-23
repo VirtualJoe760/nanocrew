@@ -22,7 +22,25 @@ export type OAuthProvider = 'apple' | 'google' | 'facebook';
 // Both (plus the web origin) must be allow-listed in Supabase → Auth → Redirect URLs.
 const redirectTo = makeRedirectUri({ path: 'auth' });
 
-async function createSessionFromUrl(url: string): Promise<void> {
+// Password-reset emails return the user to the dedicated /reset-password route (its own deep link
+// so there's no ambiguity with the OAuth callback). Allow-list this one in Supabase → Auth →
+// Redirect URLs too: nanocrew://reset-password (build), exp://…/--/reset-password (Expo Go), and
+// the web origin + /reset-password.
+const resetRedirectTo = makeRedirectUri({ path: 'reset-password' });
+
+/**
+ * Send a password-reset email. The link in it bounces through Supabase and deep-links back into
+ * the app at /reset-password with a one-time code/token, where the user picks a new password.
+ * Requesting and opening the link on the SAME device keeps the PKCE verifier available.
+ */
+export async function sendPasswordReset(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: resetRedirectTo,
+  });
+  if (error) throw error;
+}
+
+export async function createSessionFromUrl(url: string): Promise<void> {
   const { params, errorCode } = getQueryParams(url);
   if (errorCode) throw new Error(errorCode);
   if (params.error_description) throw new Error(params.error_description);

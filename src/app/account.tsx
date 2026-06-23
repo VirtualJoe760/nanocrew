@@ -18,7 +18,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import { GlowButton } from '@/components/glow-button';
 import { GlowInput } from '@/components/glow-input';
@@ -34,7 +33,7 @@ import { TERMS_URL, TERMS_VERSION } from '@/lib/legal';
 import { useTheme } from '@/hooks/use-theme';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { ApiError, apiFetch, apiUrl, readJson } from '@/lib/api';
-import { signInWithProvider, type OAuthProvider } from '@/lib/oauth';
+import { sendPasswordReset, signInWithProvider, type OAuthProvider } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
 
 type StoreRow = { id: string; name: string; slug: string; status: string };
@@ -115,7 +114,6 @@ export default withScreenFade(AccountScreen, { background: true });
 
 function AccountScreen() {
   const theme = useTheme();
-  const p = usePalette();
   const { session, loading } = useAuth();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
@@ -126,6 +124,7 @@ function AccountScreen() {
   const [isSignup, setIsSignup] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -228,6 +227,29 @@ function AccountScreen() {
       if (err) throw err;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // "Forgot password?" — email a one-time reset link that deep-links to /reset-password.
+  // We don't reveal whether the address has an account (Supabase returns success regardless),
+  // so the confirmation copy is deliberately neutral.
+  const forgotPassword = async () => {
+    if (busy) return;
+    const e = email.trim().toLowerCase();
+    setNotice(null);
+    if (!e) {
+      setError('Enter your email above, then tap “Forgot password?”.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await sendPasswordReset(e);
+      setNotice(`If an account exists for ${e}, a password-reset link is on its way. Open it on this device.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the reset email.');
     } finally {
       setBusy(false);
     }
@@ -509,12 +531,24 @@ function AccountScreen() {
                     {error}
                   </ThemedText>
                 ) : null}
+                {notice ? (
+                  <ThemedText type="small" style={{ color: theme.tint }}>
+                    {notice}
+                  </ThemedText>
+                ) : null}
                 <GlowButton
                   label={isSignup ? 'Create account' : 'Sign in'}
                   onPress={() => submit(isSignup ? 'up' : 'in')}
                   loading={busy}
                 />
-                <Pressable onPress={() => { setIsSignup((v) => !v); setError(null); }} disabled={busy}>
+                {!isSignup ? (
+                  <Pressable onPress={forgotPassword} disabled={busy} hitSlop={6}>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.createLink}>
+                      Forgot password?
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+                <Pressable onPress={() => { setIsSignup((v) => !v); setError(null); setNotice(null); }} disabled={busy}>
                   <ThemedText type="small" themeColor="textSecondary" style={styles.createLink}>
                     {isSignup ? 'Have an account? Sign in' : 'New here? Create an account'}
                   </ThemedText>
