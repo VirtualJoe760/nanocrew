@@ -1,56 +1,57 @@
-import { useEffect, useState } from 'react';
-import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import type { CSSProperties } from 'react';
 
-// WEB build of the app-wide animated background. Skia on web needs the CanvasKit WASM, lazy-loaded
-// via WithSkiaWeb. This file is web-only (Metro resolves app-background.tsx on native) so the native
-// bundle never pulls in canvaskit-wasm — which imports the Node `fs` module and breaks the RN bundle.
-// See app-background.tsx for the native version + the shared rationale.
+// WEB build of the app-wide animated background.
+//
+// We deliberately DO NOT use CanvasKit/Skia on web. The Skia path spins up a WebGL surface PER mounted
+// <AppBackground>, and the app renders one per tab screen (withScreenFade(..., {background:true})).
+// expo-router (output:"server") keeps EVERY tab mounted and hides the inactive ones with display:none,
+// collapsing their canvases to 0×0 — and CanvasKit's `Surface.flush` onto a 0×0 surface calls the
+// Emscripten `abort()`, which kills the SHARED WASM runtime. After that, even the visible tab's canvas
+// throws on its next flush, surfacing as an uncaught "Aborted()" that crashes the whole web app and
+// floods the console. (Earlier mounted/onLayout gates couldn't fully fix it: display:none doesn't
+// re-fire onLayout, and a single aborted runtime takes down every other canvas with it.)
+//
+// So web gets a robust, GPU-free CSS dot-field instead: a tiled radial-gradient grid of faint platinum
+// dots on the brand-dark base that slowly drifts and breathes. It can never abort, needs no WASM, and
+// is on-brand (cool monochrome + platinum silver). NATIVE keeps the real animated Skia shader — see
+// app-background.tsx + dot-field-scene.tsx (unchanged).
 
-const CK_OPTS = {
-  locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.40.0/bin/full/${file}`,
-};
-
-// A dark veil over the dots so text always has a consistent bed of contrast. The colour is the brand
-// background (#08080a); raise/lower the alpha to make the dots quieter/livelier behind content.
+// A dark veil over the dots so text always has a consistent bed of contrast.
 const SCRIM = 'rgba(8,8,10,0.42)';
-// Opaque brand-dark base BEHIND the dot canvas, so the background is never white while CanvasKit is
-// loading or if it renders nothing.
+// Opaque brand-dark base BEHIND the dots, so the background is never the platform-default white.
 const BASE = '#08080a';
 
-function Scene() {
-  // Load CanvasKit, then the scene module. Required lazily so it's only ever evaluated on web.
-  const { WithSkiaWeb } = require('@shopify/react-native-skia/lib/module/web');
-  return <WithSkiaWeb getComponent={() => import('./dot-field-scene')} opts={CK_OPTS} fallback={null} />;
-}
+const ANIM_CSS = `
+@keyframes ncDotDrift { from { background-position: 0 0; } to { background-position: 26px 26px; } }
+@keyframes ncDotBreathe { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .nc-dotfield { animation: none !important; }
+}`;
+
+const fill: CSSProperties = { position: 'absolute', inset: 0, pointerEvents: 'none' };
+
+const dots: CSSProperties = {
+  ...fill,
+  backgroundColor: BASE,
+  // Two layered dot grids (a brighter fine grid + a softer offset grid) for subtle depth.
+  backgroundImage:
+    'radial-gradient(circle at 50% 50%, rgba(190,196,214,0.22) 0.9px, transparent 1.7px),' +
+    'radial-gradient(circle at 50% 50%, rgba(150,156,176,0.12) 0.9px, transparent 1.7px)',
+  backgroundSize: '26px 26px, 26px 26px',
+  backgroundPosition: '0 0, 13px 13px',
+  animation: 'ncDotDrift 26s linear infinite, ncDotBreathe 9s ease-in-out infinite',
+  willChange: 'background-position, opacity',
+};
 
 export function AppBackground() {
-  // TWO gates, both required:
-  //
-  // 1. `mounted` (set in a useEffect — which NEVER runs during server render). The web build is
-  //    output:"server", so every page is server-rendered in Node. If the CanvasKit <Scene/> renders
-  //    on the server, CanvasKit tries to load its WASM from the CDN URL, which Node treats as a local
-  //    FILE path (`https:/cdn…` — note the single slash) → ENOENT → Emscripten `abort()`, flooding the
-  //    logs with `Aborted()` and destroying the SSR response stream. Gating on a client-only mount flag
-  //    keeps CanvasKit off the server entirely.
-  // 2. `ready` — wait for a real, non-zero layout size. On web expo-router keeps EVERY tab screen
-  //    mounted and hides inactive ones with `display:none`, collapsing this absoluteFill (and its
-  //    CanvasKit <canvas>) to 0×0 while the Skia clock keeps ticking; CanvasKit `abort()`s drawing onto
-  //    a 0×0 surface once per frame per hidden tab. (dot-field-scene's own guard can't catch this — it
-  //    reads useWindowDimensions(), which stays 812px even when this element is collapsed.)
-  //
-  // Web-only — native (app-background.tsx) is untouched.
-  const [mounted, setMounted] = useState(false);
-  const [ready, setReady] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const onLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    setReady(width > 0 && height > 0);
-  };
+  // Web-only file → raw DOM is fine (Metro resolves app-background.tsx on native). No CanvasKit, no
+  // WebGL, no WASM — just CSS, so there is nothing here that can abort.
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: BASE }]} pointerEvents="none" onLayout={onLayout}>
-      {mounted && ready ? <Scene /> : null}
+    <div style={{ ...fill, backgroundColor: BASE }}>
+      <style>{ANIM_CSS}</style>
+      <div className="nc-dotfield" style={dots} />
       {/* scrim — sits over the dots, under everything else, so text always pops */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: SCRIM }]} />
-    </View>
+      <div style={{ ...fill, backgroundColor: SCRIM }} />
+    </div>
   );
 }
