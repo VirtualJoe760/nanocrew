@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
@@ -57,13 +57,15 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    await assertCompositionOwner(body.compositionId, user.id);
+    const storeId = await assertCompositionOwner(body.compositionId, user.id);
 
+    // IDOR FIX: the placement designIds come from the client — scope the lookup to the caller's store so
+    // a foreign design id can't be rendered into this creator's mockup/composition (mirrors /api/merge).
     const ids = [...new Set(body.placements.map((p) => p.designId))];
     const rows = await db
       .select({ id: schema.designs.id, url: schema.designs.url })
       .from(schema.designs)
-      .where(inArray(schema.designs.id, ids));
+      .where(and(inArray(schema.designs.id, ids), eq(schema.designs.storeId, storeId)));
     const urlById = new Map(rows.map((r) => [r.id, r.url]));
 
     const clamped = body.placements

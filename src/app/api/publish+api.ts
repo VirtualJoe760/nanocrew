@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { uploadImage } from '@/lib/cloudinary';
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     if (!body?.compositionId || !name || !body.variants?.length) {
       return Response.json({ error: 'compositionId, name, variants required' }, { status: 400 });
     }
-    await assertCompositionOwner(body.compositionId, user.id);
+    const storeId = await assertCompositionOwner(body.compositionId, user.id);
 
     const [comp] = await db
       .select()
@@ -83,10 +83,12 @@ export async function POST(req: Request) {
       ? comp.placements
       : [{ placement: comp.placement, designId: comp.designId, position: comp.position ?? null }];
     const designIds = [...new Set(placementList.map((p) => p.designId))];
+    // Defense-in-depth: scope the design lookup to the caller's store so a foreign design can never
+    // become this product's print file, even if a composition somehow carries a design id it shouldn't.
     const designRows = await db
       .select({ id: schema.designs.id, url: schema.designs.url, prompt: schema.designs.prompt })
       .from(schema.designs)
-      .where(inArray(schema.designs.id, designIds));
+      .where(and(inArray(schema.designs.id, designIds), eq(schema.designs.storeId, storeId)));
     const urlById = new Map(designRows.map((r) => [r.id, r.url]));
 
     // Fulfillment-policy gate: a design we generated permissively may still be REFUSED by the print

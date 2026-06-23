@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
-import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
+import { TenantError, assertCatalogueOwner, assertDesignOwner } from '@/lib/tenant';
 import { getProductMeta } from '@/lib/printful';
 
 // POST /api/compositions → create a composition row (status: generating) and return its
@@ -24,6 +24,13 @@ export async function POST(req: Request) {
       return Response.json({ error: 'catalogueId, designId, templateKey required' }, { status: 400 });
     }
     const storeId = await assertCatalogueOwner(body.catalogueId, user.id);
+    // IDOR FIX: the catalogue is the caller's, but the design id comes from the client — verify the
+    // caller owns that design too AND that it lives in the SAME store, or one creator could bake another
+    // creator's private design into their own composition/product (realized downstream in publish).
+    const designStoreId = await assertDesignOwner(body.designId, user.id);
+    if (designStoreId !== storeId) {
+      throw new TenantError('design does not belong to this store', 403);
+    }
 
     let designId = body.designId;
     let adaptedDesign: { id: string; url: string; prompt: string } | null = null;
@@ -33,7 +40,7 @@ export async function POST(req: Request) {
       const [original] = await db
         .select({ url: schema.designs.url, prompt: schema.designs.prompt })
         .from(schema.designs)
-        .where(eq(schema.designs.id, body.designId))
+        .where(and(eq(schema.designs.id, body.designId), eq(schema.designs.storeId, storeId)))
         .limit(1);
       if (original && !original.url.startsWith('data:')) {
         try {
