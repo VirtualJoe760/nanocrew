@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, { Keyframe } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -17,6 +17,15 @@ const holdThenFade = new Keyframe({
 
 export function AnimatedSplashOverlay() {
   const [visible, setVisible] = useState(true);
+  // Belt-and-suspenders dismissal. The reanimated `entering` callback below removes the overlay when
+  // the fade finishes — but on WEB that worklet callback is unreliable (the Keyframe plays, yet
+  // `withCallback` can be dropped), which left this black overlay (#000, zIndex 1000) stuck on top of
+  // the whole app, blanking the screen with the content still mounted underneath. A timeout clears it
+  // unconditionally after the animation's duration, so the app can never get wedged behind it.
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(false), DURATION + 150);
+    return () => clearTimeout(t);
+  }, []);
   if (!visible) return null;
 
   return (

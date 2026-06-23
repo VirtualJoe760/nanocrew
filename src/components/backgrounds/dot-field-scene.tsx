@@ -95,23 +95,25 @@ export default function DotFieldScene() {
     if (effect) return;
     let cancelled = false;
     let tries = 0;
-    let raf = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const compile = () => {
       if (cancelled) return;
       let made: ReturnType<typeof Skia.RuntimeEffect.Make> = null;
       try {
         made = Skia.RuntimeEffect.Make(SKSL);
       } catch {
-        // CanvasKit not ready yet — fall through to retry on the next frame.
+        // CanvasKit not ready yet — fall through to retry. Each failed Make on web emits one Emscripten
+        // `Aborted()` console line, so retry on a GENTLE interval (not every animation frame) to keep
+        // the init-window log spam to a handful of lines instead of dozens.
       }
       if (cancelled) return;
       if (made) setEffect(made);
-      else if (tries++ < 180) raf = requestAnimationFrame(compile); // ~3s @60fps, then give up quietly
+      else if (tries++ < 24) timer = setTimeout(compile, 150); // ~3.6s window, ~one attempt/150ms
     };
     compile();
     return () => {
       cancelled = true;
-      if (raf) cancelAnimationFrame(raf);
+      if (timer) clearTimeout(timer);
     };
   }, [effect]);
   // Clamp the resolution to >= 1 so the shader never divides by zero. useWindowDimensions returns
