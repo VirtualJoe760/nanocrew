@@ -11,6 +11,13 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 
+import { GarmentMockup, type PrintRect } from '@/components/designer/garment-mockup';
+
+// Where the front print area sits on the garment PHOTO, as fractions of the photo (rough tee default).
+// Maps the design's print-area position onto the garment for OUR supplier-agnostic mockup preview. Per-
+// blank-type rects (hoodie/mug/etc.) are a follow-up; tee-front covers the common case.
+const PRINT_AREA_ON_GARMENT: PrintRect = { x: 0.31, y: 0.26, w: 0.38, h: 0.46 };
+
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -532,11 +539,24 @@ export function PlacementEditorBody({
       {entry && area ? (
         <View style={styles.editorWrap}>
           {previewVariant ? (
-            <View style={styles.previewRow}>
-              <Image source={{ uri: previewVariant.image }} style={styles.previewThumb} contentFit="contain" />
-              <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-                Previewing on {previewVariant.color} · {area.label} print area
+            <View style={styles.previewWrap}>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.previewLabel}>
+                Printed preview · {previewVariant.color}
               </ThemedText>
+              {/* OUR supplier-agnostic mockup: the design multiply-blended onto the real garment photo
+                  so it reads as PRINTED (fabric folds/shadows show through), not slapped on. Updates
+                  live as you move/resize below. The provider's own mockup is finalized at approve. */}
+              <GarmentMockup
+                garmentUri={previewVariant.image}
+                designUri={designUrl ?? null}
+                rect={{
+                  x: PRINT_AREA_ON_GARMENT.x + (entry.box.left / area.areaWidth) * PRINT_AREA_ON_GARMENT.w,
+                  y: PRINT_AREA_ON_GARMENT.y + (entry.box.top / area.areaHeight) * PRINT_AREA_ON_GARMENT.h,
+                  w: (entry.box.width / area.areaWidth) * PRINT_AREA_ON_GARMENT.w,
+                  h: (entry.box.height / area.areaHeight) * PRINT_AREA_ON_GARMENT.h,
+                }}
+                style={styles.printedPreview}
+              />
             </View>
           ) : null}
           <View
@@ -743,6 +763,9 @@ const styles = StyleSheet.create({
   editorWrap: { alignItems: 'center', gap: Spacing.two },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, alignSelf: 'stretch' },
   previewThumb: { width: 40, height: 40, borderRadius: Spacing.one },
+  previewWrap: { alignSelf: 'stretch', alignItems: 'center', gap: Spacing.one },
+  previewLabel: { alignSelf: 'center' },
+  printedPreview: { width: 200, height: 230 },
   area: { borderRadius: Spacing.two, borderWidth: 1.5, borderStyle: 'dashed' },
   designBox: { position: 'absolute', borderWidth: 1.5, borderColor: '#3b82f6' },
   designFill: { width: '100%', height: '100%' },
