@@ -313,43 +313,78 @@ const ROOT_TO_BUCKET: Record<string, BlankCategory> = {
 };
 
 let cache: { at: number; blanks: CatalogBlank[] } | null = null;
+let inflight: Promise<CatalogBlank[]> | null = null;
 const TTL_MS = 60 * 60 * 1000;
 
+// Fetch + shape the full blank catalogue from Printful, retrying transient failures (rate limits /
+// 5xx) a couple of times before giving up. This is the only place that hits Printful for the dock.
+async function fetchCatalogBlanks(): Promise<CatalogBlank[]> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 300 * attempt)); // 0, 300ms, 600ms backoff
+    try {
+      const [products, catResult] = await Promise.all([
+        pfRequest<PrintfulCatalogListProduct[]>('/products'),
+        pfRequest<{ categories: PrintfulCategory[] }>('/categories'),
+      ]);
+      const categories = catResult.categories ?? [];
+      const byId = new Map(categories.map((c) => [c.id, c]));
+
+      // Walk a category id up to its root: [leaf, ..., root].
+      const chainToRoot = (cid: number): PrintfulCategory[] => {
+        const out: PrintfulCategory[] = [];
+        let c = byId.get(cid);
+        let guard = 0;
+        while (c && guard++ < 20) {
+          out.push(c);
+          if (!c.parent_id || c.parent_id === 0) break;
+          c = byId.get(c.parent_id);
+        }
+        return out;
+      };
+
+      const blanks: CatalogBlank[] = [];
+      for (const p of products) {
+        if (p.is_discontinued) continue;
+        const chain = chainToRoot(p.main_category_id);
+        const root = chain[chain.length - 1];
+        const bucket = root ? ROOT_TO_BUCKET[root.title] : undefined;
+        if (!bucket) continue; // skip Home & living etc.
+        const type = chain.length >= 2 ? chain[chain.length - 2].title : 'Other';
+        blanks.push({ id: p.id, name: p.title, image: p.image, category: bucket, type });
+      }
+      blanks.sort((a, b) => a.name.localeCompare(b.name));
+      if (!blanks.length) throw new Error('Printful returned an empty catalogue'); // don't cache empty
+      return blanks;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Failed to load Printful catalogue');
+}
+
+// The dock's "products". Served from a 1h cache. Hardened so a Printful blip never empties the dock:
+//  - SINGLE-FLIGHT: concurrent cache-miss callers share one refresh (avoids a thundering herd at
+//    expiry hammering Printful into a rate limit — which is what caused the empty dock for some users).
+//  - STALE-ON-ERROR: if the refresh fails but we have a previous good catalogue, serve it stale rather
+//    than throwing. Only a cold start with no cache + a failing Printful surfaces an error.
 export async function getCatalogBlanks(): Promise<CatalogBlank[]> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.blanks;
-
-  const [products, catResult] = await Promise.all([
-    pfRequest<PrintfulCatalogListProduct[]>('/products'),
-    pfRequest<{ categories: PrintfulCategory[] }>('/categories'),
-  ]);
-  const categories = catResult.categories ?? [];
-  const byId = new Map(categories.map((c) => [c.id, c]));
-
-  // Walk a category id up to its root: [leaf, ..., root].
-  const chainToRoot = (cid: number): PrintfulCategory[] => {
-    const out: PrintfulCategory[] = [];
-    let c = byId.get(cid);
-    let guard = 0;
-    while (c && guard++ < 20) {
-      out.push(c);
-      if (!c.parent_id || c.parent_id === 0) break;
-      c = byId.get(c.parent_id);
-    }
-    return out;
-  };
-
-  const blanks: CatalogBlank[] = [];
-  for (const p of products) {
-    if (p.is_discontinued) continue;
-    const chain = chainToRoot(p.main_category_id);
-    const root = chain[chain.length - 1];
-    const bucket = root ? ROOT_TO_BUCKET[root.title] : undefined;
-    if (!bucket) continue; // skip Home & living etc.
-    const type = chain.length >= 2 ? chain[chain.length - 2].title : 'Other';
-    blanks.push({ id: p.id, name: p.title, image: p.image, category: bucket, type });
+  if (!inflight) {
+    inflight = (async () => {
+      try {
+        const blanks = await fetchCatalogBlanks();
+        cache = { at: Date.now(), blanks };
+        return blanks;
+      } finally {
+        inflight = null;
+      }
+    })();
   }
-  blanks.sort((a, b) => a.name.localeCompare(b.name));
-
-  cache = { at: Date.now(), blanks };
-  return blanks;
+  try {
+    return await inflight;
+  } catch (e) {
+    if (cache) return cache.blanks; // serve stale rather than an empty dock
+    throw e;
+  }
 }

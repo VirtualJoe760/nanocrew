@@ -20,10 +20,15 @@ export const DOCK_TAB_CLEARANCE = 84;
 export function TemplatesDock({
   blanks,
   loading,
+  error,
+  onRetry,
   onAdd,
 }: {
   blanks: CatalogBlank[];
   loading: boolean;
+  /** The catalogue failed to load (network / Printful). Show a retry instead of an empty dock. */
+  error?: boolean;
+  onRetry?: () => void;
   onAdd: (b: CatalogBlank) => void;
 }) {
   const theme = useTheme();
@@ -100,6 +105,22 @@ export function TemplatesDock({
         <ThemedText type="small" themeColor="textSecondary" style={styles.status}>
           Loading catalogue…
         </ThemedText>
+      ) : !blanks.length ? (
+        // Loaded but empty → either a load failure (show Retry) or, rarely, a genuinely empty result.
+        <View style={[styles.status, styles.emptyState]}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {error ? "Couldn't load products — check your connection." : 'No products available right now.'}
+          </ThemedText>
+          {onRetry ? (
+            <Pressable onPress={onRetry}>
+              <ThemedView type="backgroundSelected" style={styles.retryBtn}>
+                <ThemedText type="small" themeColor="text">
+                  Retry
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          ) : null}
+        </View>
       ) : (
         <ScrollView
           horizontal
@@ -172,6 +193,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   status: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
+  emptyState: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  retryBtn: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
   row: { gap: Spacing.two, paddingHorizontal: Spacing.three },
   card: { width: 96, padding: Spacing.two, borderRadius: Spacing.three, alignItems: 'center', gap: 2 },
   backCard: { width: 72, justifyContent: 'center' },

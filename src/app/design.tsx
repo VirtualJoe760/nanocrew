@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -250,6 +250,7 @@ function DesignScreen() {
   assetModeRef.current = assetMode;
   const [blanks, setBlanks] = useState<CatalogBlank[]>([]);
   const [blanksLoading, setBlanksLoading] = useState(true);
+  const [blanksError, setBlanksError] = useState(false); // catalogue failed to load (vs. genuinely empty)
   const [dockHeight, setDockHeight] = useState(160);
   const [dockCollapsed, setDockCollapsed] = useState(false);
   // Which target panel the dock shows: apparel to print on, the site's slots, or video.
@@ -321,15 +322,25 @@ function DesignScreen() {
   } | null>(null);
   const addOffset = useRef(0);
 
+  // Load the product catalogue (the dock's "products"). A failure here used to be swallowed silently,
+  // leaving an empty dock with no feedback or retry — the "can't see products" report. Now it surfaces
+  // an error the dock can show + retry. Reused by the dock's Retry button.
+  const loadBlanks = useCallback(() => {
+    setBlanksLoading(true);
+    setBlanksError(false);
+    return apiFetch('/api/blanks')
+      .then(readJson<{ blanks?: CatalogBlank[]; error?: string }>)
+      .then((d) => {
+        if (d.blanks?.length) setBlanks(d.blanks);
+        else setBlanksError(true); // 502 / empty payload → show the error state, not a blank dock
+      })
+      .catch(() => setBlanksError(true))
+      .finally(() => setBlanksLoading(false));
+  }, []);
+
   useEffect(() => {
     let alive = true;
-    apiFetch('/api/blanks')
-      .then(readJson<{ blanks?: CatalogBlank[] }>)
-      .then((d) => {
-        if (alive && d.blanks) setBlanks(d.blanks);
-      })
-      .catch(() => {})
-      .finally(() => alive && setBlanksLoading(false));
+    loadBlanks();
     // First thing on the Design tab: choose the brand you're designing for, then the collection.
     // Load the creator's brands and open the setup popup. One brand → pre-select it and jump to
     // the collection step; otherwise start at the brand step.
@@ -1296,6 +1307,8 @@ function DesignScreen() {
               <TemplatesDock
                 blanks={blanks}
                 loading={blanksLoading}
+                error={blanksError}
+                onRetry={loadBlanks}
                 onAdd={(b) => addNode('template', String(b.id))}
               />
             ) : dockPanel === 'web' ? (
