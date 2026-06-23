@@ -10,6 +10,17 @@ import {
   setSubscriptionStatusByStripeId,
   upsertSubscription,
 } from '@/lib/billing';
+import { sendCreditReceipt, sendPaymentFailed, sendSubscriptionReceipt } from '@/lib/notify';
+
+// Resolve a creator's email (creator-facing receipts come FROM Nano Crew). Best-effort.
+async function creatorEmail(creatorId: string): Promise<string | null> {
+  const [c] = await db
+    .select({ email: schema.creators.email })
+    .from(schema.creators)
+    .where(eq(schema.creators.id, creatorId))
+    .limit(1);
+  return c?.email ?? null;
+}
 
 // POST /api/public/billing-webhook — Stripe events for SUBSCRIPTIONS and CREDIT PACKS.
 // Separate endpoint + secret from the commerce (order) webhook so the two never interfere.
@@ -55,9 +66,19 @@ export async function POST(req: Request) {
 
         if (kind === 'credit_pack') {
           const credits = Number(s.metadata?.credits ?? 0);
-          // Idempotent on the session id — Stripe may deliver the event more than once.
+          // Idempotent on the session id — Stripe may deliver the event more than once. Only email
+          // the receipt on the FIRST grant (inside the idempotency guard) so retries don't re-send.
           if (credits > 0 && !(await ledgerHas('topup', s.id))) {
             await grantCredits(creatorId, credits, 'topup', s.id);
+            const email = await creatorEmail(creatorId);
+            if (email) {
+              await sendCreditReceipt({
+                to: email,
+                credits,
+                amountCents: s.amount_total ?? 0,
+                currency: s.currency ?? 'usd',
+              }).catch((e) => console.error('[billing-webhook] credit receipt:', e));
+            }
           }
         } else if (kind === 'subscription') {
           const plan = s.metadata?.plan ?? 'starter';
@@ -93,8 +114,46 @@ export async function POST(req: Request) {
           .limit(1);
         if (!row) break;
         const credits = monthlyCreditsFor(row.plan);
+        // Grant + receipt are both keyed off the invoice id (idempotent) so a re-delivered event
+        // neither double-grants nor double-emails.
         if (credits > 0 && !(await ledgerHas('subscription_grant', inv.id))) {
           await grantCredits(row.creatorId, credits, 'subscription_grant', inv.id);
+          const email = await creatorEmail(row.creatorId);
+          if (email) {
+            // billing_reason: 'subscription_create' = first invoice, otherwise a renewal cycle.
+            const renewal = (inv as unknown as { billing_reason?: string }).billing_reason !== 'subscription_create';
+            await sendSubscriptionReceipt({
+              to: email,
+              plan: row.plan,
+              amountCents: inv.amount_paid ?? 0,
+              currency: inv.currency ?? 'usd',
+              renewal,
+            }).catch((e) => console.error('[billing-webhook] sub receipt:', e));
+          }
+        }
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        // Dunning: a subscription payment failed. Reflect it on our row (past_due) AND email the
+        // creator so they can fix their card before the plan lapses. This event was previously
+        // unhandled — both the status update and the notification were missing.
+        const inv = event.data.object as Stripe.Invoice;
+        const subId = invoiceSubId(inv);
+        if (!subId) break;
+        await setSubscriptionStatusByStripeId(subId, 'past_due');
+        const [row] = await db
+          .select({ creatorId: schema.subscriptions.creatorId, plan: schema.subscriptions.plan })
+          .from(schema.subscriptions)
+          .where(eq(schema.subscriptions.stripeSubscriptionId, subId))
+          .limit(1);
+        if (row) {
+          const email = await creatorEmail(row.creatorId);
+          if (email) {
+            await sendPaymentFailed({ to: email, plan: row.plan }).catch((e) =>
+              console.error('[billing-webhook] payment failed email:', e),
+            );
+          }
         }
         break;
       }

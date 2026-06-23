@@ -3,7 +3,7 @@ import type Stripe from 'stripe';
 
 import { db, schema } from '@/lib/db';
 import { submitOrderToPrintful } from '@/lib/fulfill';
-import { sendOrderConfirmation, sendRefundConfirmation } from '@/lib/notify';
+import { sendCreatorSale, sendOrderConfirmation, sendRefundConfirmation } from '@/lib/notify';
 import { stripe, WEBHOOK_SECRET } from '@/lib/stripe';
 
 // POST /api/public/stripe-webhook — Stripe events (no CORS: server-to-server).
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
         // Order confirmation (best-effort, never throws into the webhook). Discloses the returns
         // policy/window — see docs/accounts/EMAIL_PIPELINE.md #2.
         const [store] = await db
-          .select({ slug: schema.stores.slug, name: schema.stores.name })
+          .select({ slug: schema.stores.slug, name: schema.stores.name, creatorId: schema.stores.creatorId })
           .from(schema.stores)
           .where(eq(schema.stores.id, order.storeId))
           .limit(1);
@@ -69,13 +69,28 @@ export async function POST(req: Request) {
           .select({ name: schema.orderItems.nameSnapshot })
           .from(schema.orderItems)
           .where(eq(schema.orderItems.orderId, order.id));
+        const itemNames = items.map((i) => i.name);
         if (store) {
           await sendOrderConfirmation({
             to: order.customerEmail,
             store,
-            items: items.map((i) => i.name),
+            items: itemNames,
             order: { id: order.id, totalCents: s.amount_total ?? 0 },
           }).catch((e) => console.error('[stripe-webhook] confirmation:', e));
+          // Tell the creator they made a sale (FROM Nano Crew). Best-effort, after the buyer email.
+          const [creator] = await db
+            .select({ email: schema.creators.email })
+            .from(schema.creators)
+            .where(eq(schema.creators.id, store.creatorId))
+            .limit(1);
+          if (creator?.email) {
+            await sendCreatorSale({
+              to: creator.email,
+              brandName: store.name,
+              items: itemNames,
+              order: { id: order.id, totalCents: s.amount_total ?? 0 },
+            }).catch((e) => console.error('[stripe-webhook] creator-sale:', e));
+          }
         }
       }
     } else if (event.type === 'checkout.session.expired') {

@@ -4,22 +4,31 @@ import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import {
+  sendBrandLive,
+  sendPayoutNotification,
   sendReturnApproved,
   sendReturnDeclined,
   type EmailStore,
 } from '@/lib/notify';
 
-// POST /api/internal/notify — central dispatch so APP-SIDE creator actions (the approve/decline
-// routes on the Railway backend) can fire a branded shopper email WITHOUT pulling Resend into the
-// app. Resend lives ONLY in platform-api. Auth: a shared INTERNAL_API_KEY, constant-time compared
-// (mirrors the first-drop internal-service path). Best-effort: a send that can't go out must not
-// fail the creator action, so a configured-and-authed call always 202s.
+// POST /api/internal/notify — central dispatch so APP-SIDE actions on the Railway backend can fire a
+// branded email WITHOUT pulling Resend into the app. Resend lives ONLY in platform-api. Auth: a
+// shared INTERNAL_API_KEY, constant-time compared (mirrors the first-drop internal-service path).
+// Best-effort: a send that can't go out must not fail the caller's action, so a configured-and-authed
+// call always 202s.
 //
-// The app stays dumb — it posts only { action, returnId, reason? }; this route (which has DB access)
-// resolves the return → store → buyer and renders the right branded email. See
-// docs/accounts/EMAIL_PIPELINE.md (the §"App-triggered sends" contract) + RETURNS_REFUNDS.md.
-
-type NotifyBody = { action: 'approved' | 'declined'; returnId: string; reason?: string };
+// The app stays dumb — it posts only a minimal { action, id } and this route (which has DB access)
+// resolves the full context and renders the right email. See docs/accounts/EMAIL_PIPELINE.md
+// (§"App-triggered sends") + RETURNS_REFUNDS.md.
+//
+// Actions:
+//  - returns:   { action: 'approved'|'declined', returnId, reason? }  → buyer email (per-brand)
+//  - brand-live:{ action: 'brand_live', slug }                        → creator email (from Nano Crew)
+//  - payout:    { action: 'payout', orderId }                         → creator email (from Nano Crew)
+type NotifyBody =
+  | { action: 'approved' | 'declined'; returnId: string; reason?: string }
+  | { action: 'brand_live'; slug: string }
+  | { action: 'payout'; orderId: string };
 
 function authorized(req: Request): boolean {
   const expected = process.env.INTERNAL_API_KEY;
@@ -30,12 +39,75 @@ function authorized(req: Request): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+async function creatorEmail(creatorId: string): Promise<string | null> {
+  const [c] = await db
+    .select({ email: schema.creators.email })
+    .from(schema.creators)
+    .where(eq(schema.creators.id, creatorId))
+    .limit(1);
+  return c?.email ?? null;
+}
+
 export async function POST(req: Request) {
   if (!authorized(req)) return Response.json({ ok: false }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as NotifyBody | null;
-  if (!body?.returnId || (body.action !== 'approved' && body.action !== 'declined')) {
-    return Response.json({ ok: false, error: 'action ("approved"|"declined") and returnId are required' }, { status: 400 });
+  if (!body || typeof body.action !== 'string') {
+    return Response.json({ ok: false, error: 'action is required' }, { status: 400 });
+  }
+
+  // ── Brand went live → tell the creator (FROM Nano Crew). ────────────────────────────────────────
+  if (body.action === 'brand_live') {
+    if (!body.slug) return Response.json({ ok: false, error: 'slug required' }, { status: 400 });
+    const [store] = await db
+      .select({ name: schema.stores.name, slug: schema.stores.slug, creatorId: schema.stores.creatorId, customDomain: schema.stores.customDomain })
+      .from(schema.stores)
+      .where(eq(schema.stores.slug, body.slug))
+      .limit(1);
+    if (!store) return Response.json({ ok: false, error: 'store not found' }, { status: 404 });
+    const email = await creatorEmail(store.creatorId);
+    if (email) {
+      const url = store.customDomain ? `https://${store.customDomain}` : `https://nanocrew.app/b/${store.slug}`;
+      await sendBrandLive({ to: email, brandName: store.name, url });
+    }
+    return Response.json({ ok: true }, { status: 202 });
+  }
+
+  // ── Held payout released → tell the creator (FROM Nano Crew). ────────────────────────────────────
+  if (body.action === 'payout') {
+    if (!body.orderId) return Response.json({ ok: false, error: 'orderId required' }, { status: 400 });
+    const [order] = await db
+      .select({ id: schema.orders.id, storeId: schema.orders.storeId, brandNetCents: schema.orders.brandNetCents, currency: schema.orders.currency })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, body.orderId))
+      .limit(1);
+    if (!order) return Response.json({ ok: false, error: 'order not found' }, { status: 404 });
+    const [store] = await db
+      .select({ name: schema.stores.name, creatorId: schema.stores.creatorId })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, order.storeId))
+      .limit(1);
+    if (store) {
+      const email = await creatorEmail(store.creatorId);
+      if (email) {
+        await sendPayoutNotification({
+          to: email,
+          brandName: store.name,
+          amountCents: order.brandNetCents,
+          currency: order.currency,
+          order: { id: order.id },
+        });
+      }
+    }
+    return Response.json({ ok: true }, { status: 202 });
+  }
+
+  // ── Returns: approved / declined → buyer email (per-brand). ──────────────────────────────────────
+  if (body.action !== 'approved' && body.action !== 'declined') {
+    return Response.json({ ok: false, error: 'unknown action' }, { status: 400 });
+  }
+  if (!body.returnId) {
+    return Response.json({ ok: false, error: 'returnId required' }, { status: 400 });
   }
 
   // Resolve the claim → its store → the buyer. If the row is gone, there's nothing to notify.

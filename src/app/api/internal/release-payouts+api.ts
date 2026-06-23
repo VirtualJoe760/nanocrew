@@ -4,6 +4,7 @@ import { and, eq, lt, notInArray } from 'drizzle-orm';
 
 import { releasePayout } from '@/lib/connect';
 import { db, schema } from '@/lib/db';
+import { notifyPlatform } from '@/lib/notify-internal';
 
 // POST /api/internal/release-payouts — the deferred-payout release job (held-marketplace model).
 //
@@ -70,6 +71,8 @@ export async function POST(req: Request) {
       // concurrent run that already released this order is a safe no-op here.
       await releasePayout(order);
       released += 1;
+      // Tell the creator their money is on the way (best-effort; never fails the release).
+      await notifyPlatform({ action: 'payout', orderId: order.id });
     } catch (e) {
       failed += 1;
       const message = e instanceof Error ? e.message : 'release failed';

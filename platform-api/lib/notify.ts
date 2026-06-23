@@ -43,6 +43,25 @@ export function buildBrandSender(store: { slug: string; name: string }): string 
   return `${display} <no-reply-${slug}@${domain}>`;
 }
 
+/**
+ * The platform's own sender — "Nano Crew <no-reply@{domain}>". Used for CREATOR-facing notifications
+ * (new sale, payout, subscription/credit receipts, brand-live), which come FROM Nano Crew TO the
+ * creator, as opposed to the per-brand shopper emails above. Falls back to EMAIL_FROM when unset.
+ */
+export function buildPlatformSender(): string {
+  const domain = process.env.MAIL_DOMAIN;
+  if (!domain) return process.env.EMAIL_FROM ?? 'Nano Crew <onboarding@resend.dev>';
+  return `Nano Crew <no-reply@${domain}>`;
+}
+
+/** Nano Crew's own brand surface for platform emails — clean monochrome (the template defaults). */
+const PLATFORM_STORE: EmailStore = { slug: 'nanocrew', name: 'Nano Crew', logoUrl: null, colors: null };
+
+const PLAN_LABEL: Record<string, string> = { free: 'Free', starter: 'Starter', pro: 'Pro', advanced: 'Advanced' };
+function planLabel(plan: string): string {
+  return PLAN_LABEL[plan] ?? plan.charAt(0).toUpperCase() + plan.slice(1);
+}
+
 // ── Core sender (raw fetch → Resend; env-gated; never throws) ─────────────────────────────────────
 
 async function sendEmail(input: {
@@ -53,6 +72,8 @@ async function sendEmail(input: {
   body: string;
   cta?: EmailCta;
   preheader?: string;
+  /** Override the From (e.g. the Nano Crew platform sender for creator-facing emails). */
+  from?: string;
 }): Promise<void> {
   try {
     const key = process.env.RESEND_API_KEY;
@@ -63,7 +84,7 @@ async function sendEmail(input: {
       console.log(`[notify] email unconfigured — would send "${input.subject}" to ${input.to} for ${input.store.name}`);
       return;
     }
-    const from = buildBrandSender(input.store);
+    const from = input.from ?? buildBrandSender(input.store);
     const html = renderEmail({
       store: input.store,
       heading: input.heading,
@@ -268,5 +289,141 @@ export async function sendRefundConfirmation(opts: {
     body:
       p(`A refund of ${esc(money(opts.amountCents, opts.order.currency ?? 'USD'))} for order ${orderRef(opts.order.id)} has been issued by ${esc(opts.store.name)}.`, { html: true }) +
       p(`It typically takes 5–10 business days to appear on your statement, depending on your bank.`, { muted: true }),
+  });
+}
+
+// ── Creator / platform emails (FROM Nano Crew TO the creator) ──────────────────────────────────────
+// These notify the brand OWNER about account activity. Unlike the shopper emails above they render
+// against the Nano Crew monochrome surface and send from the platform sender, not the per-brand one.
+
+/** Creator new-sale notification — fired from the commerce stripe-webhook once an order is paid. */
+export async function sendCreatorSale(opts: {
+  to: string;
+  brandName: string;
+  items: string[];
+  order: OrderLike;
+}): Promise<void> {
+  const total = typeof opts.order.totalCents === 'number'
+    ? p(`Order total: ${money(opts.order.totalCents, opts.order.currency ?? 'USD')}`, { muted: true })
+    : '';
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: `You made a sale on ${opts.brandName} 🎉`,
+    heading: 'You made a sale.',
+    preheader: `A new order just came in for ${opts.brandName}.`,
+    body:
+      p(`Nice — someone just ordered from ${esc(opts.brandName)}.`, { html: true }) +
+      p(`Order ${orderRef(opts.order.id)}`) +
+      ul(opts.items) +
+      total +
+      p(`Nano Crew handles production and fulfilment automatically. Your payout for this order releases after the return window closes.`, { muted: true }),
+  });
+}
+
+/** Creator payout notification — fired when a held payout is released to the connected account. */
+export async function sendPayoutNotification(opts: {
+  to: string;
+  brandName: string;
+  amountCents: number;
+  currency?: string | null;
+  order: OrderLike;
+}): Promise<void> {
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: `A payout is on the way`,
+    heading: 'Payout on the way.',
+    preheader: `${money(opts.amountCents, opts.currency ?? 'USD')} from ${opts.brandName} is being transferred.`,
+    body:
+      p(`Your payout of ${esc(money(opts.amountCents, opts.currency ?? 'USD'))} for ${esc(opts.brandName)} (order ${orderRef(opts.order.id)}) is being transferred to your connected account.`, { html: true }) +
+      p(`It typically lands in your bank within a couple of business days, depending on your bank and payout schedule.`, { muted: true }),
+  });
+}
+
+/** Subscription receipt / renewal — fired from billing-webhook invoice.paid. */
+export async function sendSubscriptionReceipt(opts: {
+  to: string;
+  plan: string;
+  amountCents: number;
+  currency?: string | null;
+  renewal?: boolean;
+}): Promise<void> {
+  const label = planLabel(opts.plan);
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: `Your Nano Crew ${label} subscription`,
+    heading: opts.renewal ? 'Subscription renewed.' : 'You’re subscribed.',
+    preheader: `${label} — ${money(opts.amountCents, opts.currency ?? 'USD')}.`,
+    body:
+      p(`Thanks for subscribing to Nano Crew ${esc(label)}.`, { html: true }) +
+      p(`Amount: ${esc(money(opts.amountCents, opts.currency ?? 'USD'))}`, { html: true }) +
+      p(`Your monthly credits have been added to your account. Manage your plan anytime from Account → billing.`, { muted: true }),
+  });
+}
+
+/** Subscription payment-failed (dunning) — fired from billing-webhook invoice.payment_failed. */
+export async function sendPaymentFailed(opts: {
+  to: string;
+  plan: string;
+  updateUrl?: string;
+}): Promise<void> {
+  const label = planLabel(opts.plan);
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: `Your Nano Crew payment didn’t go through`,
+    heading: 'Payment failed.',
+    preheader: `We couldn’t process your ${label} subscription payment.`,
+    cta: opts.updateUrl ? { label: 'Update payment method', url: opts.updateUrl } : undefined,
+    body:
+      p(`We weren’t able to process the payment for your Nano Crew ${esc(label)} subscription.`, { html: true }) +
+      p(`Please update your payment method to keep your plan active — we’ll retry automatically. If the payment keeps failing your plan may be paused.`, { muted: true }),
+  });
+}
+
+/** Credit-purchase receipt — fired from billing-webhook on a Stripe credit-pack checkout. */
+export async function sendCreditReceipt(opts: {
+  to: string;
+  credits: number;
+  amountCents: number;
+  currency?: string | null;
+}): Promise<void> {
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: `Your Nano Crew credit top-up`,
+    heading: 'Credits added.',
+    preheader: `${opts.credits.toLocaleString()} credits added to your account.`,
+    body:
+      p(`${esc(opts.credits.toLocaleString())} credits have been added to your Nano Crew account.`, { html: true }) +
+      p(`Amount: ${esc(money(opts.amountCents, opts.currency ?? 'USD'))}`, { html: true }) +
+      p(`Credits power AI design, model shots, and video generation. Happy creating.`, { muted: true }),
+  });
+}
+
+/** Brand-live announcement — fired when a store is first published (app-only or with a domain). */
+export async function sendBrandLive(opts: {
+  to: string;
+  brandName: string;
+  url: string;
+}): Promise<void> {
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: `${opts.brandName} is live 🚀`,
+    heading: 'Your store is live.',
+    preheader: `${opts.brandName} is open for business.`,
+    cta: { label: 'Visit your store', url: opts.url },
+    body:
+      p(`${esc(opts.brandName)} is now live and open for orders.`, { html: true }) +
+      p(`Share your link, post your products, and start selling. You can keep editing your site and adding products anytime — just talk to Venus.`, { muted: true }),
   });
 }

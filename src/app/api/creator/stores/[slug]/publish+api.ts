@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
 import { getEntitlements } from '@/lib/billing';
+import { notifyPlatform } from '@/lib/notify-internal';
 
 // POST /api/creator/stores/:slug/publish { listed?: boolean } — open (or close) the brand's shop in
 // the Nano Crew ecosystem. This is the APP-ONLY "go live": it lists the brand in the in-app Market
@@ -15,7 +16,7 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   const [store] = await db
-    .select({ id: schema.stores.id, status: schema.stores.status, customDomain: schema.stores.customDomain })
+    .select({ id: schema.stores.id, status: schema.stores.status, customDomain: schema.stores.customDomain, isPublic: schema.stores.isPublic })
     .from(schema.stores)
     .where(and(eq(schema.stores.slug, slug), eq(schema.stores.creatorId, user.id)))
     .limit(1);
@@ -41,6 +42,8 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
     if (!published.length) return Response.json({ error: 'no_published_products' }, { status: 409 });
 
     await db.update(schema.stores).set({ isPublic: true, status: 'live' }).where(eq(schema.stores.id, store.id));
+    // Congratulate the creator the FIRST time the shop opens (not on every re-toggle). Best-effort.
+    if (!store.isPublic) await notifyPlatform({ action: 'brand_live', slug });
     return Response.json({ ok: true, listed: true, status: 'live' });
   }
 
