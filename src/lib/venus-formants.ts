@@ -35,6 +35,11 @@ export type AcousticFeatures = {
   bandMid: number;
   /** 2500–3500 Hz energy / total, 0..1. */
   bandHigh: number;
+  /** F1 pick fell back to a band edge (no interior envelope max) — a degenerate/unreliable frame.
+   *  Per-voice calibration (VoiceNorm) skips these so a glitch window can't skew the anchors. */
+  f1Edge?: boolean;
+  /** F2 pick fell back to a band edge (no interior envelope max). */
+  f2Edge?: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -217,10 +222,12 @@ export function analyzeWindow(
   // to the strongest raw harmonic within ~1 harmonic spacing so the reported
   // frequency tracks the actual resonance, not the smoothing's centroid.
   const harmonicBins = Math.round(220 / binHz); // ~1 female-f0 spacing in bins
-  const f1 = pickFormant(env, mags, binHz, 200, 1100, 0, harmonicBins);
+  const p1 = pickFormant(env, mags, binHz, 200, 1100, 0, harmonicBins);
+  const f1 = p1.hz;
   // F2 must be higher than F1; raise the low edge to just above F1.
   const f2LoHz = Math.max(800, f1 + 150);
-  const f2 = pickFormant(env, mags, binHz, f2LoHz, 3000, f1, harmonicBins);
+  const p2 = pickFormant(env, mags, binHz, f2LoHz, 3000, f1, harmonicBins);
+  const f2 = p2.hz;
 
   // ── voiced decision ──
   // Voiced if low-frequency band carries energy, the frame isn't a sibilant
@@ -237,6 +244,8 @@ export function analyzeWindow(
     bandLow: clamp01(bandLow),
     bandMid: clamp01(bandMid),
     bandHigh: clamp01(bandHigh),
+    f1Edge: p1.edge,
+    f2Edge: p2.edge,
   };
 }
 
@@ -273,14 +282,14 @@ function pickFormant(
   hiHz: number,
   minHz: number,
   snapRadius: number
-): number {
+): { hz: number; edge: boolean } {
   const n = env.length;
   const effLo = Math.max(loHz, minHz);
   let loBin = Math.floor(effLo / binHz);
   let hiBin = Math.ceil(hiHz / binHz);
   if (loBin < 1) loBin = 1;
   if (hiBin > n - 2) hiBin = n - 2;
-  if (hiBin <= loBin) return effLo;
+  if (hiBin <= loBin) return { hz: effLo, edge: true };
 
   // Strongest envelope bin in band first (robust fallback if no strict local max).
   let bestBin = loBin;
@@ -302,7 +311,10 @@ function pickFormant(
       regionBin = i;
     }
   }
-  if (regionMag < 0) regionBin = bestBin;
+  // No interior local maximum of the envelope was found → the pick is just the band's strongest bin
+  // (often a band edge), an unreliable/degenerate frame. Flag it so calibration can skip it.
+  const edge = regionMag < 0;
+  if (edge) regionBin = bestBin;
 
   // Snap to the strongest RAW harmonic peak within ±snapRadius bins of the
   // envelope region peak (clamped to the search band). The envelope tells us
@@ -324,5 +336,5 @@ function pickFormant(
   if (peakBin > n - 2) peakBin = n - 2;
 
   const off = parabolicOffset(mags[peakBin - 1], mags[peakBin], mags[peakBin + 1]);
-  return (peakBin + off) * binHz;
+  return { hz: (peakBin + off) * binHz, edge };
 }

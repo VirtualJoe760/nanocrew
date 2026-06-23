@@ -18,6 +18,9 @@ import {
 import {
   mapFeaturesToWeights,
   MOUTH_MORPHS,
+  SEED_CAL,
+  VoiceNorm,
+  type MapContext,
 } from '../venus-viseme-map.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -472,6 +475,158 @@ check('silence: viseme_sil = 1', mSil.viseme_sil === 1, `sil=${mSil.viseme_sil}`
   const a = analyzeWindow(vowel(936, 1551), SR);
   const b = analyzeWindow(vowel(936, 1551), SR);
   check('determinism: analyzeWindow stable f1/f2', a.f1 === b.f1 && a.f2 === b.f2);
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. RICH (ctx) mapper — the ultra-realistic upgrade
+//    Built from direct AcousticFeatures so the classifier logic is tested exactly
+//    (independent of formant-estimation noise).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function mkFeat(o: Partial<AcousticFeatures>): AcousticFeatures {
+  // default = a neutral, normal-loudness voiced mid vowel (f2 in the neutral gap → no round/spread)
+  return {
+    rms: 0.08, zcr: 0.05, f1: 600, f2: 1700, voiced: true, hf: 0.1,
+    bandLow: 0.4, bandMid: 0.2, bandHigh: 0.1, f1Edge: false, f2Edge: false, ...o,
+  };
+}
+const CAL: MapContext = { cal: SEED_CAL };
+function dominantVowel(w: Record<string, number>): string {
+  let best = ''; let bv = 0;
+  for (const k of ['viseme_aa', 'viseme_O', 'viseme_U', 'viseme_E', 'viseme_I']) {
+    if ((w[k] ?? 0) > bv) { bv = w[k]; best = k; }
+  }
+  return bv > 0 ? best : '(none)';
+}
+
+(function richTests() {
+  // ── regression floor: single-arg path is byte-identical (no new keys, same values) ──
+  const basic = mapFeaturesToWeights(aa);
+  check('rich: single-arg unchanged — viseme_O not even a key', !('viseme_O' in basic));
+
+  // ── O-BUG GUARD under ctx: a mid-F2 sweep must never round/spread or emit O/U ──
+  let okMid = true;
+  let midDetail = '';
+  for (let f1 = 400; f1 <= 900; f1 += 50) {
+    const w = mapFeaturesToWeights(mkFeat({ f1, f2: 1700 }), CAL);
+    if (w.mouthFunnel > 0.1 || w.mouthPucker > 0.1 || w.mouthStretchLeft > 0.1 || w.viseme_O > 0 || w.viseme_U > 0) {
+      okMid = false; midDetail = `f1=${f1} funnel=${w.mouthFunnel.toFixed(2)} O=${w.viseme_O.toFixed(2)}`;
+    }
+  }
+  check('rich O-bug guard: mid-F2 sweep stays neutral (no round/spread/O)', okMid, midDetail);
+
+  // ── vowel identity: each cardinal vowel → exactly ONE identity viseme, the expected family ──
+  const oVow = mapFeaturesToWeights(mkFeat({ f1: 520, f2: 1150 }), CAL); // /o/ mid-back round
+  check('rich vowel /o/: viseme_O dominant + no spread', dominantVowel(oVow) === 'viseme_O' && oVow.mouthStretchLeft < 0.05, `dom=${dominantVowel(oVow)}`);
+  const uVow = mapFeaturesToWeights(mkFeat({ f1: 380, f2: 950 }), CAL); // /u/ close-back round
+  check('rich vowel /u/: viseme_U dominant', dominantVowel(uVow) === 'viseme_U', `dom=${dominantVowel(uVow)}`);
+  const iVow = mapFeaturesToWeights(mkFeat({ f1: 300, f2: 2700 }), CAL); // /i/ close-front spread
+  check('rich vowel /i/: viseme_I dominant + no round', dominantVowel(iVow) === 'viseme_I' && iVow.mouthFunnel < 0.05, `dom=${dominantVowel(iVow)}`);
+  const eVow = mapFeaturesToWeights(mkFeat({ f1: 550, f2: 2100 }), CAL); // /e/ mid-front spread
+  check('rich vowel /e/: viseme_E dominant', dominantVowel(eVow) === 'viseme_E', `dom=${dominantVowel(eVow)}`);
+  const aVow = mapFeaturesToWeights(mkFeat({ f1: 850, f2: 1500 }), CAL); // /a/ open neutral
+  check('rich vowel /a/: viseme_aa dominant + O/U==0', dominantVowel(aVow) === 'viseme_aa' && aVow.viseme_O === 0 && aVow.viseme_U === 0, `dom=${dominantVowel(aVow)}`);
+  // exclusivity: at most one identity viseme nonzero
+  for (const [nm, w] of [['o', oVow], ['u', uVow], ['i', iVow], ['e', eVow], ['a', aVow]] as const) {
+    const n = ['viseme_aa', 'viseme_O', 'viseme_U', 'viseme_E', 'viseme_I'].filter((k) => (w as any)[k] > 0).length;
+    check(`rich vowel /${nm}/: exactly one identity viseme`, n === 1, `count=${n}`);
+  }
+
+  // ── BILABIAL CLOSURE: a raw dip that re-opens to a vowel → lips MEET ──
+  const vowelAhead = mkFeat({ f1: 700, f2: 1500, rms: 0.09 });
+  const dip = mkFeat({ rms: 0.02, zcr: 0.06, hf: 0.08, voiced: false, bandLow: 0.3 });
+  const closeW = mapFeaturesToWeights(mkFeat({ rms: 0.05 }), { cal: SEED_CAL, raw: dip, aheadFar: vowelAhead, prevVoiced: true });
+  check('rich closure: lips meet (viseme_PP>0.6, mouthClose>0.5, jaw<0.15)',
+    closeW.viseme_PP > 0.6 && closeW.mouthClose > 0.5 && closeW.jawOpen < 0.15,
+    `PP=${closeW.viseme_PP.toFixed(2)} close=${closeW.mouthClose.toFixed(2)} jaw=${closeW.jawOpen.toFixed(2)}`);
+
+  // closure detected on RAW even when the SMOOTHED frame's rms was raised toward a vowel
+  const closeSmoothed = mapFeaturesToWeights(mkFeat({ rms: 0.06 }), { cal: SEED_CAL, raw: mkFeat({ rms: 0.008, voiced: false, hf: 0.06 }), aheadFar: vowelAhead, prevVoiced: true });
+  check('rich closure: fires on RAW dip despite smoothed rms', closeSmoothed.viseme_PP > 0.6, `PP=${closeSmoothed.viseme_PP.toFixed(2)}`);
+
+  // closure-vs-pause: same dip but the look-ahead is KNOWN-silent → pause (sil), not a bilabial
+  const pauseW = mapFeaturesToWeights(mkFeat({ rms: 0.05 }), { cal: SEED_CAL, raw: dip, aheadFar: mkFeat({ rms: 0.001, voiced: false }), prevVoiced: true });
+  check('rich closure-vs-pause: known-silent ahead → sil, no PP', pauseW.viseme_PP === 0 && pauseW.viseme_sil > 0.4, `PP=${pauseW.viseme_PP} sil=${pauseW.viseme_sil.toFixed(2)}`);
+
+  // no look-ahead + not previously voiced → NOT a closure (don't seal on every boundary)
+  const noLA = mapFeaturesToWeights(mkFeat({ rms: 0.05 }), { cal: SEED_CAL, raw: dip, prevVoiced: false });
+  check('rich closure: no false seal without prevVoiced/lookahead', noLA.viseme_PP === 0, `PP=${noLA.viseme_PP}`);
+
+  // ── FRICATIVE (voice-relative hf) ──
+  const fric = mapFeaturesToWeights(mkFeat({ voiced: false, rms: 0.03, hf: 0.55, bandHigh: 0.2, zcr: 0.3, bandLow: 0.05 }), { cal: SEED_CAL, raw: mkFeat({ voiced: false, hf: 0.55, bandHigh: 0.2 }) });
+  check('rich fricative: sibilant fires, jaw<=0.25, no funnel',
+    (fric.viseme_SS > 0 || fric.viseme_CH > 0) && fric.jawOpen <= 0.25 && fric.mouthFunnel < 0.05,
+    `SS=${fric.viseme_SS.toFixed(2)} jaw=${fric.jawOpen.toFixed(2)}`);
+
+  // ── COARTICULATION: anticipatory rounding leads on the current (neutral) frame ──
+  const neutralNow = mkFeat({ f1: 600, f2: 1750 }); // neutral (no round)
+  const roundAhead = mkFeat({ f1: 460, f2: 1000, rms: 0.08 }); // /oo/ coming
+  const antiW = mapFeaturesToWeights(neutralNow, { cal: SEED_CAL, raw: neutralNow, aheadFar: roundAhead });
+  const noAntiW = mapFeaturesToWeights(neutralNow, { cal: SEED_CAL, raw: neutralNow }); // no look-ahead
+  check('rich coartic: anticipatory rounding leads (funnel > no-lookahead)', antiW.mouthFunnel > noAntiW.mouthFunnel + 0.02, `anti=${antiW.mouthFunnel.toFixed(3)} none=${noAntiW.mouthFunnel.toFixed(3)}`);
+  check('rich coartic: degrades to neutral with no look-ahead', noAntiW.mouthFunnel < 0.05, `funnel=${noAntiW.mouthFunnel.toFixed(3)}`);
+
+  // ── PHANTOM-SIL guard: an open voiced vowel must not emit silence ──
+  check('rich: open vowel → viseme_sil < 0.1 (no phantom silence)', aVow.viseme_sil < 0.1, `sil=${aVow.viseme_sil}`);
+
+  // ── determinism / purity: identical (f, ctx) → identical weights ──
+  const c1 = mapFeaturesToWeights(oVow === oVow ? mkFeat({ f1: 520, f2: 1150 }) : aa, CAL);
+  const c2 = mapFeaturesToWeights(mkFeat({ f1: 520, f2: 1150 }), CAL);
+  let same = true;
+  for (const k in c1) if (c1[k] !== c2[k]) same = false;
+  check('rich: deterministic (same f,ctx → identical)', same);
+
+  // ── ranges: every rich weight stays in [0,1] across a broad sweep ──
+  let inRange = true;
+  for (let f1 = 280; f1 <= 950; f1 += 30) {
+    for (let f2 = 800; f2 <= 2900; f2 += 100) {
+      const w = mapFeaturesToWeights(mkFeat({ f1, f2 }), CAL);
+      for (const k in w) if (w[k] < 0 || w[k] > 1 || Number.isNaN(w[k])) { inRange = false; }
+    }
+  }
+  check('rich: all weights ∈ [0,1] across F1×F2 sweep', inRange);
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. VoiceNorm — self-calibrating per-voice anchors
+// ─────────────────────────────────────────────────────────────────────────────
+
+(function voiceNormTests() {
+  const vn = new VoiceNorm();
+  // cold start == today's seed anchors (warmup blend 0)
+  const cold = vn.cal();
+  check('VoiceNorm cold == SEED_CAL', cold.F1_OPEN === SEED_CAL.F1_OPEN && cold.F2_SPREAD_HI === SEED_CAL.F2_SPREAD_HI && cold.F2_ROUND === SEED_CAL.F2_ROUND);
+
+  // unvoiced frames must NOT move calibration
+  for (let i = 0; i < 30; i++) vn.update(mkFeat({ voiced: false, rms: 0.06 }));
+  check('VoiceNorm: unvoiced frames do not calibrate', vn.cal().F2_SPREAD_HI === SEED_CAL.F2_SPREAD_HI);
+
+  // warm up to a LOWER (male-ish) voice: F1 250..600, F2 900..2070
+  for (let r = 0; r < 150; r++) {
+    vn.update(mkFeat({ f1: 250 + (r % 8) * 50, f2: 900 + (r % 14) * 90, rms: 0.09, voiced: true }));
+  }
+  const warm = vn.cal();
+  check('VoiceNorm warmup: anchors slid to the new voice (F2_SPREAD_HI dropped)', warm.F2_SPREAD_HI < 2600 && warm.F2_SPREAD_HI < SEED_CAL.F2_SPREAD_HI, `hi=${warm.F2_SPREAD_HI.toFixed(0)}`);
+  check('VoiceNorm warmup: neutral gap ≥ 300Hz preserved (O-fix un-collapsible)', warm.F2_SPREAD_LO - warm.F2_ROUND >= 300, `gap=${(warm.F2_SPREAD_LO - warm.F2_ROUND).toFixed(0)}`);
+
+  // self-calibrated O-bug guard: a mid-F2 sweep at the NEW centre must still stay neutral
+  const center = (warm.F2_ROUND + warm.F2_SPREAD_LO) / 2;
+  let okMidCal = true;
+  let det = '';
+  for (let f1 = 400; f1 <= 700; f1 += 50) {
+    const w = mapFeaturesToWeights(mkFeat({ f1, f2: center }), { cal: warm });
+    if (w.mouthFunnel > 0.1 || w.mouthStretchLeft > 0.1 || w.viseme_O > 0 || w.viseme_U > 0) { okMidCal = false; det = `f1=${f1} O=${w.viseme_O.toFixed(2)} funnel=${w.mouthFunnel.toFixed(2)}`; }
+  }
+  check('VoiceNorm self-calibrated O-bug guard: mid-F2 at new centre stays neutral', okMidCal, det);
+
+  // a glitch window (wildly off the median) must not yank an anchor
+  const beforeGlitch = vn.cal().F2_SPREAD_HI;
+  vn.update(mkFeat({ f1: 600, f2: 5000, rms: 0.09, voiced: true })); // absurd F2 — rejected by deadband
+  check('VoiceNorm: single glitch window rejected', Math.abs(vn.cal().F2_SPREAD_HI - beforeGlitch) < 30, `Δ=${(vn.cal().F2_SPREAD_HI - beforeGlitch).toFixed(1)}`);
+
+  // reset re-seeds
+  vn.reset();
+  check('VoiceNorm reset → seed', vn.cal().F2_SPREAD_HI === SEED_CAL.F2_SPREAD_HI);
 })();
 
 // ─────────────────────────────────────────────────────────────────────────────

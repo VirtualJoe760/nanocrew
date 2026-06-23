@@ -18,9 +18,9 @@
 // toward them (asymmetric attack/decay). It only ever emits jaw/mouth/viseme morphs — never eyes,
 // brows, or head; the idle/liveliness layer owns those.
 
-import { speechFrameAt, speechActiveAt } from '@/lib/venus-speech-level';
+import { speechFrameAt, speechActiveAt, speechFrameAheadAt, getVoiceCal } from '@/lib/venus-speech-level';
 import { analyzeWindow, type AcousticFeatures } from '@/lib/venus-formants';
-import { mapFeaturesToWeights, MOUTH_MORPHS } from '@/lib/venus-viseme-map';
+import { mapFeaturesToWeights, MOUTH_MORPHS, VoiceNorm, type MapContext } from '@/lib/venus-viseme-map';
 
 // The 15 RPM Oculus visemes that exist on this avatar (verified from the GLB).
 export const VISEME_NAMES = [
@@ -124,10 +124,29 @@ function nowMs(): number {
   return Date.now();
 }
 
+// Coarticulation look-ahead horizons: how far ahead the mapper peeks (native only — these read the
+// already-buffered future windows). FAR drives anticipatory rounding/glide; NEAR catches an imminent
+// bilabial closure to start sealing the lips a beat early.
+const AHEAD_FAR_MS = 120;
+const AHEAD_NEAR_MS = 55;
+
+const VOWEL_ID_KEYS = ['viseme_O', 'viseme_U', 'viseme_E', 'viseme_I', 'viseme_aa'];
+// The winning vowel identity this frame — fed back as ctx.prevVowel next frame so the mapper can apply
+// hysteresis (don't flip the vowel label on vibrato/quantization near a boundary).
+function dominantVowelOf(w: VisemeWeights): string {
+  let best = '';
+  let bv = 0;
+  for (const k of VOWEL_ID_KEYS) {
+    const v = w[k] ?? 0;
+    if (v > bv) { bv = v; best = k; }
+  }
+  return best;
+}
+
 // Shared: run the formant→morph mapping and record the debug snapshot. Both drivers funnel here so
-// web and native produce identical poses from identical features.
-function applyFeatures(feat: AcousticFeatures, debug: VenusLipsync['debug']): VisemeWeights {
-  const w = mapFeaturesToWeights(feat);
+// web and native produce identical poses from identical features (web just passes no look-ahead).
+function applyFeatures(feat: AcousticFeatures, debug: VenusLipsync['debug'], ctx?: MapContext): VisemeWeights {
+  const w = mapFeaturesToWeights(feat, ctx);
   debug.rms = feat.rms;
   debug.f1 = feat.f1;
   debug.f2 = feat.f2;
@@ -185,10 +204,21 @@ class AnalyserDriver implements VenusLipsync {
   }
 
   private smoother = new FeatureSmoother();
+  private voiceNorm = new VoiceNorm();
+  private prevVoiced = false;
+  private prevVowel = '';
   sample(): VisemeWeights {
     this.analyser.getFloatTimeDomainData(this.time);
-    const feat = this.smoother.smooth(analyzeWindow(this.time, this.ctx.sampleRate), nowMs());
-    return applyFeatures(feat, this.debug);
+    const raw = analyzeWindow(this.time, this.ctx.sampleRate); // un-smoothed: closures + calibration
+    const sm = this.smoother.smooth(raw, nowMs());
+    this.voiceNorm.update(raw);
+    // Web has no buffered future, so no anticipatory coarticulation — but bilabial closure (raw-dip +
+    // prevVoiced fallback), vowel identity, and per-voice calibration all still apply.
+    const mapCtx: MapContext = { cal: this.voiceNorm.cal(), raw, prevVoiced: this.prevVoiced, prevVowel: this.prevVowel };
+    const w = applyFeatures(sm, this.debug, mapCtx);
+    this.prevVoiced = raw.voiced;
+    this.prevVowel = dominantVowelOf(w);
+    return w;
   }
 
   dispose() {
@@ -218,8 +248,26 @@ class SpeechLevelDriver implements VenusLipsync {
     return speechActiveAt();
   }
   private smoother = new FeatureSmoother();
+  private prevVoiced = false;
+  private prevVowel = '';
   sample(): VisemeWeights {
-    return applyFeatures(this.smoother.smooth(speechFrameAt(), nowMs()), this.debug);
+    const now = nowMs();
+    const raw = speechFrameAt(now); // the un-smoothed buffered window audible right now
+    const sm = this.smoother.smooth(raw, now); // smoothed feature stream for the vowel core
+    const af = speechFrameAheadAt(now, AHEAD_FAR_MS);
+    const an = speechFrameAheadAt(now, AHEAD_NEAR_MS);
+    const mapCtx: MapContext = {
+      cal: getVoiceCal(),
+      raw, // closures must be detected on RAW (the EMA erases the dip)
+      aheadFar: af.known ? af.feat : undefined, // undefined = "not buffered", NOT silence
+      aheadNear: an.known ? an.feat : undefined,
+      prevVoiced: this.prevVoiced,
+      prevVowel: this.prevVowel,
+    };
+    const w = applyFeatures(sm, this.debug, mapCtx);
+    this.prevVoiced = raw.voiced;
+    this.prevVowel = dominantVowelOf(w);
+    return w;
   }
 }
 

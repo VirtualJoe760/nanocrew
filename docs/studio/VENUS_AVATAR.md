@@ -152,12 +152,22 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     - **`src/lib/venus-formants.ts`** — a real radix-2 FFT (1024, Hann) + a smoothed spectral envelope
       (suppresses female-f0 harmonics) → `analyzeWindow()` reports F1 (200–1100 Hz), F2 (800–3000 Hz),
       band energies, HF/sibilance, rms, zcr, voicing.
-    - **`src/lib/venus-viseme-map.ts`** — `mapFeaturesToWeights()` (a JALI-style jaw-vs-lip split):
+    - **`src/lib/venus-viseme-map.ts`** — `mapFeaturesToWeights(f, ctx?)` (a JALI-style jaw-vs-lip split):
       **F1 → `jawOpen`** (level-independent; loudness only modulates ±30%), **low F2 → `mouthFunnel`/
       `mouthPucker`** (round), **high F2 → `mouthStretchL/R`** (spread). Round and spread are mutually
       exclusive by the mid-F2 gap, so the mouth only rounds on genuinely back vowels — **never by
-      default**. Vowel `viseme_O/U/E/I` are intentionally NOT used (they bundle their own rounding);
-      visemes are kept only for consonants (SS/FF/CH/TH sibilants, PP bilabial) + silence.
+      default**. **Single-arg (no `ctx`) is the original mapper, BYTE-IDENTICAL — the regression floor.**
+    - **Ultra-realistic path (`mapRich`, when a driver passes `ctx`):** layered on top of the continuous
+      core without disturbing the mid-F2 gap. (1) **Bilabial closure** — a near-silent low-hf RAW dip
+      (read on the UN-smoothed frame; the EMA erases it) that re-voices via look-ahead (or follows
+      voicing) fires `viseme_PP` + `mouthClose` so the **lips actually MEET on /p,b,m/**. (2) **Gated
+      vowel identity** — a soft-argmax coat of `viseme_O/U/E/I/aa` from F1/F2 regions, dead-zoned + gated
+      so exactly one fires and only on a genuine vowel (it can't reintroduce the "everything→O" bug).
+      (3) **Coarticulation** — anticipatory rounding/closure + glide easing from the already-buffered
+      ~120 ms look-ahead (native only). (4) **Per-voice calibration** — `VoiceNorm` tracks leaky F1/F2
+      min/max + medians and produces a `VoiceCal`, so anchors self-fit any voice (warms up FROM the
+      seed = today's constants; bounded so the neutral gap can never collapse). Consonant DD/kk/nn place
+      and the latency-loop closure are deferred (low value at wireframe scale / open-loop today).
     - **Native (Studio):** `live-voice.ts` pushes each decoded 24 kHz chunk into
       `venus-speech-level.ts`, which runs `analyzeWindow` per 40 ms window **at push time (off the
       render loop)** and time-syncs the features to playback; `SpeechLevelDriver` reads
@@ -170,8 +180,9 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
       vowels don't buzz. Lip-sync keeps running while buffered audio finishes after turn-complete.
     - **Tuning knobs** (`venus-viseme-map.ts`): `jawGain`, `JAW_BASE`/`JAW_SPAN`/`JAW_LOUD_FLOOR`,
       `F1_OPEN`, `F2_ROUND`/`F2_SPREAD_*`, `FUNNEL`/`PUCKER`/`STRETCH`, `FRICATIVE_HF`. Formant Hz are
-      voice-dependent — calibrate to Venus's TTS on device. Tests: `npm run test:lipsync` (47 cases,
-      incl. an anti-O histogram); a real-speech sanity check decodes a clip and runs the live pipeline.
+      voice-dependent but now **self-calibrating** (`VoiceNorm`) — anchors are seeds, not hard pins.
+      Tests: `npm run test:lipsync` (**76 cases** — the original 47 + the rich-path closure/identity/
+      coarticulation/normalization cases + VoiceNorm calibration + a self-calibrated anti-O guard).
   - **Liveliness** (unchanged): blink, eye saccades, Head/Neck sway, brow flashes, resting smile.
   - **Verified on web** (two-frame capture): a clean, clearly-female glowing plexus face; the
     thought-pulse visibly travels (crown→jaw between frames); eyes/lips luminous.

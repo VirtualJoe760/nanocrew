@@ -18,6 +18,7 @@
 // hardware) latency so the lips match the ear. The FFT runs HERE, at push time, OFF the render loop.
 
 import { analyzeWindow, type AcousticFeatures } from '@/lib/venus-formants';
+import { VoiceNorm, type VoiceCal } from '@/lib/venus-viseme-map';
 
 type Seg = { t0: number; t1: number; feat: AcousticFeatures };
 
@@ -27,6 +28,17 @@ const MAX_SEGS = 512; // hard cap (a long reply buffered ahead) before we force-
 
 let SEG: Seg[] = [];
 let lastEnd = 0; // wall-clock ms when the most-recently-queued chunk stops being audible
+
+// Self-calibrating per-voice anchors, fed every window at push time. It persists across barge-ins
+// (same speaker) and is only re-seeded on an explicit voice change. The lip-sync driver reads
+// getVoiceCal() per frame so the mapper fits this voice, not a hardcoded one.
+const voiceNorm = new VoiceNorm();
+export function getVoiceCal(): VoiceCal {
+  return voiceNorm.cal();
+}
+export function resetVoiceCalibration() {
+  voiceNorm.reset();
+}
 
 // Output latency: audio becomes audible a beat AFTER it's enqueued (queue + hardware buffering).
 // Shift stored windows forward by this so her mouth matches what the user hears. Tune on device:
@@ -61,6 +73,7 @@ export function pushSpeechChunk(pcm: Int16Array, startAtMs: number, durMs: numbe
     const end = Math.min(n, i + winSamples);
     // FFT + formant extraction on this window's exact samples (off the render loop).
     const feat = analyzeWindow(pcm.subarray(i, end), sampleRate);
+    voiceNorm.update(feat); // calibrate to this voice (voiced-gated, edge/glitch-rejected internally)
     SEG.push({ t0: base + i * msPerSample, t1: base + end * msPerSample, feat });
   }
   lastEnd = Math.max(lastEnd, base + durMs);
@@ -87,6 +100,16 @@ export function speechFrameAt(t = nowMs()): AcousticFeatures {
     if (s.t1 <= t) break; // everything earlier is older than t → t sits in a gap / the future
   }
   return SILENT;
+}
+
+/** A FUTURE window for coarticulation look-ahead. `known` is false when t+dtMs isn't buffered yet —
+ *  the caller must NOT treat that as silence (which would spuriously pre-close the lips at every chunk
+ *  boundary); it means "no look-ahead available". A real silent window WITHIN the buffer returns
+ *  known:true with a silent feat (that's a genuine pause the mapper can act on). */
+export function speechFrameAheadAt(t: number, dtMs: number): { feat: AcousticFeatures; known: boolean } {
+  const at = t + dtMs;
+  if (at > lastEnd) return { feat: SILENT, known: false };
+  return { feat: speechFrameAt(at), known: true };
 }
 
 /** Convenience: just the loudness. */
