@@ -788,9 +788,14 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                     ) : null}
                   </View>
                   <ThemedText type="small" style={styles.dim}>Venus turns a product into a feed video ad ({voiceoverCost}), on-model shots (20), or an on-model film for your website ({veoCost}).</ThemedText>
-                  <Pressable onPress={() => setShortComposer(true)} style={styles.primaryBtn}>
+                  {/* Scene shorts are PAUSED for now — greyed + non-interactive until the video pipeline
+                      + its content-safety guard ship. Re-enable by restoring the Pressable. */}
+                  <View style={[styles.primaryBtn, { opacity: 0.4 }]} pointerEvents="none">
                     <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Make a scene short</ThemedText>
-                  </Pressable>
+                  </View>
+                  <ThemedText type="code" style={[styles.dim, { textAlign: 'center', marginTop: 4 }]}>
+                    Coming in a later update
+                  </ThemedText>
                   <ThemedText type="code" style={styles.dim}>Put a model in a real scene — skateboarding, on a beach — and pick the quality: Wan, Seedance or Veo 3.</ThemedText>
                   {note && !draft ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
                   {note && !draft && onOpenBilling && credits !== null && credits < voiceoverCost ? (

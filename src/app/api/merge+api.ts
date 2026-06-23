@@ -8,6 +8,7 @@ import { ContentSafetyError, IMAGE_SAFETY_SETTINGS, assertSafePrompt } from '@/l
 import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 import { safeImageFetch } from '@/lib/safe-fetch';
+import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
 
 // POST /api/merge — the blend tool: feed Nano Banana BOTH design images plus the
 // collision prompt, key the result transparent, store it as a new design.
@@ -37,6 +38,21 @@ export async function POST(req: Request) {
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   const limited = await guardRate(`gen:${user.id}`, 20, 60);
   if (limited) return limited;
+
+  // Credit-gate the fuse (1 Nano Banana call ~$0.039). Skip the internal first-drop identity; debit()
+  // no-ops comp accounts. Charge BEFORE the model spend; refund on any no-image failure (refund() only
+  // grants if we actually debited, so a pre-charge failure like a tenant error never gifts credits).
+  const charge = user.email !== 'internal@nanocrew';
+  let debited = false;
+  let refunded = false;
+  let refundRef: string | undefined;
+  const refund = () => {
+    if (charge && debited && !refunded) {
+      refunded = true;
+      void grant(user.id, CREDIT_COSTS.merge, 'refund', refundRef).catch(() => {});
+    }
+  };
+
   try {
     const body = (await req.json().catch(() => null)) as {
       designAId?: string;
@@ -72,6 +88,21 @@ export async function POST(req: Request) {
       if (e instanceof ContentSafetyError) return Response.json({ error: e.message }, { status: e.status });
       throw e;
     }
+
+    // Charge before the model spend.
+    refundRef = body.catalogueId;
+    if (charge) {
+      try {
+        await debit(user.id, 'merge', body.catalogueId);
+        debited = true;
+      } catch (e) {
+        if (e instanceof InsufficientCreditsError) {
+          return Response.json({ error: 'insufficient_credits', needed: e.needed, balance: e.balance }, { status: 402 });
+        }
+        throw e;
+      }
+    }
+
     const collision = body.prompt?.trim() || 'fuse the two graphics into one cohesive design';
     const instruction =
       'Merge the two provided graphics into ONE new clothing graphic suitable for ' +
@@ -120,13 +151,16 @@ export async function POST(req: Request) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (/RESOURCE_EXHAUSTED|quota|\b429\b|PERMISSION_DENIED|\b40[134]\b/i.test(msg)) {
+          refund();
           return Response.json({ error: msg }, { status: 502 });
         }
         lastErr = msg;
       }
     }
+    refund();
     return Response.json({ error: lastErr }, { status: 502 });
   } catch (e) {
+    refund();
     const status = e instanceof TenantError ? e.status : 502;
     return Response.json({ error: e instanceof Error ? e.message : 'Merge failed' }, { status });
   }

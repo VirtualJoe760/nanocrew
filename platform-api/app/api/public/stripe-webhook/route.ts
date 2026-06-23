@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 import { db, schema } from '@/lib/db';
@@ -51,7 +51,10 @@ export async function POST(req: Request) {
           totalCents: s.amount_total ?? undefined,
           shippingAddress: collected?.shipping_details ?? s.customer_details ?? null,
         })
-        .where(eq(schema.orders.stripeSessionId, s.id))
+        // IDEMPOTENT: only transition (and return a row → submit to Printful + email buyer/creator) on
+        // the FIRST time this order reaches 'paid'. A redelivered checkout.session.completed finds it
+        // already 'paid', matches no row, returns nothing → no duplicate Printful order or receipt emails.
+        .where(and(eq(schema.orders.stripeSessionId, s.id), ne(schema.orders.status, 'paid')))
         .returning({ id: schema.orders.id, storeId: schema.orders.storeId, customerEmail: schema.orders.customerEmail });
       // Hand the paid order to Printful (draft until PRINTFUL_CONFIRM_ORDERS=1).
       // Awaited so the serverless runtime can't kill it mid-flight; failures only

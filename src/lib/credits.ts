@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { isCompCreator } from '@/lib/comp';
@@ -14,6 +14,7 @@ export const CREDIT_COSTS = {
   video_veo: 400, // Veo 3 Fast 8s ~$1.20 real → ~3.3× (premium tier, kept generous)
   design_generate: 8, // 1 Nano Banana image ~$0.039 → ~2× at the $0.01/cr floor
   logo_generate: 8,
+  merge: 8, // /api/merge fuses 2 designs via 1 Nano Banana call → same as a generate
   tryon: 6, // shopper-facing conversion feature — NOT currently debited (rate-limited instead)
   model_shots: 25, // 3 Nano Banana renders ~$0.12 → ~2×
   revision: 60,
@@ -84,13 +85,22 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
-/** Debit an arbitrary amount (variable-cost ops, e.g. scene-video tiers). Throws if balance too low. */
+/** Debit an arbitrary amount (variable-cost ops, e.g. scene-video tiers). Throws if balance too low.
+ *  ATOMIC: a single guarded `UPDATE ... WHERE balance >= amount` so two concurrent paid requests can't
+ *  both pass a stale read and drive the balance negative (the old check-then-decrement race). If the
+ *  guard matches no row, the balance was insufficient — nothing is charged and we throw. */
 export async function debitCredits(creatorId: string, amount: number, reason: CreditReason, refId?: string): Promise<number> {
   const balance = await ensureCreditAccount(creatorId);
   // Comp / internal accounts are never charged (and so never hit the insufficient-credits gate).
   if (await isCompCreator(creatorId)) return balance;
-  if (balance < amount) throw new InsufficientCreditsError(amount, balance);
-  return move(creatorId, -amount, reason, refId);
+  const [row] = await db
+    .update(schema.creditAccounts)
+    .set({ balance: sql`${schema.creditAccounts.balance} - ${amount}` })
+    .where(and(eq(schema.creditAccounts.creatorId, creatorId), gte(schema.creditAccounts.balance, amount)))
+    .returning({ balance: schema.creditAccounts.balance });
+  if (!row) throw new InsufficientCreditsError(amount, balance); // guard didn't match → too low, nothing charged
+  await db.insert(schema.creditLedger).values({ creatorId, delta: -amount, reason, refId: refId ?? null, balanceAfter: row.balance });
+  return row.balance;
 }
 
 /** Debit a fixed-cost operation. Throws InsufficientCreditsError if the balance is too low. */
