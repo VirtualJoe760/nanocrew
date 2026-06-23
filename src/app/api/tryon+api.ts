@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { GoogleGenAI, Modality } from '@google/genai';
 
 import { db, schema } from '@/lib/db';
@@ -18,7 +18,7 @@ interface InlinePart {
   text?: string;
 }
 interface GenResponse {
-  candidates?: Array<{ content?: { parts?: InlinePart[] } }>;
+  candidates?: { content?: { parts?: InlinePart[] } }[];
 }
 
 async function urlToInline(url: string): Promise<InlinePart> {
@@ -47,10 +47,12 @@ export async function POST(req: Request) {
       return Response.json({ error: 'selfie (data URL) and productId required' }, { status: 400 });
     }
 
+    // Only published products can be tried on — otherwise a draft product's image could be pulled
+    // by guessing its UUID. Matches the public product route's isPublished filter.
     const [product] = await db
       .select({ name: schema.products.name, imageUrl: schema.products.imageUrl })
       .from(schema.products)
-      .where(eq(schema.products.id, body.productId))
+      .where(and(eq(schema.products.id, body.productId), eq(schema.products.isPublished, true)))
       .limit(1);
     if (!product?.imageUrl) return Response.json({ error: 'product not found' }, { status: 404 });
 

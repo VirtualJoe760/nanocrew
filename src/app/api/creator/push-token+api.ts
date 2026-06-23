@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
@@ -35,7 +35,11 @@ export async function DELETE(req: Request) {
   const token = new URL(req.url).searchParams.get('token');
   if (!token) return Response.json({ error: 'token required' }, { status: 400 });
   try {
-    await db.delete(schema.deviceTokens).where(eq(schema.deviceTokens.token, token));
+    // Scope the delete to THIS creator's token — otherwise knowing another creator's token value
+    // would let you unregister their device (notification DoS).
+    await db
+      .delete(schema.deviceTokens)
+      .where(and(eq(schema.deviceTokens.token, token), eq(schema.deviceTokens.creatorId, user.id)));
     return Response.json({ ok: true });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });
