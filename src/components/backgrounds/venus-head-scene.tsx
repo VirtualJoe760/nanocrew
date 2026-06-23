@@ -976,7 +976,14 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
   const rig = useRef<Rig | null>(null);
   const onRevealRef = useRef(onReveal);
   onRevealRef.current = onReveal;
-  const a = useRef({ nextBlink: 1.2, blinkAt: -1, nextSacc: 0.6, gx: 0, gy: 0, nextBrow: 2.5, browAt: -1, browAmt: 0 });
+  const a = useRef({
+    nextBlink: 1.2, blinkAt: -1,
+    nextSacc: 0.6, gx: 0, gy: 0,
+    nextBrow: 2.5, browAt: -1, browAmt: 0,
+    // gaze aversion (look AWAY while thinking/speaking, then back) + speech emphasis envelope
+    nextAvert: 3, avertAt: -1, avDur: 1, avx: 0, avy: 0, aox: 0, aoy: 0,
+    emph: 0,
+  });
 
   // ── stage → reveal clock (0 = scattered dust, 1 = formed) + talking flag ───
   const reveal = useRef(0);          // eased value, driven in useFrame
@@ -1443,7 +1450,9 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       const eb = eye.parent;
       if (!eb) continue;
       eb.getWorldPosition(_eyePos);
-      _eyeTgt.copy(camera.position).add(_eyeDir.set(s.gx * 0.06, s.gy * 0.045, 0)); // drift AROUND the user
+      // gaze = the user (camera) + a small fixational drift + an occasional larger AVERSION (look away,
+      // then back). Without the aversion she reads as a fixed stare; the aversion is the "alive" tell.
+      _eyeTgt.copy(camera.position).add(_eyeDir.set(s.gx * 0.06 + s.aox, s.gy * 0.045 + s.aoy, 0));
       _eyeDir.copy(_eyeTgt).sub(_eyePos).normalize();   // world-space gaze direction
       eb.getWorldQuaternion(_eyeQ).invert();
       _eyeDir.applyQuaternion(_eyeQ);                    // into the eye-bone local frame
@@ -1475,14 +1484,19 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     }
 
     if (alive) {
-    // blink — eyelids close + open (0→1→0)
+    // Is she speaking right now (stage OR real audio still playing out)? Her eye life intensifies on
+    // speech — busier saccades, more gaze aversion, brows engaged — which is what was missing.
+    const speaking = talkingRef.current || (lipRef.current?.speaking?.() ?? false);
+    const ss01 = (x: number) => { const c = x < 0 ? 0 : x > 1 ? 1 : x; return c * c * (3 - 2 * c); };
+
+    // blink — eyelids close + open (0→1→0). A little MORE OFTEN while speaking.
     if (s.blinkAt < 0 && t > s.nextBlink) s.blinkAt = t;
     let blink = 0;
     if (s.blinkAt >= 0) {
       const p = (t - s.blinkAt) / 0.14;
       if (p >= 1) {
         s.blinkAt = -1;
-        s.nextBlink = t + 2 + Math.random() * 3.5;
+        s.nextBlink = t + (speaking ? 1.4 : 2) + Math.random() * (speaking ? 2.6 : 3.5);
       } else blink = Math.sin(p * Math.PI);
     }
     set('eyeBlinkLeft', blink);
@@ -1492,15 +1506,40 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
     sway(r.bones.head, Math.sin(t * 0.7) * 2 * DEG, Math.sin(t * 0.53) * 2.4 * DEG, Math.sin(t * 0.37) * 1 * DEG);
     sway(r.bones.neck, Math.sin(t * 0.7) * 1 * DEG, Math.sin(t * 0.53) * 1.2 * DEG, 0);
 
-    // eye saccades — pick a new gaze drift every ~0.3-1.2s; the gaze itself is
-    // aimed at the camera up top (so she looks at the user, drifting around them).
+    // eye saccades — small fixational darts; a touch bigger + more frequent while speaking (busier eyes).
     if (t > s.nextSacc) {
-      s.gx = (Math.random() - 0.5) * 2;
-      s.gy = (Math.random() - 0.5) * 1.2;
-      s.nextSacc = t + 0.3 + Math.random() * 0.9;
+      const g = speaking ? 1.25 : 1;
+      s.gx = (Math.random() - 0.5) * 2 * g;
+      s.gy = (Math.random() - 0.5) * 1.2 * g;
+      s.nextSacc = t + (speaking ? 0.18 : 0.32) + Math.random() * (speaking ? 0.5 : 0.9);
     }
 
-    // brow micro-flashes over a faint baseline
+    // GAZE AVERSION — every few seconds she glances AWAY (slightly up + to a side, the natural
+    // "thinking/recalling" beat), holds, then returns to the user. More frequent while speaking. This
+    // is the single biggest "alive, not staring" cue — added on TOP of the camera-aim above (s.aox/aoy).
+    if (s.avertAt < 0 && t > s.nextAvert) {
+      s.avertAt = t;
+      s.avDur = (speaking ? 0.7 : 0.9) + Math.random() * (speaking ? 1.0 : 0.7); // ramp-in + hold + ramp-out
+      const side = Math.random() < 0.5 ? -1 : 1;
+      s.avx = side * (0.08 + Math.random() * (speaking ? 0.1 : 0.06)); // sideways glance (≤ ~0.18)
+      s.avy = 0.04 + Math.random() * 0.1;                              // slight upward (recall)
+    }
+    if (s.avertAt >= 0) {
+      const p = (t - s.avertAt) / s.avDur;
+      if (p >= 1) {
+        s.avertAt = -1; s.aox = 0; s.aoy = 0;
+        s.nextAvert = t + (speaking ? 1.6 : 4) + Math.random() * (speaking ? 3 : 5);
+      } else {
+        const env = p < 0.22 ? ss01(p / 0.22) : p > 0.78 ? ss01((1 - p) / 0.22) : 1; // ease in → hold → ease out
+        s.aox = s.avx * env;
+        s.aoy = s.avy * env;
+      }
+    }
+
+    // brow: faint baseline + random micro-flashes + a gentle lift that TRACKS HER VOICE. The voice term
+    // is a slow (~0.4s) envelope of speech energy, NOT per-syllable jaw, so the brows engage while she
+    // talks and settle when quiet — never an uncanny per-vowel bounce.
+    s.emph += ((speaking ? Math.min(1, speak * 1.5) : 0) - s.emph) * (1 - Math.exp(-delta / 0.4));
     if (s.browAt < 0 && t > s.nextBrow) {
       s.browAt = t;
       s.browAmt = 0.15 + Math.random() * 0.2;
@@ -1510,10 +1549,13 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       const p = (t - s.browAt) / 0.7;
       if (p >= 1) {
         s.browAt = -1;
-        s.nextBrow = t + 3 + Math.random() * 5;
+        s.nextBrow = t + (speaking ? 2 : 3) + Math.random() * 5;
       } else brow = 0.04 + s.browAmt * Math.sin(p * Math.PI);
     }
-    set('browInnerUp', brow);
+    const browSpeak = s.emph * 0.1;
+    set('browInnerUp', brow + browSpeak);
+    set('browOuterUpLeft', browSpeak * 0.8);
+    set('browOuterUpRight', browSpeak * 0.8);
 
     // faint resting smile (Mona-Lisa level)
     set('mouthSmileLeft', 0.1);

@@ -183,7 +183,15 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
       voice-dependent but now **self-calibrating** (`VoiceNorm`) — anchors are seeds, not hard pins.
       Tests: `npm run test:lipsync` (**76 cases** — the original 47 + the rich-path closure/identity/
       coarticulation/normalization cases + VoiceNorm calibration + a self-calibrated anti-O guard).
-  - **Liveliness** (unchanged): blink, eye saccades, Head/Neck sway, brow flashes, resting smile.
+  - **Liveliness — now SPEECH-COUPLED** (`venus-head-scene.tsx` useFrame, the `if (alive)` block; state
+    on the `a` ref): blink, eye saccades, Head/Neck sway, brow flashes, resting smile, PLUS — driven by
+    `speaking` (`talkingRef || lip.speaking()`) so her eyes read alive while she talks:
+    **gaze aversion** (she glances away — slightly up + to a side, the "thinking/recalling" beat — then
+    back to the user; `s.avx/avy` ramped into the gaze target as `s.aox/aoy`; more frequent while
+    speaking — the single biggest "not staring" cue), **busier saccades + blinks while speaking**, and a
+    **brow lift that tracks her voice** (`s.emph` = a ~0.4s envelope of `speak`/jawOpen → `browInnerUp`
+    + `browOuterUpL/R`, slow so it engages while talking and never per-vowel bounces). Knobs are inline
+    (aversion magnitude `avx/avy`, intervals `nextAvert/nextSacc/nextBlink`, `browSpeak` scale).
   - **Verified on web** (two-frame capture): a clean, clearly-female glowing plexus face; the
     thought-pulse visibly travels (crown→jaw between frames); eyes/lips luminous.
 - Reached via the gated **Account → Developer → "Venus Lab (test)"** tool (`venus-lab-screen.tsx`
