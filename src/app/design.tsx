@@ -966,8 +966,39 @@ function DesignScreen() {
     setCatalogues([]);
     setSetupStep('collection');
     apiFetch(`/api/catalogues?store=${encodeURIComponent(b.slug)}`)
-      .then(readJson<{ catalogues?: { id: string; name: string }[] }>)
-      .then((d) => setCatalogues(d.catalogues ?? []))
+      .then(readJson<{ catalogues?: { id: string; name: string; slug?: string }[] }>)
+      .then(async (d) => {
+        const list = d.catalogues ?? [];
+        setCatalogues(list);
+        // Never strand the creator on the picker: a collection is required to design, and every brand
+        // is provisioned with a "First drop" — so default straight onto it and enter the canvas. Prefer
+        // that "first-drop"; else the first real (non-"Web Assets") collection; else create "First drop"
+        // (get-or-create, safe). They can still open the picker (the top-left chip) to switch or make a
+        // new drop. If we can't resolve one, leave them on the collection step to choose manually.
+        const isWeb = (c: { name: string }) => c.name.toLowerCase() === WEB_ASSETS_COLLECTION.toLowerCase();
+        let def =
+          list.find((c) => c.slug === 'first-drop') ??
+          list.find((c) => c.name.toLowerCase() === 'first drop') ??
+          list.find((c) => !isWeb(c)) ??
+          null;
+        if (!def) {
+          try {
+            const r = await apiFetch('/api/catalogues', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: 'First drop', storeSlug: b.slug }),
+            });
+            const cd = await readJson<{ catalogue?: { id: string; name: string } }>(r);
+            if (cd.catalogue) {
+              def = cd.catalogue;
+              setCatalogues((c) => [...c, cd.catalogue!]);
+            }
+          } catch {
+            /* leave them on the collection step to pick/create manually */
+          }
+        }
+        if (def) switchCatalogue(def);
+      })
       .catch(() => {});
   };
 
