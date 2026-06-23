@@ -78,6 +78,27 @@ const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
 
 export type LiveState = 'connecting' | 'listening' | 'speaking' | 'thinking' | 'idle' | 'error';
 
+/** Thrown when the iOS audio session can't be activated because another app holds it at higher
+ *  priority — almost always an ACTIVE PHONE / FaceTime call (you can't grab the mic mid-call). This
+ *  is distinct from a generic connection failure so the UI can show a "you're on a call — end it and
+ *  come back" modal instead of a vague error. (iOS error 561017449 = '!pri' = AVAudioSession
+ *  InsufficientPriority.) */
+export class AudioSessionBusyError extends Error {
+  constructor() {
+    super('Your microphone is busy — another app (likely a phone or FaceTime call) is using it.');
+    this.name = 'AudioSessionBusyError';
+  }
+}
+
+/** Recognize the InsufficientPriority failure across however the native layer surfaces it (a numeric
+ *  `code`, or the code/keyword inside the message string). */
+function isInsufficientPriority(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code;
+  if (code === 561017449 || code === '561017449') return true;
+  const msg = e instanceof Error ? e.message : String(e ?? '');
+  return /insufficient\s*priority|561017449|!pri\b/i.test(msg);
+}
+
 export interface LiveCallbacks {
   onState?: (s: LiveState) => void;
   onUserTranscript?: (text: string) => void; // running input transcription
@@ -257,6 +278,10 @@ export class LiveVoiceSession {
         console.warn(`[live] audio session activate attempt ${i + 1}/${delays.length} failed:`, e instanceof Error ? e.message : e);
       }
     }
+    // Persistent failure after the backoff. If it's InsufficientPriority, the mic is genuinely held by
+    // another app (an active call) — surface the dedicated busy error so the UI can tell them to end
+    // the call and come back, rather than a generic "couldn't connect".
+    if (isInsufficientPriority(lastErr)) throw new AudioSessionBusyError();
     throw lastErr instanceof Error ? lastErr : new Error('Could not activate the audio session');
   }
 

@@ -924,6 +924,14 @@ function StudioScreen() {
     togglePause();
   }, [live.error, live.start, paused, togglePause]);
 
+  // "Try again" from the mic-busy modal: they (hopefully) ended their call — clear the modal, make sure
+  // we're not paused, and reconnect. If they're still on the call it just fails back to the same modal.
+  const retryAfterCall = useCallback(() => {
+    live.dismissAudioBusy();
+    if (pausedRef.current) { pausedRef.current = false; setPaused(false); }
+    live.start();
+  }, [live.dismissAudioBusy, live.start]);
+
   // Returning creator wants another brand — reset the interview and start fresh.
   const onNewBrand = useCallback(() => {
     messages.current = [];
@@ -1059,6 +1067,30 @@ function StudioScreen() {
         {/* The Modal renders in its own native view tree (no safe-area context), so pass the
             app-level insets in — otherwise the top bar sits under the Dynamic Island / status bar. */}
         <Welcome onChoose={handleChoose} topInset={insets.top} bottomInset={insets.bottom} />
+      </Modal>
+
+      {/* Mic-busy modal: iOS refused the audio session (InsufficientPriority) because another app holds
+          the mic — almost always an active phone/FaceTime call. Rather than a vague "couldn't connect",
+          tell them plainly to end the call and come back. */}
+      <Modal visible={live.audioBusy} animationType="fade" transparent onRequestClose={live.dismissAudioBusy}>
+        <View style={styles.busyBackdrop}>
+          <View style={[styles.busyCard, { backgroundColor: p.bgTop, borderColor: p.line }]}>
+            <ThemedText type="code" style={[styles.busyEyebrow, { color: p.accent }]}>MICROPHONE IN USE</ThemedText>
+            <ThemedText type="title" style={[styles.busyTitle, { color: p.ink }]}>You're on a call</ThemedText>
+            <ThemedText type="small" style={[styles.busyBody, { color: p.dim }]}>
+              {aiName} needs your microphone, but another app — most likely an active phone or FaceTime
+              call — is using it. End your call, then come back and tap Try again.
+            </ThemedText>
+            <Pressable
+              onPress={retryAfterCall}
+              style={({ pressed }) => [styles.busyPrimary, { backgroundColor: p.accent }, glow(p.accent, 18, pressed ? 0.3 : 0.6), pressed && { transform: [{ scale: 0.98 }] }]}>
+              <ThemedText type="smallBold" style={{ color: BG }}>Try again</ThemedText>
+            </Pressable>
+            <Pressable onPress={live.dismissAudioBusy} hitSlop={8} style={styles.busySecondary}>
+              <ThemedText type="code" style={[styles.ctaSecondaryText, { color: p.dim }]}>Not now</ThemedText>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <KeyboardAvoidingView
@@ -1331,6 +1363,13 @@ const styles = StyleSheet.create({
   ctaPrimary: { backgroundColor: '#cdd1d9', borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.three },
   ctaSecondary: { paddingVertical: Spacing.two },
   ctaSecondaryText: { color: '#9396a0' },
+  busyBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.65)', padding: Spacing.four },
+  busyCard: { width: '100%', maxWidth: 360, borderRadius: 18, borderWidth: 1, paddingVertical: Spacing.five, paddingHorizontal: Spacing.four, alignItems: 'center' },
+  busyEyebrow: { fontSize: 11, letterSpacing: 1.5, marginBottom: Spacing.two },
+  busyTitle: { fontSize: 22, lineHeight: 26, marginBottom: Spacing.two, textAlign: 'center' },
+  busyBody: { textAlign: 'center', lineHeight: 20, marginBottom: Spacing.four },
+  busyPrimary: { alignSelf: 'stretch', borderRadius: 14, paddingVertical: Spacing.three, alignItems: 'center' },
+  busySecondary: { paddingVertical: Spacing.three, marginTop: Spacing.one },
   introFoot: { color: '#9396a0', fontSize: 12, marginTop: Spacing.three, textAlign: 'center' },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },

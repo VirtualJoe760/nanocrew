@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { LiveVoiceSession, type LiveState } from '@/lib/live-voice';
+import { LiveVoiceSession, AudioSessionBusyError, type LiveState } from '@/lib/live-voice';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 import { apiUrl } from '@/lib/api';
 
@@ -13,6 +13,11 @@ export interface UseLiveVoice {
   /** The full committed conversation (completed turns) — for the keyboard chat view. */
   messages: ChatMessage[];
   error: string | null;
+  /** The mic couldn't be claimed because another app (an active phone/FaceTime call) holds the audio
+   *  session. The UI shows a "end your call, then come back" modal — NOT the generic error path. */
+  audioBusy: boolean;
+  /** Dismiss the audio-busy modal (does NOT restart — the caller decides whether to retry). */
+  dismissAudioBusy: () => void;
   /** Extracting the brand from the transcript (the "build my brand" step). */
   finalizing: boolean;
   start: () => void;
@@ -49,6 +54,7 @@ export function useLiveVoice(opts: {
   const [userText, setUserText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [audioBusy, setAudioBusy] = useState(false);
   const sessionRef = useRef<LiveVoiceSession | null>(null);
   const onBrandRef = useRef(opts.onBrand);
   onBrandRef.current = opts.onBrand;
@@ -61,6 +67,7 @@ export function useLiveVoice(opts: {
   const start = useCallback(() => {
     if (sessionRef.current || !opts.accessToken) return;
     setError(null);
+    setAudioBusy(false);
     setVenusText('');
     setUserText('');
     setMessages([]);
@@ -84,9 +91,15 @@ export function useLiveVoice(opts: {
     });
     sessionRef.current = s;
     s.start().catch((e) => {
+      sessionRef.current = null;
+      // On a call → show the dedicated "mic busy" modal, not the generic error banner.
+      if (e instanceof AudioSessionBusyError) {
+        setAudioBusy(true);
+        setState('idle');
+        return;
+      }
       setError(e instanceof Error ? e.message : 'Could not start voice');
       setState('error');
-      sessionRef.current = null;
     });
   }, [opts.accessToken, opts.userName, opts.firstTime, opts.voiceName, opts.instruction, opts.greeting, opts.enableBrandTool]);
 
@@ -101,6 +114,8 @@ export function useLiveVoice(opts: {
   const mute = useCallback((m: boolean) => {
     sessionRef.current?.setMuted(m);
   }, []);
+
+  const dismissAudioBusy = useCallback(() => setAudioBusy(false), []);
 
   const [finalizing, setFinalizing] = useState(false);
   const finalize = useCallback(async () => {
@@ -134,5 +149,5 @@ export function useLiveVoice(opts: {
   // Always tear down on unmount.
   useEffect(() => () => { sessionRef.current?.stop(); sessionRef.current = null; }, []);
 
-  return { state, venusText, userText, messages, error, finalizing, start, stop, sendText, sendContext, mute, finalize };
+  return { state, venusText, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, sendText, sendContext, mute, finalize };
 }

@@ -341,6 +341,10 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
 
   // Surface Venus's connection errors as the on-screen note.
   useEffect(() => { if (venus.error) setNote(venus.error); }, [venus.error]);
+  // Mic held by another app (an active phone/FaceTime call) — tell them plainly to end the call.
+  useEffect(() => {
+    if (venus.audioBusy) setNote("You're on a call — end it, then tap the mic to reconnect.");
+  }, [venus.audioBusy]);
 
   // Close one itemised edit (note = what was said / typed) anchored to the circled regions.
   const commitEdit = (note: string) => {
