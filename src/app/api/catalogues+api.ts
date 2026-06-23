@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
@@ -51,11 +51,24 @@ export async function POST(req: Request) {
       ? await storeForMember(body.storeSlug, user.id)
       : await getCreatorStore(user.id);
     if (!store) return Response.json({ error: 'store not found' }, { status: 404 });
-    const [row] = await db
+    const slug = slugify(name);
+    // GET-OR-CREATE: (store_id, slug) is unique, and the client can legitimately ask to create a
+    // collection that already exists — e.g. the Design tab re-requesting the "Web Assets" bucket before
+    // its GET has populated the list, or a creator re-using a name. A plain insert would throw a unique
+    // violation → 500, which blocked the whole collection step (and thus the product canvas). Instead,
+    // skip the conflicting insert and return the existing row, so creating a collection is idempotent.
+    const [created] = await db
       .insert(schema.catalogues)
-      .values({ storeId: store.id, name, slug: slugify(name), season })
+      .values({ storeId: store.id, name, slug, season })
+      .onConflictDoNothing({ target: [schema.catalogues.storeId, schema.catalogues.slug] })
       .returning({ id: schema.catalogues.id, name: schema.catalogues.name, slug: schema.catalogues.slug });
-    return Response.json({ catalogue: row });
+    if (created) return Response.json({ catalogue: created });
+    const [existing] = await db
+      .select({ id: schema.catalogues.id, name: schema.catalogues.name, slug: schema.catalogues.slug })
+      .from(schema.catalogues)
+      .where(and(eq(schema.catalogues.storeId, store.id), eq(schema.catalogues.slug, slug)))
+      .limit(1);
+    return Response.json({ catalogue: existing });
   } catch (e) {
     return fail(e);
   }
