@@ -274,7 +274,8 @@ export function Paywall({
                   ? 'Purchases handled by the App Store. Manage or cancel anytime in Settings.'
                   : 'Subscriptions and credits purchased on the web. Manage or cancel any time.'}
               </ThemedText>
-              {iapNote ? <ThemedText type="code" style={s.fine}>IAP status: {iapNote}</ThemedText> : null}
+              {/* Dev-only IAP diagnostic — never shown to real users on the live paywall. */}
+              {__DEV__ && iapNote ? <ThemedText type="code" style={s.fine}>IAP status: {iapNote}</ThemedText> : null}
             </ScrollView>
           )}
         </View>

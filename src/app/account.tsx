@@ -459,6 +459,20 @@ function AccountScreen() {
                   </ThemedText>
                 </View>
 
+                {/* Affirmative Terms acceptance for the social path — Apple/Google skip the email form's
+                    terms checkbox, so continuing with a social provider IS the agreement (recorded
+                    server-side in /api/me as TERMS_VERSION). */}
+                <ThemedText type="small" themeColor="textSecondary" style={styles.joinSub}>
+                  By continuing with Apple or Google, you agree to our{' '}
+                  <ThemedText
+                    type="small"
+                    style={{ color: theme.tint, textDecorationLine: 'underline' }}
+                    onPress={() => Linking.openURL(TERMS_URL)}>
+                    Terms &amp; Creator Agreement
+                  </ThemedText>
+                  .
+                </ThemedText>
+
                 {/* Apple requires Sign in with Apple first on iOS when other social logins exist. */}
                 {Platform.OS === 'ios' ? (
                   <Pressable onPress={() => social('apple')} disabled={busy}>

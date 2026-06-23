@@ -3,6 +3,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { accessibleStoreIds } from '@/lib/tenant';
+import { TERMS_VERSION } from '@/lib/legal';
 
 // GET /api/me — verify the Supabase access token, ensure a creators row exists, and
 // return the profile (+ their stores). The app calls this right after sign-in.
@@ -21,8 +22,11 @@ export async function GET(req: Request) {
         email: user.email,
         name: user.name ?? null,
         phone: user.phone ?? null,
-        termsVersion: user.termsVersion ?? null,
-        termsAcceptedAt: user.termsVersion ? new Date() : null,
+        // Email signup carries terms_version in the token; OAuth (Apple/Google) does NOT — record the
+        // current TERMS_VERSION as a backstop so the affirmative acceptance shown on the auth screen is
+        // captured for those creators too. The coalesce() below never overwrites an already-recorded one.
+        termsVersion: user.termsVersion ?? TERMS_VERSION,
+        termsAcceptedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: schema.creators.id,
