@@ -1,5 +1,5 @@
 import { Canvas, Fill, Shader, Skia, useClock } from '@shopify/react-native-skia';
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useDerivedValue } from 'react-native-reanimated';
 
@@ -83,10 +83,37 @@ half4 main(float2 fragCoord) {
 export default function DotFieldScene() {
   const { width, height } = useWindowDimensions();
   const clock = useClock(); // elapsed ms, as a shared value
-  // Compile the shader at render time, NOT module-load time. At module load (when _layout first
-  // imports this on native) the Skia runtime may not be ready yet, so a top-level
-  // Skia.RuntimeEffect.Make(SKSL) returns null once and the scene renders nothing forever.
-  const effect = useMemo(() => Skia.RuntimeEffect.Make(SKSL), []);
+  // Compile the shader in an effect (AFTER first commit), never during render. On web, calling
+  // Skia.RuntimeEffect.Make before CanvasKit's runtime has finished initializing throws an Emscripten
+  // Aborted() (which would otherwise bubble to the React error boundary as an "uncaught error" and
+  // flood the console); on native it can return null. Compiling post-commit gives CanvasKit a tick to
+  // be ready — it normally succeeds on the first attempt — and the catch + bounded retry recovers from
+  // the not-ready window without ever throwing. (useMemo with [] couldn't do this: it runs during
+  // render and would cache the first null/aborted result forever — the scene would stay blank.)
+  const [effect, setEffect] = useState<ReturnType<typeof Skia.RuntimeEffect.Make>>(null);
+  useEffect(() => {
+    if (effect) return;
+    let cancelled = false;
+    let tries = 0;
+    let raf = 0;
+    const compile = () => {
+      if (cancelled) return;
+      let made: ReturnType<typeof Skia.RuntimeEffect.Make> = null;
+      try {
+        made = Skia.RuntimeEffect.Make(SKSL);
+      } catch {
+        // CanvasKit not ready yet — fall through to retry on the next frame.
+      }
+      if (cancelled) return;
+      if (made) setEffect(made);
+      else if (tries++ < 180) raf = requestAnimationFrame(compile); // ~3s @60fps, then give up quietly
+    };
+    compile();
+    return () => {
+      cancelled = true;
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [effect]);
   // Clamp the resolution to >= 1 so the shader never divides by zero. useWindowDimensions returns
   // 0x0 on the first frame before layout settles; an unclamped 0 height makes `uv / u_resolution.y`
   // produce NaN/Inf, which CanvasKit (web) aborts on every frame and which renders blank on native.
