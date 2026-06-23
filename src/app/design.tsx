@@ -45,7 +45,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch, readJson } from '@/lib/api';
-import { buildMemePrompt, MEME_PLACEHOLDER } from '@/lib/meme';
+import { buildMemePrompt, buildMemePromptForProduct, MEME_PLACEHOLDER } from '@/lib/meme';
 import type { CatalogBlank } from '@/lib/printful';
 import { EFFORT_LABELS, EFFORT_TIERS, type Effort } from '@/lib/effort';
 
@@ -1884,21 +1884,24 @@ function GenerateModal({
         : prompt);
     // Meme mode wraps the idea in classic meme formatting (Impact caption + image). Only on the
     // initial generation, not a "change it" re-roll (overridePrompt) — that edits the staged meme.
-    const text = meme && !overridePrompt && base.trim() ? buildMemePrompt(base) : base.trim();
+    // A meme for a PRODUCT (not a web/graphics asset) uses the magenta-bordered PANEL prompt so it
+    // chroma-keys into a clean printable rectangle instead of an opaque full-bleed block.
+    const memeNow = meme && !overridePrompt && !!base.trim();
+    const productMeme = memeNow && !isGraphics;
+    const text = memeNow ? (isGraphics ? buildMemePrompt(base) : buildMemePromptForProduct(base)) : base.trim();
     const ref = overrideRef ?? refImage ?? undefined;
     if (!text && !ref) return;
     setBusy(true);
     setError(null);
     try {
-      // Text lettering is always cut out; otherwise honor the creator's transparent/filled choice
-      // (a logo wants transparent, a hero wants filled). Meme pre-sets Filled when toggled on, but
-      // the creator can still switch — so we just follow the selected background here.
-      const bg = isText ? 'transparent' : background;
+      // Text lettering is always cut out; a product meme forces transparent (its magenta margin keys
+      // out to a tidy rectangle); otherwise honor the creator's transparent/filled choice.
+      const bg = isText || productMeme ? 'transparent' : background;
       const aspectRatio = isGraphics ? webRatio : ratio;
       const res = await apiFetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, image: ref, background: bg, aspectRatio }),
+        body: JSON.stringify({ prompt: text, image: ref, background: bg, aspectRatio, meme: productMeme }),
       });
       const data = (await res.json().catch(() => ({}))) as { image?: string; error?: string };
       if (!res.ok || !data.image) throw new Error(data.error || 'Generation failed');
@@ -2088,9 +2091,10 @@ function GenerateModal({
                       </Pressable>
                     ) : null}
                     {/* Meme (icon-only) — steer into the classic meme format (caption + image), web
-                        assets AND t-shirt designs. Defaults the background to Filled; off → restores
-                        the prior background choice. Mutually exclusive with Aa Text. */}
-                    <Pressable onPress={() => { const next = !meme; setMeme(next); if (next) { setIsText(false); setBackground('filled'); } }}>
+                        assets AND t-shirt designs. Web/graphics memes default to Filled (full-bleed share
+                        image); PRODUCT memes default to Transparent so they key out to a clean printable
+                        rectangle. Mutually exclusive with Aa Text. */}
+                    <Pressable onPress={() => { const next = !meme; setMeme(next); if (next) { setIsText(false); setBackground(modality === 'graphics' ? 'filled' : 'transparent'); } }}>
                       <ThemedView type={meme ? 'backgroundSelected' : 'backgroundElement'} style={styles.chip}>
                         {/* Frog face = the internet's IP-safe stand-in for Pepe / meme-frog culture
                             (the actual Pepe character is Matt Furie's copyright — not for our UI). */}

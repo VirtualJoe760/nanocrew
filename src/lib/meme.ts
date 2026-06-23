@@ -30,6 +30,28 @@ export function buildMemePrompt(idea: string): string {
   );
 }
 
+/** Meme formatted for a PRINTED PRODUCT (not a full-bleed web image). The model renders the meme as a
+ *  self-contained rectangular PANEL — its own photo/background to all four PANEL edges, Impact captions
+ *  inset — surrounded by a solid PURE MAGENTA margin filling the rest of the frame. The existing magenta
+ *  chroma-key (transparency.ts) then crops cleanly to the panel, so the meme prints as a tidy rectangular
+ *  graphic with the garment showing around it (instead of an opaque, un-cropped full-bleed block — what
+ *  'filled' produced, the reason memes looked wrong on shirts). */
+export function buildMemePromptForProduct(idea: string): string {
+  const body = idea.trim().replace(/[.\s]+$/, '');
+  return (
+    `Create a funny internet MEME as a SELF-CONTAINED RECTANGULAR PANEL printed on apparel. ${body}. ` +
+    `Inside the panel use classic meme formatting: caption text in bold ALL-CAPS condensed sans-serif ` +
+    `(Impact font), pure white letters with a thick solid black outline, as a top and/or bottom caption, ` +
+    `large and centered, inset just enough that the text isn't clipped. Spell every word correctly and ` +
+    `keep it legible. The panel has its OWN photo/background filling the panel edge to edge — no border, ` +
+    `frame, or margin INSIDE the panel. If the idea implies a known layout (top/bottom caption, ` +
+    `Drake approve/reject, two buttons, this-vs-that, change my mind, expanding brain), compose the panel ` +
+    `that way. CRITICAL: surround the entire panel with a SOLID, UNIFORM, PURE MAGENTA (#FF00FF) margin ` +
+    `that fills the rest of the frame; the meme panel itself must contain NO magenta or pink hues — ` +
+    `magenta appears ONLY outside the panel. Center the panel.`
+  );
+}
+
 /** Placeholder that teaches the meme input format (image + caption). */
 export const MEME_PLACEHOLDER =
   'Describe the meme — the image + the caption. e.g. “a cat glaring at a laptop · top: WHEN THE CODE WORKS · bottom: BUT YOU DON’T KNOW WHY”';

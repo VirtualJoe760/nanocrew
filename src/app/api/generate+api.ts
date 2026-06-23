@@ -21,7 +21,7 @@ const GEMINI_RATIOS = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9'
 
 // Constraints come AFTER the user's description — leading with "clothing graphic, high
 // contrast" steered the model away from faithful subjects (e.g. real likenesses).
-function buildConstraints(background: 'transparent' | 'filled', aspectRatio: string): string {
+function buildConstraints(background: 'transparent' | 'filled', aspectRatio: string, meme = false): string {
   const base =
     'Depict the subject exactly as described, faithfully. ' +
     'Do not add any text or watermark that was not requested.';
@@ -29,6 +29,16 @@ function buildConstraints(background: 'transparent' | 'filled', aspectRatio: str
     return (
       `${base} Render it as full-bleed artwork with a complete background filling the ` +
       `entire frame edge to edge at a ${aspectRatio} aspect ratio. No transparency.`
+    );
+  }
+  // A PRODUCT meme: the WHOLE panel (its photo + captions) is the keep-subject, magenta only outside —
+  // so the chroma-key crops to the panel rectangle instead of punching holes inside the meme's photo.
+  if (meme) {
+    return (
+      `${base} The ENTIRE meme panel — its photo/background, captions, everything — is the subject; ` +
+      `keep ALL of it. Surround the whole panel with a SOLID, UNIFORM, PURE MAGENTA (#FF00FF) margin ` +
+      `filling the rest of the frame at a ${aspectRatio} aspect ratio. The panel itself must contain ` +
+      `NO magenta or pink hues; magenta appears ONLY outside the panel — flat, never a checkerboard.`
     );
   }
   // The model can't emit true alpha — it FAKES transparency as rendered checkerboard
@@ -110,11 +120,13 @@ export async function POST(req: Request) {
     aspectRatio?: string;
     catalogueId?: string;
     purpose?: 'logo' | 'design';
+    meme?: boolean;
   } | null;
   const prompt = body?.prompt?.trim();
   const catalogueId = body?.catalogueId;
   const background = body?.background === 'filled' ? 'filled' : 'transparent';
   const aspectRatio = body?.aspectRatio || '1:1';
+  const isMeme = body?.meme === true;
   const refImage = await resolveRef(body?.image);
   if (!prompt && !refImage) {
     return Response.json({ error: 'prompt or image is required' }, { status: 400 });
@@ -165,7 +177,7 @@ export async function POST(req: Request) {
   const ai = new GoogleGenAI({ apiKey });
 
   // Instruction text + an optional user-supplied reference image.
-  const constraints = buildConstraints(background, aspectRatio);
+  const constraints = buildConstraints(background, aspectRatio, isMeme);
   const instruction = refImage
     ? `Design: ${prompt || 'a polished version of the reference image'}\n\nUse the provided image as a visual reference. ${constraints}`
     : `Design: ${prompt}\n\n${constraints}`;

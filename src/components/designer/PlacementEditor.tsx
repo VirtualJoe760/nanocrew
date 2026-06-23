@@ -240,6 +240,26 @@ export function PlacementEditorBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries]);
 
+  // Re-fit each box to its design's REAL aspect once known. Boxes are seeded at a placeholder 1:1 (line
+  // ~188) or restored from a DB position authored under a different area, so without this a non-square
+  // design renders squished (the getSize effect only recorded the aspect, never re-clamped). clampBox
+  // keeps the box's width and sets height = width/aspect, so this preserves the creator's chosen size.
+  useEffect(() => {
+    setEntries((list) => {
+      let changed = false;
+      const next = list.map((x) => {
+        const asp = aspects[x.designId];
+        const ar = areas.find((a) => a.placement === x.placement);
+        if (!asp || !ar) return x;
+        const fitted = clampBox(x.box, ar.areaWidth, ar.areaHeight, asp, x.bleed);
+        if (fitted.left === x.box.left && fitted.top === x.box.top && fitted.width === x.box.width && fitted.height === x.box.height) return x;
+        changed = true;
+        return { ...x, box: fitted };
+      });
+      return changed ? next : list; // no-op when already fitted → no render loop
+    });
+  }, [aspects, areas]);
+
   const entry = entries.find((e) => e.placement === active) ?? null;
   const area = areas.find((a) => a.placement === active) ?? null;
   const aspect = entry ? (aspects[entry.designId] ?? 1) : 1;
@@ -540,7 +560,9 @@ export function PlacementEditorBody({
                   height: entry.box.height * scale,
                 },
               ]}>
-              {designUrl ? <Image source={{ uri: designUrl }} style={styles.designFill} contentFit="fill" /> : null}
+              {/* contain (NOT fill) — never stretch the art; the box is kept at the design's true aspect
+                  by clampBox + the re-fit effect, so the print preview matches what's actually printed. */}
+              {designUrl ? <Image source={{ uri: designUrl }} style={styles.designFill} contentFit="contain" /> : null}
               {(['tl', 'tr', 'bl', 'br'] as Corner[]).map((c) => (
                 <View key={c} {...cornerResponders[c].panHandlers} hitSlop={14} style={[styles.handle, HANDLE_POS[c]]} />
               ))}
