@@ -48,6 +48,7 @@ import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Welcome, type OnboardChoice } from '@/components/welcome';
+import { InterviewTopics } from '@/components/interview-topics';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
@@ -1270,6 +1271,9 @@ function StudioScreen() {
           null
         ) : (
           <>
+            {/* "What to talk about" — helps a new creator know what to cover with Venus (name, products,
+                style, colors, logo, vibe) with tappable example prompts; checks off as they go. */}
+            <InterviewTopics messages={live.messages} onAsk={live.sendText} p={p} />
             <View style={[styles.entityArea, showVenusAvatar && styles.entityAreaAvatar]}>
               {showVenusAvatar ? null : (
                 <NCNucleus size={232} p={p} level={level} state={state} onPress={onOrbPress} />
