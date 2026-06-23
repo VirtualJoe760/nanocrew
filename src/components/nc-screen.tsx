@@ -1,9 +1,10 @@
-import { Dimensions, StyleSheet, useColorScheme, View } from 'react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 // Shared Studio "chrome": the monochrome silk background, the NC brand mark, and the screen
 // palette — so Studio, Design, Market, and Account all read as one product. (Extracted from

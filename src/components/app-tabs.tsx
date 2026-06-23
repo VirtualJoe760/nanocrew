@@ -1,7 +1,7 @@
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 // Nano Crew tab bar: platinum-silver selected tint + thin, elegant outline glyphs (no heavy
 // `.fill` weights), so the chrome reads premium and on-brand. Background is OPAQUE (mode-aware) so

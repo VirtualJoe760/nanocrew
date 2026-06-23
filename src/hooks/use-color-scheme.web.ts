@@ -1,21 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useColorScheme as useRNColorScheme } from 'react-native';
-
-/**
- * To support static rendering, this value needs to be re-calculated on the client side for web
- */
-export function useColorScheme() {
-  const [hasHydrated, setHasHydrated] = useState(false);
-
-  useEffect(() => {
-    setHasHydrated(true);
-  }, []);
-
-  const colorScheme = useRNColorScheme();
-
-  if (hasHydrated) {
-    return colorScheme;
-  }
-
-  return 'light';
+// Forced dark — see use-color-scheme.ts. The web build mirrors native so the preview surfaces match
+// the dark-designed effects; we don't follow the browser/OS light setting.
+export function useColorScheme(): 'light' | 'dark' {
+  return 'dark';
 }
