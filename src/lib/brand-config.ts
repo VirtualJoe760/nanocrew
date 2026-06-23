@@ -8,7 +8,8 @@
 // store has no repo (app-only brands) or GitHub is unreachable.
 
 function gh() {
-  const { GITHUB_TOKEN, GITHUB_OWNER } = process.env;
+  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+  const GITHUB_OWNER = process.env.GITHUB_OWNER;
   if (!GITHUB_TOKEN || !GITHUB_OWNER) return null;
   return { GITHUB_TOKEN, GITHUB_OWNER };
 }

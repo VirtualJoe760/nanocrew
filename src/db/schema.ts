@@ -225,7 +225,7 @@ export const compositions = pgTable(
     position: jsonb('position').$type<PrintPosition>(), // null = Printful auto-fit
     // Multi-design source of truth (front/back/sleeves). Overrides single design/placement.
     placements: jsonb('placements').$type<
-      Array<{ placement: string; designId: string; position: PrintPosition | null }>
+      { placement: string; designId: string; position: PrintPosition | null }[]
     >(),
     previewUrl: text('preview_url'),
     status: compositionStatus('status').notNull().default('generating'),

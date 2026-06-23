@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,7 +14,6 @@ import {
 } from 'react-native';
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import Animated, {
   cancelAnimation,
@@ -28,8 +26,6 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -52,6 +48,8 @@ import { apiFetch, readJson } from '@/lib/api';
 import { buildMemePrompt, MEME_PLACEHOLDER } from '@/lib/meme';
 import type { CatalogBlank } from '@/lib/printful';
 import { EFFORT_LABELS, EFFORT_TIERS, type Effort } from '@/lib/effort';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Design = {
   id: string;
@@ -151,7 +149,6 @@ export default withScreenFade(DesignScreen, { background: true });
 
 function DesignScreen() {
   const theme = useTheme();
-  const p = usePalette();
   const { session } = useAuth();
   const { width, height } = useWindowDimensions();
 

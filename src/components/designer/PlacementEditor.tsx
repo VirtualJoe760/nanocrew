@@ -197,7 +197,7 @@ export function PlacementEditorBody({
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [compositionId, templateKey, reloadKey]);
 
   // Garment colourways (for the on-product colour preview).

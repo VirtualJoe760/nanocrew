@@ -91,7 +91,7 @@ export function Purchases({ visible, onClose }: { visible: boolean; onClose: () 
   useEffect(() => {
     if (!visible) return;
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [visible]);
 
   return (

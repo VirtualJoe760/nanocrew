@@ -10,17 +10,14 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   cancelAnimation,
-  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withTiming,
@@ -33,8 +30,7 @@ import {
   useAudioSampleListener,
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Image } from 'expo-image';
-import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
 import { NCMark, type Palette, usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';

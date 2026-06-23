@@ -1,4 +1,3 @@
-import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { CREDIT_PACKS, TIERS, countBrands, getEntitlements } from '@/lib/billing';
 

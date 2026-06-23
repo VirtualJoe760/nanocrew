@@ -47,16 +47,14 @@ export function templateForStyle(designStyle: BrandResult['designStyle']): strin
 const PROVISION_BRANCH = '__provision__';
 
 function config() {
-  const {
-    GITHUB_TOKEN,
-    GITHUB_OWNER,
-    TEMPLATES_REPO,
-    VPS_HOST,
-    VPS_USER,
-    VERCEL_TOKEN,
-    EXPO_PUBLIC_SUPABASE_URL,
-    EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  } = process.env;
+  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+  const GITHUB_OWNER = process.env.GITHUB_OWNER;
+  const TEMPLATES_REPO = process.env.TEMPLATES_REPO;
+  const VPS_HOST = process.env.VPS_HOST;
+  const VPS_USER = process.env.VPS_USER;
+  const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
+  const EXPO_PUBLIC_SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!GITHUB_TOKEN || !GITHUB_OWNER || !VPS_HOST || !VPS_USER) return null;
   return {
     GITHUB_TOKEN,

@@ -16,7 +16,7 @@ interface InlinePart {
   text?: string;
 }
 interface GenResponse {
-  candidates?: Array<{ content?: { parts?: InlinePart[] } }>;
+  candidates?: { content?: { parts?: InlinePart[] } }[];
 }
 
 async function fetchAsInlineData(url: string): Promise<InlinePart> {

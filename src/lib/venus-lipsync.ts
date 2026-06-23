@@ -124,7 +124,7 @@ class AnalyserDriver implements VenusLipsync {
       this.analyser.connect(this.ctx.destination); // keep audio audible
       this.srcNode = node;
     } catch (e) {
-      // eslint-disable-next-line no-console
+       
       console.warn('[venus-lipsync] connect failed (already routed?)', e);
     }
   }
@@ -182,11 +182,11 @@ export function createVenusLipsync(): VenusLipsync {
     try {
       // Optional path. Only reached if you set USE_WAWA = true AND installed the package. require()
       // (not import) keeps Metro from trying to resolve it at bundle time when the dep is absent.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       const wawa = require('wawa-lipsync');
       return new WawaDriver(wawa.Lipsync, wawa.VISEMES);
     } catch (e) {
-      // eslint-disable-next-line no-console
+       
       console.warn('[venus-lipsync] wawa-lipsync not available, using AnalyserNode', e);
     }
   }

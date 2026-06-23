@@ -46,7 +46,6 @@ export function ProductDetail({
 
   const { bg, fg, accent } = colors;
   const dim = `${fg}99`;
-  const cardBg = `${fg}12`;
 
   const load = useCallback(async () => {
     if (!productSlug) return;

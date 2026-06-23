@@ -17,7 +17,6 @@ import { ThemedView } from '@/components/themed-view';
 import { BrandStore } from '@/components/brand-store';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import { GlowInput } from '@/components/glow-input';
 import { apiUrl } from '@/lib/api';
@@ -146,7 +145,6 @@ export default withScreenFade(MarketScreen, { background: true });
 
 function MarketScreen() {
   const theme = useTheme();
-  const p = usePalette();
   const [query, setQuery] = useState('');
   const [data, setData] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);

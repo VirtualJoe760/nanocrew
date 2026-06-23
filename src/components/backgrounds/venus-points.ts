@@ -12,8 +12,6 @@
 // no #version 300, no dynamic loops, no derivatives. Build-once attributes; only
 // uniforms change per frame.
 // ============================================================================
-import * as THREE from 'three';
-
 // ── shared Skia-look GLSL chunk (ported 1:1 from dot-field-scene.tsx SKSL) ────
 // Evaluated per-DOT at its baked aCell instead of per-fragment at floor(g).
 // hash21 / hsv2rgb / motionEnergy are byte-for-byte the SKSL math (float2->vec2 etc).

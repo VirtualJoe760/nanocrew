@@ -49,7 +49,7 @@ interface InlinePart {
   text?: string;
 }
 interface GenResponse {
-  candidates?: Array<{ content?: { parts?: InlinePart[] }; finishReason?: string }>;
+  candidates?: { content?: { parts?: InlinePart[] }; finishReason?: string }[];
   promptFeedback?: { blockReason?: string };
 }
 

@@ -15,7 +15,8 @@ import { db, schema } from '@/lib/db';
 // Env: GITHUB_TOKEN / GITHUB_OWNER.
 
 function config() {
-  const { GITHUB_TOKEN, GITHUB_OWNER } = process.env;
+  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+  const GITHUB_OWNER = process.env.GITHUB_OWNER;
   if (!GITHUB_TOKEN || !GITHUB_OWNER) return null;
   return { GITHUB_TOKEN, GITHUB_OWNER };
 }

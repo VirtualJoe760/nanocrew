@@ -244,7 +244,7 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
   const [reviewing, setReviewing] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const [subtitle, setSubtitle] = useState(COACHING);
+  const [subtitle] = useState(COACHING);
   const [note, setNote] = useState<string | null>(null);
 
   const arm = (on: boolean) => {
@@ -370,7 +370,7 @@ function PreviewContent({ url, onClose, critique, review }: { url: string; onClo
       if (t && !isCloser(t)) commitRef.current(t);
     }
     committedUsers.current = said.length;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [venus.messages]);
 
   const addTyped = () => {

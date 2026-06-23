@@ -8,7 +8,7 @@ import { Platform } from 'react-native';
 // SSR guard: the web build server-renders pages (web.output: "server"), where `window`
 // doesn't exist — AsyncStorage must only load on an actual client (native or browser).
 const isServer = typeof window === 'undefined';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const storage = isServer
   ? undefined
   : (require('@react-native-async-storage/async-storage').default as never);

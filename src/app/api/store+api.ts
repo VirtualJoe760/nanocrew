@@ -18,7 +18,7 @@ interface InlinePart {
   inlineData?: { data?: string; mimeType?: string };
 }
 interface GenResponse {
-  candidates?: Array<{ content?: { parts?: InlinePart[] } }>;
+  candidates?: { content?: { parts?: InlinePart[] } }[];
 }
 
 /** Generate a logo mark from the interview's direction, honoring the stated palette. Logos default

@@ -50,13 +50,6 @@ function approx(a: number, b: number, tol: number): boolean {
 const SR = 24000;
 const N = 1024;
 
-/** Pure sine of `freq` Hz, length `n`. */
-function sine(freq: number, n = N, amp = 1, sr = SR): Float32Array {
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = amp * Math.sin((2 * Math.PI * freq * i) / sr);
-  return out;
-}
-
 /**
  * A glottal-source vowel: a `f0` Hz pulse train (rich in harmonics) passed
  * through two 2nd-order resonators tuned to F1 and F2. This is the realistic,

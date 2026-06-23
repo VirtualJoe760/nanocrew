@@ -257,7 +257,14 @@ async function ensureCustomer(creatorId: string, email: string): Promise<string>
 /** A Stripe Checkout Session URL for subscribing to a tier. */
 export async function createSubscriptionCheckout(creatorId: string, email: string, plan: PaidPlan): Promise<string> {
   const tier = TIERS[plan];
-  const priceId = process.env[tier.priceEnv];
+  // Static env access (the lint rule forbids process.env[dynamicKey]); the value is still read at
+  // runtime on the server, just keyed off the known plan rather than a computed string.
+  const priceId =
+    plan === 'starter'
+      ? process.env.STRIPE_PRICE_STARTER
+      : plan === 'pro'
+        ? process.env.STRIPE_PRICE_PRO
+        : process.env.STRIPE_PRICE_ADVANCED;
   if (!priceId) throw new Error(`${tier.priceEnv} not configured`);
   const customer = await ensureCustomer(creatorId, email);
   const { success, cancel } = urls();

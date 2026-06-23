@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -54,7 +54,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [refreshing, setRefreshing] = useState(false);
   const [previewTarget, setPreviewTarget] = useState<string | null>(null);
   const [critiquePreview, setCritiquePreview] = useState(false);
-  const [siteAction, setSiteAction] = useState<'idle' | 'building'>('idle');
+  const [, setSiteAction] = useState<'idle' | 'building'>('idle');
   const [publishing, setPublishing] = useState(false); // open/close shop in the marketplace in flight
   const [approving, setApproving] = useState(false); // merging a reviewed change to production (Publish)
   const [reviewRev, setReviewRev] = useState<Revision | null>(null); // the revision being reviewed in the preview
