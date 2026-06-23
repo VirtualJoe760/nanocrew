@@ -237,6 +237,29 @@ export class LiveVoiceSession {
     this.token = '';
   }
 
+  // Activate the iOS audio session, tolerating transient InsufficientPriority (code 561017449 =
+  // '!pri'). iOS rejects activation when another session still holds priority — most often our OWN
+  // expo-audio TTS path a beat earlier, or another app's audio yielding — but it clears in a few
+  // hundred ms. A single failure used to kill the whole connection (the "Failed to activate audio
+  // session" banner); retry with a short backoff so the common transient case just recovers.
+  private async activateAudioSession(): Promise<void> {
+    const delays = [0, 150, 400, 900];
+    let lastErr: unknown = null;
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i]) await new Promise((res) => setTimeout(res, delays[i]));
+      if (this.closed) return; // the user dismissed / navigated away mid-retry
+      try {
+        await AudioManager.setAudioSessionActivity(true);
+        if (i > 0) console.warn(`[live] audio session activated on retry ${i}`);
+        return;
+      } catch (e) {
+        lastErr = e;
+        console.warn(`[live] audio session activate attempt ${i + 1}/${delays.length} failed:`, e instanceof Error ? e.message : e);
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error('Could not activate the audio session');
+  }
+
   async start() {
     // Enforce the single-session rule: tear down any OTHER live session first so two of her can't talk
     // at once. (Our own session is a no-op re-entry — the hook guards double-start separately.)
@@ -269,7 +292,7 @@ export class LiveVoiceSession {
       iosMode: 'voiceChat',
       iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
     });
-    await AudioManager.setAudioSessionActivity(true);
+    await this.activateAudioSession();
 
     console.warn('[live] A: new AudioContext');
     this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
