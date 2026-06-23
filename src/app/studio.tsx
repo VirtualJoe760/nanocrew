@@ -49,6 +49,7 @@ import { apiUrl, readJson } from '@/lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Welcome, type OnboardChoice } from '@/components/welcome';
 import { InterviewTopics } from '@/components/interview-topics';
+import { OnboardingTour } from '@/components/onboarding-tour';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
@@ -77,6 +78,7 @@ function venusStageFor(state: EntityState, intro: boolean): VenusStage {
 const BG = '#08080a';
 const ONBOARD_SEEN_KEY = 'nc_welcome_seen';
 const ONBOARD_INTENT_KEY = 'nc_onboard_intent';
+const TOUR_SEEN_KEY = 'nc_tour_seen'; // the coachmark app tour — shown once on first sign-in, re-openable from "?"
 // idle → listening → thinking → speaking. Champagne gold resting, brightening to near-white
 // as Venus speaks — monochrome + gold, per the Nano Crew brand.
 const STATE_COLORS = ['#cdd1d9', '#e8eaee', '#dfe2e8', '#ffffff'];
@@ -610,6 +612,8 @@ function StudioScreen() {
   // ── First-launch welcome + onboarding intent ───────────────────────────────────────────────
   const [welcomeChecked, setWelcomeChecked] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showTour, setShowTour] = useState(false); // the coachmark app tour
+  const tourCheckedRef = useRef(false);
   const [onboardIntent, setOnboardIntent] = useState<OnboardChoice | null>(null);
   const intentHandledRef = useRef(false);
   const pendingSubscribeGrantRef = useRef(false);
@@ -630,6 +634,20 @@ function StudioScreen() {
         setWelcomeChecked(true);
       }
     })();
+  }, []);
+
+  // First sign-in → run the coachmark app tour ONCE, after the welcome flow resolves (re-openable
+  // from the "?" in the header). Venus narrates each tab.
+  useEffect(() => {
+    if (!session || !welcomeChecked || showWelcome || tourCheckedRef.current) return;
+    tourCheckedRef.current = true;
+    AsyncStorage.getItem(TOUR_SEEN_KEY).then((seen) => { if (!seen) setShowTour(true); }).catch(() => {});
+  }, [session, welcomeChecked, showWelcome]);
+
+  const openTour = useCallback(() => setShowTour(true), []);
+  const closeTour = useCallback(() => {
+    setShowTour(false);
+    AsyncStorage.setItem(TOUR_SEEN_KEY, '1').catch(() => {});
   }, []);
 
   // Welcome CTA: remember the choice, dismiss the panel, send them to auth (/account). The chosen
@@ -1094,6 +1112,9 @@ function StudioScreen() {
         </View>
       </Modal>
 
+      {/* Guided coachmark app tour — first sign-in (once) + re-openable from the "?" in the header. */}
+      <OnboardingTour visible={showTour} onClose={closeTour} accessToken={session?.access_token} />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
@@ -1102,6 +1123,11 @@ function StudioScreen() {
             STUDIO
           </ThemedText>
           <View style={styles.headerSpacer} />
+          {session && !brand ? (
+            <Pressable onPress={openTour} hitSlop={10} accessibilityLabel="App tour" style={{ marginRight: Spacing.three }}>
+              <ThemedText type="code" style={{ color: p.dim, fontSize: 16 }}>?</ThemedText>
+            </Pressable>
+          ) : null}
           {session && !brand && (mode === 'interview' || mode === 'dashboard') ? (
             <View style={styles.headerIcons}>
               {hasStore && mode === 'dashboard' ? (
