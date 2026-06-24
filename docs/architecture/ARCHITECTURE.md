@@ -124,7 +124,8 @@ baked into `brand.json` (header + SEO) needs the `brand.json` push the cascade p
 
 The app brand chrome itself is **cool monochrome + platinum-silver** (no gold); individual brand
 storefronts keep their OWN colors. The app palette lives in **three** files that must stay aligned:
-`src/constants/theme.ts`, `src/lib/studio-palette.ts`, `src/app/studio.tsx` `makePalette`.
+`src/constants/theme.ts`, `src/lib/studio-palette.ts`, `src/components/nc-screen.tsx` `makePalette`
+(see [`../context/NEVER_VIOLATE.md`](../context/NEVER_VIOLATE.md) §3 for the canonical rule).
 
 ## End-to-end flow
 
@@ -264,6 +265,9 @@ migration must `ENABLE ROW LEVEL SECURITY` on its new table.
 
 ## Invariants a new contributor must not break
 
+> Canonical, enforced list (auto-checked before each commit): [`../context/NEVER_VIOLATE.md`](../context/NEVER_VIOLATE.md).
+> The items below are the same rules with architectural context.
+
 1. **Schema is duplicated.** `platform-api/db/schema.ts` is a copy of `src/db/schema.ts` — change
    both on every migration; new migrations must enable RLS on their new tables.
 2. **The forge worker mirrors the app libs.** `forge-worker/worker.mjs`'s bash is a hand-kept copy of
@@ -285,7 +289,7 @@ migration must `ENABLE ROW LEVEL SECURITY` on its new table.
 9. **Authed routes make no `fetch` before their DB query** (the Railway/Workers constraint), and the
    app backend stays on Railway (not EAS Hosting).
 10. **The app palette lives in three files** (`src/constants/theme.ts`, `src/lib/studio-palette.ts`,
-    `src/app/studio.tsx`) — change all three together.
+    `src/components/nc-screen.tsx`) — change all three together.
 11. **Reuse before you build. Audit first** — most things already exist; confirm a table/route/
     "system" isn't already there before adding one (Joe's strongest, repeated correction).
 12. **Every code change updates the docs it affects, in the same change** (AGENTS.md documentation

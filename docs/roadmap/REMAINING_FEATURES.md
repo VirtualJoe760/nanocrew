@@ -8,6 +8,17 @@ For the brand build→domain→live→Connect **lifecycle** specifically, see
 The original designer-parity plan lives in [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) (delivered;
 historical).
 
+## Scope — what we're focused on
+The anti-creep guardrail (also in [../context/PROJECT_OVERVIEW.md](../context/PROJECT_OVERVIEW.md)).
+"Out of scope" = **not the current focus**, not abandoned. Don't start deferred/parked work without
+an explicit go.
+
+| Bucket | Items |
+|---|---|
+| 🟢 **In flight** | App Store + Play launch & owner-config gates (Stripe live, Connect, domains, `PRINTFUL_CONFIRM_ORDERS`) · the **context system** · the **UI component system** (reuse refactor + build the missing primitives) · the **forge build-quality** epic (robot eyes + a real quality gate) |
+| 🟡 **Deferred backlog** | **Affiliate / referral program** · **manufacturer-connect** (POD-provider onboarding) — will build, later |
+| ⚪ **Parked / not now** | **Social feed v2** (built, hidden at `/feed`) · **native Metal-shader avatar port** · **new sales channels** (e.g. TikTok Shop) |
+
 ## 0. Shipped this session (2026-06-15/16)
 - 🟢 **Mini-CMS (✦ Customize)** — Studio brand console → `SiteEditor` edits site copy/colors/fonts
   live with **no rebuild**: `stores.site_config` (migration 0018) via `POST /api/creator/site-config`;

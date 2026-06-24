@@ -12,11 +12,26 @@ in sync with the app's catalogue.
 
 The docs are organized into divisions. Start here, then open the division you need.
 
+## 🧭 Context layer (`context/`) — how to work here + the rules
+
+The **working layer**: how to build in this repo and the rules that keep it from breaking (the rest
+of `docs/` is the **domain layer** — how the product works). Start at
+[`context/README.md`](context/README.md) for the canonical read-order.
+
+| Doc | Covers |
+|---|---|
+| [context/CONTEXT_GUIDE.md](context/CONTEXT_GUIDE.md) | **New here? Start here.** Plain-English guide to the system + how to work with the AI agent + the skills |
+| [context/PROJECT_OVERVIEW.md](context/PROJECT_OVERVIEW.md) | What it is, who for, the user flow, and the in/out-of-scope buckets |
+| [context/NEVER_VIOLATE.md](context/NEVER_VIOLATE.md) | **The hard rules.** Read before any change; auto-review enforces the mechanical ones before each commit |
+| [context/CODE_STANDARDS.md](context/CODE_STANDARDS.md) | TS/naming/error-handling · the pre-push gate · verify-latest-docs |
+| [context/UI_TOKENS.md](context/UI_TOKENS.md) · [UI_RULES.md](context/UI_RULES.md) · [UI_REGISTRY.md](context/UI_REGISTRY.md) | The app's design tokens, reuse rules, and living component registry |
+
 ## 🏛 Architecture (`architecture/`)
 
 | Doc | Covers |
 |---|---|
 | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) | The four deployable units (app · platform-api · templates · forge) + end-to-end flow |
+| [architecture/TECH_STACK.md](architecture/TECH_STACK.md) | **The full technology inventory** — every framework, dependency, AI model, service, host, and version, by unit. Keep in sync on dependency/model/deploy changes. |
 | [architecture/DATABASE_PLAN.md](architecture/DATABASE_PLAN.md) | The shared multi-tenant schema (creators, stores, catalogues, products, variants, orders, credits, billing) |
 | [architecture/API.md](architecture/API.md) | Endpoint reference — app routes (Railway) + platform-api (Vercel) |
 
@@ -73,42 +88,16 @@ The docs are organized into divisions. Start here, then open the division you ne
 | [roadmap/LIFECYCLE_ROADMAP.md](roadmap/LIFECYCLE_ROADMAP.md) | The brand build→domain→live→Connect lifecycle (Phases A–D, all code-complete; inert until Joe's config) |
 | [roadmap/FEATURE_ROADMAP.md](roadmap/FEATURE_ROADMAP.md) | Historical — the original designer-parity plan (delivered). Kept for context; see REMAINING_FEATURES for live status. |
 
-## ✋ Two invariants that bite if forgotten
+## ✋ The hard rules
 
-1. **Schema is duplicated.** `platform-api/db/schema.ts` is a copy of `src/db/schema.ts` — change
-   both on every migration (see [architecture/DATABASE_PLAN.md](architecture/DATABASE_PLAN.md)).
-2. **The brand palette lives in three files** (`src/constants/theme.ts`, `src/lib/studio-palette.ts`,
-   `src/app/studio.tsx`) — change all three together.
+The footguns that bite if forgotten (schema duplication, palette ×3, RLS, the postgres-js fetch rule,
+the cascade rules…) are consolidated and verbatim-sourced in
+**[context/NEVER_VIOLATE.md](context/NEVER_VIOLATE.md)** — read it before any change. Auto-review
+enforces the mechanical ones before each commit.
 
-## 🔭 Current focus
+## 🔭 Current focus & status
 
-The app lands on **Studio** (the social feed is hidden for v1, preserved at `/feed`, back in v2) and
-is close to production-ready on TestFlight. Recent work has shipped:
-
-- **Mini-CMS** — Studio brand console → **✦ Customize** (`SiteEditor`) edits site copy/colors/fonts
-  live with **no rebuild** (`stores.site_config`, migration 0018 → `POST /api/creator/site-config` →
-  public `GET /api/public/stores/:slug/site-config`, read by all 4 templates' `lib/site-config.ts`).
-  See [storefront/STOREFRONT_DATA_CONTRACT.md](storefront/STOREFRONT_DATA_CONTRACT.md).
-- **✦ Enhance** — every mini-CMS text box gets an AI rewrite in the brand voice
-  (`POST /api/creator/enhance-copy`, gemini-2.5-flash, free + rate-limited).
-- **SEO layer** in all 4 templates — canonical URLs + Organization/Product/BlogPosting JSON-LD,
-  OpenGraph/Twitter, `sitemap.ts` + `robots.ts` (`lib/seo.ts`). See
-  [storefront/STOREFRONT_ENGINE.md](storefront/STOREFRONT_ENGINE.md) ("SEO").
-- **Build-quality work** (the prior focus) is largely shipped: Venus now *authors* the build brief
-  (`authorBrandBrief`, gemini-2.5-pro) and a **Master `CLAUDE.md`** conditions the forge robot
-  ([studio/FORGE_AI.md](studio/FORGE_AI.md)). What remains open: giving the robot **eyes + a
-  self-critique loop** and a real quality gate (no more silent `|| true` ready-flip) — see
-  [storefront/BUILD_QUALITY.md](storefront/BUILD_QUALITY.md).
-- **App-only Publish** — selling is decoupled from websites: `POST /api/creator/stores/:slug/publish`
-  lists a brand in the in-app Market + on `nanocrew.app/b/<slug>` with only an active plan + a
-  published product (a custom domain is now a separate Pro upgrade). See
-  [studio/BUILD_FLOW.md](studio/BUILD_FLOW.md) + [storefront/STOREFRONT_DATA_CONTRACT.md](storefront/STOREFRONT_DATA_CONTRACT.md).
-- **Apple IAP (StoreKit 2)** shipped — plans + credit packs verify via the App Store Server API; the
-  **mini-CMS hex color picker**, **durable real-time build status**, **comp/internal accounts**
-  (never billed), and the **Supabase RLS lockdown** are all in. Credit pricing is finalized at a flat
-  $0.01/cr floor ([accounts/BILLING_CREDITS.md](accounts/BILLING_CREDITS.md)).
-
-The remaining open work is mostly Joe's account/config (notably **switching platform-api to the live
-Stripe key** — commerce is still on a test key — plus Connect + domain-buy contact) and end-to-end
-live verification — tracked in [roadmap/REMAINING_FEATURES.md](roadmap/REMAINING_FEATURES.md) and
+Not tracked here (it drifts). The live status — what's shipped vs. open — is the progress-tracker
+[roadmap/REMAINING_FEATURES.md](roadmap/REMAINING_FEATURES.md); what we're focused on vs. parked is
+[context/PROJECT_OVERVIEW.md](context/PROJECT_OVERVIEW.md); go-live config is
 [ops/PRODUCTION_CHECKLIST.md](ops/PRODUCTION_CHECKLIST.md).
