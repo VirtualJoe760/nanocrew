@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
+import { TourAnchorProvider } from '@/components/tour-anchors';
 import { attachReviewDeepLink } from '@/lib/push';
 
 // The VENUS LAB — our tool for iterating on Venus's APPEARANCE — now opens as a gated full-screen
@@ -43,10 +44,15 @@ export default function TabLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#08080a' }}>
       {/* The dot-field background is rendered INSIDE each tab screen (studio/market/account),
-          not here — on native the NativeTabs (UITabBarController) owns the screen and would cover
-          a background placed behind it. */}
-      <AnimatedSplashOverlay />
-      <AppTabs />
+          not here — each screen owns its own background (see withScreenFade). */}
+      {/* The dot-field background is rendered INSIDE each tab screen (studio/market/account), not
+          here — each screen owns its own background (see withScreenFade). */}
+      {/* TourAnchorProvider wraps the tab bar + screens so the guided tour can measure tab targets
+          (in AppTabs) and render its overlay (in a screen) under one shared registry. */}
+      <TourAnchorProvider>
+        <AnimatedSplashOverlay />
+        <AppTabs />
+      </TourAnchorProvider>
     </GestureHandlerRootView>
   );
 }

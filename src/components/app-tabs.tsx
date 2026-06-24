@@ -1,51 +1,93 @@
-import { Icon, Label, NativeTabs, VectorIcon } from 'expo-router/unstable-native-tabs';
-import { MaterialIcons } from '@expo/vector-icons';
+import { TabList, TabSlot, TabTrigger, type TabTriggerSlotProps, Tabs } from 'expo-router/ui';
+import { Ionicons } from '@expo/vector-icons';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/theme';
+import { TabBarBlur } from '@/components/tab-bar-blur';
+import { ThemedText } from '@/components/themed-text';
+import { TourAnchor } from '@/components/tour-anchors';
+import { Colors, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Nano Crew tab bar: platinum-silver selected tint + thin, elegant outline glyphs (no heavy
-// `.fill` weights), so the chrome reads premium and on-brand. Background is OPAQUE (mode-aware) so
-// the menu stays legible over full-bleed feed media of any brightness — it never bleeds through.
-// Icon and Label are separate children of each Trigger (SDK 54 native-tabs API).
+// Nano Crew tab bar — a JS (expo-router/ui) bar drawn to MIMIC the native iOS UITabBar: opaque,
+// mode-aware background; thin outline glyphs; platinum-silver selected tint with the rest dimmed.
+// It's built from RN Views (not expo-router/unstable-native-tabs) for two reasons: the native bar
+// can't be measured from JS — so the guided tour can now spotlight each tab EXACTLY via <TourAnchor>
+// (see tour-anchors.tsx) — and it drops a dependency on an unstable API. ONE file serves both
+// platforms (the blur is platform-split in tab-bar-blur — native expo-blur, web CSS backdrop-filter).
+
+type TabDef = {
+  name: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  href: '/studio' | '/design' | '/market' | '/account';
+};
+
+// The social feed (route /feed) is HIDDEN for v1 — it returns as a tab in v2. Studio leads (the home).
+const TABS: TabDef[] = [
+  { name: 'studio', label: 'Studio', icon: 'sparkles-outline', href: '/studio' },
+  { name: 'design', label: 'Design', icon: 'brush-outline', href: '/design' },
+  { name: 'market', label: 'Market', icon: 'bag-outline', href: '/market' },
+  { name: 'account', label: 'Account', icon: 'person-circle-outline', href: '/account' },
+];
 
 export default function AppTabs() {
   const dark = useColorScheme() !== 'light';
   const c = dark ? Colors.dark : Colors.light;
+  const insets = useSafeAreaInsets();
   return (
-    <NativeTabs
-      tintColor={c.tint}
-      backgroundColor={c.background}
-      // The full-screen feed is always at a "scroll edge", where iOS would make the bar transparent
-      // and the menu vanish over bright media — force the opaque appearance instead.
-      disableTransparentOnScrollEdge
-      labelStyle={{ fontSize: 11 }}
-    >
-      {/* The social feed (route /feed) is HIDDEN for v1; it returns as a tab in v2. Studio leads
-          (the app's home — build your brand site), then Design, then Market. */}
-      {/* Icons: `sf` (SF Symbols) is iOS-ONLY — it renders nothing on Android, which left the tab
-          bar empty/black there (only the selected tab's label pill showed). `androidSrc` supplies the
-          Android equivalent (a @expo/vector-icons glyph), so both platforms show icons. Keep them
-          visually matched. */}
-      <NativeTabs.Trigger name="studio">
-        <Icon sf="wand.and.stars" androidSrc={<VectorIcon family={MaterialIcons} name="auto-awesome" />} />
-        <Label>Studio</Label>
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="design">
-        <Icon sf="paintbrush.pointed" androidSrc={<VectorIcon family={MaterialIcons} name="brush" />} />
-        <Label>Design</Label>
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="market">
-        <Icon sf="bag" androidSrc={<VectorIcon family={MaterialIcons} name="shopping-bag" />} />
-        <Label>Market</Label>
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="account">
-        <Icon sf="person.circle" androidSrc={<VectorIcon family={MaterialIcons} name="account-circle" />} />
-        <Label>Account</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <Tabs>
+      {/* The active screen fills the space; the bar floats over the bottom (screens pad BottomTabInset). */}
+      <TabSlot style={styles.slot} />
+      <TabList asChild>
+        {/* asChild clones this into the tab-list element; on web a STYLE ARRAY here reaches a raw
+            <div> unflattened and crashes react-dom — pass a single flattened object. */}
+        <View
+          style={StyleSheet.flatten([
+            styles.bar,
+            { borderTopColor: c.backgroundSelected, paddingBottom: insets.bottom + Spacing.four },
+          ])}>
+          {/* Frosted-glass blur behind the bar — the native translucent iOS bar look (web uses backdrop-filter). */}
+          <TabBarBlur dark={dark} />
+          {TABS.map((t) => (
+            <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+              <TabButton tab={t} tint={c.tint} />
+            </TabTrigger>
+          ))}
+        </View>
+      </TabList>
+    </Tabs>
   );
 }
+
+// Receives the trigger slot props (isFocused, onPress, …) via TabTrigger asChild. The Pressable is the
+// trigger; the TourAnchor inside wraps the icon+label cluster so the tour measures EXACTLY that target.
+function TabButton({ tab, tint, isFocused, style: triggerStyle, ...props }: TabTriggerSlotProps & { tab: TabDef; tint: string }) {
+  return (
+    // Flatten the (Radix-merged) trigger style + ours into ONE object: the raw Slot in TabTrigger
+    // spreads style by object, so an array here becomes {0:..,1:..} and crashes react-dom on web.
+    <Pressable {...props} style={StyleSheet.flatten([triggerStyle, styles.tab])}>
+      <TourAnchor name={`tab-${tab.name}`} style={[styles.tabInner, { opacity: isFocused ? 1 : 0.5 }]}>
+        <Ionicons name={tab.icon} size={26} color={tint} />
+        {/* Tab labels are intentionally 11pt to match the native UITabBar labelStyle (no token is that small). */}
+        <ThemedText type="small" style={[styles.label, { color: tint }]}>
+          {tab.label}
+        </ThemedText>
+      </TourAnchor>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  slot: { flex: 1 },
+  bar: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.three,
+    paddingHorizontal: Spacing.three, // keep edge labels (Account) off the screen edge
+    overflow: 'hidden', // clip the BlurView to the bar
+  },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabInner: { alignItems: 'center', justifyContent: 'center', gap: 2 },
+  label: { fontSize: 11, lineHeight: 13 },
+});

@@ -2,18 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "nanocrew-site",
-      "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "cd nanocrew-site && npm run dev"],
-      "port": 3000
-    },
-    {
-      "name": "stephen-lawyer",
-      "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "cd ../stephen-lawyer && ./node_modules/.bin/next dev -p 3002"],
-      "port": 3002
-    },
-    {
       "name": "web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "web"],
@@ -24,6 +12,24 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web", "--port", "19010"],
       "port": 19010
+    },
+    {
+      "name": "platform-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd platform-api && npm run dev"],
+      "port": 3200
+    },
+    {
+      "name": "nanocrew-site",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd nanocrew-site && npm run dev"],
+      "port": 3000
+    },
+    {
+      "name": "stephen-lawyer",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd ../stephen-lawyer && ./node_modules/.bin/next dev -p 3002"],
+      "port": 3002
     }
   ]
 }

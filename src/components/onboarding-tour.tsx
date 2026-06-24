@@ -1,24 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 
 import { ThemedText } from '@/components/themed-text';
+import { GlowButton } from '@/components/glow-button';
 import { usePalette } from '@/components/nc-screen';
 import { Spacing } from '@/constants/theme';
 import { apiUrl, readJson } from '@/lib/api';
 import { glow } from '@/constants/glow';
+import { type Rect, useTourAnchorRects } from '@/components/tour-anchors';
 
-// Guided coachmark tour: dims the app, highlights each tab in the bottom bar, and Venus NARRATES each
-// step in her own voice (/api/say, Aoede). Next/Skip; first-run + re-openable from a "?" affordance.
-// Self-contained — owns its own audio player so it can run from anywhere without the Studio session.
+// Guided coachmark tour: dims the app and SPOTLIGHTS the exact thing to tap — either a real on-screen
+// button (measured via <TourAnchor>, so the highlight lands dead-on) or a bottom tab (the native
+// UITabBar can't be measured from JS, so those use bar geometry). Venus NARRATES each step in her own
+// voice (/api/say, Aoede). Next/Skip; first-run + re-openable from a "?" affordance. Self-contained —
+// owns its own audio player so it can run from anywhere without the Studio session.
 
 type TabKey = 'studio' | 'design' | 'market' | 'account';
 const TAB_ORDER: TabKey[] = ['studio', 'design', 'market', 'account'];
 
-type Step = { tab?: TabKey; title: string; body: string; say: string };
+// A step highlights AT MOST one target: an `anchor` (a measured on-screen button — preferred, exact)
+// or a `tab` (the native bottom bar — geometry-based). With neither, the card centers (intro/outro).
+type Step = { tab?: TabKey; anchor?: string; title: string; body: string; say: string };
 
 // ACT 1 — the first-run tab overview (runs on first sign-in).
 export const TOUR_STEPS: Step[] = [
@@ -60,8 +66,8 @@ export const TOUR_STEPS: Step[] = [
 ];
 
 // ACT 2 — the build journey, runs ONCE after the first brand is created. Walks through finishing the
-// store + site, in order. The "doing" happens via the Studio "Finish your site" checklist + the Design
-// tab, so these are mostly centered cards that point the creator at the right place, narrated by Venus.
+// store + site, in order. The hero/logo steps point straight at the real "Finish your site" buttons
+// (anchored); products/publish point at the Design/Market tabs. Narrated by Venus.
 export const JOURNEY_STEPS: Step[] = [
   {
     title: 'Your brand is built 🎉',
@@ -69,13 +75,15 @@ export const JOURNEY_STEPS: Step[] = [
     say: 'Your brand is built! This is your Studio dashboard, your command center. Let’s finish the important bits together.',
   },
   {
+    anchor: 'finish-hero',
     title: 'Design your hero image',
-    body: 'Your site needs a hero — the big image up top. In “Finish your site” below, tap “Design your website hero” and I’ll generate it with you.',
-    say: 'First, your hero image — the big picture at the top of your site. In “Finish your site,” tap “Design your website hero,” and I’ll generate it with you.',
+    body: 'Your site needs a hero — the big image up top. Tap this to generate it with me.',
+    say: 'First, your hero image — the big picture at the top of your site. Tap “Design your website hero,” and I’ll generate it with you.',
   },
   {
+    anchor: 'finish-logo',
     title: 'Add your logo',
-    body: 'Next, your logo. Tap “Add your logo” to drop in your own mark, or have me create one.',
+    body: 'Next, your logo. Tap here to drop in your own mark, or have me create one.',
     say: 'Next, your logo. Tap “Add your logo” to drop in your own, or have me create one for you.',
   },
   {
@@ -97,8 +105,17 @@ export const JOURNEY_STEPS: Step[] = [
   },
 ];
 
-// Rough bottom-bar geometry — 4 evenly-spaced tabs across the width, ~49pt tall above the safe area.
-const TAB_BAR_H = 49;
+// Native iOS UITabBar geometry (can't be measured from JS). 4 items are evenly distributed across the
+// full width; the bar is ~49pt tall and sits directly above the home indicator (insets.bottom).
+const TAB_BAR_H = 48; // height of the ring around a tab — frames the icon+label cluster
+const TAB_BAR_LIFT = 2; // the cluster sits a little above the home indicator, so lift the ring off the very bottom
+// Measured native UITabBar item centers as a fraction of screen width. The bar can't be measured from
+// JS, and its 4 items are NOT at width/4 — they're inset and spaced wider. These are calibrated from
+// the real icons (iPhone) and hold closely across iPhone widths. Index matches TAB_ORDER.
+const TAB_CENTER_FRAC = [0.16, 0.397, 0.634, 0.871];
+const HOLE_PAD = Spacing.two; // breathing room around an anchored button, so the ring frames it rather than clips it
+const CARD_GAP = Spacing.three;
+const CARD_EST_H = 150; // approximate tooltip height for placement math
 
 export function OnboardingTour({
   visible,
@@ -115,10 +132,13 @@ export function OnboardingTour({
   const p = usePalette();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const anchorRects = useTourAnchorRects();
   const [i, setI] = useState(0);
+  const [cardH, setCardH] = useState(CARD_EST_H); // real tooltip height, measured on layout (placement depends on it)
   const player = useAudioPlayer();
   const playGen = useRef(0);
   const fileN = useRef(0);
+  const pulse = useRef(new Animated.Value(0)).current;
 
   const step = steps[i];
   const last = i === steps.length - 1;
@@ -168,6 +188,19 @@ export function OnboardingTour({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, i]);
 
+  // Pulse the spotlight ring so it clearly reads as "tap here" (loops while the tour is open).
+  useEffect(() => {
+    if (!visible) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 850, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 850, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [visible, pulse]);
+
   const finish = useCallback(() => {
     playGen.current++;
     try { player.pause(); } catch {}
@@ -181,39 +214,100 @@ export function OnboardingTour({
 
   if (!visible) return null;
 
-  // Highlight box over the active tab (if any).
-  const tabIdx = step.tab ? TAB_ORDER.indexOf(step.tab) : -1;
-  const tabW = width / TAB_ORDER.length;
-  const barBottom = insets.bottom;
-  const highlight =
-    tabIdx >= 0
-      ? { left: tabIdx * tabW, width: tabW, bottom: barBottom, height: TAB_BAR_H }
-      : null;
-  // Tooltip sits above the bar (or centered for the intro/outro with no tab).
-  const tooltipBottom = highlight ? barBottom + TAB_BAR_H + Spacing.three : height / 2 - 120;
+  // ── Resolve the highlight rect (window coords) for this step ──────────────────────────────────
+  // 1) a measured on-screen button (exact), else 2) a native tab (bar geometry), else 3) nothing.
+  const pad = (r: Rect): Rect => ({ x: r.x - HOLE_PAD, y: r.y - HOLE_PAD, width: r.width + HOLE_PAD * 2, height: r.height + HOLE_PAD * 2 });
+  let hole: Rect | null = null;
+  if (step.anchor && anchorRects[step.anchor]) {
+    hole = pad(anchorRects[step.anchor]); // an in-screen button (exact)
+  } else if (step.tab && anchorRects[`tab-${step.tab}`]) {
+    hole = pad(anchorRects[`tab-${step.tab}`]); // the JS tab bar registers each tab — EXACT, no geometry guessing
+  } else if (step.tab) {
+    // Fallback geometry, only used for the first frame before the tab anchor has measured (or on a
+    // platform whose bar doesn't register anchors). Calibrated to the native bar's real icon centers.
+    const idx = TAB_ORDER.indexOf(step.tab);
+    const center = width * (TAB_CENTER_FRAC[idx] ?? (idx + 0.5) / TAB_ORDER.length);
+    const ringW = Math.min(width * 0.21, 92);
+    const barTop = height - insets.bottom - TAB_BAR_LIFT - TAB_BAR_H;
+    hole = { x: center - ringW / 2, y: barTop, width: ringW, height: TAB_BAR_H };
+  }
+
+  // Tooltip placement — uses the MEASURED card height so the card never overlaps the target. Card
+  // sits above a low target / below a high one, with the caret glued to the card's edge nearest it.
+  const CARET_H = 9;
+  const cardLeft = Spacing.four;
+  const cardRight = width - Spacing.four;
+  let cardTop: number;
+  let caret: { x: number; top: number; pointsDown: boolean } | null = null;
+  if (hole) {
+    const holeMid = hole.y + hole.height / 2;
+    const cx = Math.max(cardLeft + 16, Math.min(hole.x + hole.width / 2, cardRight - 16));
+    const pointsDown = holeMid > height * 0.5;
+    cardTop = pointsDown
+      ? hole.y - CARD_GAP - CARET_H - cardH // card ABOVE the target
+      : hole.y + hole.height + CARD_GAP + CARET_H; // card BELOW the target
+    cardTop = Math.max(insets.top + Spacing.two, Math.min(cardTop, height - insets.bottom - cardH - Spacing.two));
+    caret = { x: cx, top: pointsDown ? cardTop + cardH : cardTop - CARET_H, pointsDown };
+  } else {
+    cardTop = (height - cardH) / 2; // intro/outro: centered
+  }
+
+  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+  const dim = 'rgba(0,0,0,0.78)';
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={finish}>
-      {/* Dim backdrop — tap anywhere advances. */}
-      <Pressable style={styles.backdrop} onPress={next}>
-        {highlight ? (
+      {/* Full-screen tap layer — tap anywhere advances. */}
+      <Pressable style={styles.fill} onPress={next}>
+        {hole ? (
           <>
-            {/* a glowing ring around the highlighted tab */}
-            <View
+            {/* Spotlight: four dim panels around the target leave a bright, un-dimmed cut-out over it. */}
+            <View pointerEvents="none" style={[styles.dimRect, { backgroundColor: dim, top: 0, left: 0, right: 0, height: hole.y }]} />
+            <View pointerEvents="none" style={[styles.dimRect, { backgroundColor: dim, top: hole.y + hole.height, left: 0, right: 0, bottom: 0 }]} />
+            <View pointerEvents="none" style={[styles.dimRect, { backgroundColor: dim, top: hole.y, left: 0, width: hole.x, height: hole.height }]} />
+            <View pointerEvents="none" style={[styles.dimRect, { backgroundColor: dim, top: hole.y, left: hole.x + hole.width, right: 0, height: hole.height }]} />
+
+            {/* Pulsing ring framing the cut-out. */}
+            <Animated.View
               pointerEvents="none"
               style={[
                 styles.ring,
-                { left: highlight.left + 6, width: highlight.width - 12, height: highlight.height, bottom: highlight.bottom, borderColor: p.accent },
-                glow(p.accent, 18, 0.6),
+                {
+                  left: hole.x,
+                  top: hole.y,
+                  width: hole.width,
+                  height: hole.height,
+                  borderColor: p.accent,
+                  opacity: ringOpacity,
+                  transform: [{ scale: ringScale }],
+                },
+                glow(p.accent, 20, 0.7),
               ]}
             />
-            {/* a little caret pointing down at the tab */}
-            <View pointerEvents="none" style={[styles.caret, { left: highlight.left + highlight.width / 2 - 7, bottom: highlight.bottom + highlight.height + 2, borderTopColor: p.accent }]} />
-          </>
-        ) : null}
 
-        {/* tooltip card */}
-        <View style={[styles.card, { bottom: tooltipBottom, backgroundColor: p.bgTop, borderColor: p.line }]}>
+            {/* Caret glued to the card edge, pointing at the target. */}
+            {caret ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  caret.pointsDown ? styles.caretDown : styles.caretUp,
+                  { left: caret.x - 7, top: caret.top },
+                  caret.pointsDown ? { borderTopColor: p.accent } : { borderBottomColor: p.accent },
+                ]}
+              />
+            ) : null}
+          </>
+        ) : (
+          // No target — dim the whole screen.
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: dim }]} />
+        )}
+
+        {/* Tooltip card — measures itself so placement above can react to its real height. */}
+        <View
+          onLayout={(e) => setCardH(e.nativeEvent.layout.height)}
+          style={[styles.card, { top: cardTop, backgroundColor: p.bgTop, borderColor: p.line }]}>
+
           <View style={styles.cardHead}>
             <Image source={require('@/assets/brand/venus-portrait.png')} style={styles.venus} contentFit="cover" />
             <View style={styles.flex}>
@@ -229,14 +323,8 @@ export function OnboardingTour({
               ))}
             </View>
             <View style={styles.actions}>
-              {!last ? (
-                <Pressable onPress={finish} hitSlop={8}>
-                  <ThemedText type="code" style={{ color: p.faint }}>Skip</ThemedText>
-                </Pressable>
-              ) : null}
-              <Pressable onPress={next} style={({ pressed }) => [styles.nextBtn, { backgroundColor: p.accent }, glow(p.accent, 14, pressed ? 0.3 : 0.6)]}>
-                <ThemedText type="smallBold" style={{ color: '#08080a' }}>{last ? 'Start' : 'Next'}</ThemedText>
-              </Pressable>
+              {!last ? <GlowButton label="Skip" variant="ghost" onPress={finish} /> : null}
+              <GlowButton label={last ? 'Start' : 'Next'} variant="primary" onPress={next} />
             </View>
           </View>
         </View>
@@ -246,10 +334,12 @@ export function OnboardingTour({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.78)' },
+  fill: { flex: 1 },
   flex: { flex: 1 },
-  ring: { position: 'absolute', borderWidth: 2, borderRadius: 14 },
-  caret: { position: 'absolute', width: 0, height: 0, borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
+  dimRect: { position: 'absolute' },
+  ring: { position: 'absolute', borderWidth: 2.5, borderRadius: 16 },
+  caretDown: { position: 'absolute', width: 0, height: 0, borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 9, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
+  caretUp: { position: 'absolute', width: 0, height: 0, borderLeftWidth: 7, borderRightWidth: 7, borderBottomWidth: 9, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   card: { position: 'absolute', left: Spacing.four, right: Spacing.four, borderRadius: 18, borderWidth: 1, padding: Spacing.four },
   cardHead: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },
   venus: { width: 46, height: 46, borderRadius: 23 },
@@ -257,5 +347,4 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four },
-  nextBtn: { borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.two },
 });

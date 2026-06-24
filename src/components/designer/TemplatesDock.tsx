@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Image } from 'expo-image';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -15,7 +15,9 @@ const GENDERS: { key: BlankCategory; label: string }[] = [
   { key: 'accessories', label: 'Access.' },
 ];
 
-export const DOCK_TAB_CLEARANCE = 84;
+// The JS tab bar sits BELOW the screen (no overlay), so the dock no longer needs to clear it — just a
+// small gap. (Was 84 for the old NativeTabs overlay; that's now dead space below the cards/handle.)
+export const DOCK_TAB_CLEARANCE = Spacing.two;
 
 export function TemplatesDock({
   blanks,
@@ -32,6 +34,9 @@ export function TemplatesDock({
   onAdd: (b: CatalogBlank) => void;
 }) {
   const theme = useTheme();
+  // Big swipeable cards: ~1.5 fit per panel (the next one peeks → invites the swipe), capped on wide/web.
+  const { width } = useWindowDimensions();
+  const CARD = Math.min(Math.round(width * 0.64), 300);
   const [gender, setGender] = useState<BlankCategory>('men');
   const [type, setType] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -133,7 +138,7 @@ export function TemplatesDock({
           scrollEventThrottle={16}>
           {type && !searching ? (
             <Pressable onPress={() => setType(null)}>
-              <ThemedView type="backgroundElement" style={[styles.card, styles.backCard]}>
+              <ThemedView type="backgroundElement" style={[styles.card, styles.backCard, { width: Math.round(CARD * 0.62), height: CARD }]}>
                 <ThemedText type="title" themeColor="textSecondary">
                   ‹
                 </ThemedText>
@@ -146,24 +151,32 @@ export function TemplatesDock({
           {searching || type
             ? (searching ? matches : products).map((b) => (
                 <Pressable key={b.id} onPress={() => onAdd(b)}>
-                  <ThemedView type="backgroundElement" style={styles.card}>
-                    <Image source={{ uri: b.image }} style={styles.cardImg} contentFit="contain" />
-                    <ThemedText type="small" numberOfLines={2} style={styles.cardLabel}>
-                      {b.name}
-                    </ThemedText>
+                  <ThemedView type="backgroundElement" style={[styles.card, { width: CARD, height: CARD }]}>
+                    <Image source={{ uri: b.image }} style={StyleSheet.absoluteFill} contentFit="contain" />
+                    <View style={styles.scrimSoft} pointerEvents="none" />
+                    <View style={styles.scrim} pointerEvents="none" />
+                    <View style={styles.overlay} pointerEvents="none">
+                      <ThemedText type="smallBold" numberOfLines={1} style={styles.overlayLabel}>
+                        {b.name}
+                      </ThemedText>
+                    </View>
                   </ThemedView>
                 </Pressable>
               ))
             : types.map((t) => (
                 <Pressable key={t.type} onPress={() => setType(t.type)}>
-                  <ThemedView type="backgroundElement" style={styles.card}>
-                    <Image source={{ uri: t.image }} style={styles.cardImg} contentFit="contain" />
-                    <ThemedText type="smallBold" numberOfLines={2} style={styles.cardLabel}>
-                      {t.type}
-                    </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {t.count} items
-                    </ThemedText>
+                  <ThemedView type="backgroundElement" style={[styles.card, { width: CARD, height: CARD }]}>
+                    <Image source={{ uri: t.image }} style={StyleSheet.absoluteFill} contentFit="contain" />
+                    <View style={styles.scrimSoft} pointerEvents="none" />
+                    <View style={styles.scrim} pointerEvents="none" />
+                    <View style={styles.overlay} pointerEvents="none">
+                      <ThemedText type="smallBold" numberOfLines={1} style={styles.overlayLabel}>
+                        {t.type}
+                      </ThemedText>
+                      <ThemedText type="small" numberOfLines={1} style={styles.overlaySub}>
+                        {t.count} items
+                      </ThemedText>
+                    </View>
                   </ThemedView>
                 </Pressable>
               ))}
@@ -195,11 +208,15 @@ const styles = StyleSheet.create({
   status: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
   emptyState: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   retryBtn: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
-  row: { gap: Spacing.three, paddingHorizontal: Spacing.three },
-  // Cards lead with a large product image (≈3.5× the old 68px tile) so the garment reads clearly;
-  // the name sits below on up to 2 lines, centred, so full Printful names fit without abbreviating.
-  card: { width: 144, padding: Spacing.two, borderRadius: Spacing.four, alignItems: 'center', gap: Spacing.one },
-  backCard: { width: 96, justifyContent: 'center' },
-  cardImg: { width: 128, height: 128, borderRadius: Spacing.three },
-  cardLabel: { textAlign: 'center', paddingHorizontal: 2 },
+  row: { gap: Spacing.three, paddingHorizontal: Spacing.three, alignItems: 'flex-end' },
+  // Big square cards (size set inline, responsive): the product image fills the card and the name is
+  // OVERLAID at the bottom over a soft scrim, so every card is the SAME size (no variable-height labels).
+  card: { borderRadius: Spacing.four, overflow: 'hidden' },
+  backCard: { alignItems: 'center', justifyContent: 'center', gap: Spacing.one, padding: Spacing.three },
+  // Two stacked bands fake a gradient (transparent → dark) under the label — no gradient lib needed.
+  scrimSoft: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%', backgroundColor: 'rgba(8,8,10,0.22)' },
+  scrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '30%', backgroundColor: 'rgba(8,8,10,0.62)' },
+  overlay: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: Spacing.three, paddingBottom: Spacing.two },
+  overlayLabel: { color: '#f4f4f6' },
+  overlaySub: { color: 'rgba(235,237,241,0.7)' },
 });
