@@ -34,9 +34,11 @@ import { DesignTile, tileColor } from '@/components/design-tile';
 import { DesignCanvas, NODE_H, NODE_W, WEB_SLOT_LABELS, type CanvasNode } from '@/components/designer/DesignCanvas';
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
-import { DOCK_TAB_CLEARANCE, TemplatesDock } from '@/components/designer/TemplatesDock';
-import { ContentDock } from '@/components/designer/ContentDock';
+import { DOCK_TAB_CLEARANCE } from '@/components/designer/TemplatesDock';
+import { ProductPicker } from '@/components/designer/ProductPicker';
 import { WebAssetsDock } from '@/components/designer/WebAssetsDock';
+import { GlowButton } from '@/components/glow-button';
+import { GlowInput } from '@/components/glow-input';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
@@ -254,22 +256,27 @@ function DesignScreen() {
   const [blanksError, setBlanksError] = useState(false); // catalogue failed to load (vs. genuinely empty)
   const [dockHeight, setDockHeight] = useState(160);
   const [dockCollapsed, setDockCollapsed] = useState(false);
-  // Which target panel the dock shows: apparel to print on, the site's slots, or video.
-  const [dockPanel, setDockPanel] = useState<'products' | 'web' | 'content'>('products');
-  // Deep-link from a Studio bounty (?panel=web) opens that panel with the dock expanded.
+  // The full-screen product picker (replaces the old bottom products dock). Opened from the
+  // bottom panel's "Add products" control and right after the brand+collection setup.
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  // Live filter for the bottom panel's design strip.
+  const [designQuery, setDesignQuery] = useState('');
+  // Remembered product collection so the "Collection designs" segment can flip back out of Site assets.
+  const lastProductCatRef = useRef<{ id: string; name: string } | null>(null);
+  // Deep-link from a Studio bounty (?panel=web) just expands the dock so the designs panel is visible.
   const { panel: panelParam } = useLocalSearchParams<{ panel?: string }>();
   useEffect(() => {
     if (panelParam === 'products' || panelParam === 'web' || panelParam === 'content') {
-      setDockPanel(panelParam);
       setDockCollapsed(false);
     }
   }, [panelParam]);
 
-  // A product on the canvas with no design yet → the next step is Generate: collapse the
-  // dock and pulse the Generate button red. Everything grouped → dock open for browsing.
+  // A product on the canvas with no design yet → the next step is to pick/generate a design, so
+  // OPEN the design panel and pulse Generate. (The dock now holds designs, not products, so we
+  // expand it here rather than collapsing it.)
   const hasUngroupedTemplate = nodes.some((n) => n.kind === 'template' && !n.groupId);
   useEffect(() => {
-    setDockCollapsed(hasUngroupedTemplate);
+    if (hasUngroupedTemplate) setDockCollapsed(false);
   }, [hasUngroupedTemplate]);
 
   // The dock handle: swipe up to expand the product list, swipe down to collapse it
@@ -523,6 +530,44 @@ function DesignScreen() {
     const y = (screenY - (vp?.ty.value ?? 0)) / s - NODE_H / 2;
     setNodes((n) => [...n, { id: `n${++nodeCounter}`, kind, refId, x, y }]);
     scheduleSave();
+  };
+
+  // Add a batch of products from the picker — laid out as a vertical stack (top to bottom), one
+  // row per product, appended below whatever's already on the canvas.
+  const addProducts = (items: CatalogBlank[]) => {
+    if (!items.length) return;
+    const vp = viewportRef.current;
+    const s = vp?.scale.value || 1;
+    const cx = (width / 2 - (vp?.tx.value ?? 0)) / s - NODE_W / 2;
+    const topY = (height * 0.18 - (vp?.ty.value ?? 0)) / s;
+    const gap = NODE_H * 0.35;
+    const existing = nodesRef.current.filter((n) => n.kind === 'template' || n.kind === 'composition').length;
+    setNodes((n) => [
+      ...n,
+      ...items.map((b, i) => ({
+        id: `n${++nodeCounter}`,
+        kind: 'template' as const,
+        refId: String(b.id),
+        x: cx,
+        y: topY + (existing + i) * (NODE_H + gap),
+      })),
+    ]);
+    scheduleSave();
+    setProductPickerOpen(false);
+    // Recenter on the first newly-added product so the stack is in view.
+    if (vp) {
+      vp.tx.value = withTiming(width / 2 - (cx + NODE_W / 2) * s, { duration: 360 });
+      vp.ty.value = withTiming(height * 0.3 - (topY + NODE_H / 2) * s, { duration: 360 });
+    }
+  };
+
+  // Recenter the camera on a node — used when tapping a product in the top strip.
+  const focusNode = (node: CanvasNode) => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const s = vp.scale.value || 1;
+    vp.tx.value = withTiming(width / 2 - (node.x + NODE_W / 2) * s, { duration: 360 });
+    vp.ty.value = withTiming(height * 0.4 - (node.y + NODE_H / 2) * s, { duration: 360 });
   };
 
   const onNodeRemove = (id: string) => {
@@ -1015,7 +1060,6 @@ function DesignScreen() {
     const slug = brandRef.current?.slug;
     setAssetMode(true);
     assetModeRef.current = true;
-    setDockPanel('web');
     setCatSheetOpen(false);
     setDesigns([]);
     setNodes([]);
@@ -1050,6 +1094,7 @@ function DesignScreen() {
     setCatSheetOpen(false);
     setAssetMode(false);
     assetModeRef.current = false;
+    lastProductCatRef.current = cat;
     if (cat.id === catalogue?.id) return;
     setCatalogue(cat);
     catalogueRef.current = cat;
@@ -1198,7 +1243,7 @@ function DesignScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Top: designs history bar */}
+      {/* Top: the products on the canvas (where the design history bar used to be) */}
       <SafeAreaView edges={['top']}>
         <View style={styles.topBar}>
           <Pressable
@@ -1212,41 +1257,56 @@ function DesignScreen() {
               {brand ? `${brand.name}${assetMode ? ' · Site assets' : catalogue ? ` · ${catalogue.name}` : ''}` : 'Design'} ▾
             </ThemedText>
           </Pressable>
-          {designs.length === 0 ? (
+          {assetMode ? (
             <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.flex}>
-              {assetMode ? 'Generate a hero, logo or social image' : 'No designs yet — tap Generate'}
+              Site assets — generate graphics below
             </ThemedText>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.thumbRow}
-              style={styles.flex}>
-              {designs.map((d) =>
-                d.status === 'generating' ? (
-                  <View
-                    key={d.id}
-                    style={[styles.pendingThumb, { backgroundColor: theme.backgroundSelected }]}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      …
-                    </ThemedText>
-                  </View>
-                ) : (
-                  <Pressable
-                    key={d.id}
-                    onPress={() => addNode('design', d.id)}
-                    onLongPress={() => openDesignActions(d)}
-                    delayLongPress={350}>
-                    {d.image ? (
-                      <Image source={{ uri: d.image }} style={styles.thumbImg} contentFit="cover" />
-                    ) : (
-                      <DesignTile color={d.color} style={styles.thumb} />
-                    )}
-                  </Pressable>
-                ),
-              )}
-            </ScrollView>
-          )}
+          ) : (() => {
+            // Top strip = the PRODUCTS on the canvas (where the design history used to live). Tap one
+            // to recenter on it; the "＋" (or the empty hint) opens the full-screen product picker.
+            const productNodes = nodes.filter((n) => n.kind === 'template' || n.kind === 'composition');
+            if (productNodes.length === 0) {
+              return (
+                <Pressable onPress={() => setProductPickerOpen(true)} style={styles.flex} hitSlop={6}>
+                  <ThemedText type="small" themeColor="tint" numberOfLines={1}>
+                    ＋ Add products to design
+                  </ThemedText>
+                </Pressable>
+              );
+            }
+            return (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.thumbRow}
+                style={styles.flex}>
+                {productNodes.map((n) => {
+                  const img =
+                    n.kind === 'template'
+                      ? blankLookup[n.refId]?.image
+                      : (n.previewUrl ?? (n.designRef ? designLookup[n.designRef]?.image : undefined));
+                  return (
+                    <Pressable key={n.id} onPress={() => focusNode(n)}>
+                      {img ? (
+                        <Image source={{ uri: img }} style={styles.thumbImg} contentFit="contain" />
+                      ) : (
+                        <View style={[styles.pendingThumb, { backgroundColor: theme.backgroundSelected }]}>
+                          <ThemedText type="small" themeColor="textSecondary">
+                            ·
+                          </ThemedText>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  onPress={() => setProductPickerOpen(true)}
+                  style={[styles.pendingThumb, { backgroundColor: theme.backgroundSelected }]}>
+                  <ThemedText type="small">＋</ThemedText>
+                </Pressable>
+              </ScrollView>
+            );
+          })()}
         </View>
       </SafeAreaView>
 
@@ -1318,47 +1378,97 @@ function DesignScreen() {
           </View>
         </GestureDetector>
         {dockCollapsed ? null : (
-          <>
-            {/* Pick what you're attaching a generation to: apparel, a website slot, or video. */}
+          <View style={styles.designDock}>
+            {/* Segment: this collection's designs vs the brand's site-asset graphics. */}
             <View style={styles.dockToggle}>
-              {(
-                [
-                  ['products', 'Products'],
-                  ['web', 'Web assets'],
-                  ['content', 'Content'],
-                ] as const
-              ).map(([key, label]) => (
-                <Pressable key={key} style={styles.flex} onPress={() => setDockPanel(key)}>
-                  <ThemedView
-                    type={dockPanel === key ? 'backgroundSelected' : 'backgroundElement'}
-                    style={styles.dockToggleTab}>
-                    <ThemedText type="small" themeColor={dockPanel === key ? 'text' : 'textSecondary'}>
-                      {label}
-                    </ThemedText>
-                  </ThemedView>
-                </Pressable>
-              ))}
+              {([['collection', 'Collection designs'], ['assets', 'Site assets']] as const).map(
+                ([key, label]) => {
+                  const on = key === 'assets' ? assetMode : !assetMode;
+                  return (
+                    <Pressable
+                      key={key}
+                      style={styles.flex}
+                      onPress={() => {
+                        if (key === 'assets') {
+                          if (!assetMode) void chooseAssetsMode();
+                        } else if (assetMode) {
+                          if (lastProductCatRef.current) switchCatalogue(lastProductCatRef.current);
+                          else {
+                            setSetupStep('collection');
+                            setCatSheetOpen(true);
+                          }
+                        }
+                      }}>
+                      <ThemedView
+                        type={on ? 'backgroundSelected' : 'backgroundElement'}
+                        style={styles.dockToggleTab}>
+                        <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'}>
+                          {label}
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
+                  );
+                },
+              )}
             </View>
-            {dockPanel === 'products' ? (
-              <TemplatesDock
-                blanks={blanks}
-                loading={blanksLoading}
-                error={blanksError}
-                onRetry={loadBlanks}
-                onAdd={(b) => addNode('template', String(b.id))}
-              />
-            ) : dockPanel === 'web' ? (
-              <WebAssetsDock
-                hideCover={assetMode}
-                onAddSlot={(slot) => {
-                  addNode('webslot', slot);
-                  setDockCollapsed(true);
-                }}
-              />
+
+            {/* Search this collection's designs. */}
+            <GlowInput
+              value={designQuery}
+              onChangeText={setDesignQuery}
+              placeholder={assetMode ? 'Search graphics…' : 'Search designs…'}
+              autoCapitalize="none"
+              containerStyle={styles.dockSearch}
+            />
+
+            {/* The designs strip — tap to drop on a product, long-press to assign to the site / delete. */}
+            {designs.length === 0 ? (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.dockHint}>
+                {assetMode ? 'No graphics yet — tap Generate' : 'No designs yet — tap Generate'}
+              </ThemedText>
             ) : (
-              <ContentDock />
+              (() => {
+                const q = designQuery.trim().toLowerCase();
+                const list = q ? designs.filter((d) => d.prompt.toLowerCase().includes(q)) : designs;
+                return (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dockStrip}>
+                    {list.map((d) =>
+                      d.status === 'generating' ? (
+                        <View key={d.id} style={[styles.designThumb, styles.designThumbPending, { backgroundColor: theme.backgroundSelected }]}>
+                          <ThemedText type="small" themeColor="textSecondary">…</ThemedText>
+                        </View>
+                      ) : (
+                        <Pressable
+                          key={d.id}
+                          onPress={() => addNode('design', d.id)}
+                          onLongPress={() => openDesignActions(d)}
+                          delayLongPress={350}>
+                          {d.image ? (
+                            <Image source={{ uri: d.image }} style={styles.designThumb} contentFit="cover" />
+                          ) : (
+                            <DesignTile color={d.color} style={styles.designThumb} />
+                          )}
+                        </Pressable>
+                      ),
+                    )}
+                  </ScrollView>
+                );
+              })()
             )}
-          </>
+
+            {/* Site-assets mode shows the website slots (drop a graphic to publish it to the site); a
+                product collection shows the control that opens the full-screen product picker. */}
+            {assetMode ? (
+              <WebAssetsDock hideCover onAddSlot={(slot) => addNode('webslot', slot)} />
+            ) : (
+              <GlowButton
+                label="＋ Add products"
+                variant="secondary"
+                onPress={() => setProductPickerOpen(true)}
+                style={styles.addProductsBtn}
+              />
+            )}
+          </View>
         )}
       </View>
 
@@ -1383,6 +1493,17 @@ function DesignScreen() {
           void commitDesign(staged);
           setGenerateOpen(false);
         }}
+      />
+
+      {/* Full-screen product picker — Supplier → Type → Gender → Category → Product, multi-add. */}
+      <ProductPicker
+        visible={productPickerOpen}
+        blanks={blanks}
+        loading={blanksLoading}
+        error={blanksError}
+        onRetry={loadBlanks}
+        onClose={() => setProductPickerOpen(false)}
+        onAdd={addProducts}
       />
 
       {/* Composite review */}
@@ -1659,9 +1780,18 @@ function DesignScreen() {
                     </Pressable>
                   ))
                 ) : (
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.catRow}>
-                    No brands yet — create one in Studio with Venus.
-                  </ThemedText>
+                  <View style={styles.emptyBrand}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Create a brand to get started — design products once you have a store.
+                    </ThemedText>
+                    <GlowButton
+                      label="Create a brand in Studio"
+                      onPress={() => {
+                        setCatSheetOpen(false);
+                        router.navigate('/studio');
+                      }}
+                    />
+                  </View>
                 )
               ) : (
                 <>
@@ -2376,6 +2506,14 @@ const styles = StyleSheet.create({
   assignLabel: { alignSelf: 'center', marginRight: Spacing.one },
   dockToggle: { flexDirection: 'row', gap: Spacing.one, paddingHorizontal: Spacing.three, marginBottom: Spacing.one },
   dockToggleTab: { alignItems: 'center', paddingVertical: Spacing.one, borderRadius: 999 },
+  designDock: { gap: Spacing.two, paddingBottom: Spacing.three },
+  dockSearch: { marginHorizontal: Spacing.three, marginBottom: 0 },
+  dockStrip: { gap: Spacing.two, alignItems: 'center', paddingHorizontal: Spacing.three },
+  dockHint: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  designThumb: { width: 56, height: 56, borderRadius: Spacing.two },
+  designThumbPending: { alignItems: 'center', justifyContent: 'center' },
+  addProductsBtn: { marginHorizontal: Spacing.three },
+  emptyBrand: { gap: Spacing.three, paddingVertical: Spacing.three },
   effortBlock: { gap: Spacing.one, marginTop: Spacing.one },
   effortHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   effortTrackRow: { flexDirection: 'row', alignItems: 'center', height: 24 },
