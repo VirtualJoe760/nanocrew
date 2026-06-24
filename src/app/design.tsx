@@ -161,6 +161,7 @@ function DesignScreen() {
   const [colors, setColors] = useState<Swatch[]>([]);
   const [colorsLoading, setColorsLoading] = useState(false);
   const [colorsError, setColorsError] = useState(false); // load failed (vs. genuinely no colours)
+  const [colorsAllOver, setColorsAllOver] = useState(false); // all-over print → no blank colour by design
   const [colorBlankId, setColorBlankId] = useState<string | null>(null); // remembered for retry
   // Combine sheet — opens when a design "clicks" onto a product; user picks the placement.
   const [combineTarget, setCombineTarget] = useState<{
@@ -935,10 +936,14 @@ function DesignScreen() {
   const loadColors = (blankId: string) => {
     setColors([]);
     setColorsError(false);
+    setColorsAllOver(false);
     setColorsLoading(true);
     apiFetch(`/api/blank/${blankId}/colors`)
-      .then(readJson<{ colors?: Swatch[] }>)
-      .then((d) => setColors(d.colors ?? []))
+      .then(readJson<{ colors?: Swatch[]; allOver?: boolean }>)
+      .then((d) => {
+        setColors(d.colors ?? []);
+        setColorsAllOver(!!d.allOver);
+      })
       .catch(() => setColorsError(true))
       .finally(() => setColorsLoading(false));
   };
@@ -1524,7 +1529,9 @@ function DesignScreen() {
                 </Pressable>
               ) : colors.length === 0 ? (
                 <ThemedText type="small" themeColor="textSecondary">
-                  No colours available for this product.
+                  {colorsAllOver
+                    ? 'This is an all-over print product — your design covers the whole garment, so there’s no blank colour to choose (just sizes).'
+                    : 'No colours available for this product.'}
                 </ThemedText>
               ) : (
                 <ScrollView

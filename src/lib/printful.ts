@@ -42,17 +42,24 @@ export interface BlankColor {
 }
 
 // Unique colors (with a representative product photo) for one catalog product.
-export async function getBlankColors(id: number | string): Promise<BlankColor[]> {
+// `allOver` is true when the product HAS variants but none carry a color (all-over-print
+// garments — the design covers the whole garment, so there's no blank color to pick, only sizes).
+// That's distinct from a genuine empty/failed load, so the UI can explain it instead of alarming.
+export async function getBlankColors(
+  id: number | string,
+): Promise<{ colors: BlankColor[]; allOver: boolean }> {
   const result = await pfRequest<{ variants?: PrintfulVariant[] }>(`/products/${id}`);
+  const variants = result.variants ?? [];
   const seen = new Set<string>();
   const colors: BlankColor[] = [];
-  for (const v of result.variants ?? []) {
+  for (const v of variants) {
     const name = v.color?.trim();
     if (!name || seen.has(name)) continue;
     seen.add(name);
     colors.push({ color: name, colorCode: v.color_code ?? '#cccccc', image: v.image });
   }
-  return colors;
+  const allOver = variants.length > 0 && colors.length === 0;
+  return { colors, allOver };
 }
 
 export interface BlankPlacement {

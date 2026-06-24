@@ -257,7 +257,11 @@ function NodeView({
                 <Text style={styles.glyph}>👕</Text>
               )}
             </View>
-            <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              numberOfLines={3}
+              style={styles.nodeLabel}>
               {node.selectedColor ? `${blank?.name ?? 'Blank'} · ${node.selectedColor}` : (blank?.name ?? 'Blank')}
             </ThemedText>
           </>
@@ -735,6 +739,9 @@ const styles = StyleSheet.create({
     width: NODE_W,
     gap: Spacing.one,
   },
+  // Product/blank label: a touch wider than the thumb + centered, so full Printful names
+  // (e.g. "All-Over Print Men's Sports Warmup Hoodie") read without abbreviating.
+  nodeLabel: { width: NODE_W + 28, marginHorizontal: -14, textAlign: 'center' },
   designTile: { width: NODE_W },
   designImage: { width: NODE_W, height: NODE_W, borderRadius: Spacing.three },
   thumb: {
