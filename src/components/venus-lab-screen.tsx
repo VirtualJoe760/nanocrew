@@ -3,24 +3,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState } from 'react';
 
 import VenusAvatar, { type VenusStage } from '@/components/venus-avatar';
+import SimliVenus from '@/components/simli-venus';
 
 // THE VENUS LAB — the live venus-head-scene full-screen, for iterating on Venus's appearance in
 // isolation. Now surfaced as a TEST tool from the Account screen (gated to the Venus-Lab tester
 // email), not a tab. `onBack` returns to wherever it was opened from (the Account page). The avatar
 // comes from <VenusAvatar>, a COMPONENT split: venus-avatar.web.tsx renders the real R3F scene on
-// web, venus-avatar.tsx on native (expo-gl). Full guide: docs/studio/VENUS_AVATAR.md.
+// web, venus-avatar.tsx on native (expo-gl). A `mode` toggle also lets us compare the current 3D
+// build against the **Simli** photoreal renderer (web: simli-client; native: WebView). Full guide:
+// docs/studio/VENUS_AVATAR.md.
 
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
+type Mode = '3d' | 'simli';
 
 export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
+  const [mode, setMode] = useState<Mode>('3d');
 
   // No Skia <AppBackground> here: the UNIFIED LATTICE inside the transparent avatar canvas IS the
   // dot-field background (one field that becomes her), over the near-black bed.
   return (
     <View style={styles.root}>
-      <VenusAvatar stage={stage} />
+      {mode === '3d' ? <VenusAvatar stage={stage} /> : <SimliVenus />}
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
@@ -28,19 +33,32 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
           <Text style={styles.backText}>‹ back</Text>
         </Pressable>
         <Text style={styles.title}>VENUS · LAB</Text>
+        {/* renderer toggle: current 3D build vs the Simli photoreal renderer */}
+        <View style={styles.modeRow}>
+          {(['3d', 'simli'] as Mode[]).map((m) => {
+            const active = mode === m;
+            return (
+              <Pressable key={m} onPress={() => setMode(m)} style={[styles.modePill, active && styles.pillActive]}>
+                <Text style={[styles.pillText, active && styles.pillTextActive]}>{m === '3d' ? '3D' : 'Simli'}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
-      {/* stage control — toggle her lifecycle stage to test each phase */}
-      <View style={[styles.stageBar, { bottom: insets.bottom + 42 }]} pointerEvents="box-none">
-        {STAGES.map((s) => {
-          const active = stage === s;
-          return (
-            <Pressable key={s} onPress={() => setStage(s)} style={[styles.pill, active && styles.pillActive]}>
-              <Text style={[styles.pillText, active && styles.pillTextActive]}>{s}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* stage control — toggle her lifecycle stage to test each phase (3D build only) */}
+      {mode === '3d' ? (
+        <View style={[styles.stageBar, { bottom: insets.bottom + 42 }]} pointerEvents="box-none">
+          {STAGES.map((s) => {
+            const active = stage === s;
+            return (
+              <Pressable key={s} onPress={() => setStage(s)} style={[styles.pill, active && styles.pillActive]}>
+                <Text style={[styles.pillText, active && styles.pillTextActive]}>{s}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
       <Text style={[styles.foot, { bottom: insets.bottom + 16 }]}>
         venus avatar lab · docs/studio/VENUS_AVATAR.md
@@ -87,6 +105,15 @@ const styles = StyleSheet.create({
   },
   pillText: { color: 'rgba(207,232,243,0.6)', fontFamily: 'Jost-Light', fontSize: 12, letterSpacing: 0.5 },
   pillTextActive: { color: '#dff4ff', fontFamily: 'Jost-Medium' },
+  modeRow: { flexDirection: 'row', gap: 6 },
+  modePill: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(124,199,223,0.25)',
+    backgroundColor: 'rgba(8,12,18,0.55)',
+  },
   foot: {
     position: 'absolute',
     left: 0,

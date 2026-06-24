@@ -85,6 +85,7 @@ credits up front and refund on failure.
 | POST | `/api/composite` | bearer, RL | Render a design on a garment photo (review). |
 | POST | `/api/mockup` | bearer, RL | Real Printful mockups + persist positions. |
 | POST | `/api/enhance` | bearer, RL | Expand a terse prompt into a rich one. |
+| POST | `/api/venus/simli-session` | bearer (tester-gated) | Mint a short-lived **Simli** session token from `SIMLI_API_KEY` server-side (the key never reaches the client) for the Venus-Lab photoreal renderer. → `{ sessionToken, faceId }`. See VENUS_AVATAR.md "Simli". |
 | POST | `/api/tryon` | bearer, RL | Render a product on a selfie (selfie not stored). |
 | POST | `/api/voice-live-token` | bearer | Mint a short-lived Gemini Live ephemeral token; the app connects to Gemini Live directly (the realtime Venus interview — `lib/live-voice.ts`). |
 | POST | `/api/say` | bearer, RL | One-shot TTS in Venus's Gemini voice (Aoede) → base64 WAV. Used for the post-build launch line. (The old turn-based `/api/voice` + `/api/interview` ElevenLabs routes were removed.) |
