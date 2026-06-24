@@ -79,6 +79,10 @@ const WEB_ASSETS_COLLECTION = 'Web Assets';
 // collection screen: "Site assets" → 'graphics' (web), a product collection → 'design'.
 type Modality = 'design' | 'graphics';
 
+// Collections often carry a long descriptive name ("First drop — APPAREL (T-SHIRTS…)"); the top chip
+// shows just the short part before the dash/paren ("First drop").
+const shortCatName = (name?: string) => (name ? name.split(/\s*[—–]\s*|\s*\(/)[0].trim() : '');
+
 // Every node shares the same footprint, so overlap is a simple AABB test.
 const overlaps = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   a.x < b.x + NODE_W && a.x + NODE_W > b.x && a.y < b.y + NODE_H && a.y + NODE_H > b.y;
@@ -466,11 +470,20 @@ function DesignScreen() {
           const webGroupIds = new Set(
             mapped.filter((n) => n.kind === 'webslot' && n.groupId).map((n) => n.groupId as string),
           );
-          setNodes(
-            webGroupIds.size
-              ? mapped.filter((n) => !webGroupIds.has(n.id) && !(n.groupId && webGroupIds.has(n.groupId)))
-              : mapped,
-          );
+          const finalNodes = webGroupIds.size
+            ? mapped.filter((n) => !webGroupIds.has(n.id) && !(n.groupId && webGroupIds.has(n.groupId)))
+            : mapped;
+          setNodes(finalNodes);
+          // Fresh / empty product collection → take the creator straight to the product picker (the
+          // "product selection screen" in the flow). A collection that already has products on its
+          // canvas just shows the canvas.
+          if (
+            !assetModeRef.current &&
+            catalogueRef.current?.id === catId &&
+            !finalNodes.some((n) => n.kind === 'template' || n.kind === 'composition')
+          ) {
+            setProductPickerOpen(true);
+          }
         },
       )
       .catch(() => {});
@@ -1247,14 +1260,24 @@ function DesignScreen() {
       <SafeAreaView edges={['top']}>
         <View style={styles.topBar}>
           <Pressable
+            // Tap the collection chip → open the products view. Long-press → switch brand / collection.
             onPress={() => {
-              setSetupStep('brand');
+              if (assetMode) {
+                setSetupStep('collection');
+                setCatSheetOpen(true);
+              } else {
+                setProductPickerOpen(true);
+              }
+            }}
+            onLongPress={() => {
+              setSetupStep('collection');
               setCatSheetOpen(true);
             }}
+            delayLongPress={350}
             style={styles.catChip}
             hitSlop={6}>
             <ThemedText type="code" themeColor="tint" style={styles.eyebrow} numberOfLines={1}>
-              {brand ? `${brand.name}${assetMode ? ' · Site assets' : catalogue ? ` · ${catalogue.name}` : ''}` : 'Design'} ▾
+              {assetMode ? 'Site assets' : catalogue ? shortCatName(catalogue.name) : brand ? 'Pick a collection' : 'Design'} ▾
             </ThemedText>
           </Pressable>
           {assetMode ? (
@@ -1456,18 +1479,11 @@ function DesignScreen() {
               })()
             )}
 
-            {/* Site-assets mode shows the website slots (drop a graphic to publish it to the site); a
-                product collection shows the control that opens the full-screen product picker. */}
+            {/* This panel is purely the collection's DESIGNS — products are added from the top strip
+                (or the chip). Site-assets mode shows the website slots to publish graphics to. */}
             {assetMode ? (
               <WebAssetsDock hideCover onAddSlot={(slot) => addNode('webslot', slot)} />
-            ) : (
-              <GlowButton
-                label="＋ Add products"
-                variant="secondary"
-                onPress={() => setProductPickerOpen(true)}
-                style={styles.addProductsBtn}
-              />
-            )}
+            ) : null}
           </View>
         )}
       </View>
