@@ -1515,10 +1515,17 @@ function DesignScreen() {
       <ProductPicker
         visible={productPickerOpen}
         blanks={blanks}
+        brandName={brand?.name}
+        collectionName={assetMode ? 'Site assets' : shortCatName(catalogue?.name)}
         loading={blanksLoading}
         error={blanksError}
         onRetry={loadBlanks}
         onClose={() => setProductPickerOpen(false)}
+        onEditContext={() => {
+          setProductPickerOpen(false);
+          setSetupStep('collection');
+          setCatSheetOpen(true);
+        }}
         onAdd={addProducts}
       />
 

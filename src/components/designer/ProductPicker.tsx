@@ -34,18 +34,26 @@ const POPULAR_COUNT = 8;
 export function ProductPicker({
   visible,
   blanks,
+  brandName,
+  collectionName,
   loading,
   error,
   onRetry,
   onClose,
+  onEditContext,
   onAdd,
 }: {
   visible: boolean;
   blanks: CatalogBlank[];
+  /** Shown as leading breadcrumbs (Brand › Collection › Supplier) so the picker carries context. */
+  brandName?: string;
+  collectionName?: string;
   loading?: boolean;
   error?: boolean;
   onRetry?: () => void;
   onClose: () => void;
+  /** Tapping the Brand / Collection crumb → reopen the brand/collection switcher. */
+  onEditContext?: () => void;
   /** Confirmed selection — every chosen blank, dropped onto the canvas as a product. */
   onAdd: (blanks: CatalogBlank[]) => void;
 }) {
@@ -206,6 +214,8 @@ export function ProductPicker({
           {/* Header: breadcrumb (Supplier › Type › Gender › Category) + close. */}
           <View style={styles.header}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.crumbs}>
+              {brandName ? <Crumb label={brandName} onPress={() => onEditContext?.()} /> : null}
+              {collectionName ? <Crumb label={collectionName} onPress={() => onEditContext?.()} /> : null}
               <Crumb label={SUPPLIERS[0].label} onPress={reset} active={atRoot} />
               {type ? <Crumb label={type === 'apparel' ? 'Apparel' : 'Accessories'} onPress={() => { setGender(null); setCategory(null); }} active={!gender && !category} /> : null}
               {gender ? <Crumb label={GENDERS.find((g) => g.key === gender)?.label ?? ''} onPress={() => setCategory(null)} active={!category} /> : null}
