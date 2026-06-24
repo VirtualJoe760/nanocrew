@@ -205,8 +205,9 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   name/collection/sizes/colors and publishes (`/api/publish`, with the cost+$5 price floor enforced).
 - **Blend / Combine:** merge two designs (`/api/merge`) or pick placements for a design+product.
 - **Catalogues/drops:** create with season presets, scoped to the chosen brand (`/api/catalogues`).
-- **Dock (3 panels):** **Products** (the full Printful catalogue — `/api/blanks`, `/api/blank/:id/*`),
-  **Web assets** (the site's slots: hero / cover / logo), **Content**.
+- **Dock (3 panels):** **Products** (the full Printful catalogue — `/api/blanks`, `/api/blank/:id/*`;
+  browsed as large product cards — gender → type → product — with full, 2-line names so blanks read
+  clearly), **Web assets** (the site's slots: hero / cover / logo), **Content**.
 - **Web assets:** drag a graphic onto a web-slot target → it "clicks together," assigns to the brand
   site (`/api/creator/site-assets` — a direct DB write to `stores.site_assets`), and the finished
   group then **clears off the canvas** (the asset is saved; nothing lingers). Slots that haven't been

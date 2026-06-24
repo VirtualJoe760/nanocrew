@@ -148,7 +148,7 @@ export function TemplatesDock({
                 <Pressable key={b.id} onPress={() => onAdd(b)}>
                   <ThemedView type="backgroundElement" style={styles.card}>
                     <Image source={{ uri: b.image }} style={styles.cardImg} contentFit="contain" />
-                    <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                    <ThemedText type="small" numberOfLines={2} style={styles.cardLabel}>
                       {b.name}
                     </ThemedText>
                   </ThemedView>
@@ -158,7 +158,7 @@ export function TemplatesDock({
                 <Pressable key={t.type} onPress={() => setType(t.type)}>
                   <ThemedView type="backgroundElement" style={styles.card}>
                     <Image source={{ uri: t.image }} style={styles.cardImg} contentFit="contain" />
-                    <ThemedText type="small" numberOfLines={1}>
+                    <ThemedText type="smallBold" numberOfLines={2} style={styles.cardLabel}>
                       {t.type}
                     </ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
@@ -195,8 +195,11 @@ const styles = StyleSheet.create({
   status: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
   emptyState: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   retryBtn: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
-  row: { gap: Spacing.two, paddingHorizontal: Spacing.three },
-  card: { width: 96, padding: Spacing.two, borderRadius: Spacing.three, alignItems: 'center', gap: 2 },
-  backCard: { width: 72, justifyContent: 'center' },
-  cardImg: { width: 68, height: 68, borderRadius: Spacing.two },
+  row: { gap: Spacing.three, paddingHorizontal: Spacing.three },
+  // Cards lead with a large product image (≈3.5× the old 68px tile) so the garment reads clearly;
+  // the name sits below on up to 2 lines, centred, so full Printful names fit without abbreviating.
+  card: { width: 144, padding: Spacing.two, borderRadius: Spacing.four, alignItems: 'center', gap: Spacing.one },
+  backCard: { width: 96, justifyContent: 'center' },
+  cardImg: { width: 128, height: 128, borderRadius: Spacing.three },
+  cardLabel: { textAlign: 'center', paddingHorizontal: 2 },
 });
