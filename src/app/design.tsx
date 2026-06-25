@@ -1965,6 +1965,30 @@ function DesignScreen() {
                       );
                     })()}
 
+                    {/* Or design for the brand's website (no collection needed) */}
+                    <ThemedText type="code" themeColor="textSecondary" style={styles.setupSection}>
+                      OR DESIGN FOR YOUR SITE
+                    </ThemedText>
+                    <Pressable onPress={() => void chooseAssetsMode()}>
+                      <ThemedView
+                        type={assetMode ? 'backgroundSelected' : 'backgroundElement'}
+                        style={[styles.setupCard, assetMode && { borderColor: theme.tint }]}>
+                        <View style={[styles.avatar, { backgroundColor: theme.backgroundSelected }]}>
+                          <ThemedText type="small">🌐</ThemedText>
+                        </View>
+                        <View style={styles.flexShrink}>
+                          <ThemedText type="small">Site assets</ThemedText>
+                          <ThemedText type="code" themeColor="textSecondary">
+                            Hero · logo · social graphics
+                          </ThemedText>
+                        </View>
+                        <View style={styles.flex} />
+                        <ThemedText type="small" themeColor={assetMode ? 'tint' : 'textSecondary'}>
+                          {assetMode ? '✓' : '›'}
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
+
                     {/* New collection / drop */}
                     <ThemedView type="backgroundElement" style={styles.newCatCard}>
                       <ThemedText type="code" themeColor="textSecondary">
@@ -2006,30 +2030,6 @@ function DesignScreen() {
                         disabled={!newCat.trim()}
                       />
                     </ThemedView>
-
-                    {/* Or design for the brand's website (no collection needed) */}
-                    <ThemedText type="code" themeColor="textSecondary" style={styles.setupSection}>
-                      OR DESIGN FOR YOUR SITE
-                    </ThemedText>
-                    <Pressable onPress={() => void chooseAssetsMode()}>
-                      <ThemedView
-                        type={assetMode ? 'backgroundSelected' : 'backgroundElement'}
-                        style={[styles.setupCard, assetMode && { borderColor: theme.tint }]}>
-                        <View style={[styles.avatar, { backgroundColor: theme.backgroundSelected }]}>
-                          <ThemedText type="small">🌐</ThemedText>
-                        </View>
-                        <View style={styles.flexShrink}>
-                          <ThemedText type="small">Site assets</ThemedText>
-                          <ThemedText type="code" themeColor="textSecondary">
-                            Hero · logo · social graphics
-                          </ThemedText>
-                        </View>
-                        <View style={styles.flex} />
-                        <ThemedText type="small" themeColor={assetMode ? 'tint' : 'textSecondary'}>
-                          {assetMode ? '✓' : '›'}
-                        </ThemedText>
-                      </ThemedView>
-                    </Pressable>
                   </>
                 )}
               </ScrollView>
