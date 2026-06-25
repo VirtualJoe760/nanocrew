@@ -54,6 +54,12 @@ export type BlankRef = { name: string; image?: string };
 export const NODE_W = 116;
 export const NODE_H = 150;
 
+// Designs are titled by their (often long) generation prompt — show a short label on the canvas tile.
+const shortName = (s: string) => {
+  const t = (s ?? '').trim();
+  return t.length > 16 ? `${t.slice(0, 16).trimEnd()}…` : t || 'Design';
+};
+
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 2.5;
 const GRID = 4000;
@@ -201,12 +207,12 @@ function NodeView({
         {node.kind === 'design' && design ? (
           <>
             {design.image ? (
-              <Image source={{ uri: design.image }} style={styles.designImage} contentFit="cover" />
+              <Image source={{ uri: design.image }} style={styles.designImage} contentFit="contain" />
             ) : (
               <DesignTile color={design.color} label={design.prompt} style={styles.designTile} />
             )}
-            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-              {design.prompt}
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.nodeLabel}>
+              {shortName(design.prompt)}
             </ThemedText>
           </>
         ) : node.kind === 'composition' ? (

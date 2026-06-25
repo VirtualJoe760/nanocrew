@@ -1481,7 +1481,7 @@ function DesignScreen() {
                       onLongPress={() => openDesignActions(d)}
                       delayLongPress={350}>
                       {d.image ? (
-                        <Image source={{ uri: d.image }} style={styles.designThumb} contentFit="cover" />
+                        <Image source={{ uri: d.image }} style={styles.designThumb} contentFit="contain" />
                       ) : (
                         <DesignTile color={d.color} style={styles.designThumb} />
                       )}
