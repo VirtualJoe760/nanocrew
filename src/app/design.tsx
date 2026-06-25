@@ -245,7 +245,17 @@ function DesignScreen() {
   const [newCatSeason, setNewCatSeason] = useState<string | null>(null);
   // Brand (store) context — the Design tab is scoped to one brand at a time. The setup popup
   // (brand → collection) is the FIRST thing on entering the tab; the top-left chip reopens it.
-  type Brand = { id: string; slug: string; name: string };
+  type Brand = {
+    id: string;
+    slug: string;
+    name: string;
+    logoUrl?: string | null;
+    ogImageUrl?: string | null;
+    siteAssets?: { hero?: { imageUrl?: string | null } | null } | null;
+  };
+  // The brand's banner image for the setup screen: its OG/social image, else the site hero, else logo.
+  const brandImage = (b?: Brand | null) =>
+    b?.ogImageUrl || b?.siteAssets?.hero?.imageUrl || b?.logoUrl || undefined;
   const [brands, setBrands] = useState<Brand[]>([]);
   const [brand, setBrand] = useState<Brand | null>(null);
   const brandRef = useRef<Brand | null>(null);
@@ -370,7 +380,14 @@ function DesignScreen() {
       .then(readJson<{ stores?: Brand[] }>)
       .then((d) => {
         if (!alive) return;
-        const list = (d.stores ?? []).map((s) => ({ id: s.id, slug: s.slug, name: s.name }));
+        const list = (d.stores ?? []).map((s) => ({
+          id: s.id,
+          slug: s.slug,
+          name: s.name,
+          logoUrl: s.logoUrl,
+          ogImageUrl: s.ogImageUrl,
+          siteAssets: s.siteAssets,
+        }));
         setBrands(list);
         setCatSheetOpen(true);
         if (list.length === 1) chooseBrand(list[0]);
@@ -1782,25 +1799,19 @@ function DesignScreen() {
       {/* Setup: choose the brand you're designing for, then the collection. This is the first
           popup on entering the Design tab; the top-left chip reopens it to switch. */}
       {catSheetOpen ? (
-        <Modal visible transparent animationType="slide" onRequestClose={() => setCatSheetOpen(false)}>
-          <View style={styles.modalBackdrop}>
-            <ThemedView type="background" style={styles.sheet}>
-              <View style={styles.sheetHeader}>
-                <View style={styles.setupHeaderRow}>
-                  {setupStep === 'collection' && brands.length > 1 ? (
-                    <Pressable onPress={() => setSetupStep('brand')} hitSlop={10}>
-                      <ThemedText type="subtitle" themeColor="textSecondary">‹</ThemedText>
-                    </Pressable>
-                  ) : null}
-                  <View style={styles.flexShrink}>
-                    <ThemedText type="smallBold">
-                      {setupStep === 'brand' ? 'Choose a brand' : 'Choose a collection'}
+        <Modal visible animationType="slide" onRequestClose={() => setCatSheetOpen(false)}>
+          <ThemedView style={styles.fillScreen}>
+            <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+              <View style={styles.setupTopBar}>
+                {setupStep === 'collection' && brands.length > 1 ? (
+                  <Pressable onPress={() => setSetupStep('brand')} hitSlop={10}>
+                    <ThemedText type="small" themeColor="tint">
+                      ‹ Brands
                     </ThemedText>
-                    <ThemedText type="code" themeColor="textSecondary" numberOfLines={1}>
-                      {setupStep === 'brand' ? 'Where your designs will live' : `for ${brand?.name ?? 'your brand'}`}
-                    </ThemedText>
-                  </View>
-                </View>
+                  </Pressable>
+                ) : (
+                  <View />
+                )}
                 <Pressable onPress={() => setCatSheetOpen(false)} hitSlop={10}>
                   <ThemedText type="small" themeColor="textSecondary">
                     Close
@@ -1814,49 +1825,101 @@ function DesignScreen() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled">
                 {setupStep === 'brand' ? (
-                  brands.length ? (
-                    brands.map((b) => {
-                      const on = b.id === brand?.id;
-                      return (
-                        <Pressable key={b.id} onPress={() => chooseBrand(b)}>
-                          <ThemedView
-                            type={on ? 'backgroundSelected' : 'backgroundElement'}
-                            style={[styles.setupCard, on && { borderColor: theme.tint }]}>
-                            <View style={[styles.avatar, { backgroundColor: tileColor(b.name) }]}>
-                              <ThemedText type="smallBold" style={styles.avatarText}>
-                                {initials(b.name)}
-                              </ThemedText>
-                            </View>
-                            <View style={styles.flexShrink}>
-                              <ThemedText type="small">{b.name}</ThemedText>
-                              <ThemedText type="code" themeColor="textSecondary" numberOfLines={1}>
-                                {b.slug}
-                              </ThemedText>
-                            </View>
-                            <View style={styles.flex} />
-                            <ThemedText type="small" themeColor={on ? 'tint' : 'textSecondary'}>
-                              {on ? '✓' : '›'}
-                            </ThemedText>
-                          </ThemedView>
-                        </Pressable>
-                      );
-                    })
-                  ) : (
-                    <View style={styles.emptyBrand}>
+                  <>
+                    <View style={styles.setupTitleBlock}>
+                      <ThemedText type="title">Choose a brand</ThemedText>
                       <ThemedText type="small" themeColor="textSecondary">
-                        Create a brand to get started — design products once you have a store.
+                        Pick the store you’re designing for.
                       </ThemedText>
-                      <GlowButton
-                        label="Create a brand in Studio"
-                        onPress={() => {
-                          setCatSheetOpen(false);
-                          router.navigate('/studio');
-                        }}
-                      />
                     </View>
-                  )
+                    {brands.length ? (
+                      brands.map((b) => {
+                        const on = b.id === brand?.id;
+                        const img = brandImage(b);
+                        return (
+                          <Pressable key={b.id} onPress={() => chooseBrand(b)}>
+                            <View style={[styles.brandCard, on && { borderColor: theme.tint, borderWidth: 2 }]}>
+                              {img ? (
+                                <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                              ) : (
+                                <View style={[StyleSheet.absoluteFill, { backgroundColor: tileColor(b.name) }]} />
+                              )}
+                              <View style={styles.brandScrim} pointerEvents="none" />
+                              <View style={styles.brandCardRow}>
+                                {b.logoUrl ? (
+                                  <Image source={{ uri: b.logoUrl }} style={styles.brandLogo} contentFit="cover" />
+                                ) : (
+                                  <View style={[styles.avatar, { backgroundColor: tileColor(b.name) }]}>
+                                    <ThemedText type="smallBold" style={styles.avatarText}>
+                                      {initials(b.name)}
+                                    </ThemedText>
+                                  </View>
+                                )}
+                                <View style={styles.flexShrink}>
+                                  <ThemedText type="smallBold" style={styles.brandOverlayLabel} numberOfLines={1}>
+                                    {b.name}
+                                  </ThemedText>
+                                  <ThemedText type="code" style={styles.brandOverlaySub} numberOfLines={1}>
+                                    {b.slug}
+                                  </ThemedText>
+                                </View>
+                                <View style={styles.flex} />
+                                <ThemedText type="small" style={styles.brandOverlayLabel}>
+                                  {on ? '✓' : '›'}
+                                </ThemedText>
+                              </View>
+                            </View>
+                          </Pressable>
+                        );
+                      })
+                    ) : (
+                      <View style={styles.emptyBrand}>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          Create a brand to get started — design products once you have a store.
+                        </ThemedText>
+                        <GlowButton
+                          label="Create a brand in Studio"
+                          onPress={() => {
+                            setCatSheetOpen(false);
+                            router.navigate('/studio');
+                          }}
+                        />
+                      </View>
+                    )}
+                  </>
                 ) : (
                   <>
+                    {/* Brand OG / hero banner */}
+                    {(() => {
+                      const heroImg = brandImage(brand);
+                      return (
+                        <View style={styles.brandHero}>
+                          {heroImg ? (
+                            <Image source={{ uri: heroImg }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                          ) : (
+                            <View style={[StyleSheet.absoluteFill, { backgroundColor: tileColor(brand?.name ?? '') }]} />
+                          )}
+                          <View style={styles.brandScrim} pointerEvents="none" />
+                          <View style={styles.brandHeroContent}>
+                            {brand?.logoUrl ? (
+                              <Image source={{ uri: brand.logoUrl }} style={styles.brandHeroLogo} contentFit="cover" />
+                            ) : (
+                              <View style={[styles.avatar, { backgroundColor: tileColor(brand?.name ?? '') }]}>
+                                <ThemedText type="smallBold" style={styles.avatarText}>
+                                  {initials(brand?.name ?? '?')}
+                                </ThemedText>
+                              </View>
+                            )}
+                            <ThemedText type="title" style={styles.brandOverlayLabel} numberOfLines={1}>
+                              {brand?.name ?? 'Your brand'}
+                            </ThemedText>
+                            <ThemedText type="small" style={styles.brandOverlaySub}>
+                              Choose a collection to design
+                            </ThemedText>
+                          </View>
+                        </View>
+                      );
+                    })()}
                     {(() => {
                       const collections = catalogues.filter(
                         (c) => c.name.toLowerCase() !== WEB_ASSETS_COLLECTION.toLowerCase(),
@@ -1970,8 +2033,8 @@ function DesignScreen() {
                   </>
                 )}
               </ScrollView>
-            </ThemedView>
-          </View>
+            </SafeAreaView>
+          </ThemedView>
         </Modal>
       ) : null}
     </ThemedView>
@@ -2617,8 +2680,40 @@ const styles = StyleSheet.create({
   // Setup sheet (brand / collection)
   setupHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexShrink: 1 },
   flexShrink: { flexShrink: 1 },
-  setupScroll: { flexShrink: 1 },
-  setupScrollContent: { gap: Spacing.two, paddingBottom: Spacing.two },
+  fillScreen: { flex: 1 },
+  setupTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  setupTitleBlock: { gap: Spacing.one, paddingVertical: Spacing.two },
+  setupScroll: { flex: 1 },
+  setupScrollContent: { gap: Spacing.two, paddingHorizontal: Spacing.three, paddingBottom: Spacing.six },
+  // Brand OG banner cards (brand step) + hero banner (collection step)
+  brandCard: {
+    height: 132,
+    borderRadius: Spacing.four,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  brandScrim: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(8,8,10,0.5)' },
+  brandCardRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, padding: Spacing.three },
+  brandLogo: { width: 42, height: 42, borderRadius: Spacing.two },
+  brandHero: {
+    height: 200,
+    borderRadius: Spacing.four,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    marginBottom: Spacing.one,
+  },
+  brandHeroContent: { padding: Spacing.four, gap: Spacing.one },
+  brandHeroLogo: { width: 52, height: 52, borderRadius: Spacing.two, marginBottom: Spacing.one },
+  brandOverlayLabel: { color: '#f4f4f6' },
+  brandOverlaySub: { color: 'rgba(235,237,241,0.8)' },
   setupCard: {
     flexDirection: 'row',
     alignItems: 'center',

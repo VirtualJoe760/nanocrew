@@ -38,7 +38,15 @@ export async function GET(req: Request) {
         },
       });
     const stores = await db
-      .select({ id: schema.stores.id, name: schema.stores.name, slug: schema.stores.slug, status: schema.stores.status })
+      .select({
+        id: schema.stores.id,
+        name: schema.stores.name,
+        slug: schema.stores.slug,
+        status: schema.stores.status,
+        logoUrl: schema.stores.logoUrl,
+        ogImageUrl: schema.stores.ogImageUrl,
+        siteAssets: schema.stores.siteAssets,
+      })
       .from(schema.stores)
       .where(inArray(schema.stores.id, await accessibleStoreIds(user.id)));
     return Response.json({ creator: { id: user.id, email: user.email }, stores });
