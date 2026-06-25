@@ -33,6 +33,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { DesignTile, tileColor } from '@/components/design-tile';
 import { DesignCanvas, NODE_H, NODE_W, WEB_SLOT_LABELS, type CanvasNode } from '@/components/designer/DesignCanvas';
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
+import { ProductDetailSheet } from '@/components/designer/ProductDetailSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
 import { DOCK_TAB_CLEARANCE } from '@/components/designer/TemplatesDock';
 import { ProductPicker } from '@/components/designer/ProductPicker';
@@ -153,8 +154,6 @@ async function pickImage(): Promise<string | null> {
 let designCounter = 0;
 let nodeCounter = 0;
 
-type Swatch = { color: string; colorCode: string; image: string };
-
 export default withScreenFade(DesignScreen, { background: true });
 
 function DesignScreen() {
@@ -167,12 +166,12 @@ function DesignScreen() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [mergeTarget, setMergeTarget] = useState<{ aId: string; bId: string } | null>(null);
-  const [colorNodeId, setColorNodeId] = useState<string | null>(null);
-  const [colors, setColors] = useState<Swatch[]>([]);
-  const [colorsLoading, setColorsLoading] = useState(false);
-  const [colorsError, setColorsError] = useState(false); // load failed (vs. genuinely no colours)
-  const [colorsAllOver, setColorsAllOver] = useState(false); // all-over print → no blank colour by design
-  const [colorBlankId, setColorBlankId] = useState<string | null>(null); // remembered for retry
+  // Tap a product on the canvas → open its detail sheet (photo · colourways · sizes · price).
+  const [detailNode, setDetailNode] = useState<{
+    nodeId: string;
+    blank: { id: string; name: string; image?: string };
+    color?: string;
+  } | null>(null);
   // Combine sheet — opens when a design "clicks" onto a product; user picks the placement.
   const [combineTarget, setCombineTarget] = useState<{
     designNodeId: string;
@@ -1007,37 +1006,27 @@ function DesignScreen() {
   const onNodeTap = (id: string) => {
     const node = nodesRef.current.find((n) => n.id === id);
     if (node?.kind === 'composition') setReviewId(id);
-    else if (node?.kind === 'template') openColorPicker(id, node.refId);
+    else if (node?.kind === 'template') openProductDetail(node);
   };
 
-  const loadColors = (blankId: string) => {
-    setColors([]);
-    setColorsError(false);
-    setColorsAllOver(false);
-    setColorsLoading(true);
-    apiFetch(`/api/blank/${blankId}/colors`)
-      .then(readJson<{ colors?: Swatch[]; allOver?: boolean }>)
-      .then((d) => {
-        setColors(d.colors ?? []);
-        setColorsAllOver(!!d.allOver);
-      })
-      .catch(() => setColorsError(true))
-      .finally(() => setColorsLoading(false));
+  // The product detail sheet replaces the old inline colour picker: product photo, selectable
+  // colourways, sizes and starting price — all from /api/blank/:id/variants.
+  const openProductDetail = (node: CanvasNode) => {
+    const b = blankLookup[node.refId];
+    setDetailNode({
+      nodeId: node.id,
+      blank: { id: node.refId, name: b?.name ?? 'Product', image: b?.image },
+      color: node.selectedColor,
+    });
   };
 
-  const openColorPicker = (id: string, blankId: string) => {
-    setColorNodeId(id);
-    setColorBlankId(blankId);
-    loadColors(blankId);
-  };
-
-  const pickColor = (c: Swatch) => {
+  // Confirmed colourway → apply it to the tapped canvas product (photo + colour name).
+  const applyProductColor = (nodeId: string, c: { color: string; image: string }) => {
     setNodes((n) =>
       n.map((node) =>
-        node.id === colorNodeId ? { ...node, colorImage: c.image, selectedColor: c.color } : node,
+        node.id === nodeId ? { ...node, colorImage: c.image, selectedColor: c.color } : node,
       ),
     );
-    setColorNodeId(null);
     scheduleSave();
   };
 
@@ -1661,56 +1650,13 @@ function DesignScreen() {
       ) : null}
 
       {/* Product colour picker (tap a product node) */}
-      {colorNodeId ? (
-        <Modal visible transparent animationType="slide" onRequestClose={() => setColorNodeId(null)}>
-          <View style={styles.modalBackdrop}>
-            <ThemedView type="background" style={styles.sheet}>
-              <View style={styles.sheetHeader}>
-                <ThemedText type="smallBold">Product colour</ThemedText>
-                <Pressable onPress={() => setColorNodeId(null)} hitSlop={10}>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Close
-                  </ThemedText>
-                </Pressable>
-              </View>
-              {colorsLoading ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  Loading colours…
-                </ThemedText>
-              ) : colorsError ? (
-                <Pressable onPress={() => colorBlankId && loadColors(colorBlankId)} hitSlop={8}>
-                  <ThemedText type="small" themeColor="tint">
-                    Couldn’t load colours — tap to try again.
-                  </ThemedText>
-                </Pressable>
-              ) : colors.length === 0 ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {colorsAllOver
-                    ? 'This is an all-over print product — your design covers the whole garment, so there’s no blank colour to choose (just sizes).'
-                    : 'No colours available for this product.'}
-                </ThemedText>
-              ) : (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.swatchRow}>
-                  {colors.map((c) => (
-                    <Pressable key={c.color} onPress={() => pickColor(c)} style={styles.swatchItem}>
-                      <View style={[styles.swatch, { backgroundColor: c.colorCode }]} />
-                      <ThemedText
-                        type="small"
-                        themeColor="textSecondary"
-                        numberOfLines={1}
-                        style={styles.swatchLabel}>
-                        {c.color}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              )}
-            </ThemedView>
-          </View>
-        </Modal>
+      {detailNode ? (
+        <ProductDetailSheet
+          blank={detailNode.blank}
+          initialColor={detailNode.color}
+          onClose={() => setDetailNode(null)}
+          onApply={(c) => applyProductColor(detailNode.nodeId, c)}
+        />
       ) : null}
 
       {/* Combine sheet — design clicked onto a product; choose the print placement */}
@@ -2612,16 +2558,6 @@ const styles = StyleSheet.create({
   sheetScroll: { flexShrink: 1 },
   sheetScrollContent: { gap: Spacing.three, paddingBottom: Spacing.three },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  swatchRow: { gap: Spacing.three, paddingVertical: Spacing.two, paddingRight: Spacing.four },
-  swatchItem: { alignItems: 'center', width: 60, gap: Spacing.one },
-  swatch: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(128,128,128,0.5)',
-  },
-  swatchLabel: { textAlign: 'center', fontSize: 10 },
   catChip: { paddingVertical: 2, paddingRight: Spacing.two },
   canvasWrap: { flex: 1 },
   toolbar: {
