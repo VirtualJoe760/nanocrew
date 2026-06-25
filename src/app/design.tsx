@@ -1044,7 +1044,8 @@ function DesignScreen() {
   };
 
   // Setup step 1: pick the brand → load its collections and advance to the collection step.
-  const chooseBrand = (b: Brand) => {
+  // opts.assets jumps straight into Site-assets mode (used by the "Add brand image" quick link).
+  const chooseBrand = (b: Brand, opts?: { assets?: boolean }) => {
     setBrand(b);
     brandRef.current = b;
     setCatalogues([]);
@@ -1054,6 +1055,10 @@ function DesignScreen() {
       .then(async (d) => {
         const list = d.catalogues ?? [];
         setCatalogues(list);
+        if (opts?.assets) {
+          void chooseAssetsMode(list);
+          return;
+        }
         // Never strand the creator on the picker: a collection is required to design, and every brand
         // is provisioned with a "First drop" — so default straight onto it and enter the canvas. Prefer
         // that "first-drop"; else the first real (non-"Web Assets") collection; else create "First drop"
@@ -1090,14 +1095,17 @@ function DesignScreen() {
   // with the brand's persistent "Web Assets" collection (found or created) so every graphic
   // generated here is STORED + reappears — while the UI stays in asset mode (chip "· Site assets",
   // cover hidden). assetMode is the UI flag; the catalogue underneath is just the storage bucket.
-  const chooseAssetsMode = async () => {
+  const chooseAssetsMode = async (cataloguesList?: { id: string; name: string }[]) => {
     const slug = brandRef.current?.slug;
+    // Use the explicitly-passed list when we just loaded a brand's catalogues (the `catalogues`
+    // state closure is still stale in that same tick); otherwise the current state is correct.
+    const list = cataloguesList ?? catalogues;
     setAssetMode(true);
     assetModeRef.current = true;
     setCatSheetOpen(false);
     setDesigns([]);
     setNodes([]);
-    let cat = catalogues.find((c) => c.name.toLowerCase() === WEB_ASSETS_COLLECTION.toLowerCase()) ?? null;
+    let cat = list.find((c) => c.name.toLowerCase() === WEB_ASSETS_COLLECTION.toLowerCase()) ?? null;
     if (!cat && slug) {
       try {
         const r = await apiFetch('/api/catalogues', {
@@ -1837,7 +1845,8 @@ function DesignScreen() {
                         const on = b.id === brand?.id;
                         const img = brandImage(b);
                         return (
-                          <Pressable key={b.id} onPress={() => chooseBrand(b)}>
+                          <View key={b.id} style={styles.brandItem}>
+                            <Pressable onPress={() => chooseBrand(b)}>
                             <View style={[styles.brandCard, on && { borderColor: theme.tint, borderWidth: 2 }]}>
                               {img ? (
                                 <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" />
@@ -1869,7 +1878,18 @@ function DesignScreen() {
                                 </ThemedText>
                               </View>
                             </View>
-                          </Pressable>
+                            </Pressable>
+                            {!img ? (
+                              <Pressable
+                                onPress={() => chooseBrand(b, { assets: true })}
+                                style={styles.addImageLink}
+                                hitSlop={6}>
+                                <ThemedText type="small" themeColor="tint">
+                                  ＋ Add a brand image
+                                </ThemedText>
+                              </Pressable>
+                            ) : null}
+                          </View>
                         );
                       })
                     ) : (
@@ -1916,6 +1936,16 @@ function DesignScreen() {
                             <ThemedText type="small" style={styles.brandOverlaySub}>
                               Choose a collection to design
                             </ThemedText>
+                            {!heroImg ? (
+                              <Pressable
+                                onPress={() => void chooseAssetsMode()}
+                                style={styles.heroAddImage}
+                                hitSlop={6}>
+                                <ThemedText type="small" style={styles.brandOverlayLabel}>
+                                  ＋ Add a brand image
+                                </ThemedText>
+                              </Pressable>
+                            ) : null}
                           </View>
                         </View>
                       );
@@ -2714,6 +2744,16 @@ const styles = StyleSheet.create({
   brandHeroLogo: { width: 52, height: 52, borderRadius: Spacing.two, marginBottom: Spacing.one },
   brandOverlayLabel: { color: '#f4f4f6' },
   brandOverlaySub: { color: 'rgba(235,237,241,0.8)' },
+  brandItem: { gap: Spacing.one },
+  addImageLink: { alignSelf: 'flex-start', paddingVertical: Spacing.one },
+  heroAddImage: {
+    marginTop: Spacing.two,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    borderRadius: 999,
+  },
   setupCard: {
     flexDirection: 'row',
     alignItems: 'center',
