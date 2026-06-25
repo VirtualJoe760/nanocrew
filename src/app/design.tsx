@@ -277,8 +277,6 @@ function DesignScreen() {
   // The full-screen product picker (replaces the old bottom products dock). Opened from the
   // bottom panel's "Add products" control and right after the brand+collection setup.
   const [productPickerOpen, setProductPickerOpen] = useState(false);
-  // Live filter for the bottom panel's design strip.
-  const [designQuery, setDesignQuery] = useState('');
   // Remembered product collection so the "Collection designs" segment can flip back out of Site assets.
   const lastProductCatRef = useRef<{ id: string; name: string } | null>(null);
   // Deep-link from a Studio bounty (?panel=web) just expands the dock so the designs panel is visible.
@@ -1464,48 +1462,33 @@ function DesignScreen() {
               )}
             </View>
 
-            {/* Search this collection's designs. */}
-            <GlowInput
-              value={designQuery}
-              onChangeText={setDesignQuery}
-              placeholder={assetMode ? 'Search graphics…' : 'Search designs…'}
-              autoCapitalize="none"
-              containerStyle={styles.dockSearch}
-            />
-
             {/* The designs strip — tap to drop on a product, long-press to assign to the site / delete. */}
             {designs.length === 0 ? (
               <ThemedText type="small" themeColor="textSecondary" style={styles.dockHint}>
                 {assetMode ? 'No graphics yet — tap Generate' : 'No designs yet — tap Generate'}
               </ThemedText>
             ) : (
-              (() => {
-                const q = designQuery.trim().toLowerCase();
-                const list = q ? designs.filter((d) => d.prompt.toLowerCase().includes(q)) : designs;
-                return (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dockStrip}>
-                    {list.map((d) =>
-                      d.status === 'generating' ? (
-                        <View key={d.id} style={[styles.designThumb, styles.designThumbPending, { backgroundColor: theme.backgroundSelected }]}>
-                          <ThemedText type="small" themeColor="textSecondary">…</ThemedText>
-                        </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dockStrip}>
+                {designs.map((d) =>
+                  d.status === 'generating' ? (
+                    <View key={d.id} style={[styles.designThumb, styles.designThumbPending, { backgroundColor: theme.backgroundSelected }]}>
+                      <ThemedText type="small" themeColor="textSecondary">…</ThemedText>
+                    </View>
+                  ) : (
+                    <Pressable
+                      key={d.id}
+                      onPress={() => addNode('design', d.id)}
+                      onLongPress={() => openDesignActions(d)}
+                      delayLongPress={350}>
+                      {d.image ? (
+                        <Image source={{ uri: d.image }} style={styles.designThumb} contentFit="cover" />
                       ) : (
-                        <Pressable
-                          key={d.id}
-                          onPress={() => addNode('design', d.id)}
-                          onLongPress={() => openDesignActions(d)}
-                          delayLongPress={350}>
-                          {d.image ? (
-                            <Image source={{ uri: d.image }} style={styles.designThumb} contentFit="cover" />
-                          ) : (
-                            <DesignTile color={d.color} style={styles.designThumb} />
-                          )}
-                        </Pressable>
-                      ),
-                    )}
-                  </ScrollView>
-                );
-              })()
+                        <DesignTile color={d.color} style={styles.designThumb} />
+                      )}
+                    </Pressable>
+                  ),
+                )}
+              </ScrollView>
             )}
 
             {/* This panel is purely the collection's DESIGNS — products are added from the top strip
@@ -2703,7 +2686,7 @@ const styles = StyleSheet.create({
   dockSearch: { marginHorizontal: Spacing.three, marginBottom: 0 },
   dockStrip: { gap: Spacing.two, alignItems: 'center', paddingHorizontal: Spacing.three },
   dockHint: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  designThumb: { width: 56, height: 56, borderRadius: Spacing.two },
+  designThumb: { width: 78, height: 78, borderRadius: Spacing.three },
   designThumbPending: { alignItems: 'center', justifyContent: 'center' },
   addProductsBtn: { marginHorizontal: Spacing.three },
   emptyBrand: { gap: Spacing.three, paddingVertical: Spacing.three },
