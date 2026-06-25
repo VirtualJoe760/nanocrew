@@ -62,6 +62,8 @@ const shortName = (s: string) => {
 
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 2.5;
+// The canvas opens (and resets) zoomed out, so several big tiles are in view at once.
+const DEFAULT_SCALE = 0.6;
 const GRID = 4000;
 
 type Props = {
@@ -397,7 +399,7 @@ export function DesignCanvas({
   // correctly. The parent reads them via viewportRef only to place new nodes.
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
-  const scale = useSharedValue(1);
+  const scale = useSharedValue(DEFAULT_SCALE);
 
   useEffect(() => {
     if (viewportRef) viewportRef.current = { tx, ty, scale };
@@ -584,7 +586,7 @@ export function DesignCanvas({
   const resetView = () => {
     tx.value = withTiming(0);
     ty.value = withTiming(0);
-    scale.value = withTiming(1);
+    scale.value = withTiming(DEFAULT_SCALE);
   };
 
   // + / − zoom anchored at the viewport center.
