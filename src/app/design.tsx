@@ -1649,7 +1649,7 @@ function DesignScreen() {
         />
       ) : null}
 
-      {/* Product colour picker (tap a product node) */}
+      {/* Product detail sheet (tap a product node) — photo · colourways · sizes · price */}
       {detailNode ? (
         <ProductDetailSheet
           blank={detailNode.blank}
