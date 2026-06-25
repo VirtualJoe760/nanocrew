@@ -51,8 +51,8 @@ export type CanvasNode = {
 export type DesignRef = { prompt: string; color: string; image?: string };
 export type BlankRef = { name: string; image?: string };
 
-export const NODE_W = 116;
-export const NODE_H = 150;
+export const NODE_W = 160;
+export const NODE_H = 204;
 
 // Designs are titled by their (often long) generation prompt — show a short label on the canvas tile.
 const shortName = (s: string) => {
@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   thumbFill: { width: '100%', height: '100%' },
-  glyph: { fontSize: 44 },
+  glyph: { fontSize: 60 },
   renderingWrap: { alignItems: 'center', gap: Spacing.one },
   removeBadge: {
     position: 'absolute',
