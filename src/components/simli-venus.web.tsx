@@ -1,19 +1,21 @@
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 import { apiFetch, readJson } from '@/lib/api';
-import { buildSimliHtml } from '@/components/simli-venus-html';
+import { buildSimliHtml, synthSimliPcm, type SimliVenusHandle } from '@/components/simli-venus-html';
 
 // WEB renderer for the Simli avatar. We mint the session token from our gated server route (the
 // SIMLI_API_KEY stays on the server), then run simli-client inside an <iframe srcDoc> that loads the
-// SDK from a CDN — so Metro never has to bundle the browser-only package. Native (simli-venus.tsx)
-// does the same via a WebView with the SAME HTML builder. See docs/studio/VENUS_AVATAR.md.
+// SDK from a CDN — so Metro never has to bundle the browser-only package. The `speak(text)` handle
+// (used by the Venus Lab) fetches Venus's Gemini-voice PCM and postMessages it into the frame.
+// Native (simli-venus.tsx) does the same via a WebView. See docs/studio/VENUS_AVATAR.md.
 
 type Status = 'connecting' | 'ready' | 'error';
 
-export default function SimliVenus() {
+const SimliVenus = forwardRef<SimliVenusHandle>(function SimliVenus(_props, ref) {
   const [html, setHtml] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>('connecting');
   const [err, setErr] = useState<string>('');
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,16 +40,29 @@ export default function SimliVenus() {
     };
   }, []);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      async speak(text: string) {
+        const pcm = await synthSimliPcm(text);
+        if (pcm) iframeRef.current?.contentWindow?.postMessage({ type: 'simli-speak', pcm }, '*');
+      },
+    }),
+    [],
+  );
+
   return (
     <div style={wrap}>
       {status === 'ready' && html ? (
-        <iframe title="Simli Venus" srcDoc={html} allow="autoplay" style={frame} />
+        <iframe ref={iframeRef} title="Simli Venus" srcDoc={html} allow="autoplay" style={frame} />
       ) : (
         <div style={overlay}>{status === 'error' ? `Simli error: ${err}` : '[ connecting to Simli… ]'}</div>
       )}
     </div>
   );
-}
+});
+
+export default SimliVenus;
 
 const wrap: React.CSSProperties = { position: 'absolute', inset: 0, background: '#06080f' };
 const frame: React.CSSProperties = { width: '100%', height: '100%', border: 0, background: '#06080f' };

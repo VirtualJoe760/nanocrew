@@ -1,19 +1,21 @@
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 import { apiFetch, readJson } from '@/lib/api';
-import { buildSimliHtml } from '@/components/simli-venus-html';
+import { buildSimliHtml, synthSimliPcm, type SimliVenusHandle } from '@/components/simli-venus-html';
 
 // NATIVE renderer for the Simli avatar. simli-client is browser/WebRTC-only (AudioContext + window),
 // so on iOS/Android we run it inside a react-native-webview: the RN side mints the session token from
 // our gated server route (SIMLI_API_KEY stays on the server), then injects ONLY that token into a tiny
 // HTML page that loads simli-client from a CDN and connects over LiveKit. The key never enters the
-// WebView. (Needs a dev build — WebRTC in WKWebView.) Web uses simli-venus.web.tsx with the SAME HTML.
+// WebView. The `speak(text)` handle (Venus Lab) fetches Venus's Gemini-voice PCM and injects it into
+// the frame's window.__simliSpeak. (Needs a dev build — WebRTC in WKWebView.) Web uses simli-venus.web.tsx.
 
-export default function SimliVenus() {
+const SimliVenus = forwardRef<SimliVenusHandle>(function SimliVenus(_props, ref) {
   const [token, setToken] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const webRef = useRef<WebView>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +35,17 @@ export default function SimliVenus() {
     };
   }, []);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      async speak(text: string) {
+        const pcm = await synthSimliPcm(text);
+        if (pcm) webRef.current?.injectJavaScript(`window.__simliSpeak(${JSON.stringify(pcm)});true;`);
+      },
+    }),
+    [],
+  );
+
   if (err) {
     return (
       <View style={styles.center}>
@@ -50,6 +63,7 @@ export default function SimliVenus() {
 
   return (
     <WebView
+      ref={webRef}
       style={styles.web}
       source={{ html: buildSimliHtml(token) }}
       originWhitelist={['*']}
@@ -59,7 +73,9 @@ export default function SimliVenus() {
       mediaPlaybackRequiresUserAction={false}
     />
   );
-}
+});
+
+export default SimliVenus;
 
 const styles = StyleSheet.create({
   web: { flex: 1, backgroundColor: '#06080f' },

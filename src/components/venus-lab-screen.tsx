@@ -1,9 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import VenusAvatar, { type VenusStage } from '@/components/venus-avatar';
 import SimliVenus from '@/components/simli-venus';
+import type { SimliVenusHandle } from '@/components/simli-venus-html';
 
 // THE VENUS LAB — the live venus-head-scene full-screen, for iterating on Venus's appearance in
 // isolation. Now surfaced as a TEST tool from the Account screen (gated to the Venus-Lab tester
@@ -20,12 +21,29 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
   const [mode, setMode] = useState<Mode>('3d');
+  const simliRef = useRef<SimliVenusHandle>(null);
+  const [line, setLine] = useState("Hi, I'm Venus — how do I sound?");
+  const [speaking, setSpeaking] = useState(false);
+
+  // Simli mode: make Venus speak the typed line in her Gemini voice (Aoede).
+  const speak = async () => {
+    const text = line.trim();
+    if (!text || speaking) return;
+    setSpeaking(true);
+    try {
+      await simliRef.current?.speak(text);
+    } catch {
+      // any failure surfaces inside the Simli frame; keep the Lab UI quiet
+    } finally {
+      setSpeaking(false);
+    }
+  };
 
   // No Skia <AppBackground> here: the UNIFIED LATTICE inside the transparent avatar canvas IS the
   // dot-field background (one field that becomes her), over the near-black bed.
   return (
     <View style={styles.root}>
-      {mode === '3d' ? <VenusAvatar stage={stage} /> : <SimliVenus />}
+      {mode === '3d' ? <VenusAvatar stage={stage} /> : <SimliVenus ref={simliRef} />}
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
@@ -57,6 +75,27 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
               </Pressable>
             );
           })}
+        </View>
+      ) : null}
+
+      {/* simli mode — type a line and hear Venus say it in her Gemini voice (Aoede) */}
+      {mode === 'simli' ? (
+        <View style={[styles.speakBar, { bottom: insets.bottom + 42 }]} pointerEvents="box-none">
+          <TextInput
+            value={line}
+            onChangeText={setLine}
+            placeholder="Type a line for Venus…"
+            placeholderTextColor="rgba(207,232,243,0.4)"
+            style={styles.speakInput}
+            returnKeyType="send"
+            onSubmitEditing={speak}
+          />
+          <Pressable
+            onPress={speak}
+            disabled={speaking}
+            style={[styles.speakBtn, speaking && styles.pillActive]}>
+            <Text style={[styles.pillText, styles.pillTextActive]}>{speaking ? '…' : 'Speak'}</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -105,6 +144,37 @@ const styles = StyleSheet.create({
   },
   pillText: { color: 'rgba(207,232,243,0.6)', fontFamily: 'Jost-Light', fontSize: 12, letterSpacing: 0.5 },
   pillTextActive: { color: '#dff4ff', fontFamily: 'Jost-Medium' },
+  speakBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+  },
+  speakInput: {
+    flex: 1,
+    maxWidth: 360,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(124,199,223,0.25)',
+    backgroundColor: 'rgba(8,12,18,0.7)',
+    color: '#dff4ff',
+    fontFamily: 'Jost-Light',
+    fontSize: 13,
+  },
+  speakBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#5fd0e0',
+    backgroundColor: 'rgba(95,208,224,0.18)',
+  },
   modeRow: { flexDirection: 'row', gap: 6 },
   modePill: {
     paddingVertical: 6,

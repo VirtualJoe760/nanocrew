@@ -1,10 +1,30 @@
+import { apiFetch, readJson } from '@/lib/api';
+
 // Shared HTML for the Simli avatar frame — used by BOTH the web renderer (<iframe srcDoc>) and the
 // native renderer (<WebView source.html>). simli-client is a browser/WebRTC SDK that doesn't bundle
 // cleanly under Metro (its internal `./Client` import fails to resolve), so instead of importing it
 // into the app we load it from a CDN INSIDE the frame. Only the short-lived session token is embedded
 // — never the SIMLI_API_KEY. LiveKit transport supplies its own ICE, so no key/ICE is needed here.
-// `handleSilence` (set server-side) keeps her idling live with no audio; piping Venus's Gemini PCM
-// (postMessage → sendAudioData, 16kHz) is the next phase. See docs/studio/VENUS_AVATAR.md "Simli".
+//
+// VOICE: she speaks in her Gemini voice (Aoede). The renderer fetches Simli-ready PCM from the gated
+// /api/simli/tts route (Gemini TTS, resampled to 16kHz) and hands it to the frame — web via
+// postMessage({type:'simli-speak'}), native via injectJavaScript(window.__simliSpeak(...)). The frame
+// base64-decodes and feeds it to client.sendAudioData() in 16kHz chunks. See VENUS_AVATAR.md "Simli".
+
+/** Imperative handle both renderers expose so the Lab can make Venus speak a line. */
+export type SimliVenusHandle = { speak: (text: string) => Promise<void> };
+
+/** Fetch Venus's line as Simli-ready 16kHz PCM16 (base64) from the gated Gemini-TTS route. */
+export async function synthSimliPcm(text: string): Promise<string | null> {
+  const { pcm } = await readJson<{ pcm?: string }>(
+    await apiFetch('/api/simli/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }),
+  );
+  return pcm ?? null;
+}
 
 export function buildSimliHtml(token: string): string {
   return `<!doctype html><html><head>
@@ -22,8 +42,22 @@ video{width:100%;height:100%;object-fit:contain;display:block}
 // CDN bundlers (esm.sh/jsdelivr). .../dist/client.js sidesteps the broken index and exports cleanly.
 import { SimliClient, LogLevel } from 'https://esm.sh/simli-client@3.0.2/dist/client.js';
 const v=document.getElementById('v'),a=document.getElementById('a'),s=document.getElementById('s');
+let c=null;
+// Feed base64 PCM16 (16kHz mono) into Simli's lip-synced playback, chunked so the data channel
+// isn't handed one huge blob. Defined up-front (guards on c) so it survives a slow/failed connect.
+function speak(b64){
+  if(!c||!b64) return;
+  try{
+    const bin=atob(b64), bytes=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+    const CHUNK=6000;
+    for(let o=0;o<bytes.length;o+=CHUNK) c.sendAudioData(bytes.subarray(o,Math.min(o+CHUNK,bytes.length)));
+  }catch(err){ /* a bad frame shouldn't kill the session */ }
+}
+window.__simliSpeak=speak; // native: injectJavaScript(window.__simliSpeak("..."))
+window.addEventListener('message',function(e){ if(e&&e.data&&e.data.type==='simli-speak') speak(e.data.pcm); }); // web
 try {
-  const c = new SimliClient(${JSON.stringify(token)}, v, a, null, LogLevel.ERROR, 'livekit');
+  c = new SimliClient(${JSON.stringify(token)}, v, a, null, LogLevel.ERROR, 'livekit');
   c.on('start', () => { s.style.display='none'; });
   c.on('error', (d) => { s.textContent='Simli error: '+d; });
   await c.start();
