@@ -83,6 +83,10 @@ type Modality = 'design' | 'graphics';
 // shows just the short part before the dash/paren ("First drop").
 const shortCatName = (name?: string) => (name ? name.split(/\s*[—–]\s*|\s*\(/)[0].trim() : '');
 
+// Up to two leading initials for a brand avatar.
+const initials = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '·';
+
 // Every node shares the same footprint, so overlap is a simple AABB test.
 const overlaps = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   a.x < b.x + NODE_W && a.x + NODE_W > b.x && a.y < b.y + NODE_H && a.y + NODE_H > b.y;
@@ -1782,9 +1786,21 @@ function DesignScreen() {
           <View style={styles.modalBackdrop}>
             <ThemedView type="background" style={styles.sheet}>
               <View style={styles.sheetHeader}>
-                <ThemedText type="smallBold">
-                  {setupStep === 'brand' ? 'Which brand?' : `What are you designing for ${brand?.name ?? 'this brand'}?`}
-                </ThemedText>
+                <View style={styles.setupHeaderRow}>
+                  {setupStep === 'collection' && brands.length > 1 ? (
+                    <Pressable onPress={() => setSetupStep('brand')} hitSlop={10}>
+                      <ThemedText type="subtitle" themeColor="textSecondary">‹</ThemedText>
+                    </Pressable>
+                  ) : null}
+                  <View style={styles.flexShrink}>
+                    <ThemedText type="smallBold">
+                      {setupStep === 'brand' ? 'Choose a brand' : 'Choose a collection'}
+                    </ThemedText>
+                    <ThemedText type="code" themeColor="textSecondary" numberOfLines={1}>
+                      {setupStep === 'brand' ? 'Where your designs will live' : `for ${brand?.name ?? 'your brand'}`}
+                    </ThemedText>
+                  </View>
+                </View>
                 <Pressable onPress={() => setCatSheetOpen(false)} hitSlop={10}>
                   <ThemedText type="small" themeColor="textSecondary">
                     Close
@@ -1792,107 +1808,168 @@ function DesignScreen() {
                 </Pressable>
               </View>
 
-              {setupStep === 'brand' ? (
-                brands.length ? (
-                  brands.map((b) => (
-                    <Pressable key={b.id} onPress={() => chooseBrand(b)} style={styles.catRow}>
-                      <ThemedText type="small" themeColor={b.id === brand?.id ? 'text' : 'textSecondary'}>
-                        {b.id === brand?.id ? '●  ' : '○  '}
-                        {b.name}
-                      </ThemedText>
-                    </Pressable>
-                  ))
-                ) : (
-                  <View style={styles.emptyBrand}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      Create a brand to get started — design products once you have a store.
-                    </ThemedText>
-                    <GlowButton
-                      label="Create a brand in Studio"
-                      onPress={() => {
-                        setCatSheetOpen(false);
-                        router.navigate('/studio');
-                      }}
-                    />
-                  </View>
-                )
-              ) : (
-                <>
-                  {brands.length > 1 ? (
-                    <Pressable onPress={() => setSetupStep('brand')} hitSlop={6} style={styles.catRow}>
-                      <ThemedText type="small" themeColor="tint">
-                        ‹ Change brand
-                      </ThemedText>
-                    </Pressable>
-                  ) : null}
-                  {/* Design the brand's WEBSITE assets — no collection needed. */}
-                  <Pressable onPress={() => void chooseAssetsMode()} style={styles.catRow}>
-                    <ThemedText type="small" themeColor={assetMode ? 'text' : 'textSecondary'}>
-                      {assetMode ? '●  ' : '○  '}🌐 Site assets — hero · logo · social
-                    </ThemedText>
-                  </Pressable>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.catPresetLabel}>
-                    Collections
-                  </ThemedText>
-                  {catalogues.map((c) => (
-                    <Pressable key={c.id} onPress={() => switchCatalogue(c)} style={styles.catRow}>
-                      <ThemedText
-                        type="small"
-                        themeColor={c.id === catalogue?.id ? 'text' : 'textSecondary'}>
-                        {c.id === catalogue?.id ? '●  ' : '○  '}
-                        {c.name}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.catPresetLabel}>
-                    New collection / drop
-                  </ThemedText>
-                  <View style={styles.catPresetRow}>
-                    {(['Spring', 'Summer', 'Fall', 'Winter', 'Drop'] as const).map((s) => {
-                      const season = s.toLowerCase();
-                      const on = newCatSeason === season;
+              <ScrollView
+                style={styles.setupScroll}
+                contentContainerStyle={styles.setupScrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled">
+                {setupStep === 'brand' ? (
+                  brands.length ? (
+                    brands.map((b) => {
+                      const on = b.id === brand?.id;
                       return (
-                        <Pressable
-                          key={s}
-                          onPress={() => {
-                            setNewCatSeason(season);
-                            setNewCat(s === 'Drop' ? '' : `${s} ${new Date().getFullYear()}`);
-                          }}
-                          hitSlop={4}>
-                          <ThemedView type={on ? 'backgroundSelected' : 'backgroundElement'} style={styles.catPreset}>
-                            <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'}>
-                              {s}
+                        <Pressable key={b.id} onPress={() => chooseBrand(b)}>
+                          <ThemedView
+                            type={on ? 'backgroundSelected' : 'backgroundElement'}
+                            style={[styles.setupCard, on && { borderColor: theme.tint }]}>
+                            <View style={[styles.avatar, { backgroundColor: tileColor(b.name) }]}>
+                              <ThemedText type="smallBold" style={styles.avatarText}>
+                                {initials(b.name)}
+                              </ThemedText>
+                            </View>
+                            <View style={styles.flexShrink}>
+                              <ThemedText type="small">{b.name}</ThemedText>
+                              <ThemedText type="code" themeColor="textSecondary" numberOfLines={1}>
+                                {b.slug}
+                              </ThemedText>
+                            </View>
+                            <View style={styles.flex} />
+                            <ThemedText type="small" themeColor={on ? 'tint' : 'textSecondary'}>
+                              {on ? '✓' : '›'}
                             </ThemedText>
                           </ThemedView>
                         </Pressable>
                       );
-                    })}
-                  </View>
-                  <View style={styles.catCreateRow}>
-                    <TextInput
-                      value={newCat}
-                      onChangeText={setNewCat}
-                      placeholder="Collection name, e.g. Summer 2026"
-                      placeholderTextColor={theme.textSecondary}
-                      style={[
-                        styles.input,
-                        styles.flex,
-                        { color: theme.text, backgroundColor: theme.backgroundElement },
-                      ]}
-                    />
-                    <Pressable
-                      onPress={() => {
-                        createCatalogue(newCat, newCatSeason ?? undefined);
-                        setNewCatSeason(null);
-                      }}
-                      hitSlop={6}>
-                      <ThemedView type="backgroundSelected" style={styles.chip}>
-                        <ThemedText type="small">Create</ThemedText>
+                    })
+                  ) : (
+                    <View style={styles.emptyBrand}>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Create a brand to get started — design products once you have a store.
+                      </ThemedText>
+                      <GlowButton
+                        label="Create a brand in Studio"
+                        onPress={() => {
+                          setCatSheetOpen(false);
+                          router.navigate('/studio');
+                        }}
+                      />
+                    </View>
+                  )
+                ) : (
+                  <>
+                    {(() => {
+                      const collections = catalogues.filter(
+                        (c) => c.name.toLowerCase() !== WEB_ASSETS_COLLECTION.toLowerCase(),
+                      );
+                      return (
+                        <>
+                          <ThemedText type="code" themeColor="textSecondary" style={styles.setupSection}>
+                            COLLECTIONS
+                          </ThemedText>
+                          {collections.length ? (
+                            collections.map((c) => {
+                              const on = !assetMode && c.id === catalogue?.id;
+                              return (
+                                <Pressable key={c.id} onPress={() => switchCatalogue(c)}>
+                                  <ThemedView
+                                    type={on ? 'backgroundSelected' : 'backgroundElement'}
+                                    style={[styles.setupCard, on && { borderColor: theme.tint }]}>
+                                    <View style={[styles.collThumb, { backgroundColor: tileColor(c.name) }]} />
+                                    <View style={styles.flexShrink}>
+                                      <ThemedText type="small" numberOfLines={1}>
+                                        {shortCatName(c.name)}
+                                      </ThemedText>
+                                      <ThemedText type="code" themeColor="textSecondary">
+                                        Product collection
+                                      </ThemedText>
+                                    </View>
+                                    <View style={styles.flex} />
+                                    {on ? (
+                                      <ThemedText type="small" themeColor="tint">
+                                        ✓
+                                      </ThemedText>
+                                    ) : null}
+                                  </ThemedView>
+                                </Pressable>
+                              );
+                            })
+                          ) : (
+                            <ThemedText type="small" themeColor="textSecondary" style={styles.setupHint}>
+                              No collections yet — create your first below.
+                            </ThemedText>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    {/* New collection / drop */}
+                    <ThemedView type="backgroundElement" style={styles.newCatCard}>
+                      <ThemedText type="code" themeColor="textSecondary">
+                        NEW COLLECTION / DROP
+                      </ThemedText>
+                      <View style={styles.catPresetRow}>
+                        {(['Spring', 'Summer', 'Fall', 'Winter', 'Drop'] as const).map((s) => {
+                          const season = s.toLowerCase();
+                          const son = newCatSeason === season;
+                          return (
+                            <Pressable
+                              key={s}
+                              onPress={() => {
+                                setNewCatSeason(season);
+                                setNewCat(s === 'Drop' ? '' : `${s} ${new Date().getFullYear()}`);
+                              }}
+                              hitSlop={4}>
+                              <ThemedView type={son ? 'backgroundSelected' : 'background'} style={styles.catPreset}>
+                                <ThemedText type="small" themeColor={son ? 'text' : 'textSecondary'}>
+                                  {s}
+                                </ThemedText>
+                              </ThemedView>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                      <GlowInput
+                        value={newCat}
+                        onChangeText={setNewCat}
+                        placeholder="Collection name, e.g. Summer 2026"
+                        containerStyle={styles.newCatInput}
+                      />
+                      <GlowButton
+                        label="Create collection"
+                        onPress={() => {
+                          createCatalogue(newCat, newCatSeason ?? undefined);
+                          setNewCatSeason(null);
+                        }}
+                        disabled={!newCat.trim()}
+                      />
+                    </ThemedView>
+
+                    {/* Or design for the brand's website (no collection needed) */}
+                    <ThemedText type="code" themeColor="textSecondary" style={styles.setupSection}>
+                      OR DESIGN FOR YOUR SITE
+                    </ThemedText>
+                    <Pressable onPress={() => void chooseAssetsMode()}>
+                      <ThemedView
+                        type={assetMode ? 'backgroundSelected' : 'backgroundElement'}
+                        style={[styles.setupCard, assetMode && { borderColor: theme.tint }]}>
+                        <View style={[styles.avatar, { backgroundColor: theme.backgroundSelected }]}>
+                          <ThemedText type="small">🌐</ThemedText>
+                        </View>
+                        <View style={styles.flexShrink}>
+                          <ThemedText type="small">Site assets</ThemedText>
+                          <ThemedText type="code" themeColor="textSecondary">
+                            Hero · logo · social graphics
+                          </ThemedText>
+                        </View>
+                        <View style={styles.flex} />
+                        <ThemedText type="small" themeColor={assetMode ? 'tint' : 'textSecondary'}>
+                          {assetMode ? '✓' : '›'}
+                        </ThemedText>
                       </ThemedView>
                     </Pressable>
-                  </View>
-                </>
-              )}
+                  </>
+                )}
+              </ScrollView>
             </ThemedView>
           </View>
         </Modal>
@@ -2537,6 +2614,27 @@ const styles = StyleSheet.create({
   designThumbPending: { alignItems: 'center', justifyContent: 'center' },
   addProductsBtn: { marginHorizontal: Spacing.three },
   emptyBrand: { gap: Spacing.three, paddingVertical: Spacing.three },
+  // Setup sheet (brand / collection)
+  setupHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexShrink: 1 },
+  flexShrink: { flexShrink: 1 },
+  setupScroll: { flexShrink: 1 },
+  setupScrollContent: { gap: Spacing.two, paddingBottom: Spacing.two },
+  setupCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#f4f4f6' },
+  collThumb: { width: 42, height: 42, borderRadius: Spacing.two },
+  setupSection: { textTransform: 'uppercase', marginTop: Spacing.two },
+  setupHint: { paddingVertical: Spacing.two },
+  newCatCard: { gap: Spacing.two, padding: Spacing.three, borderRadius: Spacing.three, marginTop: Spacing.one },
+  newCatInput: { marginBottom: 0 },
   effortBlock: { gap: Spacing.one, marginTop: Spacing.one },
   effortHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   effortTrackRow: { flexDirection: 'row', alignItems: 'center', height: 24 },
