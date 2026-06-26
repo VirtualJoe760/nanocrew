@@ -155,6 +155,7 @@ type Rig = {
   edgeCoreMat?: THREE.LineBasicMaterial;
   edgeHaloMat?: THREE.LineBasicMaterial; // reveal fade
   occluderMat?: THREE.MeshBasicMaterial; // deforming dark face fill (shared by the mesh clones)
+  skinMat?: THREE.MeshMatcapMaterial;    // shaded skin surface (baked living-hologram matcap)
   streamMat?: THREE.ShaderMaterial;      // persistent dot-field pulsing toward her
   eyeObjs: THREE.Object3D[];             // iris/sclera sprites — hidden until formed
   cycleMats: THREE.Material[]; // edges — narrow hue drift
@@ -201,6 +202,55 @@ function makeAuraTexture(): THREE.Texture {
     }
   }
   const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Baked "living hologram" SKIN matcap (DataTexture → native-safe): a stylized cyan lit-sphere
+// (key + fill + ambient = form) with a WARM subsurface shift at the terminator — what makes skin read
+// ALIVE (the DICE/GPU-Gems cheap-SSS idea) — and a fresnel rim at the silhouette. MeshMatcapMaterial
+// samples it by the VIEW-SPACE NORMAL, so it shades with no lights, no UVs: ES2/expo-gl safe.
+function makeSkinMatcap(): THREE.Texture {
+  const S = 256;
+  const data = new Uint8Array(S * S * 4);
+  const nrm = (x: number, y: number, z: number) => { const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l] as const; };
+  const key = nrm(-0.35, 0.42, 0.84); // key light: upper-left, toward camera
+  const fill = nrm(0.6, -0.15, 0.55); // soft fill: lower-right
+  const cl = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const shadow = [0.04, 0.16, 0.22]; // deep cyan shadow
+  const litC = [0.8, 0.97, 1.0];     // bright near-white cyan
+  const warm = [1.0, 0.42, 0.3];     // subsurface warmth
+  const rimC = [0.78, 0.98, 1.0];    // fresnel rim (cyan-white)
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const u = ((x + 0.5) / S) * 2 - 1;
+      const v = (1 - (y + 0.5) / S) * 2 - 1;
+      const r2 = u * u + v * v;
+      const i = (y * S + x) * 4;
+      if (r2 >= 1) { data[i] = data[i + 1] = data[i + 2] = 4; data[i + 3] = 255; continue; }
+      const nz = Math.sqrt(1 - r2);
+      const nl = u * key[0] + v * key[1] + nz * key[2];
+      const wrap = Math.pow(cl(nl * 0.5 + 0.5), 1.3); // wrapped/half-Lambert key — avoids a hard terminator
+      const f = cl((u * fill[0] + v * fill[1] + nz * fill[2]) * 0.5 + 0.5) * 0.32; // soft fill
+      const lum = cl(wrap + f);
+      const term = Math.pow(cl(1 - nl), 2.0) * cl(nl * 0.5 + 0.72); // warm only in the wrap, not the core dark
+      const fres = Math.pow(1 - nz, 3.0); // fresnel rim at the silhouette
+      const col = [
+        cl(lerp(shadow[0], litC[0], lum) + warm[0] * term * 0.5 + rimC[0] * fres * 0.7),
+        cl(lerp(shadow[1], litC[1], lum) + warm[1] * term * 0.5 + rimC[1] * fres * 0.7),
+        cl(lerp(shadow[2], litC[2], lum) + warm[2] * term * 0.5 + rimC[2] * fres * 0.7),
+      ];
+      data[i] = Math.round(col[0] * 255);
+      data[i + 1] = Math.round(col[1] * 255);
+      data[i + 2] = Math.round(col[2] * 255);
+      data[i + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
   return tex;
 }
@@ -1119,6 +1169,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
         let edgeCoreMat: THREE.LineBasicMaterial | undefined;
         let edgeHaloMat: THREE.LineBasicMaterial | undefined;
         let occluderMat: THREE.MeshBasicMaterial | undefined; // shared dark fill (deforming clones)
+        let skinMat: THREE.MeshMatcapMaterial | undefined;    // shaded skin surface (matcap)
         let streamMat: THREE.ShaderMaterial | undefined;
         let aura: THREE.Object3D | undefined;
         let bob: THREE.Mesh | undefined;
@@ -1300,6 +1351,32 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
               (src.parent ?? bones.head).add(occ);
             }
 
+            // (f2) SKIN — a real shaded surface so she reads as a finished head, not a bare wireframe.
+            // A clone of the face skin (shares skeleton + the morph-influence array → deforms with the
+            // visemes), shaded by a baked "living hologram" matcap (cyan form + warm subsurface at the
+            // terminator + fresnel rim). Sits BETWEEN the dark occluder (-10) and the hair (-5); the
+            // wireframe/edges/lattice glow OVER it. polygonOffset keeps it just behind the coincident wireframe.
+            {
+              const headSrc = meshes.find((m) => m.name === 'Wolf3D_Head') ?? meshes[0];
+              if (headSrc) {
+                skinMat = new THREE.MeshMatcapMaterial({
+                  matcap: makeSkinMatcap(),
+                  color: new THREE.Color('#9fe8f2'), // tints the matcap; lit-scaled per frame
+                  transparent: true,
+                  opacity: 0, // reveal fades it in
+                  depthWrite: false, // gated true once she forms (useFrame)
+                  polygonOffset: true,
+                  polygonOffsetFactor: 2,
+                  polygonOffsetUnits: 2,
+                });
+                const skin = headSrc.clone() as THREE.Mesh;
+                skin.material = skinMat;
+                skin.morphTargetInfluences = headSrc.morphTargetInfluences; // SHARE → deforms with visemes
+                skin.renderOrder = -8;
+                (headSrc.parent ?? bones.head).add(skin);
+              }
+            }
+
             // start the substrate hidden too — the reveal clock fades it in
             for (const m of meshes) (m.material as THREE.MeshBasicMaterial).opacity = 0;
 
@@ -1317,7 +1394,7 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
           }
         }
 
-        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluderMat, eyeObjs, cycleMats, aura, shell, bob, hairMat, strandHairMat, streamMat };
+        rig.current = { meshes, bones, rest, latticeMat, coreMat, edgeCoreMat, edgeHaloMat, occluderMat, skinMat, eyeObjs, cycleMats, aura, shell, bob, hairMat, strandHairMat, streamMat };
 
         // clip the dim SUBSTRATE at the ear line so the ears don't poke out from under
         // the hair (the bright shell already dropped them; the bob covers the area).
@@ -1339,6 +1416,11 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
           if (occluderMat) {
             occluderMat.clippingPlanes = earPlanes;
             occluderMat.needsUpdate = true;
+          }
+          // clip the SKIN like the substrate — ears + above the hairline — so no bare face shows past the hair
+          if (skinMat) {
+            skinMat.clippingPlanes = subPlanes;
+            skinMat.needsUpdate = true;
           }
         }
 
@@ -1435,6 +1517,15 @@ function Avatar({ url, stage = 'talking', onReveal }: { url: string; stage?: Ven
       // the whole face+neck) makes the entire head one cohesive colour. Scaled by `lit` (a touch
       // brighter speaking).
       om.color.setRGB(0.05 * lit, 0.21 * lit, 0.46 * lit);
+    }
+    // SKIN fades in WITH the structure (slightly translucent → reads as a luminous holographic surface,
+    // not opaque plastic); depthWrite gates on once formed; a subtle brighten while she speaks.
+    if (r.skinMat) {
+      const sm = r.skinMat;
+      sm.opacity = 0.92 * seg(0.55, 0.78);
+      sm.depthWrite = R > 0.5;
+      const sk = 0.84 + 0.16 * talk + 0.05 * speak * talk;
+      sm.color.setRGB(0.62 * sk, 0.91 * sk, 0.95 * sk);
     }
     // Hair fades in WITH the face structure (edges/substrate at 0.62–0.78), not after it — so during
     // the morph everything loads together instead of the hair popping in last.
