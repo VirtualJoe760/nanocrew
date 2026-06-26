@@ -42,17 +42,23 @@ video{width:100%;height:100%;object-fit:contain;display:block}
 // CDN bundlers (esm.sh/jsdelivr). .../dist/client.js sidesteps the broken index and exports cleanly.
 import { SimliClient, LogLevel } from 'https://esm.sh/simli-client@3.0.2/dist/client.js';
 const v=document.getElementById('v'),a=document.getElementById('a'),s=document.getElementById('s');
-let c=null;
-// Feed base64 PCM16 (16kHz mono) into Simli's lip-synced playback, chunked so the data channel
-// isn't handed one huge blob. Defined up-front (guards on c) so it survives a slow/failed connect.
-function speak(b64){
+let c=null, speakSeq=0;
+// Feed base64 PCM16 (16kHz mono) into Simli's lip-synced playback. Each new line first SKIPs any
+// audio still playing (so you can interrupt and re-test freely), then streams 6kB (~0.19s) chunks
+// PACED at ~real-time. Flooding every chunk at once overruns Simli's buffer and wedges the session
+// after the first utterance (the "only speaks once" bug). A bumped speakSeq supersedes an in-flight line.
+async function speak(b64){
   if(!c||!b64) return;
-  try{
-    const bin=atob(b64), bytes=new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-    const CHUNK=6000;
-    for(let o=0;o<bytes.length;o+=CHUNK) c.sendAudioData(bytes.subarray(o,Math.min(o+CHUNK,bytes.length)));
-  }catch(err){ /* a bad frame shouldn't kill the session */ }
+  const seq=++speakSeq;
+  try{ if(c.ClearBuffer) c.ClearBuffer(); }catch(e){}
+  const bin=atob(b64), bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  const CHUNK=6000;
+  for(let o=0;o<bytes.length;o+=CHUNK){
+    if(seq!==speakSeq) return;                                              // superseded by a newer line
+    try{ c.sendAudioData(bytes.subarray(o,Math.min(o+CHUNK,bytes.length))); }catch(e){ return; }
+    await new Promise(r=>setTimeout(r,150));                                // pace so the stream stays healthy
+  }
 }
 window.__simliSpeak=speak; // native: injectJavaScript(window.__simliSpeak("..."))
 window.addEventListener('message',function(e){ if(e&&e.data&&e.data.type==='simli-speak') speak(e.data.pcm); }); // web

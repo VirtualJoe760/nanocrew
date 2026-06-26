@@ -17,6 +17,13 @@ import type { SimliVenusHandle } from '@/components/simli-venus-html';
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
 type Mode = '3d' | 'simli';
 
+// Quick lines to tap in Simli mode (so you can sample her voice without typing each time).
+const SIMLI_LINES = [
+  "Hi, I'm Venus — how do I sound?",
+  "Let's build your brand — what are we making today?",
+  'Your store is live. Go check it out!',
+];
+
 export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
@@ -25,10 +32,12 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const [line, setLine] = useState("Hi, I'm Venus — how do I sound?");
   const [speaking, setSpeaking] = useState(false);
 
-  // Simli mode: make Venus speak the typed line in her Gemini voice (Aoede).
-  const speak = async () => {
-    const text = line.trim();
+  // Simli mode: make Venus speak in her Gemini voice (Aoede). Pass a preset, or use the input.
+  // Re-pressing while she's talking interrupts and says the new line (the frame supersedes it).
+  const speak = async (textArg?: string) => {
+    const text = (textArg ?? line).trim();
     if (!text || speaking) return;
+    if (textArg) setLine(textArg);
     setSpeaking(true);
     try {
       await simliRef.current?.speak(text);
@@ -78,24 +87,35 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
         </View>
       ) : null}
 
-      {/* simli mode — type a line and hear Venus say it in her Gemini voice (Aoede) */}
+      {/* simli mode — tap a preset or type your own; hear Venus in her Gemini voice (Aoede) */}
       {mode === 'simli' ? (
-        <View style={[styles.speakBar, { bottom: insets.bottom + 42 }]} pointerEvents="box-none">
-          <TextInput
-            value={line}
-            onChangeText={setLine}
-            placeholder="Type a line for Venus…"
-            placeholderTextColor="rgba(207,232,243,0.4)"
-            style={styles.speakInput}
-            returnKeyType="send"
-            onSubmitEditing={speak}
-          />
-          <Pressable
-            onPress={speak}
-            disabled={speaking}
-            style={[styles.speakBtn, speaking && styles.pillActive]}>
-            <Text style={[styles.pillText, styles.pillTextActive]}>{speaking ? '…' : 'Speak'}</Text>
-          </Pressable>
+        <View style={[styles.simliControls, { bottom: insets.bottom + 42 }]} pointerEvents="box-none">
+          <View style={styles.presetRow}>
+            {SIMLI_LINES.map((p, i) => (
+              <Pressable key={i} onPress={() => speak(p)} disabled={speaking} style={styles.preset}>
+                <Text numberOfLines={1} style={styles.presetText}>
+                  {p}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.speakBar}>
+            <TextInput
+              value={line}
+              onChangeText={setLine}
+              placeholder="Type a line for Venus…"
+              placeholderTextColor="rgba(207,232,243,0.4)"
+              style={styles.speakInput}
+              returnKeyType="send"
+              onSubmitEditing={() => speak()}
+            />
+            <Pressable
+              onPress={() => speak()}
+              disabled={speaking}
+              style={[styles.speakBtn, speaking && styles.pillActive]}>
+              <Text style={[styles.pillText, styles.pillTextActive]}>{speaking ? '…' : 'Speak'}</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
@@ -144,16 +164,26 @@ const styles = StyleSheet.create({
   },
   pillText: { color: 'rgba(207,232,243,0.6)', fontFamily: 'Jost-Light', fontSize: 12, letterSpacing: 0.5 },
   pillTextActive: { color: '#dff4ff', fontFamily: 'Jost-Medium' },
-  speakBar: {
+  simliControls: {
     position: 'absolute',
     left: 0,
     right: 0,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 18,
   },
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
+  preset: {
+    maxWidth: 220,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(124,199,223,0.25)',
+    backgroundColor: 'rgba(8,12,18,0.6)',
+  },
+  presetText: { color: 'rgba(207,232,243,0.7)', fontFamily: 'Jost-Light', fontSize: 11 },
+  speakBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'stretch' },
   speakInput: {
     flex: 1,
     maxWidth: 360,
