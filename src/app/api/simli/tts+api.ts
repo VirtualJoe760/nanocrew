@@ -13,7 +13,10 @@ import { guardRate } from '@/lib/rate-limit';
 
 const VENUS_LAB_EMAIL = 'josephsardella@gmail.com';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
-const VENUS_VOICE = 'Aoede'; // MUST match LiveVoiceSession + /api/say
+const VENUS_VOICE = 'Aoede'; // the DEFAULT — MUST match LiveVoiceSession + /api/say
+// Voice AUDITION (Lab): the request may name any of these Gemini prebuilt voices to hear a
+// candidate. Making one THE voice = change VENUS_VOICE here + /api/say + studio.tsx LIVE_VOICE.
+const VOICE_OPTIONS = ['Aoede', 'Leda', 'Kore', 'Zephyr', 'Callirrhoe', 'Despina', 'Erinome', 'Laomedeia'];
 const GEMINI_RATE = 24000; // Gemini TTS PCM sample rate
 const SIMLI_RATE = 16000; // simli-client AudioContext sampleRate
 
@@ -51,10 +54,12 @@ export async function POST(req: Request) {
   if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });
 
   let text: string;
+  let voice = VENUS_VOICE;
   try {
-    const body = (await req.json()) as { text?: string };
+    const body = (await req.json()) as { text?: string; voice?: string };
     text = typeof body.text === 'string' ? body.text.trim().slice(0, 300) : '';
     if (!text) throw new Error();
+    if (typeof body.voice === 'string' && VOICE_OPTIONS.includes(body.voice)) voice = body.voice;
   } catch {
     return Response.json({ error: 'text is required' }, { status: 400 });
   }
@@ -66,7 +71,7 @@ export async function POST(req: Request) {
       contents: [{ role: 'user', parts: [{ text }] }],
       config: {
         responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VENUS_VOICE } } },
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
       },
     });
     const data = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData?.data;

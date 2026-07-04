@@ -691,6 +691,8 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
   const crawlRef = useRef(0);
   const bpmRef = useRef(0);
   const hueRef = useRef({ net: 0, lim: 0.33, nuc: 0.66 });
+  const tkRef = useRef(0); // damped talk gate (kept OUT of the lattice uniform — that one now carries the energy baseline)
+  const voiceOverrideRef = useRef<number | null>(null); // __venusOrbVoice: fake jawOpen for stills
 
   // SHAPE-MORPH state: bus requests are polled per frame; a transition dissolves the dots
   // (reveal dips), swaps their targets to the new silhouette, then re-forms. The gate dims the
@@ -719,6 +721,11 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     g.__venusOrbSpin = (rad: number) => {
       spinRef.current = rad % (Math.PI * 2);
     };
+    // fake the voice signal (0..1 jawOpen) for deterministic stills — the real one needs live
+    // audio through the lipsync analyser. Pass null to return to the live signal.
+    (g as { __venusOrbVoice?: (v: number | null) => void }).__venusOrbVoice = (v) => {
+      voiceOverrideRef.current = v;
+    };
     // Dev-only introspection for the deterministic-stills workflow: the live shape-machine state
     // plus the bounding box of the face dots' CURRENT landing targets (cloud ≈ wide irregular box;
     // a flat object ≈ thin z). See docs/studio/VENUS_AVATAR.md.
@@ -742,6 +749,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       delete g.__venusOrbShape;
       delete g.__venusOrbDebug;
       delete g.__venusOrbSpin;
+      delete (g as { __venusOrbVoice?: unknown }).__venusOrbVoice;
     };
   }, []);
 
@@ -878,7 +886,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         uDot: { value: dotTex }, uTime: { value: 0 }, uOpacity: { value: 0 },
         uOrbR: { value: ORB_R }, uExpand: { value: 0 },
         uColA: { value: new THREE.Color(NET_A) }, uColB: { value: new THREE.Color(NET_B) },
-        uColMix: { value: 0 }, uBeatPop: { value: 0 },
+        uColMix: { value: 0 }, uBeatPop: { value: 0 }, uVoice: { value: 0 },
       },
       vertexShader: DUST_VERT, fragmentShader: DUST_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -894,7 +902,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       uOrbR: { value: ORB_R }, uCrawlPos: { value: 0 }, uExpand: { value: 0 },
       uYMin: { value: yMin * s }, uYSpan: { value: ySpan * s },
       uColA: { value: new THREE.Color(NET_A) }, uColB: { value: new THREE.Color(NET_B) },
-      uColMix: { value: 0 }, uBeatPop: { value: 0 },
+      uColMix: { value: 0 }, uBeatPop: { value: 0 }, uVoice: { value: 0 },
       uPlatinum: { value: new THREE.Color(PLATINUM) },
     });
     const netMat = new THREE.ShaderMaterial({
@@ -931,7 +939,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       uniforms: {
         uTime: { value: 0 }, uOpacity: { value: 0 }, uFlare: { value: 0 },
         uColA: { value: new THREE.Color(NUC_A) }, uColB: { value: new THREE.Color(NUC_B) },
-        uColMix: { value: 0 }, uBeatPop: { value: 0 },
+        uColMix: { value: 0 }, uBeatPop: { value: 0 }, uVoice: { value: 0 },
       },
       vertexShader: NUCLEUS_VERT, fragmentShader: NUCLEUS_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -943,7 +951,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         uTime: { value: 0 }, uAmp: { value: 0.14 }, uFlow: { value: 0.16 }, uOpacity: { value: 0 },
         uBoil: { value: 0.15 }, uBlip: { value: 1 }, uIgnite: { value: 0 },
         uColA: { value: new THREE.Color(SHE_A) }, uColB: { value: new THREE.Color(SHE_B) },
-        uColMix: { value: 0 }, uBeatPop: { value: 0 },
+        uColMix: { value: 0 }, uBeatPop: { value: 0 }, uVoice: { value: 0 },
         uPlatinum: { value: new THREE.Color(PLATINUM) }, uNavy: { value: new THREE.Color(NAVY) },
       },
       vertexShader: PLASMA_VERT, fragmentShader: SHEATH_FRAG,
@@ -982,10 +990,15 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const lip = lipRef.current;
     const talking = talkingRef.current || (lip?.speaking?.() ?? false);
     lipTargets.current = talking && lip ? lip.sample() : {};
-    const speak = lipTargets.current.jawOpen ?? 0;
+    const speak = voiceOverrideRef.current ?? lipTargets.current.jawOpen ?? 0;
     const talk = talkingRef.current ? 1 : 0;
-    // Brightness model — same as the face: silent 0.88, talking ~1.0 (+ a punch on energy).
-    const lit = 0.88 + 0.12 * talk + 0.06 * speak * talk;
+    // STATE MODEL (Joe 2026-07-04): "the way talking looks should be how silence looks" — the
+    // old talking ENERGY is now the BASELINE (en: 0.75 silent → 1 talking); the talking state
+    // itself is the VOICE layer below (color + nucleus riding the audio).
+    tkRef.current = THREE.MathUtils.damp(tkRef.current, talk, 5, delta);
+    const en = 0.75 + 0.25 * tkRef.current;
+    // Brightness model: silence already glows near-full; the voice punches it.
+    const lit = 0.88 + 0.12 * en + 0.06 * speak * talk;
     const blip = Math.random() < 0.003 ? 0.82 : 1.0; // the ONE allowed instability (lattice + sheath rim)
 
     // lattice: ambient Skia look + the cyclone + the talking bottom→top wave (aFaceY = cloud height).
@@ -998,7 +1011,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     u.uSelA.value = selA; u.uSelB.value = selB; u.uFade.value = fade;
     (u.uDrift.value as THREE.Vector2).set(t * 0.01, t * 0.006);
     u.uSpeak.value = THREE.MathUtils.damp(u.uSpeak.value, speak * 1.2, 8, delta);
-    u.uTalk.value = THREE.MathUtils.damp(u.uTalk.value, talk, 5, delta);
+    u.uTalk.value = THREE.MathUtils.damp(u.uTalk.value, en, 5, delta); // dots wave in silence too
     const pulseTarget = 0.12 + 0.88 * seg(0.18, 0.5) * (1 - 0.5 * seg(0.7, 0.95)) + 0.5 * seg(0.7, 0.95);
     u.uPulse.value = THREE.MathUtils.damp(u.uPulse.value, pulseTarget, 3, delta);
 
@@ -1044,7 +1057,8 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
 
     // ── the constellation drive block (spec: docs/studio/VENUS_AVATAR.md orb v3) ─────
     const spk = Math.min(1, u.uSpeak.value / 1.2); // normalized damped speech
-    const tk = u.uTalk.value;                      // damped talking gate
+    const tk = tkRef.current;                      // damped talking gate
+    const voice = spk * tk;                        // the VOICE signal — syllable energy, 0 in silence
     const formed = seg(0.45, 0.8);
     const growSweep = seg(0.48, 0.92);             // the network wires itself outward from the nucleus
     const ignite = seg(0.55, 0.8) * (1 - seg(0.8, 0.96)); // boot storm as she comes online
@@ -1053,18 +1067,18 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     nm.uTime.value = t; nd.uTime.value = t;
     nm.uGrow.value = growSweep; nd.uGrow.value = growSweep;
     nm.uIgnite.value = ignite;
-    nm.uRate.value = 0.16 + 0.12 * tk + 0.85 * spk * tk; // the storm rides syllables
+    nm.uRate.value = 0.16 + 0.12 * en + 0.85 * spk * tk; // full-energy baseline; the storm rides syllables
     nd.uRate.value = nm.uRate.value;
     nm.uFire.value = 0.6 + 1.5 * spk * tk;
     nd.uFire.value = nm.uFire.value;
     nm.uJitAmp.value = 1.0 + 0.6 * spk;                  // the web trembles on syllables
     nm.uTrunk.value = THREE.MathUtils.damp(nm.uTrunk.value, spk * tk, 6, delta); // trunks flare per phrase
-    nm.uTalk.value = tk; nd.uTalk.value = tk;
+    nm.uTalk.value = en; nd.uTalk.value = en; // the band sweeps in silence too
     nm.uSpeak.value = spk; nd.uSpeak.value = spk;
     // idle cognition: every ~7s (faster while talking) ONE ganglion flares and decays — thinking.
-    const per = 7 - 3 * tk;
+    const per = 7 - 3 * en;
     const hot = Math.floor((t / per) % 7) + 1;
-    const flare = Math.exp(-3 * ((t / per) % 1)) * (1 + 0.5 * tk);
+    const flare = Math.exp(-3 * ((t / per) % 1)) * (1 + 0.5 * en);
     nm.uHotGang.value = hot; nd.uHotGang.value = hot;
     nm.uGangFlare.value = flare; nd.uGangFlare.value = flare;
     nm.uOpacity.value = 0.9 * seg(0.5, 0.85) * lit * mindDim;
@@ -1075,7 +1089,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // ENERGY CRAWL — a luminous front creeping through the LIMBS along the BFS growth field
     // (nucleus → ganglia → arm tips, following actual wire paths). One lap ~12s at idle,
     // quicker while talking. Delta-integrated so rate changes stay phase-continuous.
-    crawlRef.current = (crawlRef.current + delta * (0.08 + 0.04 * tk + 0.1 * spk * tk)) % 1;
+    crawlRef.current = (crawlRef.current + delta * (0.08 + 0.04 * en + 0.1 * spk * tk)) % 1;
     nm.uCrawlPos.value = crawlRef.current;
     nd.uCrawlPos.value = crawlRef.current;
     // differential EXPANSION — the net grows outward like the universe: roots anchored, the
@@ -1091,10 +1105,12 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // limbic and nucleus cycle their palettes at different rates — and pops brightness.
     bpmRef.current = (bpmRef.current + delta * (80 / 60)) % 1;
     const beatPop = Math.exp(-bpmRef.current * 6);
+    // THE VOICE LAYER (the new talking representation): syllables SLIDE every hue clock and
+    // shift the palettes in-shader (uVoice) — the organism's color visibly reacts to her voice.
     const hue = hueRef.current;
-    hue.net = (hue.net + delta * beatPop * 0.3) % 1;
-    hue.lim = (hue.lim + delta * beatPop * 0.45) % 1;
-    hue.nuc = (hue.nuc + delta * beatPop * 0.22) % 1;
+    hue.net = (hue.net + delta * (beatPop * 0.3 + voice * 0.5)) % 1;
+    hue.lim = (hue.lim + delta * (beatPop * 0.45 + voice * 0.7)) % 1;
+    hue.nuc = (hue.nuc + delta * (beatPop * 0.22 + voice * 0.6)) % 1;
     nm.uColMix.value = hue.net;
     nd.uColMix.value = hue.net;
     r.dustMat.uniforms.uColMix.value = hue.net;
@@ -1102,15 +1118,19 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     nm.uBeatPop.value = beatPop;
     nd.uBeatPop.value = beatPop;
     r.dustMat.uniforms.uBeatPop.value = beatPop;
+    nm.uVoice.value = voice;
+    nd.uVoice.value = voice;
+    r.dustMat.uniforms.uVoice.value = voice;
 
     // nucleus + sheath — the mind condenses FIRST; the heart flares on syllables.
     const nu = r.nucleusMat.uniforms;
     nu.uTime.value = t;
     nu.uOpacity.value = (0.7 + 0.15 * Math.sin(t * 0.5)) * seg(0.42, 0.7) * lit * mindDim;
-    nu.uFlare.value = 0.9 * spk * tk + 1.6 * ignite;
+    nu.uFlare.value = 1.5 * voice + 1.6 * ignite; // the heart goes white-hot with the voice
     nu.uColMix.value = hue.nuc;
     nu.uBeatPop.value = beatPop;
-    r.nucleus.scale.setScalar(1.0 + 0.15 * spk * tk);   // syllable swell
+    nu.uVoice.value = voice;
+    r.nucleus.scale.setScalar(1.0 + 0.25 * voice);   // syllable swell
     const sh = r.sheathMat.uniforms;
     sh.uTime.value = t;
     sh.uOpacity.value = 0.5 * seg(0.42, 0.7) * lit * mindDim;
@@ -1118,11 +1138,12 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // "plasma liquid… shapes flow in different ways"), and boils harder on speech.
     sh.uAmp.value = Math.min(0.3, 0.14 + 0.02 * Math.sin(t * 0.5) + 0.16 * spk * tk);
     sh.uFlow.value = 0.16 + 0.45 * spk * tk;
-    sh.uBoil.value = THREE.MathUtils.damp(sh.uBoil.value, 0.15 + 0.55 * tk + 0.45 * spk, 4, delta);
+    sh.uBoil.value = THREE.MathUtils.damp(sh.uBoil.value, 0.15 + 0.55 * en + 0.45 * spk, 4, delta);
     sh.uBlip.value = blip;
     sh.uIgnite.value = ignite;
     sh.uColMix.value = hue.nuc; // the sheath rides the nucleus family's clock (own palette)
     sh.uBeatPop.value = beatPop;
+    sh.uVoice.value = voice;
 
     // halos — nucleus bleed + the room pulse (the only round glows left; shape-gate kills them)
     r.haloTightMat.opacity = 0.3 * lit * seg(0.5, 0.8) * sphereDim;
@@ -1133,7 +1154,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // LANDING TARGETS by the same uSpinY/uTgtScale, so landed dots stay glued to their somas
     // (this is what makes accumulating rotation safe). Spin pauses while an object is showing
     // so the tee/heart/bolt don't turn edge-on.
-    spinRef.current = (spinRef.current + delta * (0.05 + 0.05 * tk) * (1 - ss.gate)) % (Math.PI * 2);
+    spinRef.current = (spinRef.current + delta * (0.02 + 0.015 * tk) * (1 - ss.gate)) % (Math.PI * 2); // full turn ~5min — slow, per Joe
     const swell = 0.05 * Math.sin(t * 0.1);
     r.netGroup.rotation.y = Math.sin(t * 0.07) * 0.12 + spinRef.current;
     r.netGroup.rotation.x = Math.sin(t * 0.05 + 1.7) * 0.08;

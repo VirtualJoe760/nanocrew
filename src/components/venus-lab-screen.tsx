@@ -29,6 +29,12 @@ const SIMLI_LINES = [
   'Your store is live. Go check it out!',
 ];
 
+// VOICE AUDITION — Gemini prebuilt voices to try (must match the tts route's allowlist).
+// Tap a voice, then a line: she speaks it in that voice. 'Aoede' is today's default; to make a
+// different one THE voice, change VENUS_VOICE in /api/say + /api/simli/tts and LIVE_VOICE in
+// studio.tsx (they must all match).
+const VOICES = ['Aoede', 'Leda', 'Kore', 'Zephyr', 'Callirrhoe', 'Despina', 'Erinome', 'Laomedeia'];
+
 export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
@@ -37,16 +43,17 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const simliRef = useRef<SimliVenusHandle>(null);
   const [line, setLine] = useState("Hi, I'm Venus — how do I sound?");
   const [speaking, setSpeaking] = useState(false);
+  const [voice, setVoice] = useState('Aoede');
 
-  // Simli mode: make Venus speak in her Gemini voice (Aoede). Pass a preset, or use the input.
-  // Re-pressing while she's talking interrupts and says the new line (the frame supersedes it).
+  // Simli mode: make Venus speak in the SELECTED Gemini voice (voice audition). Pass a preset,
+  // or use the input. Re-pressing while she's talking interrupts (the frame supersedes it).
   const speak = async (textArg?: string) => {
     const text = (textArg ?? line).trim();
     if (!text || speaking) return;
     if (textArg) setLine(textArg);
     setSpeaking(true);
     try {
-      await simliRef.current?.speak(text);
+      await simliRef.current?.speak(text, voice);
     } catch {
       // any failure surfaces inside the Simli frame; keep the Lab UI quiet
     } finally {
@@ -115,9 +122,19 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
         </View>
       ) : null}
 
-      {/* simli mode — tap a preset or type your own; hear Venus in her Gemini voice (Aoede) */}
+      {/* simli mode — pick a VOICE, then tap a preset or type your own to audition it */}
       {mode === 'simli' ? (
         <View style={[styles.simliControls, { bottom: insets.bottom + 42 }]} pointerEvents="box-none">
+          <View style={styles.presetRow}>
+            {VOICES.map((v) => {
+              const active = voice === v;
+              return (
+                <Pressable key={v} onPress={() => setVoice(v)} style={[styles.pill, active && styles.pillActive]}>
+                  <Text style={[styles.pillText, active && styles.pillTextActive]}>{v}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <View style={styles.presetRow}>
             {SIMLI_LINES.map((p, i) => (
               <Pressable key={i} onPress={() => speak(p)} disabled={speaking} style={styles.preset}>

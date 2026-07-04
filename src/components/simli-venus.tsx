@@ -38,8 +38,8 @@ const SimliVenus = forwardRef<SimliVenusHandle>(function SimliVenus(_props, ref)
   useImperativeHandle(
     ref,
     () => ({
-      async speak(text: string) {
-        const pcm = await synthSimliPcm(text);
+      async speak(text: string, voice?: string) {
+        const pcm = await synthSimliPcm(text, voice);
         if (pcm) webRef.current?.injectJavaScript(`window.__simliSpeak(${JSON.stringify(pcm)});true;`);
       },
     }),

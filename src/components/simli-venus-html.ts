@@ -11,16 +11,17 @@ import { apiFetch, readJson } from '@/lib/api';
 // postMessage({type:'simli-speak'}), native via injectJavaScript(window.__simliSpeak(...)). The frame
 // base64-decodes and feeds it to client.sendAudioData() in 16kHz chunks. See VENUS_AVATAR.md "Simli".
 
-/** Imperative handle both renderers expose so the Lab can make Venus speak a line. */
-export type SimliVenusHandle = { speak: (text: string) => Promise<void> };
+/** Imperative handle both renderers expose so the Lab can make Venus speak a line.
+ *  `voice` (optional) auditions a different Gemini prebuilt voice — see the tts route's allowlist. */
+export type SimliVenusHandle = { speak: (text: string, voice?: string) => Promise<void> };
 
 /** Fetch Venus's line as Simli-ready 16kHz PCM16 (base64) from the gated Gemini-TTS route. */
-export async function synthSimliPcm(text: string): Promise<string | null> {
+export async function synthSimliPcm(text: string, voice?: string): Promise<string | null> {
   const { pcm } = await readJson<{ pcm?: string }>(
     await apiFetch('/api/simli/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, ...(voice ? { voice } : {}) }),
     }),
   );
   return pcm ?? null;
