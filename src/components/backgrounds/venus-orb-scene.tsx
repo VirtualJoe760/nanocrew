@@ -11,6 +11,7 @@ import {
   PLASMA_VERT, PLASMA_FRAG, INNER_FRAG, VEIL_VERT, VEIL_FRAG,
   NET_VERT, NET_FRAG, NODE_VERT, NODE_FRAG,
 } from './venus-plasma';
+import { getVenusOrbShapeRequest, setVenusOrbShape, type VenusOrbShape } from './venus-orb-bus';
 import type { VenusStage } from './venus-head-scene';
 
 // ── Venus ORB v2 — the "CONTAINED STAR" (R3F) ───────────────────────────────
@@ -61,6 +62,53 @@ function bakeOrbDots(count: number, radius: number): THREE.BufferGeometry {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   bakeAurora(g);
   return g;
+}
+
+// ── SHAPE MORPH: 2D object silhouettes the dots can re-form into ────────────
+// Flat point clouds facing the fixed camera read crisply. Each sampler rejection-fills a unit
+// silhouette, scaled to ~1.3R with a little z-jitter for depth sparkle.
+function pointInPoly(x: number, y: number, poly: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const TEE_POLY = [
+  [-0.95, 0.5], [-0.55, 0.72], [-0.18, 0.6], [0, 0.52], [0.18, 0.6], [0.55, 0.72], [0.95, 0.5],
+  [0.68, 0.12], [0.45, 0.24], [0.45, -0.78], [-0.45, -0.78], [-0.45, 0.24], [-0.68, 0.12],
+];
+const BOLT_POLY = [
+  [0.12, 1.0], [-0.5, 0.05], [-0.08, 0.05], [-0.34, -1.0], [0.5, 0.12], [0.06, 0.12],
+];
+function insideShape(name: VenusOrbShape, x: number, y: number): boolean {
+  if (name === 'tee') return pointInPoly(x, y, TEE_POLY);
+  if (name === 'bolt') return pointInPoly(x, y, BOLT_POLY);
+  if (name === 'heart') {
+    const yy = y * 1.2 - 0.1;
+    const a = x * x + yy * yy - 1;
+    return a * a * a - x * x * yy * yy * yy <= 0;
+  }
+  return x * x + y * y <= 1;
+}
+function sampleShape(name: VenusOrbShape, count: number, R: number): Float32Array {
+  const out = new Float32Array(count * 3);
+  // ~orb-sized: unit shapes span ±1, so S=R keeps the object inside the old silhouette and the
+  // dot density high enough to read (at 1.3R the tee filled the whole canvas and read as dust).
+  const S = R;
+  let i = 0, guard = 0;
+  while (i < count && guard < count * 400) {
+    guard++;
+    const x = Math.random() * 2.6 - 1.3;
+    const y = Math.random() * 2.6 - 1.3;
+    if (!insideShape(name, x, y)) continue;
+    out[i * 3] = x * S;
+    out[i * 3 + 1] = y * S;
+    out[i * 3 + 2] = (Math.random() - 0.5) * R * 0.12;
+    i++;
+  }
+  return out;
 }
 
 type OrbRig = {
@@ -194,6 +242,43 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
   if (!lipRef.current) lipRef.current = createVenusLipsync();
   const lipTargets = useRef<VisemeWeights>({});
 
+  // SHAPE-MORPH state: bus requests are polled per frame; a transition dissolves the dots
+  // (reveal dips), swaps their targets to the new silhouette, then re-forms. shapeGate dims the
+  // sphere-shaped layers (membrane/net/nucleus/veils) while a non-orb object is showing.
+  const shapeRig = useRef<{ latGeo: THREE.BufferGeometry; idx: number[]; orbTargets: Float32Array; orbFaceY: Float32Array } | null>(null);
+  const shapeState = useRef({ seq: 0, showing: 'orb' as VenusOrbShape, pending: null as VenusOrbShape | null, gate: 0 });
+  useEffect(() => {
+    if (!__DEV__) return;
+    const g = globalThis as {
+      __venusOrbShape?: (s: VenusOrbShape) => void;
+      __venusOrbDebug?: () => unknown;
+    };
+    g.__venusOrbShape = (s) => setVenusOrbShape(s);
+    // Dev-only introspection for the deterministic-stills workflow: the live shape-machine state
+    // plus the bounding box of the face dots' CURRENT landing targets (sphere ≈ cube ±R; a flat
+    // object ≈ thin z). See docs/studio/VENUS_AVATAR.md.
+    g.__venusOrbDebug = () => {
+      const sr = shapeRig.current;
+      let box: number[] | null = null;
+      if (sr) {
+        const tgt = sr.latGeo.getAttribute('aTarget') as THREE.BufferAttribute;
+        let nx = 1e9, px = -1e9, ny = 1e9, py = -1e9, nz = 1e9, pz = -1e9;
+        for (const li of sr.idx) {
+          const x = tgt.getX(li), y = tgt.getY(li), z = tgt.getZ(li);
+          nx = Math.min(nx, x); px = Math.max(px, x);
+          ny = Math.min(ny, y); py = Math.max(py, y);
+          nz = Math.min(nz, z); pz = Math.max(pz, z);
+        }
+        box = [nx, px, ny, py, nz, pz].map((v) => Math.round(v * 1000) / 1000);
+      }
+      return { ...shapeState.current, reveal: reveal.current, revealTarget: revealTarget.current, rig: !!sr, box };
+    };
+    return () => {
+      delete g.__venusOrbShape;
+      delete g.__venusOrbDebug;
+    };
+  }, []);
+
   // ── build once (synchronous — no GLB to load) ───────────────────────────────
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
@@ -213,7 +298,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const { geometry: latGeo, faceCentroid } = bakeUnifiedLattice(orbDots, { vW, vH }, new THREE.Matrix4());
     const latticeMat = new THREE.ShaderMaterial({
       uniforms: {
-        uTime: { value: 0 }, uMorph: { value: 0 }, uReveal: { value: 0 },
+        uTime: { value: 0 }, uMorph: { value: 0 }, uReveal: { value: 0 }, uLead: { value: 0 },
         uPulse: { value: 0.12 }, uSpeak: { value: 0 }, uTalk: { value: 0 }, uBlip: { value: 1 },
         uSelA: { value: 0 }, uSelB: { value: 0 }, uFade: { value: 0 },
         uDrift: { value: new THREE.Vector2() }, uCellScale: { value: LAT_ROWS / 2.0 },
@@ -233,6 +318,25 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     latticePts.renderOrder = 0;
     latticePts.frustumCulled = false;
     scene.add(latticePts);
+
+    // SHAPE-MORPH rig: remember which lattice dots are hers (aIsFace) and their sphere landing
+    // spots, so setVenusOrbShape() can retarget them to an object silhouette and back.
+    {
+      const isFace = latGeo.getAttribute('aIsFace');
+      const tgt = latGeo.getAttribute('aTarget');
+      const fy = latGeo.getAttribute('aFaceY');
+      const idx: number[] = [];
+      for (let i = 0; i < isFace.count; i++) if (isFace.getX(i) > 0.5) idx.push(i);
+      const orbTargets = new Float32Array(idx.length * 3);
+      const orbFaceY = new Float32Array(idx.length);
+      idx.forEach((li, k) => {
+        orbTargets[k * 3] = tgt.getX(li);
+        orbTargets[k * 3 + 1] = tgt.getY(li);
+        orbTargets[k * 3 + 2] = tgt.getZ(li);
+        orbFaceY[k] = fy.getX(li);
+      });
+      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY };
+    }
 
     // (b) the stream field — a volumetric shell of dots looping INTO the star (the depth-feed).
     const streamMat = new THREE.ShaderMaterial({
@@ -285,7 +389,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const bodyGeo = new THREE.SphereGeometry(BODY_R, 60, 44);
     const innerMat = new THREE.ShaderMaterial({
       uniforms: {
-        uTime: { value: 0 }, uAmp: { value: 0.03 }, uOpacity: { value: 0 },
+        uTime: { value: 0 }, uAmp: { value: 0.03 }, uFlow: { value: 0.1 }, uOpacity: { value: 0 },
         uCyan: { value: new THREE.Color(CYAN) }, uNavy: { value: new THREE.Color(NAVY) },
       },
       vertexShader: PLASMA_VERT,
@@ -298,7 +402,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     inner.renderOrder = 5; // the glowing far wall — drawn BEFORE the front pass, condenses first
     const bodyMat = new THREE.ShaderMaterial({
       uniforms: {
-        uTime: { value: 0 }, uAmp: { value: 0.03 }, uOpacity: { value: 0 },
+        uTime: { value: 0 }, uAmp: { value: 0.03 }, uFlow: { value: 0.1 }, uOpacity: { value: 0 },
         uBoil: { value: 0.15 }, uSpeak: { value: 0 }, uTalk: { value: 0 },
         uBlip: { value: 1 }, uIgnite: { value: 0 },
         uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
@@ -438,24 +542,60 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     s.uIntake.value = THREE.MathUtils.damp(s.uIntake.value, 0.15 + 1.0 * seg(0.18, 0.5) * (1 - seg(0.55, 0.85)), 3.5, delta);
     s.uSpeak.value = THREE.MathUtils.damp(s.uSpeak.value, speak, 6, delta);
 
-    // ── the star's drive block (spec: docs/studio/VENUS_AVATAR.md orb v2) ─────
+    // ── SHAPE MORPH: poll the bus; dissolve → retarget the dots → re-form ─────
+    const req = getVenusOrbShapeRequest();
+    const ss = shapeState.current;
+    if (req.seq !== ss.seq) {
+      ss.seq = req.seq;
+      if (req.shape !== ss.showing) ss.pending = req.shape;
+    }
+    if (ss.pending && stage !== 'pre-render') {
+      revealTarget.current = 0.3; // dissolve toward dust…
+      if (R < 0.45 && shapeRig.current) {
+        // …and at the bottom of the dip, swap her dots' landing targets to the new silhouette.
+        const sr = shapeRig.current;
+        const pts = ss.pending === 'orb' ? sr.orbTargets : sampleShape(ss.pending, sr.idx.length, ORB_R);
+        const tgt = sr.latGeo.getAttribute('aTarget') as THREE.BufferAttribute;
+        const fy = sr.latGeo.getAttribute('aFaceY') as THREE.BufferAttribute;
+        sr.idx.forEach((li, k) => {
+          tgt.setXYZ(li, pts[k * 3], pts[k * 3 + 1], pts[k * 3 + 2]);
+          fy.setX(li, ss.pending === 'orb' ? sr.orbFaceY[k] : THREE.MathUtils.clamp(pts[k * 3 + 1] / (2.6 * ORB_R) + 0.5, 0, 1));
+        });
+        tgt.needsUpdate = true;
+        fy.needsUpdate = true;
+        ss.showing = ss.pending;
+        ss.pending = null;
+        revealTarget.current = 1; // …then cyclone onto the object
+      }
+    }
+    // While a non-orb object is showing, the sphere-shaped layers step back and the dots lead.
+    ss.gate = THREE.MathUtils.damp(ss.gate, ss.showing !== 'orb' || ss.pending ? 1 : 0, 4, delta);
+    const sphereDim = 1 - 0.97 * ss.gate; // membrane/inner/veils/halos — the sphere must GO AWAY
+    const mindDim = 1 - 0.88 * ss.gate;   // nucleus/net (a faint mind lingers inside the object)
+    u.uLead.value = ss.gate;              // dots take over the drawing while an object shows
+
+    // ── the plasma drive block (spec: docs/studio/VENUS_AVATAR.md orb v2) ─────
     const spk = Math.min(1, u.uSpeak.value / 1.2); // normalized damped speech (lattice damps toward speak*1.2)
     const tk = u.uTalk.value;                      // damped talking gate
     const formed = seg(0.45, 0.8);
-    // SILHOUETTE LOCK: body and inner MUST receive identical uTime/uAmp — set both from these locals.
-    const amp = Math.min(0.12, 0.03 + 0.008 * Math.sin(t * 0.5) + 0.085 * spk * tk); // clamp is load-bearing
-    const surge = seg(0.6, 0.85) * (1 - seg(0.85, 0.97));  // newborn-star churn at formation
+    // SILHOUETTE LOCK: body and inner MUST receive identical uTime/uAmp/uFlow.
+    // The blob MORPHS while she talks: big displacement lobes riding speech energy (crests
+    // deliberately break the dot skin now — sparks half-buried in plasma read organic).
+    const amp = Math.min(0.3, 0.05 + 0.015 * Math.sin(t * 0.5) + 0.26 * spk * tk);
+    const flow = 0.1 + 0.08 * tk + 0.45 * spk * tk; // the noise field streams faster on syllables
+    const surge = seg(0.6, 0.85) * (1 - seg(0.85, 0.97));  // newborn churn at formation
     const ignite = seg(0.5, 0.8) * (1 - seg(0.82, 0.96));  // landing brightness flash
     const b = r.bodyMat.uniforms, n = r.innerMat.uniforms;
     b.uTime.value = t; n.uTime.value = t;
     b.uAmp.value = amp; n.uAmp.value = amp;
+    b.uFlow.value = flow; n.uFlow.value = flow;
     b.uBoil.value = THREE.MathUtils.damp(b.uBoil.value, 0.15 + 0.55 * tk + 0.45 * spk + 0.6 * surge, 4, delta);
     b.uSpeak.value = spk; b.uTalk.value = tk; b.uBlip.value = blip; b.uIgnite.value = ignite;
-    b.uOpacity.value = 0.55 * formed * lit;         // TRANSLUCENT membrane — the brain must read through
-    n.uOpacity.value = 0.4 * seg(0.42, 0.72) * lit; // faint far wall (the nucleus is the interior light now)
+    b.uOpacity.value = 0.55 * formed * lit * sphereDim; // TRANSLUCENT membrane — the brain must read through
+    n.uOpacity.value = 0.4 * seg(0.42, 0.72) * lit * sphereDim; // faint far wall
 
     // the brain: nucleus condenses first, then the web ignites; firing rate rides her voice
-    r.nucleusMat.uniforms.uOpacity.value = (0.7 + 0.15 * Math.sin(t * 0.5) + 0.9 * spk * tk) * seg(0.42, 0.72) * lit;
+    r.nucleusMat.uniforms.uOpacity.value = (0.7 + 0.15 * Math.sin(t * 0.5) + 0.9 * spk * tk) * seg(0.42, 0.72) * lit * mindDim;
     const nm = r.netMat.uniforms, nd = r.nodeMat.uniforms;
     nm.uTime.value = t; nd.uTime.value = t;
     nm.uTalk.value = tk; nd.uTalk.value = tk;
@@ -464,19 +604,19 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     nd.uRate.value = nm.uRate.value;
     nm.uFire.value = 0.7 + 1.3 * spk * tk;
     nd.uFire.value = nm.uFire.value;
-    nm.uOpacity.value = 0.9 * formed * lit;
-    nd.uOpacity.value = formed * lit;
+    nm.uOpacity.value = 0.9 * formed * lit * mindDim;
+    nd.uOpacity.value = formed * lit * mindDim;
     // slow 3D tumble — neurons crossing in front of/behind the nucleus = the volume tell
     r.netGroup.rotation.y = t * 0.1;
     r.netGroup.rotation.x = Math.sin(t * 0.13) * 0.15;
     r.veilAMat.uniforms.uTime.value = t; r.veilBMat.uniforms.uTime.value = t;
-    r.veilAMat.uniforms.uOpacity.value = 0.15 * lit * seg(0.55, 0.85);
-    r.veilBMat.uniforms.uOpacity.value = 0.11 * lit * seg(0.6, 0.9);
+    r.veilAMat.uniforms.uOpacity.value = 0.15 * lit * seg(0.55, 0.85) * sphereDim;
+    r.veilBMat.uniforms.uOpacity.value = 0.11 * lit * seg(0.6, 0.9) * sphereDim;
     r.veilAMat.uniforms.uFlare.value = 0.3 * spk * tk;  // corona surges on syllables (0 at idle)
     r.veilBMat.uniforms.uFlare.value = 0.22 * spk * tk;
-    r.haloTightMat.opacity = 0.42 * lit * formed;
-    r.haloMidMat.opacity = 0.2 * lit * seg(0.55, 0.9);
-    r.haloWideMat.opacity = (0.07 + 0.3 * spk * tk) * seg(0.65, 0.95); // she lights the room on each phrase
+    r.haloTightMat.opacity = 0.42 * lit * formed * sphereDim;
+    r.haloMidMat.opacity = 0.2 * lit * seg(0.55, 0.9) * sphereDim;
+    r.haloWideMat.opacity = (0.07 + 0.3 * spk * tk) * seg(0.65, 0.95) * sphereDim; // she lights the room on each phrase
     r.veilA.rotation.x = Math.sin(t * 0.19) * 0.22; // slow tilts (the spin lives in-shader)
     r.veilB.rotation.z = Math.sin(t * 0.14) * 0.18;
 

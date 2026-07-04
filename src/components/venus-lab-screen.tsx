@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRef, useState } from 'react';
 
 import VenusAvatar, { type VenusStage } from '@/components/venus-avatar';
+import { setVenusOrbShape, type VenusOrbShape } from '@/components/backgrounds/venus-orb-bus';
 import SimliVenus from '@/components/simli-venus';
 import type { SimliVenusHandle } from '@/components/simli-venus-html';
 
@@ -15,6 +16,8 @@ import type { SimliVenusHandle } from '@/components/simli-venus-html';
 // docs/studio/VENUS_AVATAR.md.
 
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
+// Orb-mode shape morphs — the dots dissolve and re-form as the object (venus-orb-bus).
+const SHAPES: VenusOrbShape[] = ['orb', 'tee', 'heart', 'bolt'];
 // orb = the JARVIS-style sphere of light (the DEFAULT embodiment app-wide); face = the Cortana-era
 // humanoid build (kept for comparison); simli = the photoreal renderer POC.
 type Mode = 'orb' | 'face' | 'simli';
@@ -30,6 +33,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
   const [mode, setMode] = useState<Mode>('orb');
+  const [shape, setShape] = useState<VenusOrbShape>('orb');
   const simliRef = useRef<SimliVenusHandle>(null);
   const [line, setLine] = useState("Hi, I'm Venus — how do I sound?");
   const [speaking, setSpeaking] = useState(false);
@@ -85,6 +89,26 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
             return (
               <Pressable key={s} onPress={() => setStage(s)} style={[styles.pill, active && styles.pillActive]}>
                 <Text style={[styles.pillText, active && styles.pillTextActive]}>{s}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {/* shape morphs — orb mode only: her dots dissolve and re-form as the object */}
+      {mode === 'orb' ? (
+        <View style={[styles.stageBar, { bottom: insets.bottom + 92 }]} pointerEvents="box-none">
+          {SHAPES.map((s) => {
+            const active = shape === s;
+            return (
+              <Pressable
+                key={s}
+                onPress={() => {
+                  setShape(s);
+                  setVenusOrbShape(s);
+                }}
+                style={[styles.pill, active && styles.pillActive]}>
+                <Text style={[styles.pillText, active && styles.pillTextActive]}>{s === 'orb' ? '● orb' : s}</Text>
               </Pressable>
             );
           })}

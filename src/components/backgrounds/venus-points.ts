@@ -64,6 +64,7 @@ export const LATTICE_VERT = /* glsl */ `
   uniform float uSpeak;         // jawOpen energy (twinkle/pulse boost)
   uniform float uTalk;          // 0..1 talking gate — drives the speech pulse down her face
   uniform float uBlip;          // rare holographic instability
+  uniform float uLead;          // 1 = dots LEAD (orb shape-morph: membrane gone, dots draw the object). Default 0 → head scene unchanged.
   uniform float uSelA, uSelB, uFade;   // Skia 12s pattern-crossfade (JS-computed)
   uniform vec2  uDrift;         // = (t*0.010, t*0.006) — Skia parallax, uv units
   uniform float uCellScale;     // uv->cell factor = ROWS / (2.0) (see bake); for drift->cell
@@ -119,7 +120,7 @@ export const LATTICE_VERT = /* glsl */ `
     float spark = 0.6 + 1.4 * fly;
     vec3  faceColor = mix(vec3(0.85, 0.95, 1.0), color, matT);     // hot-white -> aurora
     float faceGlow  = (0.5 * matT + spark * (1.0 - matT));         // bright in flight
-    float landFade  = 1.0 - land * 0.85;                          // fade dot glow at land (handoff)
+    float landFade  = 1.0 - land * 0.85 * (1.0 - uLead);          // fade dot glow at land (handoff to the membrane) — UNLESS the dots lead
     // ambient brightness for BOTH kinds; face dots add their flight term, scaled by peel:
     vColor = mix(ambColor, faceColor, peel);
     vGlow  = (ambVal + peel * faceGlow * landFade) * tw * (1.0 + uSpeak * 0.4);
@@ -132,6 +133,8 @@ export const LATTICE_VERT = /* glsl */ `
     float talkPulse = band * aIsFace * uTalk * (0.7 + 1.6 * uSpeak);
     vColor = mix(vColor, vec3(0.80, 0.95, 1.0), clamp(talkPulse, 0.0, 0.7)); // lit dots read brighter
     vGlow += talkPulse;
+    // dots-lead boost: landed dots hold a steady glow so the object silhouette reads on its own.
+    vGlow += aIsFace * uLead * land * (0.9 + 0.4 * uTalk);
 
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     float flightSize = 1.0 + fly * 0.9 * aIsFace;

@@ -58,16 +58,18 @@ mat2 rot2(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
 // uTime/uAmp every frame or the back wall pokes through the front rim as a hard cyan sliver).
 export const PLASMA_VERT = /* glsl */ `
 precision highp float;
-uniform float uTime, uAmp;
+uniform float uTime, uAmp, uFlow;
 varying vec3 vN, vV, vObj;
 varying float vY;
 ${NOISE3}
 void main(){
   vec3 dir = normalize(position);
-  // low-frequency convection lift — sampled on the unit sphere (precision stays unit-scale)
-  vec3 np = dir * 2.6 + vec3(0.0, uTime * 0.22, 0.0);
+  // TWO scales of deformation: big slow LOBES (the whole form visibly morphs — reads as the blob
+  // reshaping itself while she talks) + finer convection ripple. uFlow speeds the field on speech.
+  vec3 np = dir * 1.6 + vec3(0.0, uTime * uFlow, uTime * uFlow * 0.3);
+  float lobe = vnoise3(dir * 0.9 + vec3(uTime * uFlow * 0.5, uTime * 0.07, 0.0));
   float n = fbm3(np);
-  float d = (n - 0.5) * 2.0 * uAmp;                 // uAmp: 0.03 idle → 0.12 syllable peak (CPU-clamped)
+  float d = ((n - 0.5) * 1.4 + (lobe - 0.5) * 1.2) * uAmp; // uAmp: ~0.05 idle → ~0.3 talking (CPU-clamped)
   vec3 displaced = position * (1.0 + d);
   // forward-difference gradient (dFdx is forbidden) → perturbed shading normal
   float e = 0.12;
@@ -76,7 +78,7 @@ void main(){
     fbm3(np + vec3(0.0, e, 0.0)) - n,
     fbm3(np + vec3(0.0, 0.0, e)) - n) / e;
   vec3 gt = g - dir * dot(g, dir);                  // tangential slope only
-  vec3 nObj = normalize(dir - gt * uAmp * 5.0);
+  vec3 nObj = normalize(dir - gt * uAmp * 4.0);
   vec4 mv = modelViewMatrix * vec4(displaced, 1.0);
   vN = normalize(normalMatrix * nObj);
   vV = normalize(-mv.xyz);
@@ -109,23 +111,27 @@ void main(){
   sp.xz = rot2(swirlA * (0.6 + 0.4 * (1.0 - sp.y * sp.y))) * sp.xz;
   vec3 P = sp * 2.6;
 
-  // gauze wisps: 2 × fbm2 + 1 × fbm4 = 8 vnoise3 (cheaper than the star build)
-  float climb = uTime * (0.04 + uBoil * 0.10);
+  // PLASMA LICKS: heavier domain warp (boil cranks it) + sharpened crests → tendrils of energy
+  // crawling the glass, not an even fog. 2 × fbm2 + 1 × fbm4 = 8 vnoise3.
+  float climb = uTime * (0.05 + uBoil * 0.22);
   vec3 q = vec3(
     fbm2(P + vec3(0.0, climb, 0.0)),
-    fbm2(P + vec3(5.2, 1.3, 2.8)),
+    fbm2(P + vec3(5.2, 1.3, 2.8) - vec3(climb * 0.6, 0.0, 0.0)),
     0.0);
-  float wisp = fbm4(P + (1.1 + uBoil * 0.5) * q.xyx);
+  float wisp = fbm4(P + (1.0 + 1.3 * uBoil) * q.xyx);
+  float licks = smoothstep(0.48, 0.82, wisp);       // the bright tendril crests
 
   // the GLASS model: nearly clear face, luminous limb
   float rim   = pow(1.0 - ndv, 2.6);
   float razor = pow(1.0 - ndv, 9.0);
-  float faceClear = 0.10 + 0.90 * pow(1.0 - ndv, 1.4); // ≈0.1 at the face → 1 at the limb
+  float faceClear = 0.08 + 0.92 * pow(1.0 - ndv, 1.4); // ≈0.08 at the face → 1 at the limb
 
-  vec3 gauze = mix(uNavy, uCyan, smoothstep(0.25, 0.75, wisp));
-  gauze = mix(gauze, uPlatinum, smoothstep(0.68, 0.92, wisp));
+  vec3 gauze = mix(uNavy, uCyan, smoothstep(0.3, 0.7, wisp));
+  gauze = mix(gauze, uPlatinum, smoothstep(0.7, 0.9, wisp));
 
-  vec3 col = gauze * (0.20 + 0.55 * wisp) * faceClear * (0.9 + uBoil * 0.5);
+  vec3 col = gauze * (0.10 + 0.35 * wisp) * faceClear * (0.7 + uBoil * 0.5);
+  // tendrils ride EVERYWHERE (not fresnel-gated) so talking reads as plasma crawling the surface
+  col += mix(uCyan, vec3(0.9, 0.98, 1.0), 0.45) * licks * (0.10 + 0.85 * uBoil) * (0.25 + 0.75 * faceClear);
   col += uCyan * rim * 1.15 * uBlip;                // luminous limb
   col += mix(uPlatinum, vec3(1.0), 0.5) * razor * 1.6 * uBlip; // razor edge
 
