@@ -19,9 +19,10 @@ dedicated, permanent tool for it.**
   account (`VENUS_LAB_EMAIL = josephsardella@gmail.com` in `src/app/account.tsx`) — invisible to
   everyone else. It works on a native dev build AND in production builds for that one email.
 - **How to view it live on web (fast iteration loop):** the avatar renders in the `web-preview`
-  server. Edit `venus-head-scene.tsx` (and the hair/eye/shader helpers in the same file) →
-  `npx tsc --noEmit` → reload the preview → screenshot to verify. Almost all of Venus's look lives
-  in that ONE file (shaders, the procedural bob, the eyes, the liveliness).
+  server. Edit `venus-head-scene.tsx` (the scene/orchestration) and/or the extracted builder modules
+  (`venus-shaders/textures/geometry/hair/eyes.ts`, see the File map) → `npx tsc --noEmit` → reload the
+  preview → screenshot to verify. Venus's look now lives across that ONE scene file + those 5 sibling
+  builder modules (shaders, textures, geometry/lattice, the procedural bob, the eyes).
 - **Commit cadence:** commit at each visual milestone; this doc gets updated in the same change.
 
 ## The vision
@@ -427,7 +428,20 @@ server, and renders the live avatar (`connection state … -> connected`).
 
 ## File map
 - `src/components/backgrounds/venus-head-scene.tsx` — **the live R3F POC** ("Ascendant Cortana":
-  clean female face, glow shell + thought-pulse, liveliness, real lip-sync wiring). ← work here.
+  the `Avatar` component + the GLB load/build + the `useFrame` orchestration/lip-sync/liveliness +
+  the `VenusHeadScene` Canvas export). ← work here. The pure builders were extracted into the 5
+  sibling modules below (behavior-preserving split, 1710→~770 lines), so this file is now the
+  scene logic, not the shader/geometry zoo.
+- `src/components/backgrounds/venus-shaders.ts` — the GLSL sources (STREAM/CORE/HAIR/STRAND), ES2/
+  expo-gl-safe. (The unified-lattice shaders still live in `venus-points.ts`.)
+- `src/components/backgrounds/venus-textures.ts` — procedural DataTexture/matcap makers
+  (`makeDotTexture/makeAuraTexture/makeSkinMatcap/makeIrisTexture/makeScleraTexture` + `SCLERA_COLOR`).
+- `src/components/backgrounds/venus-geometry.ts` — geometry bake/derive helpers (`bakeHeadLocal`,
+  `dropEars/dropAbove`, `bakeAurora`, `subsample`, the UNIFIED LATTICE `bakeUnifiedLattice` +
+  `LAT_COLS/LAT_ROWS`, `bakeStreamField`).
+- `src/components/backgrounds/venus-hair.ts` — procedural BOB hair (`buildBobHair` shell +
+  `buildHairStrands` bristles) + the `BOB_*` shape consts.
+- `src/components/backgrounds/venus-eyes.ts` — `makeIris` (sclera + iris sprites) + `EYE_R`.
 - `src/lib/venus-formants.ts` — pure **FFT + formant extractor** (`analyzeWindow` → F1/F2 + bands +
   rms/zcr/voicing). Zero-dep, Hermes-safe, Node-tested. Shared by both drivers.
 - `src/lib/venus-viseme-map.ts` — pure **`mapFeaturesToWeights`** (the F1/F2 → ARKit jaw/funnel/
