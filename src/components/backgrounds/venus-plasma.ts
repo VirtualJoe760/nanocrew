@@ -86,8 +86,8 @@ void main(){
 // sphere tells), wisp warp fbm3 not fbm4, razor weight halved (soft corona edge, not a glass rim).
 export const SHEATH_FRAG = /* glsl */ `
 precision highp float;
-uniform float uTime, uOpacity, uBoil, uBlip, uIgnite;
-uniform vec3 uCyan, uPlatinum, uNavy;
+uniform float uTime, uOpacity, uBoil, uBlip, uIgnite, uColMix, uBeatPop;
+uniform vec3 uColA, uColB, uPlatinum, uNavy;
 varying vec3 vN, vV, vObj;
 ${NOISE3}
 void main(){
@@ -114,15 +114,17 @@ void main(){
   float razor = pow(1.0 - ndv, 9.0);
   float faceClear = 0.08 + 0.92 * pow(1.0 - ndv, 1.4);
 
-  vec3 gauze = mix(uNavy, uCyan, smoothstep(0.3, 0.7, wisp));
+  // the sheath rides the nucleus-family hue clock; the wisps themselves shade across the palette
+  vec3 shCol = mix(uColA, uColB, 0.5 - 0.5 * cos(6.2831 * (uColMix + wisp * 0.3)));
+  vec3 gauze = mix(uNavy, shCol, smoothstep(0.3, 0.7, wisp));
   gauze = mix(gauze, uPlatinum, smoothstep(0.7, 0.9, wisp));
 
   vec3 col = gauze * (0.10 + 0.35 * wisp) * faceClear * (0.7 + uBoil * 0.5);
-  col += mix(uCyan, vec3(0.9, 0.98, 1.0), 0.45) * licks * (0.10 + 0.85 * uBoil) * (0.25 + 0.75 * faceClear);
-  col += uCyan * rim * 1.15 * uBlip;
+  col += mix(shCol, vec3(0.9, 0.98, 1.0), 0.45) * licks * (0.10 + 0.85 * uBoil) * (0.25 + 0.75 * faceClear);
+  col += shCol * rim * 1.15 * uBlip;
   col += mix(uPlatinum, vec3(1.0), 0.5) * razor * 0.8 * uBlip;
 
-  col *= 1.0 + 0.7 * uIgnite;                       // ignition flash at the morph landing
+  col *= (1.0 + 0.7 * uIgnite) * (1.0 + 0.15 * uBeatPop);
   col = col / (1.0 + 0.22 * col);                   // soft knee — additive stack cannot white-clip
   gl_FragColor = vec4(col, uOpacity);
 }
@@ -162,8 +164,8 @@ void main(){
 `;
 export const NUCLEUS_FRAG = /* glsl */ `
 precision highp float;
-uniform float uTime, uOpacity, uFlare;
-uniform vec3 uCyan;
+uniform float uTime, uOpacity, uFlare, uColMix, uBeatPop;
+uniform vec3 uColA, uColB;
 varying vec3 vN, vV, vObj;
 ${NOISE3}
 void main(){
@@ -171,10 +173,15 @@ void main(){
   vec3 V = normalize(vV);
   float f = pow(clamp(dot(N, V), 0.001, 1.0), 2.2);   // inverse fresnel — hot heart
   float m = fbm2(vObj * 3.0 + vec3(uTime * 0.10, uTime * 0.06, 0.0));
-  vec3 col = mix(uCyan, vec3(0.94, 0.99, 1.0), f) * (0.45 + 1.25 * f) * (0.85 + 0.3 * m);
-  col *= 1.0 + uFlare;
+  // the crystal wears its palette per-facet (the mottle shifts the hue plate to plate) and the
+  // whole family slides on the nucleus hue clock; edges glint like cut crystal.
+  vec3 nucCol = mix(uColA, uColB, 0.5 - 0.5 * cos(6.2831 * (uColMix + m * 0.45)));
+  vec3 col = mix(nucCol, vec3(0.97, 0.99, 1.0), f) * (0.45 + 1.25 * f) * (0.85 + 0.3 * m);
+  float edge = pow(clamp(1.0 - dot(N, V), 0.001, 1.0), 3.0);
+  col += nucCol * edge * 0.5;
+  col *= (1.0 + uFlare) * (1.0 + 0.25 * uBeatPop);
   col = col / (1.0 + 0.22 * col);
-  gl_FragColor = vec4(col, f * uOpacity);
+  gl_FragColor = vec4(col, max(f, edge * 0.5) * uOpacity);
 }
 `;
 
@@ -217,7 +224,8 @@ export const NET_FRAG = /* glsl */ `
 precision highp float;
 uniform float uTime, uOpacity, uRate, uFire, uTalk, uSpeak, uGrow, uIgnite, uTrunk;
 uniform float uHotGang, uGangFlare, uYMin, uYSpan, uCrawlPos;
-uniform vec3 uCyan, uPlatinum;
+uniform float uColMix, uLimMix, uBeatPop;
+uniform vec3 uColA, uColB, uLimA, uLimB;
 varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth;
 void main(){
   float isFine  = 1.0 - step(0.5, vClass);
@@ -259,17 +267,24 @@ void main(){
   float y01 = clamp((vWy - uYMin) / uYSpan, 0.0, 1.0);
   float dw = y01 - fract(uTime * 0.5);
   float band = exp(-dw * dw * 55.0) * uTalk;
-  vec3 col = mix(uCyan * 0.55, uCyan, isDend + isTrunk + isWhisk) * fil;
-  col = mix(col, mix(uCyan, uPlatinum, 0.45), isTrunk * 0.9);       // trunks platinum-hot
-  col += mix(uCyan, vec3(0.92, 0.98, 1.0), 0.5 + 0.3 * isTrunk)
+  // independent part palettes on the 80bpm hue clocks: the NET's gradient flows outward along
+  // the growth field; each LIMBIC snake wears its palette along its own body (vT). The old
+  // flat trunk-color mix also buried the fil/snake modulation — colors now multiply fil.
+  vec3 netCol = mix(uColA, uColB, 0.5 - 0.5 * cos(6.2831 * (uColMix + vGrow * 0.35)));
+  vec3 limCol = mix(uLimA, uLimB, 0.5 - 0.5 * cos(6.2831 * (uLimMix + vT)));
+  vec3 wire = mix(netCol * 0.55, netCol, isDend + isTrunk + isWhisk);
+  wire = mix(wire, limCol, isTrunk);
+  vec3 col = wire * fil;
+  col += mix(mix(netCol, limCol, isTrunk), vec3(0.92, 0.98, 1.0), 0.5 + 0.3 * isTrunk)
          * (pk + spark * 0.9) * uFire * (1.0 + 1.5 * uIgnite) * (isDend + 1.4 * isTrunk + 0.4 * isFine);
-  col += uCyan * band * (0.3 + 0.9 * uSpeak) * (isDend + isTrunk);
+  col += netCol * band * (0.3 + 0.9 * uSpeak) * (isDend + isTrunk);
   col *= mix(0.45, 1.0, 1.0 - vDepth);                              // depth cue — the #1 3D tell
   // ENERGY CRAWL — a sharp luminous front pulsing down the ROOTS along the BFS growth field
   // (graph paths from the nucleus to the arm tips — not radius, so it never reads as a ring)
   float dcr = abs(vGrow - uCrawlPos);
   dcr = min(dcr, 1.0 - dcr);
   col *= 1.0 + 0.55 * exp(-dcr * dcr * 130.0);
+  col *= 1.0 + 0.2 * uBeatPop;                                      // the 80bpm brightness pop
   col *= smoothstep(vGrow - 0.15, vGrow, uGrow);                    // wires outward from the nucleus
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, uOpacity * (0.5 * isFine + (1.0 - isFine)));
@@ -300,7 +315,8 @@ export const NODE_FRAG = /* glsl */ `
 precision highp float;
 uniform float uTime, uOpacity, uRate, uFire, uTalk, uSpeak, uGrow;
 uniform float uHotGang, uGangFlare, uYMin, uYSpan, uCrawlPos;
-uniform vec3 uCyan, uPlatinum;
+uniform float uColMix, uBeatPop;
+uniform vec3 uColA, uColB, uPlatinum;
 varying float vPhase, vGang, vHub, vGrow, vWy, vDepth;
 void main(){
   vec2 pc = gl_PointCoord * 2.0 - 1.0;
@@ -315,13 +331,16 @@ void main(){
   float gangHit = 1.0 - min(abs(vGang - uHotGang), 1.0);
   float glow = (0.45 + 0.9 * flash * uFire + 0.6 * band * (0.4 + 0.8 * uSpeak) + 0.35 * vHub)
              * (1.0 + 0.8 * uGangFlare * gangHit);
-  vec3 col = mix(mix(uCyan, uPlatinum, 0.4 * vHub), vec3(0.92, 0.98, 1.0), 0.35 + 0.45 * flash)
+  // cells wear the NET palette (same clock/gradient as their wires); hubs tint platinum
+  vec3 netCol = mix(uColA, uColB, 0.5 - 0.5 * cos(6.2831 * (uColMix + vGrow * 0.35)));
+  vec3 col = mix(mix(netCol, uPlatinum, 0.4 * vHub), vec3(0.92, 0.98, 1.0), 0.35 + 0.45 * flash)
            * glow * (core + halo);
   col *= mix(0.5, 1.0, 1.0 - vDepth);
   // the energy crawl lights each cell as the front creeps past (same field as the wiring)
   float dcr = abs(vGrow - uCrawlPos);
   dcr = min(dcr, 1.0 - dcr);
   col *= 1.0 + 0.45 * exp(-dcr * dcr * 60.0);
+  col *= 1.0 + 0.25 * uBeatPop;                                     // the 80bpm brightness pop
   col *= smoothstep(vGrow - 0.10, vGrow, uGrow);
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, clamp(core + halo, 0.0, 1.0) * uOpacity);
@@ -352,12 +371,13 @@ void main(){
 export const DUST_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D uDot;
-uniform float uTime, uOpacity;
-uniform vec3 uCyan;
+uniform float uTime, uOpacity, uColMix, uBeatPop;
+uniform vec3 uColA, uColB;
 varying float vPhase;
 void main(){
   float a = texture2D(uDot, gl_PointCoord).a;
   float tw = 0.35 + 0.25 * sin(uTime * 0.4 + vPhase * 6.2831);
-  gl_FragColor = vec4(uCyan * 0.35, a * tw * uOpacity);
+  vec3 c = mix(uColA, uColB, 0.5 - 0.5 * cos(6.2831 * (uColMix + vPhase * 0.3))) * 0.35;
+  gl_FragColor = vec4(c * (1.0 + 0.2 * uBeatPop), a * tw * uOpacity);
 }
 `;

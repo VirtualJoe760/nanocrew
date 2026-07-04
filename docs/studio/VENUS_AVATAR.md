@@ -526,16 +526,27 @@ landed dots stay glued to their spinning somas.
   fine web (~30% duty per wire — electricity through circuits); and differential EXPANSION
   (`uExpand`, slow clock): roots anchored, periphery breathing off the frame (wires+somas+dust;
   the uniform swell part is dot-tracked, the aGrow-weighted extra is not).
-- **Limbic**: each braided trunk is a SNAKE — hot head, tapered tail, body length breathing as
-  it slides around the nucleus on its path (in-shader window on aT at `uRate*0.6`); the old
-  static full-brightness rails are now faint ghosts.
+- **Limbic**: class 2 now lives on SIX CLOSED ORBITAL LOOPS (wobbly tilted ovals, integer
+  harmonics so the seam closes, 3-strand braids) winding around the nucleus — each carries a
+  SNAKE (hot head, tapered tail, breathing body length, in-shader window on aT at `uRate*0.6`)
+  so the motion IS a circling of the core. The old hub↔hub/hub→ring arterials render as
+  ordinary dendrites (still carry the BFS).
 - **Nucleus**: NOT a sphere — NUCLEUS_VERT displaces with terraced (quantized) noise = crystal
   facets that reform as the field flows + a per-facet fast tremor ("crystallized water
   vibrating"), forward-difference normals so the fresnel breaks into facet glints; the sheath
   runs LIQUID at rest (uAmp base 0.14, cap 0.3).
-Dust additionally free-orbits (not dot-coupled). The layout deliberately OVERSHOOTS the short
-view extent by 12% (`layoutScale`, uncapped) — the outer network runs off the viewport; shape
-objects use a separate capped `shapeS` so tee/heart/bolt still fit the frame.
+Dust additionally free-orbits (not dot-coupled). FRAMING fills the RECT: the baked cloud is
+stretched PER-AXIS (sx/sy each overshoot their view extent by 12%, depth = min) so the net
+reaches ALL corners; the big portrait stretch is Y, invariant under the Y-spin. Core meshes
+(nucleus/sheath/halos) scale uniformly by sz. Shape objects use a separate capped `shapeS`.
+
+**COLOR (80bpm)**: brand-cyan-only is retired for the orb — each part owns a palette pair and
+an INDEPENDENT hue clock (`uColMix`/`uLimMix` + `uBeatPop`): net aqua-teal↔azure (gradient
+flows outward along aGrow), limbic snakes violet↔rose (gradient along each body), nucleus
+ice↔pale-violet (per-facet via the mottle), sheath cyan↔periwinkle (via wisp). A steady
+80bpm MUSICAL beat (independent of speech — the "heartbeat" reborn as color) surges every hue
+phase at its own rate (net .30 / limbic .45 / nucleus .22 per beat-second) and pops brightness
+~20% with a sharp attack + decay each beat. Palette constants live at the top of the scene file.
 
 **The lattice dots land ON the soma positions** (dot skin = neuron field), so the tee/heart/bolt
 shape-morph survives: dissolve → retarget → re-form, `uLead` makes the dots carry the object,

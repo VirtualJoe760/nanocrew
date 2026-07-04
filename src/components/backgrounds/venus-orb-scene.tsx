@@ -37,6 +37,14 @@ const PLATINUM = '#cdd1d9';
 const NAVY = '#0B1626';
 const NET_SEED = 1337; // mulberry32 seed — the whole constellation is reproducible frame-to-frame
 
+// Independent per-part palettes (art direction 2026-07-04: "introduce more colors… net, limbic,
+// nucleus should all color independently… shift on a musical bpm count, say 80bpm"): each part
+// cycles A↔B on its OWN hue clock; the 80bpm beat surges every clock + pops brightness.
+const NET_A = '#3FE0C5', NET_B = '#4E8DFF';   // net: aqua-teal ↔ azure
+const LIM_A = '#B36CFF', LIM_B = '#FF5FA2';   // limbic snakes: violet ↔ rose
+const NUC_A = '#DFF6FF', NUC_B = '#C77DFF';   // nucleus: ice ↔ pale violet
+const SHE_A = '#5BD8E6', SHE_B = '#7B8CFF';   // sheath: cyan ↔ periwinkle
+
 // THE RADIUS LADDER (load-bearing): nucleus 0.18R < sheath 0.30R < clearance gap (no somas)
 // to 0.38R < nucleus ring 0.40–0.44R < ganglia cloud 0.42R–1.15R < arms out to 1.42R (hard cap).
 // The gap between sheath and ring is a composition beat — core, a breath of black, then the web.
@@ -305,18 +313,20 @@ function bakeConnectome(R: number): {
       }
     if (bi >= 0) addEdge(bi, bj, 1);
   }
-  // trunks: hub↔hub arterials + every hub roots to its nearest nucleus-ring soma
+  // hub arterials: hub↔hub + every hub roots to its nearest nucleus-ring soma. Rendered as
+  // ordinary dendrites (class 1) — the LIMBIC class (2) now lives on closed orbital loops
+  // instead, so its snakes visibly circle the core. These edges still carry the BFS.
   const HUB_PAIRS: [number, number][] = [[1, 2], [1, 3], [1, 5], [2, 4], [2, 6], [3, 6], [3, 7], [4, 7], [1, 7], [2, 7]];
-  const trunkPaths: [number, number][] = HUB_PAIRS.map(([a, b]) => [hubIdx[a - 1], hubIdx[b - 1]]);
+  const rootPaths: [number, number][] = HUB_PAIRS.map(([a, b]) => [hubIdx[a - 1], hubIdx[b - 1]]);
   for (const h of hubIdx) {
     let best = ringStart, bd = 1e9;
     for (let i = ringStart; i < ringEnd; i++) {
       const d = somas[h].p.distanceTo(somas[i].p);
       if (d < bd) { bd = d; best = i; }
     }
-    trunkPaths.push([h, best]); // packet direction hub→ring: signals flow INTO the nucleus
+    rootPaths.push([h, best]);
   }
-  for (const [a, b] of trunkPaths) addEdge(a, b, 2);
+  for (const [a, b] of rootPaths) addEdge(a, b, 1);
 
   // 8) aGrow — BFS depth from the nucleus ring, normalized: the network "wires itself outward
   //    from the nucleus" as the drive sweeps uGrow 0→1 during assembly.
@@ -393,41 +403,34 @@ function bakeConnectome(R: number): {
     emit(quadBezier(a, ctrl, b, 6, 0.01 * R), 1, somas[e.a].gang, rnd(), 0.6 + 0.8 * rnd(), Math.max(grow[e.a], grow[e.b]), 1.0);
   }
 
-  // trunks (aClass 2): cubic S-bends sagging toward the origin, 3 braided strands, S=12
-  for (const [ai, bi] of trunkPaths) {
-    const a = somas[ai].p, b = somas[bi].p;
-    const len = a.distanceTo(b);
-    const perp = perpOf(a, b);
-    const sag = (v: THREE.Vector3) => v.addScaledVector(v.clone().normalize(), -0.1 * R);
-    const c1 = sag(a.clone().lerp(b, 1 / 3).addScaledVector(perp, 0.18 * len));
-    const c2 = sag(a.clone().lerp(b, 2 / 3).addScaledVector(perp, -0.18 * len));
-    const cubic = (t: number) => {
-      const u = 1 - t;
-      return new THREE.Vector3()
-        .addScaledVector(a, u * u * u)
-        .addScaledVector(c1, 3 * u * u * t)
-        .addScaledVector(c2, 3 * u * t * t)
-        .addScaledVector(b, t * t * t);
-    };
+  // LIMBIC LOOPS (aClass 2): closed orbital paths winding around the nucleus — wobbly tilted
+  // ovals (integer harmonics keep the seam closed), 3 braided strands, S=48. The snakes ride
+  // aT around these loops, so their motion IS a circling of the core ("think snake the game…
+  // growing and moving around the nucleus").
+  for (let li = 0; li < 6; li++) {
+    const tiltQ = new THREE.Quaternion().setFromAxisAngle(randDir(), rnd() * Math.PI * 2);
+    const r0 = R * (0.42 + 0.22 * rnd());
+    const ph1 = rnd() * Math.PI * 2, ph2 = rnd() * Math.PI * 2, ph3 = rnd() * Math.PI * 2;
+    const S = 48;
     const phase = rnd();
-    const gang = somas[ai].gang || somas[bi].gang;
-    const gVal = Math.max(grow[ai], grow[bi]);
+    const gVal = 0.12 + 0.1 * rnd(); // near the core → lights early in the assembly
     for (let strand = 0; strand < 3; strand++) {
       const pts: THREE.Vector3[] = [];
-      for (let s = 0; s <= 12; s++) {
-        const t = s / 12;
-        const p = cubic(t);
-        const tang = cubic(Math.min(1, t + 0.01)).sub(cubic(Math.max(0, t - 0.01))).normalize();
-        const n1 = new THREE.Vector3().crossVectors(tang, perp);
+      for (let s = 0; s <= S; s++) {
+        const th = (s / S) * Math.PI * 2;
+        const rr = r0 * (1 + 0.12 * Math.sin(2 * th + ph1) + 0.08 * Math.sin(3 * th + ph2));
+        const p = new THREE.Vector3(Math.cos(th) * rr, Math.sin(2 * th + ph3) * 0.1 * R, Math.sin(th) * rr)
+          .applyQuaternion(tiltQ);
+        const tang = new THREE.Vector3(-Math.sin(th), 0, Math.cos(th)).applyQuaternion(tiltQ);
+        const n1 = new THREE.Vector3().crossVectors(tang, p.clone().normalize());
         if (n1.lengthSq() < 1e-8) n1.set(0, 1, 0);
         n1.normalize();
         const n2 = new THREE.Vector3().crossVectors(tang, n1).normalize();
-        const ang = (strand / 3) * Math.PI * 2 + t * Math.PI * 3; // 1.5 braid turns
-        p.addScaledVector(n1, Math.cos(ang) * 0.012 * R).addScaledVector(n2, Math.sin(ang) * 0.012 * R);
-        if (s > 0 && s < 12) p.add(randDir().multiplyScalar(0.004 * R));
+        const ang = (strand / 3) * Math.PI * 2 + (s / S) * Math.PI * 4; // 2 braid turns (closed)
+        p.addScaledVector(n1, Math.cos(ang) * 0.01 * R).addScaledVector(n2, Math.sin(ang) * 0.01 * R);
         pts.push(p);
       }
-      emit(pts, 2, gang, phase, 0.9 + 0.4 * rnd(), gVal, 0.4);
+      emit(pts, 2, 0, phase, 0.9 + 0.4 * rnd(), gVal, 0.4);
     }
   }
 
@@ -563,9 +566,12 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
 
   // Continuous-motion clocks, integrated on delta (rate changes stay phase-continuous):
   // spin = the slow constellation rotation (paused while a shape object is showing);
-  // crawl = the luminous energy front creeping through the limbs along the aGrow field.
+  // crawl = the luminous energy front creeping through the limbs along the aGrow field;
+  // bpm = the 80bpm musical beat (steady — NOT tied to speech) that surges the hue clocks.
   const spinRef = useRef(0);
   const crawlRef = useRef(0);
+  const bpmRef = useRef(0);
+  const hueRef = useRef({ net: 0, lim: 0.33, nuc: 0.66 });
 
   // SHAPE-MORPH state: bus requests are polled per frame; a transition dissolves the dots
   // (reveal dips), swaps their targets to the new silhouette, then re-forms. The gate dims the
@@ -622,23 +628,33 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const vH = Math.tan((cam.fov * Math.PI) / 360) * 2; // half-height of the view at the orb plane
     const vW = vH * cam.aspect;
 
-    // FRAMING: the ganglia HULL (~1.15R) deliberately OVERSHOOTS the short view extent by 12% —
-    // the outer network expands off the viewport on every aspect (the mind is bigger than the
-    // frame). No upper cap: wide screens scale the whole constellation up to match.
-    const layoutScale = (1.12 * Math.min(vW, vH)) / (ORB_R * 1.15);
+    // FRAMING: fill the RECT, not the short axis — the baked cloud is stretched PER-AXIS so the
+    // net reaches ALL corners of the viewport (each axis overshoots by 12%; the big stretch on
+    // portrait is Y, which is invariant under the Y-spin, so rotation doesn't pump the
+    // silhouette). Depth uses the smaller factor. Core meshes (nucleus/sheath/halos) scale
+    // UNIFORMLY by sz so they stay round-ish while the cloud stretches around them.
+    const sx = (1.12 * vW) / (ORB_R * 1.15);
+    const sy = (1.12 * vH) / (ORB_R * 1.15);
+    const sz = Math.min(sx, sy);
 
     const scene = new THREE.Group();
     const dotTex = makeDotTexture();
     const auraTex = makeAuraTexture();
 
     // (a) THE UNIFIED LATTICE — ambient background dots + the soma landing dots in ONE buffer.
-    //     The face targets ARE the soma positions (scaled): dot skin = neuron field, so the
+    //     The face targets ARE the soma positions (stretched): dot skin = neuron field, so the
     //     tee/heart/bolt shape-morph system keeps working unchanged.
     const { lines: netGeo, nodes: nodeGeo, dust: dustGeo, somaPositions, yMin, ySpan } = bakeConnectome(ORB_R);
+    const stretch = (geo: THREE.BufferGeometry) => {
+      const a = geo.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < a.count; i++) a.setXYZ(i, a.getX(i) * sx, a.getY(i) * sy, a.getZ(i) * sz);
+      a.needsUpdate = true;
+    };
+    stretch(netGeo);
+    stretch(nodeGeo); // NOTE: nodeGeo shares its buffer with somaPositions — both now stretched
+    stretch(dustGeo);
     const somaGeo = new THREE.BufferGeometry();
-    const scaledSomas = new Float32Array(somaPositions.length);
-    for (let i = 0; i < somaPositions.length; i++) scaledSomas[i] = somaPositions[i] * layoutScale;
-    somaGeo.setAttribute('position', new THREE.BufferAttribute(scaledSomas, 3));
+    somaGeo.setAttribute('position', new THREE.BufferAttribute(somaPositions.slice(), 3));
     bakeAurora(somaGeo);
     const { geometry: latGeo, faceCentroid } = bakeUnifiedLattice(somaGeo, { vW, vH }, new THREE.Matrix4());
     const latticeMat = new THREE.ShaderMaterial({
@@ -682,8 +698,8 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         orbFaceY[k] = fy.getX(li);
       });
       // unit shapes span ±1, so cap the sampler scale to 92% of the short half-extent
-      const shapeS = Math.min(ORB_R * 1.15 * layoutScale, 0.92 * Math.min(vW, vH));
-      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY, shapeS, yMin: yMin * layoutScale, ySpan: ySpan * layoutScale };
+      const shapeS = Math.min(ORB_R * 1.15 * sz, 0.92 * Math.min(vW, vH));
+      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY, shapeS, yMin: yMin * sy, ySpan: ySpan * sy };
     }
 
     // (b) the stream field — a volumetric shell of dots looping INTO the mind (the depth-feed).
@@ -705,8 +721,8 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     scene.add(streamPts);
 
     // (c) the constellation. Camera FIXED at +z → static planes inside orbGroup ARE billboards.
+    //     (No group scale — the stretch is baked into the geometry; core meshes carry sz.)
     const orbGroup = new THREE.Group();
-    orbGroup.scale.setScalar(layoutScale);
 
     const haloMat = (map: THREE.Texture, color?: string) =>
       new THREE.MeshBasicMaterial({
@@ -719,11 +735,11 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         blending: THREE.AdditiveBlending,
       });
     const haloWideMat = haloMat(auraTex);
-    const haloWide = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 6.0, ORB_R * 6.0), haloWideMat);
+    const haloWide = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 6.0 * sz, ORB_R * 6.0 * sz), haloWideMat);
     haloWide.position.z = -0.02;
     haloWide.renderOrder = 2; // the room glow — near-invisible at idle, pulses with her voice
     const haloTightMat = haloMat(dotTex, CYAN);
-    const haloTight = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 1.1, ORB_R * 1.1), haloTightMat);
+    const haloTight = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 1.1 * sz, ORB_R * 1.1 * sz), haloTightMat);
     haloTight.position.z = -0.01;
     haloTight.renderOrder = 3; // the nucleus bleed — hot air around the core, NOT a limb
     orbGroup.add(haloWide, haloTight);
@@ -733,7 +749,9 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const dustMat = new THREE.ShaderMaterial({
       uniforms: {
         uDot: { value: dotTex }, uTime: { value: 0 }, uOpacity: { value: 0 },
-        uOrbR: { value: ORB_R }, uExpand: { value: 0 }, uCyan: { value: new THREE.Color(CYAN) },
+        uOrbR: { value: ORB_R }, uExpand: { value: 0 },
+        uColA: { value: new THREE.Color(NET_A) }, uColB: { value: new THREE.Color(NET_B) },
+        uColMix: { value: 0 }, uBeatPop: { value: 0 },
       },
       vertexShader: DUST_VERT, fragmentShader: DUST_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -747,11 +765,18 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       uTalk: { value: 0 }, uSpeak: { value: 0 }, uGrow: { value: 0 }, uIgnite: { value: 0 },
       uTrunk: { value: 0 }, uHotGang: { value: 1 }, uGangFlare: { value: 0 },
       uOrbR: { value: ORB_R }, uCrawlPos: { value: 0 }, uExpand: { value: 0 },
-      uYMin: { value: yMin * layoutScale }, uYSpan: { value: ySpan * layoutScale },
-      uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
+      uYMin: { value: yMin * sy }, uYSpan: { value: ySpan * sy },
+      uColA: { value: new THREE.Color(NET_A) }, uColB: { value: new THREE.Color(NET_B) },
+      uColMix: { value: 0 }, uBeatPop: { value: 0 },
+      uPlatinum: { value: new THREE.Color(PLATINUM) },
     });
     const netMat = new THREE.ShaderMaterial({
-      uniforms: { ...wireUniforms(), uJitAmp: { value: 1 } },
+      uniforms: {
+        ...wireUniforms(),
+        uJitAmp: { value: 1 },
+        uLimA: { value: new THREE.Color(LIM_A) }, uLimB: { value: new THREE.Color(LIM_B) },
+        uLimMix: { value: 0 },
+      },
       vertexShader: NET_VERT, fragmentShader: NET_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
@@ -773,25 +798,27 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const nucleusMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 }, uOpacity: { value: 0 }, uFlare: { value: 0 },
-        uCyan: { value: new THREE.Color('#8FE9F5') },
+        uColA: { value: new THREE.Color(NUC_A) }, uColB: { value: new THREE.Color(NUC_B) },
+        uColMix: { value: 0 }, uBeatPop: { value: 0 },
       },
       vertexShader: NUCLEUS_VERT, fragmentShader: NUCLEUS_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const nucleus = new THREE.Mesh(new THREE.IcosahedronGeometry(NUC_R, 3), nucleusMat);
+    const nucleus = new THREE.Mesh(new THREE.IcosahedronGeometry(NUC_R * sz, 3), nucleusMat);
     nucleus.renderOrder = 6;
     const sheathMat = new THREE.ShaderMaterial({
       uniforms: {
-        uTime: { value: 0 }, uAmp: { value: 0.06 }, uFlow: { value: 0.1 }, uOpacity: { value: 0 },
+        uTime: { value: 0 }, uAmp: { value: 0.14 }, uFlow: { value: 0.16 }, uOpacity: { value: 0 },
         uBoil: { value: 0.15 }, uBlip: { value: 1 }, uIgnite: { value: 0 },
-        uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
-        uNavy: { value: new THREE.Color(NAVY) },
+        uColA: { value: new THREE.Color(SHE_A) }, uColB: { value: new THREE.Color(SHE_B) },
+        uColMix: { value: 0 }, uBeatPop: { value: 0 },
+        uPlatinum: { value: new THREE.Color(PLATINUM) }, uNavy: { value: new THREE.Color(NAVY) },
       },
       vertexShader: PLASMA_VERT, fragmentShader: SHEATH_FRAG,
       side: THREE.FrontSide,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const sheath = new THREE.Mesh(new THREE.SphereGeometry(SHEATH_R, 40, 28), sheathMat);
+    const sheath = new THREE.Mesh(new THREE.SphereGeometry(SHEATH_R * sz, 40, 28), sheathMat);
     sheath.renderOrder = 7;
     orbGroup.add(nucleus, sheath);
     scene.add(orbGroup);
@@ -926,11 +953,30 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     nd.uExpand.value = expand;
     r.dustMat.uniforms.uExpand.value = expand;
 
+    // 80 BPM COLOR CLOCK — the heartbeat reborn as COLOR (art direction): a steady musical
+    // pulse (80bpm, independent of speech). Each beat surges every part's OWN hue phase — net,
+    // limbic and nucleus cycle their palettes at different rates — and pops brightness.
+    bpmRef.current = (bpmRef.current + delta * (80 / 60)) % 1;
+    const beatPop = Math.exp(-bpmRef.current * 6);
+    const hue = hueRef.current;
+    hue.net = (hue.net + delta * beatPop * 0.3) % 1;
+    hue.lim = (hue.lim + delta * beatPop * 0.45) % 1;
+    hue.nuc = (hue.nuc + delta * beatPop * 0.22) % 1;
+    nm.uColMix.value = hue.net;
+    nd.uColMix.value = hue.net;
+    r.dustMat.uniforms.uColMix.value = hue.net;
+    nm.uLimMix.value = hue.lim;
+    nm.uBeatPop.value = beatPop;
+    nd.uBeatPop.value = beatPop;
+    r.dustMat.uniforms.uBeatPop.value = beatPop;
+
     // nucleus + sheath — the mind condenses FIRST; the heart flares on syllables.
     const nu = r.nucleusMat.uniforms;
     nu.uTime.value = t;
     nu.uOpacity.value = (0.7 + 0.15 * Math.sin(t * 0.5)) * seg(0.42, 0.7) * lit * mindDim;
     nu.uFlare.value = 0.9 * spk * tk + 1.6 * ignite;
+    nu.uColMix.value = hue.nuc;
+    nu.uBeatPop.value = beatPop;
     r.nucleus.scale.setScalar(1.0 + 0.15 * spk * tk);   // syllable swell
     const sh = r.sheathMat.uniforms;
     sh.uTime.value = t;
@@ -942,6 +988,8 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     sh.uBoil.value = THREE.MathUtils.damp(sh.uBoil.value, 0.15 + 0.55 * tk + 0.45 * spk, 4, delta);
     sh.uBlip.value = blip;
     sh.uIgnite.value = ignite;
+    sh.uColMix.value = hue.nuc; // the sheath rides the nucleus family's clock (own palette)
+    sh.uBeatPop.value = beatPop;
 
     // halos — nucleus bleed + the room pulse (the only round glows left; shape-gate kills them)
     r.haloTightMat.opacity = 0.3 * lit * seg(0.5, 0.8) * sphereDim;
