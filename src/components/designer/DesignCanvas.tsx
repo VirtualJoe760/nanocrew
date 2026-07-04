@@ -107,6 +107,8 @@ function NodeView({
   onTap,
   onRemove,
   onEdit,
+  hoverTargetId,
+  dropRects,
 }: {
   node: CanvasNode;
   design?: DesignRef;
@@ -124,6 +126,10 @@ function NodeView({
   onTap: (id: string) => void;
   onRemove: (id: string) => void;
   onEdit?: (id: string) => void;
+  /** The drop target a dragged design is hovering (drives the grouping affordance). */
+  hoverTargetId: SharedValue<string>;
+  /** Committed rects of every valid drop target (template/composition/webslot) — worklet-read. */
+  dropRects: { id: string; x: number; y: number }[];
 }) {
   const theme = useTheme();
   const x = useSharedValue(node.x);
@@ -170,13 +176,28 @@ function NodeView({
       // Divide by scale so the node tracks the finger 1:1 at any zoom level.
       x.value = startX.value + e.translationX / scale.value;
       y.value = startY.value + e.translationY / scale.value;
+      // GROUPING affordance: while a DESIGN drags, light up the drop target under it — the
+      // same AABB test the drop handler uses, so the glow always predicts the actual drop.
+      if (node.kind === 'design') {
+        let hit = '';
+        for (let i = 0; i < dropRects.length; i++) {
+          const r = dropRects[i];
+          if (x.value < r.x + NODE_W && x.value + NODE_W > r.x && y.value < r.y + NODE_H && y.value + NODE_H > r.y) {
+            hit = r.id;
+            break;
+          }
+        }
+        if (hoverTargetId.value !== hit) hoverTargetId.value = hit;
+      }
     })
     .onEnd(() => {
       dragging.value = false;
+      hoverTargetId.value = '';
       runOnJS(onMoveEnd)(node.id, x.value, y.value);
     })
     .onFinalize(() => {
       dragging.value = false;
+      hoverTargetId.value = '';
     });
 
   // Tap a node to select it; tapping a selected node's ×-corner removes it, elsewhere opens it.
@@ -204,21 +225,30 @@ function NodeView({
   const taps = node.kind === 'design' && onEdit ? Gesture.Exclusive(doubleTap, tap) : tap;
   const gesture = Gesture.Race(pan, taps);
 
+  const isDropTarget = node.kind === 'template' || node.kind === 'composition' || node.kind === 'webslot';
   const style = useAnimatedStyle(() => {
     // While this node's group is being dragged, follow the broadcast delta LIVE so the
     // member moves WITH the group box (no springing into place after the finger lifts).
     const following = !!node.groupId && groupDragId.value === node.groupId;
     const gx = following ? groupDx.value : 0;
     const gy = following ? groupDy.value : 0;
+    // Drop targets SWELL under a hovering design (the "these will group" cue). Springed only for
+    // target kinds so a pinch-resize on other nodes stays 1:1 with the fingers.
+    const base = selected ? activeScale.value : (node.scale ?? 1);
+    const hovered = isDropTarget && hoverTargetId.value === node.id;
     return {
       transformOrigin: '0% 0%',
       transform: [
         { translateX: x.value + gx },
         { translateY: y.value + gy },
-        { scale: selected ? activeScale.value : (node.scale ?? 1) },
+        { scale: isDropTarget ? withSpring(hovered ? base * 1.07 : base, { damping: 15, stiffness: 260 }) : base },
       ],
     };
   });
+  // Accent ring + glow that fades in on the hovered drop target.
+  const dropRingStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(isDropTarget && hoverTargetId.value === node.id ? 1 : 0, { duration: 120 }),
+  }));
 
   return (
     <GestureDetector gesture={gesture}>
@@ -297,6 +327,12 @@ function NodeView({
           </>
         )}
 
+        {isDropTarget ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.dropRing, { borderColor: theme.tint, shadowColor: theme.tint }, dropRingStyle]}
+          />
+        ) : null}
         {selected ? (
           <>
             <View style={styles.selectRing} pointerEvents="none" />
@@ -437,6 +473,12 @@ export function DesignCanvas({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const activeScale = useSharedValue(1); // live scale of the single selected node
+  // Drag-over GROUPING affordance: the id of the drop target currently under a dragged design.
+  // Written by the dragging NodeView's pan worklet; read by every target NodeView's styles.
+  const hoverTargetId = useSharedValue('');
+  const dropRects = nodes
+    .filter((n) => n.kind === 'template' || n.kind === 'composition' || n.kind === 'webslot')
+    .map((n) => ({ id: n.id, x: n.x, y: n.y }));
   const lastNodeTap = useRef(0);
   // Gestures run as UI-thread worklets — they must read the tool from a shared value
   // (capturing a plain ref in a worklet freezes it and warns on every later mutation).
@@ -708,6 +750,8 @@ export function DesignCanvas({
                 onTap={handleNodeTap}
                 onRemove={onNodeRemove}
                 onEdit={onNodeEdit}
+                hoverTargetId={hoverTargetId}
+                dropRects={dropRects}
               />
             ))}
           </Animated.View>
@@ -810,6 +854,20 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three + 4,
     borderWidth: 2,
     borderColor: '#3b82f6',
+  },
+  // The grouping affordance — accent ring + glow on the drop target under a dragged design.
+  dropRing: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    width: NODE_W + 10,
+    height: NODE_W + 10,
+    borderRadius: Spacing.three + 5,
+    borderWidth: 2.5,
+    shadowOpacity: 0.9,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
   },
   group: {
     position: 'absolute',
