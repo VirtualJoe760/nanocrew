@@ -60,9 +60,12 @@ const LIVE_VOICE = 'Aoede'; // known-good native-audio voice (Sulafat/en-GB brok
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
-// Venus's 3D avatar replaces the SVG orb in the voice interview (the build-a-brand flow). Flip to
-// `false` to fall back to the legacy nucleus orb. She renders full-bleed behind the controls and is
-// driven by the live `state`. Source of truth for her look: docs/studio/VENUS_AVATAR.md.
+// Venus's NEURAL CONSTELLATION (the orb — VenusAvatar's default embodiment) is the face of the
+// voice interview (the build-a-brand flow). Flip to `false` to fall back to the legacy nucleus
+// SVG orb. She renders full-bleed behind the controls, driven by the live `state`
+// (silence/talking + the morphing intro), and her VOICE layer (color + nucleus riding the
+// audio) is fed by the live session through the venus-speech-level bus on both platforms
+// (web: HybridWebDriver in venus-lipsync.ts). Look source of truth: docs/studio/VENUS_AVATAR.md.
 const VENUS_IN_INTERVIEW = true;
 
 // Map the interview's EntityState → the avatar's lifecycle stage. She's formed + listening at rest;

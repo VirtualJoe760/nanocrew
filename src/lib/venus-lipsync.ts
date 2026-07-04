@@ -271,6 +271,33 @@ class SpeechLevelDriver implements VenusLipsync {
   }
 }
 
+// ─── hybrid web driver ────────────────────────────────────────────────────────
+// The Studio live session (web) plays Venus through a Web-Audio BUFFER QUEUE — there is no
+// HTMLMediaElement to connect an analyser to. But live-voice.ts pushes every audible PCM chunk
+// into the venus-speech-level bus on BOTH platforms, so on web we read THAT whenever the live
+// session is speaking, and fall back to the AnalyserNode path (Lab test harness, mic) otherwise.
+// This is what feeds the orb's VOICE layer (color + nucleus riding the audio) in the Studio.
+class HybridWebDriver implements VenusLipsync {
+  private speech = new SpeechLevelDriver();
+  private analyser = new AnalyserDriver();
+  debug = this.analyser.debug;
+  connect(el: HTMLMediaElement) { this.analyser.connect(el); }
+  connectMicrophone() { return this.analyser.connectMicrophone(); }
+  resume() { this.analyser.resume(); }
+  speaking(): boolean { return speechActiveAt(); }
+  sample(): VisemeWeights {
+    if (speechActiveAt()) {
+      const w = this.speech.sample();
+      this.debug = this.speech.debug;
+      return w;
+    }
+    const w = this.analyser.sample();
+    this.debug = this.analyser.debug;
+    return w;
+  }
+  dispose() { this.analyser.dispose(); }
+}
+
 // ─── factory ─────────────────────────────────────────────────────────────────
 export function createVenusLipsync(): VenusLipsync {
   // Native (no Web Audio): drive the mouth from the real spoken-audio formant envelope (live-voice).
@@ -279,15 +306,16 @@ export function createVenusLipsync(): VenusLipsync {
     try {
       // Optional path. Only reached if you set USE_WAWA = true AND installed the package. require()
       // (not import) keeps Metro from trying to resolve it at bundle time when the dep is absent.
-       
+
       const wawa = require('wawa-lipsync');
       return new WawaDriver(wawa.Lipsync, wawa.VISEMES);
     } catch (e) {
-       
+
       console.warn('[venus-lipsync] wawa-lipsync not available, using AnalyserNode', e);
     }
   }
-  return new AnalyserDriver();
+  // Web: hybrid — the live-session speech-level bus when she's speaking, the analyser otherwise.
+  return new HybridWebDriver();
 }
 
 // ─── optional wawa-lipsync adapter (inert unless USE_WAWA && installed) ───────
