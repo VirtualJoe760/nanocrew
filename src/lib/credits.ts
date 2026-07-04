@@ -17,6 +17,7 @@ export const CREDIT_COSTS = {
   merge: 8, // /api/merge fuses 2 designs via 1 Nano Banana call → same as a generate
   tryon: 6, // shopper-facing conversion feature — NOT currently debited (rate-limited instead)
   model_shots: 25, // 3 Nano Banana renders ~$0.12 → ~2×
+  preview_shots: 16, // on-model PREVIEW at the placement step: 2 Nano Banana renders ~$0.08 → ~2×
   revision: 60,
   // NOTE: scene-video ("cool short") is variable-cost — the creator picks a model tier whose price
   // lives in VIDEO_MODELS (src/lib/fal-video.ts). It charges via debitCredits() with reason
