@@ -561,6 +561,12 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
   if (!lipRef.current) lipRef.current = createVenusLipsync();
   const lipTargets = useRef<VisemeWeights>({});
 
+  // Continuous-motion clocks, integrated on delta (rate changes stay phase-continuous):
+  // spin = the slow constellation rotation (paused while a shape object is showing);
+  // beatPhase = the heartbeat clock shared by the JS nucleus kick and the shader ripple.
+  const spinRef = useRef(0);
+  const beatPhaseRef = useRef(0);
+
   // SHAPE-MORPH state: bus requests are polled per frame; a transition dissolves the dots
   // (reveal dips), swaps their targets to the new silhouette, then re-forms. The gate dims the
   // whole constellation (mind) and the halos while a non-orb object is showing; uLead makes the
@@ -637,6 +643,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const latticeMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 }, uMorph: { value: 0 }, uReveal: { value: 0 }, uLead: { value: 0 },
+        uSpinY: { value: 0 }, uTgtScale: { value: 0 },
         uPulse: { value: 0.12 }, uSpeak: { value: 0 }, uTalk: { value: 0 }, uBlip: { value: 1 },
         uSelA: { value: 0 }, uSelB: { value: 0 }, uFade: { value: 0 },
         uDrift: { value: new THREE.Vector2() }, uCellScale: { value: LAT_ROWS / 2.0 },
@@ -721,7 +728,11 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // THE MIND — dust, wiring and somas live in netGroup (bounded sway = cheap parallax).
     const netGroup = new THREE.Group();
     const dustMat = new THREE.ShaderMaterial({
-      uniforms: { uDot: { value: dotTex }, uTime: { value: 0 }, uOpacity: { value: 0 }, uCyan: { value: new THREE.Color(CYAN) } },
+      uniforms: {
+        uDot: { value: dotTex }, uTime: { value: 0 }, uOpacity: { value: 0 },
+        uOrbR: { value: ORB_R }, uBeatPhase: { value: 0 }, uBeatAmp: { value: 0.035 },
+        uCyan: { value: new THREE.Color(CYAN) },
+      },
       vertexShader: DUST_VERT, fragmentShader: DUST_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
@@ -733,11 +744,12 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       uTime: { value: 0 }, uOpacity: { value: 0 }, uRate: { value: 0.16 }, uFire: { value: 0.6 },
       uTalk: { value: 0 }, uSpeak: { value: 0 }, uGrow: { value: 0 }, uIgnite: { value: 0 },
       uTrunk: { value: 0 }, uHotGang: { value: 1 }, uGangFlare: { value: 0 },
+      uOrbR: { value: ORB_R }, uBeatPhase: { value: 0 }, uBeatAmp: { value: 0.035 },
       uYMin: { value: yMin * layoutScale }, uYSpan: { value: ySpan * layoutScale },
       uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
     });
     const netMat = new THREE.ShaderMaterial({
-      uniforms: { ...wireUniforms(), uJitAmp: { value: 1 }, uOrbR: { value: ORB_R } },
+      uniforms: { ...wireUniforms(), uJitAmp: { value: 1 } },
       vertexShader: NET_VERT, fragmentShader: NET_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
@@ -900,12 +912,26 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     r.dustMat.uniforms.uTime.value = t;
     r.dustMat.uniforms.uOpacity.value = 0.5 * seg(0.6, 0.95) * lit * mindDim;
 
-    // nucleus + sheath — the mind condenses FIRST; the heart flares on syllables.
+    // HEARTBEAT — one lub-dub clock (idle ~27bpm meditative, quickens while talking). The
+    // nucleus kicks first (JS), then the pressure wave ripples outward through wiring/somas/dust
+    // (shader, delayed by radius). Growth reads as: each beat pushes the web a few % outward.
+    const beatRate = 0.45 + 0.35 * tk;
+    beatPhaseRef.current = (beatPhaseRef.current + delta * beatRate) % 1;
+    const bp = beatPhaseRef.current;
+    const d1 = bp - 0.1, d2 = bp - 0.3;
+    const beat = Math.exp(-d1 * d1 * 260) + 0.55 * Math.exp(-d2 * d2 * 300);
+    const beatAmp = 0.035 + 0.02 * spk * tk;
+    nm.uBeatPhase.value = bp; nd.uBeatPhase.value = bp;
+    nm.uBeatAmp.value = beatAmp; nd.uBeatAmp.value = beatAmp;
+    r.dustMat.uniforms.uBeatPhase.value = bp;
+    r.dustMat.uniforms.uBeatAmp.value = beatAmp;
+
+    // nucleus + sheath — the mind condenses FIRST; the heart BEATS, and flares on syllables.
     const nu = r.nucleusMat.uniforms;
     nu.uTime.value = t;
     nu.uOpacity.value = (0.7 + 0.15 * Math.sin(t * 0.5)) * seg(0.42, 0.7) * lit * mindDim;
-    nu.uFlare.value = 0.9 * spk * tk + 1.6 * ignite;
-    r.nucleus.scale.setScalar(1.0 + 0.15 * spk * tk);    // syllable swell
+    nu.uFlare.value = 0.9 * spk * tk + 1.6 * ignite + 0.25 * beat;
+    r.nucleus.scale.setScalar((1.0 + 0.15 * spk * tk) * (1.0 + 0.06 * beat)); // the systole kick
     const sh = r.sheathMat.uniforms;
     sh.uTime.value = t;
     sh.uOpacity.value = 0.5 * seg(0.42, 0.7) * lit * mindDim;
@@ -919,10 +945,18 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     r.haloTightMat.opacity = 0.3 * lit * seg(0.5, 0.8) * sphereDim;
     r.haloWideMat.opacity = (0.04 + 0.25 * spk * tk) * seg(0.65, 0.95) * sphereDim;
 
-    // BOUNDED sway — never accumulate (the lattice dot targets are world-space); the rear
-    // ganglion crossing behind the nucleus is the parallax that sells the volume.
-    r.netGroup.rotation.y = Math.sin(t * 0.07) * 0.12;
+    // ROTATION + BREATH — a slow continuous spin (full turn ~2min, quicker while talking) plus
+    // the bounded sway and a long-period swell. The lattice shader rotates/swells the dot
+    // LANDING TARGETS by the same uSpinY/uTgtScale, so landed dots stay glued to their somas
+    // (this is what makes accumulating rotation safe). Spin pauses while an object is showing
+    // so the tee/heart/bolt don't turn edge-on.
+    spinRef.current = (spinRef.current + delta * (0.05 + 0.05 * tk) * (1 - ss.gate)) % (Math.PI * 2);
+    const swell = 0.02 * Math.sin(t * 0.13);
+    r.netGroup.rotation.y = Math.sin(t * 0.07) * 0.12 + spinRef.current;
     r.netGroup.rotation.x = Math.sin(t * 0.05 + 1.7) * 0.08;
+    r.netGroup.scale.setScalar(1 + swell);
+    u.uSpinY.value = r.netGroup.rotation.y;
+    u.uTgtScale.value = swell;
 
     // the whole mind hovers — a slow bob, nothing humanoid.
     r.orbGroup.position.y = Math.sin(t * 0.5) * 0.006;

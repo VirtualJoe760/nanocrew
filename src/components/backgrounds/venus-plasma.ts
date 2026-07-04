@@ -171,13 +171,21 @@ export const NET_VERT = /* glsl */ `
 precision highp float;
 attribute float aT, aPhase, aClass, aGang, aBright, aGrow;
 attribute vec3 aJit;
-uniform float uTime, uJitAmp, uOrbR;
-varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth;
+uniform float uTime, uJitAmp, uOrbR, uBeatPhase, uBeatAmp;
+varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth, vPulse;
 void main(){
   vT = aT; vPhase = aPhase; vClass = aClass; vGang = aGang; vBright = aBright; vGrow = aGrow;
   // living-wire shimmer — the whole web trembles, amplitude rides speech (uJitAmp)
   vec3 p = position + aJit * uOrbR * 0.004 * uJitAmp
            * sin(uTime * 1.3 + aPhase * 6.2831 + aT * 9.0);
+  // HEARTBEAT — a lub-dub pressure wave rippling OUTWARD from the nucleus: farther tissue
+  // pulses later. The web swells a few % as the wave passes; the fragment adds a glow (vPulse).
+  float rr = length(position) / uOrbR;
+  float bt = fract(uBeatPhase - rr * 0.13);
+  float d1 = bt - 0.10, d2 = bt - 0.30;
+  float pulse = exp(-d1 * d1 * 260.0) + 0.55 * exp(-d2 * d2 * 300.0);
+  vPulse = pulse;
+  p += normalize(position + vec3(1e-5)) * (uOrbR * uBeatAmp * pulse);
   vWy = (modelMatrix * vec4(p, 1.0)).y;              // WORLD y — the band stays vertical under sway
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDepth = clamp((-mv.z - 1.80) / 0.42, 0.0, 1.0);   // 0 near → 1 far across the ACTUAL cloud z-extent
@@ -189,7 +197,7 @@ precision highp float;
 uniform float uTime, uOpacity, uRate, uFire, uTalk, uSpeak, uGrow, uIgnite, uTrunk;
 uniform float uHotGang, uGangFlare, uYMin, uYSpan;
 uniform vec3 uCyan, uPlatinum;
-varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth;
+varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth, vPulse;
 void main(){
   float isFine  = 1.0 - step(0.5, vClass);
   float isDend  = step(0.5, vClass) * (1.0 - step(1.5, vClass));
@@ -225,6 +233,7 @@ void main(){
          * pk * uFire * (1.0 + 1.5 * uIgnite) * (isDend + 1.4 * isTrunk + 0.25 * isFine);
   col += uCyan * band * (0.3 + 0.9 * uSpeak) * (isDend + isTrunk);
   col *= mix(0.45, 1.0, 1.0 - vDepth);                              // depth cue — the #1 3D tell
+  col *= 1.0 + 0.35 * vPulse;                                       // the heartbeat wave glows past
   col *= smoothstep(vGrow - 0.15, vGrow, uGrow);                    // wires outward from the nucleus
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, uOpacity * (0.5 * isFine + (1.0 - isFine)));
@@ -237,14 +246,21 @@ void main(){
 export const NODE_VERT = /* glsl */ `
 precision highp float;
 attribute float aPhase, aSize, aGang, aHub, aGrow;
-uniform float uTime;
-varying float vPhase, vGang, vHub, vGrow, vWy, vDepth;
+uniform float uTime, uOrbR, uBeatPhase, uBeatAmp;
+varying float vPhase, vGang, vHub, vGrow, vWy, vDepth, vPulse;
 void main(){
   vPhase = aPhase; vGang = aGang; vHub = aHub; vGrow = aGrow;
-  vWy = (modelMatrix * vec4(position, 1.0)).y;
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  // heartbeat ripple — same wave as the wiring: cells push outward + swell as it passes
+  float rr = length(position) / uOrbR;
+  float bt = fract(uBeatPhase - rr * 0.13);
+  float d1 = bt - 0.10, d2 = bt - 0.30;
+  float pulse = exp(-d1 * d1 * 260.0) + 0.55 * exp(-d2 * d2 * 300.0);
+  vPulse = pulse;
+  vec3 p = position + normalize(position + vec3(1e-5)) * (uOrbR * uBeatAmp * pulse);
+  vWy = (modelMatrix * vec4(p, 1.0)).y;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDepth = clamp((-mv.z - 1.80) / 0.42, 0.0, 1.0);
-  float breathe = 1.0 + 0.12 * sin(uTime * 0.8 + aPhase * 6.2831);
+  float breathe = 1.0 + 0.12 * sin(uTime * 0.8 + aPhase * 6.2831) + 0.22 * pulse;
   gl_PointSize = clamp(aSize * breathe * (1.0 / max(0.1, -mv.z)), 2.0, 30.0);
   gl_Position = projectionMatrix * mv;
 }
@@ -254,7 +270,7 @@ precision highp float;
 uniform float uTime, uOpacity, uRate, uFire, uTalk, uSpeak, uGrow;
 uniform float uHotGang, uGangFlare, uYMin, uYSpan;
 uniform vec3 uCyan, uPlatinum;
-varying float vPhase, vGang, vHub, vGrow, vWy, vDepth;
+varying float vPhase, vGang, vHub, vGrow, vWy, vDepth, vPulse;
 void main(){
   vec2 pc = gl_PointCoord * 2.0 - 1.0;
   float r2 = dot(pc, pc);
@@ -271,6 +287,7 @@ void main(){
   vec3 col = mix(mix(uCyan, uPlatinum, 0.4 * vHub), vec3(0.92, 0.98, 1.0), 0.35 + 0.45 * flash)
            * glow * (core + halo);
   col *= mix(0.5, 1.0, 1.0 - vDepth);
+  col *= 1.0 + 0.4 * vPulse;                                        // the heartbeat wave glows past
   col *= smoothstep(vGrow - 0.10, vGrow, uGrow);
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, clamp(core + halo, 0.0, 1.0) * uOpacity);
@@ -282,10 +299,21 @@ void main(){
 export const DUST_VERT = /* glsl */ `
 precision highp float;
 attribute float aPhase;
+uniform float uTime, uOrbR, uBeatPhase, uBeatAmp;
 varying float vPhase;
 void main(){
   vPhase = aPhase;
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  // the motes are free-floating (not dot-morph-coupled): a slow interstitial orbit + radial
+  // bob, and a soft echo of the heartbeat wave.
+  vec3 p = position;
+  float ca = cos(uTime * 0.03), sa = sin(uTime * 0.03);
+  p.xz = mat2(ca, -sa, sa, ca) * p.xz;
+  p += normalize(p + vec3(1e-5)) * (uOrbR * 0.012 * sin(uTime * 0.3 + aPhase * 6.2831));
+  float rr = length(position) / uOrbR;
+  float bt = fract(uBeatPhase - rr * 0.13);
+  float d1 = bt - 0.10;
+  p += normalize(p + vec3(1e-5)) * (uOrbR * uBeatAmp * 0.5 * exp(-d1 * d1 * 260.0));
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_PointSize = 5.0 / max(0.1, -mv.z);
   gl_Position = projectionMatrix * mv;
 }

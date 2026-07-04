@@ -65,6 +65,8 @@ export const LATTICE_VERT = /* glsl */ `
   uniform float uTalk;          // 0..1 talking gate — drives the speech pulse down her face
   uniform float uBlip;          // rare holographic instability
   uniform float uLead;          // 1 = dots LEAD (orb shape-morph: membrane gone, dots draw the object). Default 0 → head scene unchanged.
+  uniform float uSpinY;         // orb-only (default 0 → head scene unchanged): the orb's netGroup rotates
+  uniform float uTgtScale;      // + breathes; rotate/swell the LANDING TARGETS identically so landed dots stay ON their somas. Swell is an OFFSET (0 = ×1).
   uniform float uSelA, uSelB, uFade;   // Skia 12s pattern-crossfade (JS-computed)
   uniform vec2  uDrift;         // = (t*0.010, t*0.006) — Skia parallax, uv units
   uniform float uCellScale;     // uv->cell factor = ROWS / (2.0) (see bake); for drift->cell
@@ -94,12 +96,15 @@ export const LATTICE_VERT = /* glsl */ `
     pAmb = mix(pAmb, mix(pAmb, uCenter, 0.10), uPulse * pulseWave); // <=10% lean toward her
 
     // ---------- FACE cyclone (today's NODE_VERT, anchored aHome->aTarget) ------
+    // the landing target tracks the orb group's live spin + breath (no-op when uSpinY/uTgtScale=0)
+    vec3 tgt = aTarget * (1.0 + uTgtScale);
+    tgt.xz = rot(uSpinY) * tgt.xz;
     float lp   = clamp((uMorph - aDelay) / max(1e-3, 1.0 - aDelay), 0.0, 1.0);
     float ease = lp * lp * (3.0 - 2.0 * lp);
     float land = smoothstep(0.82, 1.0, lp);
     float fly  = sin(lp * 3.14159);
     float rNow = mix(aRadius, aRadius * (1.0 - uInfall), ease);
-    vec3  pCyc = mix(aHome, aTarget, ease);
+    vec3  pCyc = mix(aHome, tgt, ease);
     float spinFall = 1.0 / (0.35 + rNow * 2.5);
     float ang = uSwirl * fly * spinFall + uTime * (1.0 - ease) * 0.6;
     pCyc.xz = rot(ang) * (pCyc.xz - uCenter.xz) + uCenter.xz;

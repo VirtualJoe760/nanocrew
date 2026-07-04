@@ -512,7 +512,15 @@ haloWide room-pulse (2) · haloTight nucleus bleed 1.1R (3) · ghost dust 400 pt
 · NUCLEUS 0.18R (6, NUCLEUS_FRAG: inverse fresnel + 2-tap mottle + uFlare) · plasma SHEATH 0.30R
 (7, PLASMA_VERT + SHEATH_FRAG — the old membrane slimmed: no band, no speculars, soft rim; the
 ONLY surviving plasma) · SOMAS (8, procedural two-gaussian sprite, power-law sizes, hub floors).
-netGroup sway is BOUNDED sin() only — dot targets are world-space; never accumulate rotation.
+
+**Motion**: netGroup carries a slow CONTINUOUS spin (full turn ~2min, quicker talking; paused
+while a shape object shows) + bounded sway + a long-period 2% swell. Accumulating rotation is
+safe ONLY because the lattice shader rotates/swells the dot LANDING TARGETS by the same
+`uSpinY`/`uTgtScale` uniforms (defaults 0 → head scene unchanged) — landed dots stay glued to
+their spinning somas. A HEARTBEAT clock (`uBeatPhase`, delta-integrated so rate changes stay
+phase-continuous; idle ~27bpm, quickens talking) kicks the nucleus first (JS scale + flare),
+then a lub-dub pressure wave ripples OUTWARD through wiring/somas/dust (radius-delayed in the
+verts: a few % radial swell + a passing glow). Dust additionally free-orbits (not dot-coupled).
 
 **The lattice dots land ON the soma positions** (dot skin = neuron field), so the tee/heart/bolt
 shape-morph survives: dissolve → retarget → re-form, `uLead` makes the dots carry the object,
