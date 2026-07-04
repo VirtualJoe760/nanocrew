@@ -22,6 +22,7 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -29,6 +30,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 
 import { DesignTile, tileColor } from '@/components/design-tile';
 import { DesignCanvas, NODE_H, NODE_W, WEB_SLOT_LABELS, type CanvasNode } from '@/components/designer/DesignCanvas';
@@ -53,6 +55,54 @@ import type { CatalogBlank } from '@/lib/printful';
 import { EFFORT_LABELS, EFFORT_TIERS, type Effort } from '@/lib/effort';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const PREVIEW_SHOTS_COST = 16; // display-only mirror of CREDIT_COSTS.preview_shots (server is source of truth)
+
+// Placement → a garment-part icon + a compact label for the square placement tiles in the Combine sheet.
+function placementIcon(key: string): keyof typeof Ionicons.glyphMap {
+  const k = key.toLowerCase();
+  if (k.includes('sleeve')) return 'swap-horizontal-outline';
+  if (k.includes('hood')) return 'person-outline';
+  return 'shirt-outline'; // front / back / default
+}
+function shortPlacement(label: string): string {
+  return label.replace(/\s*print$/i, '').replace(/^Right\s/i, 'R. ').replace(/^Left\s/i, 'L. ');
+}
+
+// A compact SQUARE action button for the design composer's tool row — an icon (or emoji) over a tiny
+// caption, laid out in a horizontally-scrolling strip. Toggle actions pass `selected`; one-shots don't.
+function ActionTile({
+  icon,
+  emoji,
+  label,
+  selected,
+  disabled,
+  onPress,
+}: {
+  icon?: keyof typeof Ionicons.glyphMap;
+  emoji?: string;
+  label: string;
+  selected?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable onPress={onPress} disabled={disabled} accessibilityLabel={label} style={disabled ? { opacity: 0.5 } : undefined}>
+      <ThemedView
+        type={selected ? 'backgroundSelected' : 'backgroundElement'}
+        style={[styles.iconTile, selected ? { borderColor: theme.tint } : null]}>
+        {emoji ? (
+          <ThemedText type="small" style={styles.tileEmoji}>{emoji}</ThemedText>
+        ) : (
+          <Ionicons name={icon ?? 'ellipse-outline'} size={22} color={selected ? theme.text : theme.textSecondary} />
+        )}
+        <ThemedText type="code" themeColor={selected ? 'text' : 'textSecondary'} style={styles.tileLabel} numberOfLines={1}>
+          {label}
+        </ThemedText>
+      </ThemedView>
+    </Pressable>
+  );
+}
 
 type Design = {
   id: string;
@@ -182,6 +232,49 @@ function DesignScreen() {
   const [placements, setPlacements] = useState<{ key: string; label: string; allOver: boolean }[]>([]);
   const [placementsLoading, setPlacementsLoading] = useState(false);
   const [chosenPlacement, setChosenPlacement] = useState('front');
+  // On-model PREVIEW for the Combine sheet — generated on demand (Nano Banana), cached per
+  // design+blank+placement so switching placements or re-opening the sheet doesn't re-charge.
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewErr, setPreviewErr] = useState<string | null>(null);
+  const [previewShots, setPreviewShots] = useState<string[]>([]);
+  const previewCache = useRef<Map<string, string[]>>(new Map());
+  const previewKey = combineTarget ? `${combineTarget.designId}:${combineTarget.blankId}:${chosenPlacement}` : '';
+  useEffect(() => {
+    setPreviewErr(null);
+    setPreviewShots(previewKey ? previewCache.current.get(previewKey) ?? [] : []);
+  }, [previewKey]);
+  const runPreview = async () => {
+    if (!combineTarget || previewBusy) return;
+    const b = blanks.find((x) => String(x.id) === combineTarget.blankId);
+    if (!b?.image) {
+      setPreviewErr('This product has no image to preview.');
+      return;
+    }
+    const label = placements.find((p) => p.key === chosenPlacement)?.label ?? chosenPlacement;
+    setPreviewBusy(true);
+    setPreviewErr(null);
+    try {
+      const res = await apiFetch('/api/creator/preview-shots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          designId: combineTarget.designId,
+          templateKey: combineTarget.blankId, // lets the server ground shots in a real Printful mockup
+          garmentUrl: b.image, // fallback if the mockup task fails
+          placements: [{ placement: chosenPlacement, label }],
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { shots?: string[]; error?: string; needed?: number };
+      if (res.status === 402) throw new Error(`Not enough credits — need ${data.needed ?? PREVIEW_SHOTS_COST}. Top up in Account.`);
+      if (!res.ok || !data.shots?.length) throw new Error(data.error || 'Preview failed');
+      previewCache.current.set(previewKey, data.shots);
+      setPreviewShots(data.shots);
+    } catch (e) {
+      setPreviewErr(e instanceof Error ? e.message : 'Preview failed');
+    } finally {
+      setPreviewBusy(false);
+    }
+  };
   // PlacementEditor — opened from a composite's review modal, or by dropping a design on it.
   const [editorComp, setEditorComp] = useState<{
     id: string;
@@ -628,6 +721,74 @@ function DesignScreen() {
       apiFetch(`/api/designs/${id}`, { method: 'DELETE' }).catch(() => {});
     }
   };
+
+  // ── Drag-to-trash: drag a thumb from the TOP product strip or the BOTTOM designs dock onto the
+  // trashcan that appears over the canvas. Deletes via the SAME paths as the canvas × (products →
+  // onNodeRemove, designs → deleteDesign — no new delete logic). The pan claims only clearly
+  // VERTICAL drags, so the horizontal strips still scroll and tap/long-press stay untouched.
+  const [trashDrag, setTrashDrag] = useState<{ kind: 'product' | 'design'; id: string; image?: string | null } | null>(null);
+  const trashDragRef = useRef<{ kind: 'product' | 'design'; id: string } | null>(null);
+  const trashGX = useSharedValue(0);
+  const trashGY = useSharedValue(0);
+  const trashActive = useSharedValue(0);
+  const trashOver = useSharedValue(0);
+  const trashCX = width / 2;
+  const trashCY = height * 0.45;
+  const beginTrashDrag = (kind: 'product' | 'design', id: string, image?: string | null) => {
+    Haptics.selectionAsync().catch(() => {});
+    trashDragRef.current = { kind, id };
+    setTrashDrag({ kind, id, image });
+  };
+  const settleTrashDrag = (dropped: boolean) => {
+    const t = trashDragRef.current;
+    trashDragRef.current = null;
+    setTrashDrag(null);
+    if (!dropped || !t) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (t.kind === 'design') deleteDesign(t.id);
+    else onNodeRemove(t.id);
+  };
+  const trashPan = (kind: 'product' | 'design', id: string, image?: string | null) =>
+    Gesture.Pan()
+      // Vertical intent claims the drag; the strip's horizontal scroll keeps pure-horizontal moves.
+      // NO failOffsetX: the trash sits mid-canvas, so real drags are DIAGONAL — a horizontal fail
+      // window kills them the moment the finger angles toward the target (verified live).
+      .activeOffsetY([-12, 12])
+      .onStart((e) => {
+        trashActive.value = 1;
+        trashGX.value = e.absoluteX;
+        trashGY.value = e.absoluteY;
+        runOnJS(beginTrashDrag)(kind, id, image);
+      })
+      .onChange((e) => {
+        trashGX.value = e.absoluteX;
+        trashGY.value = e.absoluteY;
+        const dx = e.absoluteX - trashCX;
+        const dy = e.absoluteY - trashCY;
+        trashOver.value = dx * dx + dy * dy < 74 * 74 ? 1 : 0;
+      })
+      .onEnd(() => {
+        runOnJS(settleTrashDrag)(trashOver.value === 1);
+      })
+      .onFinalize(() => {
+        // Safety net for cancelled gestures — settle is idempotent (the ref nulls on first call).
+        runOnJS(settleTrashDrag)(false);
+        trashActive.value = 0;
+        trashOver.value = 0;
+      });
+  const trashGhostStyle = useAnimatedStyle(() => ({
+    opacity: trashActive.value ? 0.95 : 0,
+    transform: [
+      { translateX: trashGX.value - 32 },
+      { translateY: trashGY.value - 32 },
+      { scale: withSpring(trashOver.value ? 0.55 : 1, { damping: 16 }) },
+    ],
+  }));
+  const trashZoneStyle = useAnimatedStyle(() => ({
+    opacity: trashActive.value ? 1 : 0,
+    transform: [{ scale: withSpring(trashOver.value ? 1.12 : 1, { damping: 14 }) }],
+    backgroundColor: trashOver.value ? '#e11d48' : 'rgba(18,20,26,0.94)',
+  }));
 
   // Assign a hosted graphic to a website slot (hero / collection cover / logo) — a direct DB write
   // that overrides the storefront placeholder, then revalidates the live site.
@@ -1325,17 +1486,20 @@ function DesignScreen() {
                       ? blankLookup[n.refId]?.image
                       : (n.previewUrl ?? (n.designRef ? designLookup[n.designRef]?.image : undefined));
                   return (
-                    <Pressable key={n.id} onPress={() => focusNode(n)}>
-                      {img ? (
-                        <Image source={{ uri: img }} style={styles.thumbImg} contentFit="contain" />
-                      ) : (
-                        <View style={[styles.pendingThumb, { backgroundColor: theme.backgroundSelected }]}>
-                          <ThemedText type="small" themeColor="textSecondary">
-                            ·
-                          </ThemedText>
-                        </View>
-                      )}
-                    </Pressable>
+                    // Drag the thumb DOWN toward the trashcan to remove the product from the canvas.
+                    <GestureDetector key={n.id} gesture={trashPan('product', n.id, img)}>
+                      <Pressable onPress={() => focusNode(n)}>
+                        {img ? (
+                          <Image source={{ uri: img }} style={styles.thumbImg} contentFit="contain" />
+                        ) : (
+                          <View style={[styles.pendingThumb, { backgroundColor: theme.backgroundSelected }]}>
+                            <ThemedText type="small" themeColor="textSecondary">
+                              ·
+                            </ThemedText>
+                          </View>
+                        )}
+                      </Pressable>
+                    </GestureDetector>
                   );
                 })}
                 <Pressable
@@ -1464,17 +1628,19 @@ function DesignScreen() {
                       <ThemedText type="small" themeColor="textSecondary">…</ThemedText>
                     </View>
                   ) : (
-                    <Pressable
-                      key={d.id}
-                      onPress={() => addNode('design', d.id)}
-                      onLongPress={() => openDesignActions(d)}
-                      delayLongPress={350}>
-                      {d.image ? (
-                        <Image source={{ uri: d.image }} style={styles.designThumb} contentFit="contain" />
-                      ) : (
-                        <DesignTile color={d.color} style={styles.designThumb} />
-                      )}
-                    </Pressable>
+                    // Drag the thumb UP toward the trashcan to delete the design (tap/long-press unchanged).
+                    <GestureDetector key={d.id} gesture={trashPan('design', d.id, d.image)}>
+                      <Pressable
+                        onPress={() => addNode('design', d.id)}
+                        onLongPress={() => openDesignActions(d)}
+                        delayLongPress={350}>
+                        {d.image ? (
+                          <Image source={{ uri: d.image }} style={styles.designThumb} contentFit="contain" />
+                        ) : (
+                          <DesignTile color={d.color} style={styles.designThumb} />
+                        )}
+                      </Pressable>
+                    </GestureDetector>
                   ),
                 )}
               </ScrollView>
@@ -1501,6 +1667,27 @@ function DesignScreen() {
           ✦ Generate
         </ThemedText>
       </AnimatedPressable>
+
+      {/* Drag-to-trash overlay — the drop zone + the ghost thumb riding the finger. */}
+      {trashDrag ? (
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.trashZone, { left: trashCX - 56, top: trashCY - 56 }, trashZoneStyle]}>
+            <Ionicons name="trash-outline" size={26} color="#fff" />
+            <ThemedText type="small" style={styles.trashZoneText}>
+              Drop to delete
+            </ThemedText>
+          </Animated.View>
+          <Animated.View pointerEvents="none" style={[styles.trashGhost, trashGhostStyle]}>
+            {trashDrag.image ? (
+              <Image source={{ uri: trashDrag.image }} style={styles.trashGhostImg} contentFit="contain" />
+            ) : (
+              <View style={[styles.trashGhostImg, { backgroundColor: theme.backgroundSelected }]} />
+            )}
+          </Animated.View>
+        </>
+      ) : null}
 
       <GenerateModal
         open={generateOpen}
@@ -1700,26 +1887,55 @@ function DesignScreen() {
                   Loading placements…
                 </ThemedText>
               ) : (
-                <View style={styles.placementWrap}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.iconStrip}>
                   {(placements.length
                     ? placements
                     : [{ key: 'front', label: 'Front print', allOver: false }]
                   ).map((p) => (
-                    <Pressable key={p.key} onPress={() => setChosenPlacement(p.key)}>
-                      <ThemedView
-                        type={chosenPlacement === p.key ? 'backgroundSelected' : 'backgroundElement'}
-                        style={styles.chip}>
-                        <ThemedText
-                          type="small"
-                          themeColor={chosenPlacement === p.key ? 'text' : 'textSecondary'}>
-                          {p.label}
-                          {p.allOver ? ' · all-over' : ''}
-                        </ThemedText>
-                      </ThemedView>
-                    </Pressable>
+                    <ActionTile
+                      key={p.key}
+                      icon={placementIcon(p.key)}
+                      label={shortPlacement(p.label)}
+                      selected={chosenPlacement === p.key}
+                      onPress={() => setChosenPlacement(p.key)}
+                    />
                   ))}
-                </View>
+                </ScrollView>
               )}
+
+              {/* On-model PREVIEW gallery — high-quality shots of the design on the product, on a model. */}
+              {previewShots.length ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewStrip}>
+                  {previewShots.map((uri) => (
+                    <Image key={uri} source={{ uri }} style={styles.previewShot} contentFit="cover" />
+                  ))}
+                </ScrollView>
+              ) : null}
+              {previewErr ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {previewErr}
+                </ThemedText>
+              ) : null}
+              <Pressable onPress={runPreview} disabled={previewBusy}>
+                <ThemedView type="backgroundElement" style={[styles.previewBtn, previewBusy ? { opacity: 0.6 } : null]}>
+                  {previewBusy ? (
+                    <>
+                      <ActivityIndicator color={theme.text} size="small" />
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Rendering on a model…
+                      </ThemedText>
+                    </>
+                  ) : (
+                    <ThemedText type="small" themeColor="text">
+                      {previewShots.length ? '↻ Regenerate preview' : `✦ Preview on a model · ${PREVIEW_SHOTS_COST}`}
+                    </ThemedText>
+                  )}
+                </ThemedView>
+              </Pressable>
 
               <Pressable onPress={() => doCombine(chosenPlacement)}>
                 <View style={[styles.generate, { backgroundColor: theme.text }]}>
@@ -2313,67 +2529,54 @@ function GenerateModal({
                 </View>
               ) : null}
 
-              <View style={styles.optionRow}>
-                <Pressable onPress={pick}>
-                  <ThemedView type="backgroundElement" style={styles.chip}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      ↑ Upload image
-                    </ThemedText>
-                  </ThemedView>
-                </Pressable>
-                {/* Transparent vs filled background — for product designs AND web graphics (a
-                    transparent PNG logo, a filled hero/banner). Always available; only hidden when
-                    Aa Text is on (lettering is always cut out). Meme just defaults this to Filled. */}
-                <>
-                    {!isText
-                      ? (['transparent', 'filled'] as const).map((b) => (
-                          <Pressable key={b} onPress={() => setBackground(b)}>
-                            <ThemedView
-                              type={background === b ? 'backgroundSelected' : 'backgroundElement'}
-                              style={styles.chip}>
-                              <ThemedText type="small" themeColor={background === b ? 'text' : 'textSecondary'}>
-                                {b === 'transparent' ? 'Transparent' : 'Filled'}
-                              </ThemedText>
-                            </ThemedView>
-                          </Pressable>
-                        ))
-                      : null}
-                    {modality === 'design' ? (
-                      <Pressable onPress={() => { const next = !isText; setIsText(next); if (next) setMeme(false); }}>
-                        <ThemedView
-                          type={isText ? 'backgroundSelected' : 'backgroundElement'}
-                          style={styles.chip}>
-                          <ThemedText type="small" themeColor={isText ? 'text' : 'textSecondary'}>
-                            Aa Text
-                          </ThemedText>
-                        </ThemedView>
-                      </Pressable>
-                    ) : null}
-                    {/* Meme (icon-only) — steer into the classic meme format (caption + image), web
-                        assets AND t-shirt designs. Web/graphics memes default to Filled (full-bleed share
-                        image); PRODUCT memes default to Transparent so they key out to a clean printable
-                        rectangle. Mutually exclusive with Aa Text. */}
-                    <Pressable onPress={() => { const next = !meme; setMeme(next); if (next) { setIsText(false); setBackground(modality === 'graphics' ? 'filled' : 'transparent'); } }}>
-                      <ThemedView type={meme ? 'backgroundSelected' : 'backgroundElement'} style={styles.chip}>
-                        {/* Frog face = the internet's IP-safe stand-in for Pepe / meme-frog culture
-                            (the actual Pepe character is Matt Furie's copyright — not for our UI). */}
-                        <ThemedText type="small" themeColor={meme ? 'text' : 'textSecondary'}>🐸</ThemedText>
-                      </ThemedView>
-                    </Pressable>
-                </>
-                <Pressable onPress={rollIdea} disabled={rolling}>
-                  <ThemedView type="backgroundElement" style={[styles.chip, { opacity: rolling ? 0.5 : 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary">🎲</ThemedText>
-                  </ThemedView>
-                </Pressable>
-                <Pressable onPress={enhancePrompt} disabled={enhancing || !prompt.trim()}>
-                  <ThemedView
-                    type="backgroundElement"
-                    style={[styles.chip, { opacity: enhancing || !prompt.trim() ? 0.5 : 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary">✨</ThemedText>
-                  </ThemedView>
-                </Pressable>
-              </View>
+              {/* Tool row — compact SQUARE icons in a horizontal scroll strip (Upload · background ·
+                  Text · Meme · Idea · Enhance). Toggles carry a selected state; the rest are one-shots. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.iconStrip}>
+                <ActionTile icon="cloud-upload-outline" label="Upload" onPress={pick} />
+                {/* Transparent vs filled background — hidden when Aa Text is on (lettering is always cut out). */}
+                {!isText ? (
+                  <>
+                    <ActionTile
+                      icon="square-outline"
+                      label="Transparent"
+                      selected={background === 'transparent'}
+                      onPress={() => setBackground('transparent')}
+                    />
+                    <ActionTile
+                      icon="square"
+                      label="Filled"
+                      selected={background === 'filled'}
+                      onPress={() => setBackground('filled')}
+                    />
+                  </>
+                ) : null}
+                {modality === 'design' ? (
+                  <ActionTile
+                    icon="text-outline"
+                    label="Text"
+                    selected={isText}
+                    onPress={() => { const next = !isText; setIsText(next); if (next) setMeme(false); }}
+                  />
+                ) : null}
+                {/* Frog = the IP-safe stand-in for meme-frog culture (Pepe is Matt Furie's copyright). */}
+                <ActionTile
+                  emoji="🐸"
+                  label="Meme"
+                  selected={meme}
+                  onPress={() => { const next = !meme; setMeme(next); if (next) { setIsText(false); setBackground(modality === 'graphics' ? 'filled' : 'transparent'); } }}
+                />
+                <ActionTile icon="dice-outline" label="Idea" disabled={rolling} onPress={rollIdea} />
+                <ActionTile
+                  icon="sparkles-outline"
+                  label="Enhance"
+                  disabled={enhancing || !prompt.trim()}
+                  onPress={enhancePrompt}
+                />
+              </ScrollView>
 
               <Pressable onPress={() => setShowMore((m) => !m)} hitSlop={6} style={styles.moreToggle}>
                 <ThemedText type="small" themeColor="textSecondary">{showMore ? 'Fewer options ▴' : 'More options ▾'}</ThemedText>
@@ -2584,6 +2787,13 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   combineThumb: { width: 72, height: 72, borderRadius: Spacing.two },
+  previewStrip: { gap: Spacing.two, paddingVertical: Spacing.one },
+  previewShot: { width: 132, height: 168, borderRadius: Spacing.two, backgroundColor: 'rgba(255,255,255,0.04)' },
+  previewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.two, paddingVertical: Spacing.three, borderRadius: 999 },
+  trashZone: { position: 'absolute', width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)' },
+  trashZoneText: { color: '#fff', fontSize: 11 },
+  trashGhost: { position: 'absolute', left: 0, top: 0, width: 64, height: 64 },
+  trashGhostImg: { width: 64, height: 64, borderRadius: Spacing.two },
   placementWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   catRow: { paddingVertical: Spacing.two },
   catCreateRow: {
@@ -2607,6 +2817,10 @@ const styles = StyleSheet.create({
   refThumb: { width: 56, height: 56, borderRadius: Spacing.two },
   optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   chip: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
+  iconStrip: { flexDirection: 'row', gap: Spacing.two, paddingVertical: Spacing.one, paddingRight: Spacing.four },
+  iconTile: { width: 66, height: 62, borderRadius: 14, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 4 },
+  tileEmoji: { fontSize: 22, lineHeight: 24 },
+  tileLabel: { fontSize: 9, letterSpacing: 0.2 },
   tabsRow: { flexDirection: 'row', gap: Spacing.one, marginBottom: Spacing.two },
   tab: { alignItems: 'center', paddingVertical: Spacing.two, borderRadius: 999 },
   previewPane: { height: 190, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.18)' },

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -17,6 +17,9 @@ import { DesignTile } from '@/components/design-tile';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
+
+// Captured once so gesture worklets can branch on platform (module constants are worklet-safe).
+const IS_WEB = Platform.OS === 'web';
 
 // Website-slot target nodes (drop a design on one to set it as that site asset).
 export const WEB_SLOT_LABELS: Record<string, string> = {
@@ -173,8 +176,15 @@ function NodeView({
     });
 
   // Tap a node to select it; tapping a selected node's ×-corner removes it, elsewhere opens it.
+  // ⚠ On WEB, RNGH reports e.x/e.y in SCREEN pixels of the transformed element, while the corner
+  // test is in LAYOUT pixels — so under viewport zoom / node pinch-scale the × zone drifted off the
+  // visible badge and the tap fell through to "open" (the "× doesn't delete" bug). Normalize by the
+  // live scales on web; native locationInView already reports layout coords.
   const tap = Gesture.Tap().onEnd((e) => {
-    if (selected && e.x > NODE_W - 34 && e.y < 34) {
+    const s = IS_WEB ? scale.value * (selected ? activeScale.value : (node.scale ?? 1)) : 1;
+    const lx = e.x / (s || 1);
+    const ly = e.y / (s || 1);
+    if (selected && lx > NODE_W - 40 && ly < 40) {
       runOnJS(onRemove)(node.id);
     } else {
       runOnJS(onTap)(node.id);
@@ -348,9 +358,11 @@ function GroupView({
     });
 
   const w = node.width ?? 200;
-  // Tap the × (top-right, in the floating label) to ungroup.
+  // Tap the × (top-right, in the floating label) to ungroup. Same web screen-px normalization as
+  // the node × (groups don't pinch-scale, so only the viewport zoom applies).
   const tap = Gesture.Tap().onEnd((e) => {
-    if (e.x > w - 34 && e.y < 26) runOnJS(onUngroup)(node.id);
+    const s = IS_WEB ? scale.value : 1;
+    if (e.x / (s || 1) > w - 40 && e.y / (s || 1) < 32) runOnJS(onUngroup)(node.id);
   });
   const gesture = Gesture.Race(pan, tap);
 
