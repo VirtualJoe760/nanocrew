@@ -153,6 +153,8 @@ function bakeConnectome(R: number): {
   somaPositions: Float32Array;
   yMin: number;
   ySpan: number;
+  xMax: number;
+  zMax: number;
 } {
   const rnd = mulberry32(NET_SEED);
   const gauss = () => Math.sqrt(-2 * Math.log(Math.max(1e-9, rnd()))) * Math.cos(2 * Math.PI * rnd());
@@ -465,6 +467,20 @@ function bakeConnectome(R: number): {
     fine++;
   }
 
+  // VOID THREADS (aClass 0): the net does not END — ~300 dim threads continue radially outward
+  // from peripheral somas to 1.6–3.0× their radius, running past the screen diagonal at every
+  // rotation ("like our universe expands — we shouldn't see the end of the net").
+  let voids = 0, voidGuard = 0;
+  while (voids < 300 && voidGuard++ < 6000) {
+    const i = Math.floor(rnd() * N);
+    const a = somas[i].p;
+    if (a.length() < 0.75 * R) continue;
+    const b = a.clone().multiplyScalar(1.6 + 1.4 * rnd()).add(randDir().multiplyScalar(0.22 * R));
+    const ctrl = a.clone().add(b).multiplyScalar(0.5).addScaledVector(perpOf(a, b), 0.08 * a.distanceTo(b));
+    emit(quadBezier(a, ctrl, b, 4, 0.012 * R), 0, 0, rnd(), 0.4 + 0.5 * rnd(), 0.85 + 0.15 * rnd(), 0.7);
+    voids++;
+  }
+
   const lines = new THREE.BufferGeometry();
   lines.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lp), 3));
   lines.setAttribute('aT', new THREE.BufferAttribute(new Float32Array(lT), 1));
@@ -504,8 +520,10 @@ function bakeConnectome(R: number): {
   nodes.setAttribute('aHub', new THREE.BufferAttribute(nHub, 1));
   nodes.setAttribute('aGrow', new THREE.BufferAttribute(nGr, 1));
 
-  // ghost dust: 400 near-invisible motes in the envelope (interstitial volume fill)
-  const dustPos = new Float32Array(400 * 3), dPh = new Float32Array(400);
+  // ghost dust: 400 motes in the envelope (interstitial fill) + 300 in an OUTER SHELL out to
+  // ~2.3R — with the void threads, the far field never ends on-screen.
+  const DUST_N = 700;
+  const dustPos = new Float32Array(DUST_N * 3), dPh = new Float32Array(DUST_N);
   let dCount = 0, dGuard = 0;
   while (dCount < 400 && dGuard++ < 40000) {
     const p = new THREE.Vector3((rnd() * 2 - 1) * 1.3 * R, (rnd() * 2 - 1) * 1.02 * R, (rnd() * 2 - 1) * 0.8 * R);
@@ -516,11 +534,26 @@ function bakeConnectome(R: number): {
     dPh[dCount] = rnd();
     dCount++;
   }
+  while (dCount < DUST_N) {
+    const p = randDir().multiplyScalar(R * (1.05 + 1.25 * rnd()));
+    dustPos[dCount * 3] = p.x;
+    dustPos[dCount * 3 + 1] = p.y;
+    dustPos[dCount * 3 + 2] = p.z;
+    dPh[dCount] = rnd();
+    dCount++;
+  }
   const dust = new THREE.BufferGeometry();
   dust.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
   dust.setAttribute('aPhase', new THREE.BufferAttribute(dPh, 1));
 
-  return { lines, nodes, dust, somaPositions: nodePos, yMin, ySpan: Math.max(1e-4, yMax - yMin) };
+  // per-axis SOMA extents — the framing math equalizes the rotating footprint from these
+  let xMax = 1e-4, zMax = 1e-4;
+  somas.forEach((s) => {
+    xMax = Math.max(xMax, Math.abs(s.p.x));
+    zMax = Math.max(zMax, Math.abs(s.p.z));
+  });
+
+  return { lines, nodes, dust, somaPositions: nodePos, yMin, ySpan: Math.max(1e-4, yMax - yMin), xMax, zMax };
 }
 
 function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (r: number) => void }) {
@@ -628,15 +661,6 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const vH = Math.tan((cam.fov * Math.PI) / 360) * 2; // half-height of the view at the orb plane
     const vW = vH * cam.aspect;
 
-    // FRAMING: fill the RECT, not the short axis — the baked cloud is stretched PER-AXIS so the
-    // net reaches ALL corners of the viewport (each axis overshoots by 12%; the big stretch on
-    // portrait is Y, which is invariant under the Y-spin, so rotation doesn't pump the
-    // silhouette). Depth uses the smaller factor. Core meshes (nucleus/sheath/halos) scale
-    // UNIFORMLY by sz so they stay round-ish while the cloud stretches around them.
-    const sx = (1.12 * vW) / (ORB_R * 1.15);
-    const sy = (1.12 * vH) / (ORB_R * 1.15);
-    const sz = Math.min(sx, sy);
-
     const scene = new THREE.Group();
     const dotTex = makeDotTexture();
     const auraTex = makeAuraTexture();
@@ -644,10 +668,22 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // (a) THE UNIFIED LATTICE — ambient background dots + the soma landing dots in ONE buffer.
     //     The face targets ARE the soma positions (stretched): dot skin = neuron field, so the
     //     tee/heart/bolt shape-morph system keeps working unchanged.
-    const { lines: netGeo, nodes: nodeGeo, dust: dustGeo, somaPositions, yMin, ySpan } = bakeConnectome(ORB_R);
+    const { lines: netGeo, nodes: nodeGeo, dust: dustGeo, somaPositions, yMin, ySpan, xMax, zMax } =
+      bakeConnectome(ORB_R);
+
+    // FRAMING: fill the RECT at EVERY rotation — per-axis stretch from the ACTUAL baked extents:
+    // x and y overshoot their view extents by 12%; DEPTH is stretched so the z-footprint EQUALS
+    // the x-footprint (the baked cloud is shallow, and a shallow cloud shows its edges when the
+    // Y-spin turns the wide side into the screen). With z ≈ x, the rotating silhouette never
+    // thins — combined with the void threads, you can't see the end of the net. Core meshes
+    // (nucleus/sheath/halos) scale UNIFORMLY by sCore so they stay round-ish.
+    const sx = (1.12 * vW) / xMax;
+    const sy = (1.12 * vH) / Math.max(Math.abs(yMin), Math.abs(yMin + ySpan));
+    const szDepth = (sx * xMax) / zMax; // stretched z extent == stretched x extent
+    const sCore = Math.min(sx, sy);
     const stretch = (geo: THREE.BufferGeometry) => {
       const a = geo.getAttribute('position') as THREE.BufferAttribute;
-      for (let i = 0; i < a.count; i++) a.setXYZ(i, a.getX(i) * sx, a.getY(i) * sy, a.getZ(i) * sz);
+      for (let i = 0; i < a.count; i++) a.setXYZ(i, a.getX(i) * sx, a.getY(i) * sy, a.getZ(i) * szDepth);
       a.needsUpdate = true;
     };
     stretch(netGeo);
@@ -698,7 +734,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         orbFaceY[k] = fy.getX(li);
       });
       // unit shapes span ±1, so cap the sampler scale to 92% of the short half-extent
-      const shapeS = Math.min(ORB_R * 1.15 * sz, 0.92 * Math.min(vW, vH));
+      const shapeS = Math.min(ORB_R * 1.15 * sCore, 0.92 * Math.min(vW, vH));
       shapeRig.current = { latGeo, idx, orbTargets, orbFaceY, shapeS, yMin: yMin * sy, ySpan: ySpan * sy };
     }
 
@@ -721,7 +757,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     scene.add(streamPts);
 
     // (c) the constellation. Camera FIXED at +z → static planes inside orbGroup ARE billboards.
-    //     (No group scale — the stretch is baked into the geometry; core meshes carry sz.)
+    //     (No group scale — the stretch is baked into the geometry; core meshes carry sCore.)
     const orbGroup = new THREE.Group();
 
     const haloMat = (map: THREE.Texture, color?: string) =>
@@ -735,11 +771,11 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         blending: THREE.AdditiveBlending,
       });
     const haloWideMat = haloMat(auraTex);
-    const haloWide = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 6.0 * sz, ORB_R * 6.0 * sz), haloWideMat);
+    const haloWide = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 6.0 * sCore, ORB_R * 6.0 * sCore), haloWideMat);
     haloWide.position.z = -0.02;
     haloWide.renderOrder = 2; // the room glow — near-invisible at idle, pulses with her voice
     const haloTightMat = haloMat(dotTex, CYAN);
-    const haloTight = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 1.1 * sz, ORB_R * 1.1 * sz), haloTightMat);
+    const haloTight = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 1.1 * sCore, ORB_R * 1.1 * sCore), haloTightMat);
     haloTight.position.z = -0.01;
     haloTight.renderOrder = 3; // the nucleus bleed — hot air around the core, NOT a limb
     orbGroup.add(haloWide, haloTight);
@@ -804,7 +840,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       vertexShader: NUCLEUS_VERT, fragmentShader: NUCLEUS_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const nucleus = new THREE.Mesh(new THREE.IcosahedronGeometry(NUC_R * sz, 3), nucleusMat);
+    const nucleus = new THREE.Mesh(new THREE.IcosahedronGeometry(NUC_R * sCore, 3), nucleusMat);
     nucleus.renderOrder = 6;
     const sheathMat = new THREE.ShaderMaterial({
       uniforms: {
@@ -818,7 +854,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       side: THREE.FrontSide,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const sheath = new THREE.Mesh(new THREE.SphereGeometry(SHEATH_R * sz, 40, 28), sheathMat);
+    const sheath = new THREE.Mesh(new THREE.SphereGeometry(SHEATH_R * sCore, 40, 28), sheathMat);
     sheath.renderOrder = 7;
     orbGroup.add(nucleus, sheath);
     scene.add(orbGroup);
@@ -946,9 +982,10 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     crawlRef.current = (crawlRef.current + delta * (0.08 + 0.04 * tk + 0.1 * spk * tk)) % 1;
     nm.uCrawlPos.value = crawlRef.current;
     nd.uCrawlPos.value = crawlRef.current;
-    // differential EXPANSION — the net grows outward on a slow clock: roots anchored, periphery
-    // breathing off the frame. (The uniform swell below is dot-tracked; this extra is not.)
-    const expand = 0.05 + 0.05 * Math.sin(t * 0.15);
+    // differential EXPANSION — the net grows outward like the universe: roots anchored, the
+    // periphery drifting off the frame. The clock is SO slow (~2min period) that within any
+    // viewing window it reads as one-way growth. (The uniform swell is dot-tracked; this isn't.)
+    const expand = 0.06 + 0.06 * Math.sin(t * 0.05);
     nm.uExpand.value = expand;
     nd.uExpand.value = expand;
     r.dustMat.uniforms.uExpand.value = expand;

@@ -216,7 +216,7 @@ void main(){
   p += normalize(position + vec3(1e-5)) * (uOrbR * uExpand * aGrow);
   vWy = (modelMatrix * vec4(p, 1.0)).y;              // WORLD y — the band stays vertical under sway
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
-  vDepth = clamp((-mv.z - 1.80) / 0.42, 0.0, 1.0);   // 0 near → 1 far across the ACTUAL cloud z-extent
+  vDepth = clamp((-mv.z - 1.69) / 0.62, 0.0, 1.0);   // 0 near → 1 far across the ACTUAL cloud z-extent
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -305,7 +305,7 @@ void main(){
   vec3 p = position + normalize(position + vec3(1e-5)) * (uOrbR * uExpand * aGrow);
   vWy = (modelMatrix * vec4(p, 1.0)).y;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
-  vDepth = clamp((-mv.z - 1.80) / 0.42, 0.0, 1.0);
+  vDepth = clamp((-mv.z - 1.69) / 0.62, 0.0, 1.0);
   float breathe = 1.0 + 0.12 * sin(uTime * 0.8 + aPhase * 6.2831);
   gl_PointSize = clamp(aSize * breathe * (1.0 / max(0.1, -mv.z)), 2.0, 30.0);
   gl_Position = projectionMatrix * mv;
