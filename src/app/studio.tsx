@@ -1078,7 +1078,7 @@ function StudioScreen() {
         <View style={styles.busyBackdrop}>
           <View style={[styles.busyCard, { backgroundColor: p.bgTop, borderColor: p.line }]}>
             <ThemedText type="code" style={[styles.busyEyebrow, { color: p.accent }]}>MICROPHONE IN USE</ThemedText>
-            <ThemedText type="title" style={[styles.busyTitle, { color: p.ink }]}>You're on a call</ThemedText>
+            <ThemedText type="title" style={[styles.busyTitle, { color: p.ink }]}>You’re on a call</ThemedText>
             <ThemedText type="small" style={[styles.busyBody, { color: p.dim }]}>
               {aiName} needs your microphone, but another app — most likely an active phone or FaceTime
               call — is using it. End your call, then come back and tap Try again.
