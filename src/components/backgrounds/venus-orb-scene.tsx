@@ -733,7 +733,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const dustMat = new THREE.ShaderMaterial({
       uniforms: {
         uDot: { value: dotTex }, uTime: { value: 0 }, uOpacity: { value: 0 },
-        uOrbR: { value: ORB_R }, uCyan: { value: new THREE.Color(CYAN) },
+        uOrbR: { value: ORB_R }, uExpand: { value: 0 }, uCyan: { value: new THREE.Color(CYAN) },
       },
       vertexShader: DUST_VERT, fragmentShader: DUST_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -746,7 +746,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       uTime: { value: 0 }, uOpacity: { value: 0 }, uRate: { value: 0.16 }, uFire: { value: 0.6 },
       uTalk: { value: 0 }, uSpeak: { value: 0 }, uGrow: { value: 0 }, uIgnite: { value: 0 },
       uTrunk: { value: 0 }, uHotGang: { value: 1 }, uGangFlare: { value: 0 },
-      uOrbR: { value: ORB_R }, uCrawlPos: { value: 0 },
+      uOrbR: { value: ORB_R }, uCrawlPos: { value: 0 }, uExpand: { value: 0 },
       uYMin: { value: yMin * layoutScale }, uYSpan: { value: ySpan * layoutScale },
       uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
     });
@@ -919,6 +919,12 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     crawlRef.current = (crawlRef.current + delta * (0.08 + 0.04 * tk + 0.1 * spk * tk)) % 1;
     nm.uCrawlPos.value = crawlRef.current;
     nd.uCrawlPos.value = crawlRef.current;
+    // differential EXPANSION — the net grows outward on a slow clock: roots anchored, periphery
+    // breathing off the frame. (The uniform swell below is dot-tracked; this extra is not.)
+    const expand = 0.05 + 0.05 * Math.sin(t * 0.15);
+    nm.uExpand.value = expand;
+    nd.uExpand.value = expand;
+    r.dustMat.uniforms.uExpand.value = expand;
 
     // nucleus + sheath — the mind condenses FIRST; the heart flares on syllables.
     const nu = r.nucleusMat.uniforms;
@@ -929,8 +935,10 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const sh = r.sheathMat.uniforms;
     sh.uTime.value = t;
     sh.uOpacity.value = 0.5 * seg(0.42, 0.7) * lit * mindDim;
-    sh.uAmp.value = Math.min(0.22, 0.06 + 0.01 * Math.sin(t * 0.5) + 0.16 * spk * tk);
-    sh.uFlow.value = 0.1 + 0.45 * spk * tk;
+    // LIQUID at rest — the sheath visibly flows and reshapes even in silence (art direction:
+    // "plasma liquid… shapes flow in different ways"), and boils harder on speech.
+    sh.uAmp.value = Math.min(0.3, 0.14 + 0.02 * Math.sin(t * 0.5) + 0.16 * spk * tk);
+    sh.uFlow.value = 0.16 + 0.45 * spk * tk;
     sh.uBoil.value = THREE.MathUtils.damp(sh.uBoil.value, 0.15 + 0.55 * tk + 0.45 * spk, 4, delta);
     sh.uBlip.value = blip;
     sh.uIgnite.value = ignite;
@@ -945,7 +953,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // (this is what makes accumulating rotation safe). Spin pauses while an object is showing
     // so the tee/heart/bolt don't turn edge-on.
     spinRef.current = (spinRef.current + delta * (0.05 + 0.05 * tk) * (1 - ss.gate)) % (Math.PI * 2);
-    const swell = 0.02 * Math.sin(t * 0.13);
+    const swell = 0.05 * Math.sin(t * 0.1);
     r.netGroup.rotation.y = Math.sin(t * 0.07) * 0.12 + spinRef.current;
     r.netGroup.rotation.x = Math.sin(t * 0.05 + 1.7) * 0.08;
     r.netGroup.scale.setScalar(1 + swell);

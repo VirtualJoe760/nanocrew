@@ -513,18 +513,29 @@ haloWide room-pulse (2) · haloTight nucleus bleed 1.1R (3) · ghost dust 400 pt
 (7, PLASMA_VERT + SHEATH_FRAG — the old membrane slimmed: no band, no speculars, soft rim; the
 ONLY surviving plasma) · SOMAS (8, procedural two-gaussian sprite, power-law sizes, hub floors).
 
-**Motion**: netGroup carries a slow CONTINUOUS spin (full turn ~2min, quicker talking; paused
-while a shape object shows) + bounded sway + a long-period 2% swell. Accumulating rotation is
-safe ONLY because the lattice shader rotates/swells the dot LANDING TARGETS by the same
-`uSpinY`/`uTgtScale` uniforms (defaults 0 → head scene unchanged) — landed dots stay glued to
-their spinning somas. The wires CRAWL: two slow waves traveling ALONG each wire (aT-coupled
-phase in NET_VERT, endpoint-anchored so nothing detaches; whisker tips swing free, trunks stiff),
-and a luminous ENERGY FRONT creeps through the limbs along the aGrow BFS field (`uCrawlPos`,
-delta-integrated, one lap ~12s idle / quicker talking) — it follows actual wire paths nucleus →
-tips, so it never reads as a radial ring (a RADIAL pulse was tried and rejected: "water
-droplet"). Dust additionally free-orbits (not dot-coupled). The layout deliberately OVERSHOOTS
-the short view extent by 12% (`layoutScale`, uncapped) — the outer network runs off the
-viewport; shape objects use a separate capped `shapeS` so tee/heart/bolt still fit the frame.
+**Motion** (labels per Joe's annotated still — "Net" = peripheral web, "Limbic" = the trunk
+arcs around the core, "Nuculus" = the core): netGroup carries a slow CONTINUOUS spin (full turn
+~2min, quicker talking; paused while a shape object shows) + bounded sway + a long-period 5%
+swell. Accumulating rotation is safe ONLY because the lattice shader rotates/swells the dot
+LANDING TARGETS by the same `uSpinY`/`uTgtScale` uniforms (defaults 0 → head scene unchanged) —
+landed dots stay glued to their spinning somas.
+- **Net**: two slow waves traveling ALONG each wire (aT-coupled phase, endpoint-anchored;
+  whisker tips swing free, trunks stiff); a sharp ENERGY FRONT pulsing down the roots along the
+  aGrow BFS field (`uCrawlPos`, one lap ~12s idle — graph paths, never a radial ring: a RADIAL
+  pulse was tried and rejected as "water droplet"); fast INTERMITTENT SPARKS racing dendrites +
+  fine web (~30% duty per wire — electricity through circuits); and differential EXPANSION
+  (`uExpand`, slow clock): roots anchored, periphery breathing off the frame (wires+somas+dust;
+  the uniform swell part is dot-tracked, the aGrow-weighted extra is not).
+- **Limbic**: each braided trunk is a SNAKE — hot head, tapered tail, body length breathing as
+  it slides around the nucleus on its path (in-shader window on aT at `uRate*0.6`); the old
+  static full-brightness rails are now faint ghosts.
+- **Nucleus**: NOT a sphere — NUCLEUS_VERT displaces with terraced (quantized) noise = crystal
+  facets that reform as the field flows + a per-facet fast tremor ("crystallized water
+  vibrating"), forward-difference normals so the fresnel breaks into facet glints; the sheath
+  runs LIQUID at rest (uAmp base 0.14, cap 0.3).
+Dust additionally free-orbits (not dot-coupled). The layout deliberately OVERSHOOTS the short
+view extent by 12% (`layoutScale`, uncapped) — the outer network runs off the viewport; shape
+objects use a separate capped `shapeS` so tee/heart/bolt still fit the frame.
 
 **The lattice dots land ON the soma positions** (dot skin = neuron field), so the tee/heart/bolt
 shape-morph survives: dissolve → retarget → re-form, `uLead` makes the dots carry the object,

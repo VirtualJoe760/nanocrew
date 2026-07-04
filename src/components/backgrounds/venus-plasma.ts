@@ -128,16 +128,35 @@ void main(){
 }
 `;
 
-// THE NUCLEUS — hero core: inverse fresnel (hot heart) + a 2-tap noise mottle so close-ups
-// aren't a flat gradient; uFlare rides syllables and the morph-landing ignition.
+// THE NUCLEUS — hero core: NOT a sphere. Terraced (quantized) noise displacement = crystal
+// facets that reform as the field flows, a second free-flowing swell so the shapes move in
+// different ways, and a fine per-facet tremor — "crystallized water vibrating" (art direction).
+// Forward-difference normals so the fresnel breaks into facet glints.
 export const NUCLEUS_VERT = /* glsl */ `
 precision highp float;
+uniform float uTime;
 varying vec3 vN, vV, vObj;
+${NOISE3}
 void main(){
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vN = normalize(normalMatrix * normal);
+  vec3 dir = normalize(position);
+  vec3 nc = dir * 2.2 + vec3(uTime * 0.11, uTime * 0.07, 0.0);
+  float n = vnoise3(nc);
+  float n2 = vnoise3(dir * 4.5 - vec3(0.0, uTime * 0.13, uTime * 0.05));
+  float facet = mix(n, floor(n * 4.0) / 4.0 + 0.125, 0.7);
+  float d = (facet - 0.5) * 0.55 + (n2 - 0.5) * 0.18
+          + 0.025 * sin(uTime * 9.0 + hash13(floor(dir * 5.0)) * 6.2831);
+  vec3 displaced = position * (1.0 + d);
+  float e = 0.15;
+  vec3 g = vec3(
+    vnoise3(nc + vec3(e * 2.2, 0.0, 0.0)) - n,
+    vnoise3(nc + vec3(0.0, e * 2.2, 0.0)) - n,
+    vnoise3(nc + vec3(0.0, 0.0, e * 2.2)) - n) / e;
+  vec3 gt = g - dir * dot(g, dir);
+  vec3 nObj = normalize(dir - gt * 1.2);
+  vec4 mv = modelViewMatrix * vec4(displaced, 1.0);
+  vN = normalize(normalMatrix * nObj);
   vV = normalize(-mv.xyz);
-  vObj = normalize(position);
+  vObj = dir;
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -171,7 +190,7 @@ export const NET_VERT = /* glsl */ `
 precision highp float;
 attribute float aT, aPhase, aClass, aGang, aBright, aGrow;
 attribute vec3 aJit;
-uniform float uTime, uJitAmp, uOrbR;
+uniform float uTime, uJitAmp, uOrbR, uExpand;
 varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth;
 void main(){
   vT = aT; vPhase = aPhase; vClass = aClass; vGang = aGang; vBright = aBright; vGrow = aGrow;
@@ -185,6 +204,9 @@ void main(){
   vec3 crawl = aJit * sin(aT * 6.2831 - uTime * 0.55 + aPhase * 6.2831)
              + aJit.zxy * 0.6 * sin(aT * 12.566 + uTime * 0.37 + aPhase * 12.0);
   vec3 p = position + crawl * (uOrbR * 0.011 * loose * anchor * uJitAmp);
+  // differential EXPANSION — the net grows outward: roots stay anchored (aGrow≈0), the
+  // periphery breathes off the frame (aGrow≈1). Slow clock, no ring read.
+  p += normalize(position + vec3(1e-5)) * (uOrbR * uExpand * aGrow);
   vWy = (modelMatrix * vec4(p, 1.0)).y;              // WORLD y — the band stays vertical under sway
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDepth = clamp((-mv.z - 1.80) / 0.42, 0.0, 1.0);   // 0 near → 1 far across the ACTUAL cloud z-extent
@@ -202,22 +224,33 @@ void main(){
   float isDend  = step(0.5, vClass) * (1.0 - step(1.5, vClass));
   float isTrunk = step(1.5, vClass) * (1.0 - step(2.5, vClass));
   float isWhisk = step(2.5, vClass);
-  // packets: per-ganglion staggered clock; trunks slower; whiskers never fire
-  float rate = uRate * (0.8 + 0.4 * fract(vGang * 0.37)) * (isDend + 0.55 * isTrunk + 0.8 * isFine);
+  // packets: per-ganglion staggered clock; whiskers never fire; trunks carry SNAKES instead
+  float rate = uRate * (0.8 + 0.4 * fract(vGang * 0.37)) * (isDend + 0.8 * isFine);
   float p = fract(uTime * rate + vPhase);
   float K = 130.0 - 60.0 * uSpeak;                   // the packet WIDENS + brightens on speech
   float d = vT - p;
   float head = exp(-d * d * K);
   float tail = 0.35 * exp(-abs(d) * 20.0) * (1.0 - step(0.0, d));   // comet wake
-  float d2 = vT - fract(p + 0.5);
-  float head2 = 0.45 * exp(-d2 * d2 * K) * isTrunk;                 // trunk double packet
-  float pk = (head + tail + head2) * (1.0 - isWhisk);
+  float pk = (head + tail) * (1.0 - isWhisk) * (1.0 - isTrunk);
+  // ELECTRICITY — fast intermittent sparks racing the circuits (dendrites + fine web): each
+  // wire bursts ~30% of the time, discharge crossing in well under a second.
+  float sp = vT - fract(uTime * uRate * 7.0 + vPhase * 7.31);
+  float burst = step(0.72, fract(vPhase * 13.7 + uTime * 0.23));
+  float spark = exp(-sp * sp * 420.0) * burst * (isDend + 0.7 * isFine);
   float refr = 0.45 + 0.55 * smoothstep(0.05, 0.35, fract(p - vT)); // refractory dim trail
+  refr = mix(refr, 1.0, isTrunk);
+  // LIMBIC SNAKES — each braided trunk is a living body sliding around the nucleus: a hot head,
+  // a tapered tail, the body length breathing as it travels ("snake", per the art direction).
+  float hp = fract(uTime * uRate * 0.6 + vPhase);
+  float db = fract(hp - vT);
+  float bodyLen = 0.38 + 0.14 * sin(uTime * 0.31 + vPhase * 6.2831);
+  float body = max(0.0, 1.0 - db / bodyLen);
+  float snake = exp(-db * db * 300.0) * 1.3 + body * body * 0.9;
   // the filament ladder — a 4-tier brightness hierarchy IS the perceived detail
   float ends = vT * (1.0 - vT) * 4.0;
   float fil = isFine  * (0.045 + 0.05 * ends)
             + isDend  * (0.14 + 0.20 * ends)
-            + isTrunk * (0.30 + 0.20 * ends) * (1.0 + 1.2 * uTrunk)
+            + isTrunk * (0.05 + 0.05 * ends + snake * (0.55 + 0.5 * uTrunk))
             + isWhisk * 0.10 * (1.0 - vT);                          // tip taper
   fil *= vBright * refr;
   float gangHit = 1.0 - min(abs(vGang - uHotGang), 1.0);            // idle thought-flare
@@ -229,14 +262,14 @@ void main(){
   vec3 col = mix(uCyan * 0.55, uCyan, isDend + isTrunk + isWhisk) * fil;
   col = mix(col, mix(uCyan, uPlatinum, 0.45), isTrunk * 0.9);       // trunks platinum-hot
   col += mix(uCyan, vec3(0.92, 0.98, 1.0), 0.5 + 0.3 * isTrunk)
-         * pk * uFire * (1.0 + 1.5 * uIgnite) * (isDend + 1.4 * isTrunk + 0.25 * isFine);
+         * (pk + spark * 0.9) * uFire * (1.0 + 1.5 * uIgnite) * (isDend + 1.4 * isTrunk + 0.4 * isFine);
   col += uCyan * band * (0.3 + 0.9 * uSpeak) * (isDend + isTrunk);
   col *= mix(0.45, 1.0, 1.0 - vDepth);                              // depth cue — the #1 3D tell
-  // ENERGY CRAWL — a luminous front creeping through the LIMBS along the BFS growth field
+  // ENERGY CRAWL — a sharp luminous front pulsing down the ROOTS along the BFS growth field
   // (graph paths from the nucleus to the arm tips — not radius, so it never reads as a ring)
   float dcr = abs(vGrow - uCrawlPos);
   dcr = min(dcr, 1.0 - dcr);
-  col *= 1.0 + 0.4 * exp(-dcr * dcr * 60.0);
+  col *= 1.0 + 0.55 * exp(-dcr * dcr * 130.0);
   col *= smoothstep(vGrow - 0.15, vGrow, uGrow);                    // wires outward from the nucleus
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, uOpacity * (0.5 * isFine + (1.0 - isFine)));
@@ -249,12 +282,14 @@ void main(){
 export const NODE_VERT = /* glsl */ `
 precision highp float;
 attribute float aPhase, aSize, aGang, aHub, aGrow;
-uniform float uTime;
+uniform float uTime, uOrbR, uExpand;
 varying float vPhase, vGang, vHub, vGrow, vWy, vDepth;
 void main(){
   vPhase = aPhase; vGang = aGang; vHub = aHub; vGrow = aGrow;
-  vWy = (modelMatrix * vec4(position, 1.0)).y;
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  // cells ride the same differential expansion as their wires (roots anchored, periphery out)
+  vec3 p = position + normalize(position + vec3(1e-5)) * (uOrbR * uExpand * aGrow);
+  vWy = (modelMatrix * vec4(p, 1.0)).y;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDepth = clamp((-mv.z - 1.80) / 0.42, 0.0, 1.0);
   float breathe = 1.0 + 0.12 * sin(uTime * 0.8 + aPhase * 6.2831);
   gl_PointSize = clamp(aSize * breathe * (1.0 / max(0.1, -mv.z)), 2.0, 30.0);
@@ -298,15 +333,17 @@ void main(){
 export const DUST_VERT = /* glsl */ `
 precision highp float;
 attribute float aPhase;
-uniform float uTime, uOrbR;
+uniform float uTime, uOrbR, uExpand;
 varying float vPhase;
 void main(){
   vPhase = aPhase;
-  // the motes are free-floating (not dot-morph-coupled): a slow interstitial orbit + radial bob
+  // the motes are free-floating (not dot-morph-coupled): a slow interstitial orbit + radial bob,
+  // drifting outward with the net's expansion (weighted by their own radius)
   vec3 p = position;
   float ca = cos(uTime * 0.03), sa = sin(uTime * 0.03);
   p.xz = mat2(ca, -sa, sa, ca) * p.xz;
   p += normalize(p + vec3(1e-5)) * (uOrbR * 0.012 * sin(uTime * 0.3 + aPhase * 6.2831));
+  p += normalize(p + vec3(1e-5)) * (uOrbR * uExpand * clamp(length(position) / (1.2 * uOrbR), 0.0, 1.0));
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_PointSize = 5.0 / max(0.1, -mv.z);
   gl_Position = projectionMatrix * mv;
