@@ -57,13 +57,17 @@ const ARM_CAP = ORB_R * 1.42;
 // fixed at +z so the projected XY layout IS the composition). Units of R:
 // [ cx, cy, cz,  sx, sy, sz,  weight ] — per-axis gaussian spreads; each ganglion also gets a
 // seeded random tilt so every cluster is a tilted LENS, not an axis-aligned puff.
+// NOTE the z values: the centers are deliberately SPREAD IN AZIMUTH around the Y spin axis
+// (≈29°/-150°/72°/-124°/-12°/152°/-85°) so the rotating cloud shows similar mass at every
+// angle — clustered azimuths made the sides go sparse mid-rotation. Z moves don't change the
+// head-on composition, only the side views.
 const GANGLIA: number[][] = [
-  [0.62, 0.3, 0.1, 0.28, 0.2, 0.22, 0.2],     // G1 right lobe
-  [-0.7, 0.12, -0.15, 0.24, 0.26, 0.2, 0.18], // G2 left lobe, slightly behind
-  [0.18, -0.58, 0.2, 0.22, 0.18, 0.24, 0.15], // G3 lower, slightly front
-  [-0.3, 0.62, 0.05, 0.2, 0.22, 0.18, 0.13],  // G4 upper-left
+  [0.62, 0.3, 0.35, 0.28, 0.2, 0.22, 0.2],    // G1 right lobe
+  [-0.7, 0.12, -0.4, 0.24, 0.26, 0.2, 0.18],  // G2 left lobe, behind
+  [0.18, -0.58, 0.55, 0.22, 0.18, 0.24, 0.15], // G3 lower, well in front
+  [-0.3, 0.62, -0.45, 0.2, 0.22, 0.18, 0.13],  // G4 upper-left, behind
   [0.95, -0.25, -0.2, 0.14, 0.12, 0.14, 0.08],  // G5 OUTRIGGER (breaks the hull)
-  [-0.85, -0.55, 0.15, 0.12, 0.14, 0.12, 0.07], // G6 OUTRIGGER
+  [-0.85, -0.55, 0.45, 0.12, 0.14, 0.12, 0.07], // G6 OUTRIGGER, front
   [0.05, 0.15, -0.55, 0.26, 0.24, 0.2, 0.19],   // G7 rear depth ganglion (the parallax layer)
 ];
 // soma budget: 640 ganglia (by weight) + 180 arm (3 arms × 5 clusters × 12) + 20 nucleus ring
@@ -556,6 +560,54 @@ function bakeConnectome(R: number): {
   return { lines, nodes, dust, somaPositions: nodePos, yMin, ySpan: Math.max(1e-4, yMax - yMin), xMax, zMax };
 }
 
+// STATIC FAR WEB — a dim backdrop of threads filling the whole view rect (+35% overshoot)
+// BEHIND the cloud. Infinitely-far things don't parallax: this layer never rotates, so the
+// frame is covered at EVERY spin angle — the rotating net lives inside a universe with no
+// visible end. Shares the NET material, so it rides the same color clocks / crawl / sparks.
+function bakeFarWeb(vW: number, vH: number): THREE.BufferGeometry {
+  const rnd = mulberry32(NET_SEED + 7);
+  const vec = (x: number, y: number, z: number, len: number) => {
+    const v = new THREE.Vector3(x, y, z);
+    if (v.lengthSq() < 1e-9) v.set(1, 0, 0);
+    return v.setLength(len);
+  };
+  const lp: number[] = [], lT: number[] = [], lPh: number[] = [], lCl: number[] = [];
+  const lGa: number[] = [], lBr: number[] = [], lGr: number[] = [], lJit: number[] = [];
+  for (let e = 0; e < 380; e++) {
+    const a = new THREE.Vector3((rnd() * 2 - 1) * 1.35 * vW, (rnd() * 2 - 1) * 1.35 * vH, -0.22 - 0.33 * rnd());
+    const b = a.clone().add(vec(rnd() * 2 - 1, rnd() * 2 - 1, (rnd() * 2 - 1) * 0.2, 0.1 + 0.25 * rnd()));
+    const mid = a.clone().add(b).multiplyScalar(0.5)
+      .add(vec(rnd() - 0.5, rnd() - 0.5, (rnd() - 0.5) * 0.3, 0.03 + 0.04 * rnd()));
+    const phase = rnd(), bright = 0.35 + 0.4 * rnd(), grow = 0.55 + 0.45 * rnd();
+    const jd = vec(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5, 0.7);
+    const S = 4;
+    for (let s = 0; s < S; s++) {
+      for (const tt of [s / S, (s + 1) / S]) {
+        const u = 1 - tt;
+        const p = new THREE.Vector3().addScaledVector(a, u * u).addScaledVector(mid, 2 * u * tt).addScaledVector(b, tt * tt);
+        lp.push(p.x, p.y, p.z);
+        lT.push(tt);
+        lPh.push(phase);
+        lCl.push(0);
+        lGa.push(0);
+        lBr.push(bright);
+        lGr.push(grow);
+        lJit.push(jd.x, jd.y, jd.z);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lp), 3));
+  g.setAttribute('aT', new THREE.BufferAttribute(new Float32Array(lT), 1));
+  g.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(lPh), 1));
+  g.setAttribute('aClass', new THREE.BufferAttribute(new Float32Array(lCl), 1));
+  g.setAttribute('aGang', new THREE.BufferAttribute(new Float32Array(lGa), 1));
+  g.setAttribute('aBright', new THREE.BufferAttribute(new Float32Array(lBr), 1));
+  g.setAttribute('aGrow', new THREE.BufferAttribute(new Float32Array(lGr), 1));
+  g.setAttribute('aJit', new THREE.BufferAttribute(new Float32Array(lJit), 3));
+  return g;
+}
+
 function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (r: number) => void }) {
   const { camera, advance } = useThree();
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
@@ -819,6 +871,11 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const wiring = new THREE.LineSegments(netGeo, netMat);
     wiring.renderOrder = 5;
     wiring.frustumCulled = false;
+    // the far web sits OUTSIDE netGroup (never rotates) but shares netMat — same color clocks
+    const farWeb = new THREE.LineSegments(bakeFarWeb(vW, vH), netMat);
+    farWeb.renderOrder = 4;
+    farWeb.frustumCulled = false;
+    orbGroup.add(farWeb);
     const nodeMat = new THREE.ShaderMaterial({
       uniforms: wireUniforms(),
       vertexShader: NODE_VERT, fragmentShader: NODE_FRAG,

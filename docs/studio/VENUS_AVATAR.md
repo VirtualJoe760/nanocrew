@@ -535,10 +535,14 @@ landed dots stay glued to their spinning somas.
   facets that reform as the field flows + a per-facet fast tremor ("crystallized water
   vibrating"), forward-difference normals so the fresnel breaks into facet glints; the sheath
   runs LIQUID at rest (uAmp base 0.14, cap 0.3).
-Dust additionally free-orbits (not dot-coupled). FRAMING fills the RECT: the baked cloud is
-stretched PER-AXIS (sx/sy each overshoot their view extent by 12%, depth = min) so the net
-reaches ALL corners; the big portrait stretch is Y, invariant under the Y-spin. Core meshes
-(nucleus/sheath/halos) scale uniformly by sz. Shape objects use a separate capped `shapeS`.
+Dust additionally free-orbits (not dot-coupled). FRAMING is BOUNDLESS at every rotation: the
+baked cloud is stretched PER-AXIS from its ACTUAL extents (x/y overshoot the view by 12%;
+DEPTH stretched so z-footprint == x-footprint — a shallow cloud shows its edges mid-spin);
+the GANGLIA table's z values spread the centers in AZIMUTH around the spin axis (clustered
+azimuths made the sides go sparse — z moves don't change the head-on look); ~300 VOID THREADS
+continue radially past the screen diagonal; and a STATIC FAR WEB (`bakeFarWeb`, shares netMat,
+never rotates — far things don't parallax) guarantees corner coverage at every angle. Core
+meshes (nucleus/sheath/halos) scale uniformly by `sCore`; shape objects use capped `shapeS`.
 
 **COLOR (80bpm)**: brand-cyan-only is retired for the orb — each part owns a palette pair and
 an INDEPENDENT hue clock (`uColMix`/`uLimMix` + `uBeatPop`): net aqua-teal↔azure (gradient
