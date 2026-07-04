@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { pickFontPairing } from '@/lib/font-pairings';
+import { generateHeroImage } from '@/lib/hero-image';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Storefront provisioning v2 (see docs/STOREFRONT_ENGINE.md):
@@ -210,17 +211,25 @@ TEMPORARY CONTENT GOES IN content/placeholders.json (NOT hardcoded in pages, NEV
 - The template ships a placeholder index (hero media, product tiles, featured videos). The live
   catalogue auto-overrides it the moment real products exist — your brief must tell the forge to
   edit content/placeholders.json and to leave the wiring (lib/api.ts) alone.
-- IMAGES/VIDEO: the forge cannot generate images. So LEAVE imageUrl/videoUrl null and rely on the
-  template's deliberate brand-tinted treatment (a palette wash + the name) UNLESS a real on-brand
-  asset URL exists (e.g. a creator upload). NEVER invent a stock or external URL — a dead link is a
-  blank hero. Direct the MOOD/treatment in words; do not fabricate asset links.
+- IMAGES/VIDEO: the forge cannot generate images. The platform PRE-GENERATES one on-brand hero
+  image into the live hero slot (stores.site_assets — the hero block auto-renders it, nothing to
+  wire); for everything else LEAVE imageUrl/videoUrl null and rely on the template's deliberate
+  brand-tinted treatment (a palette wash + the name) UNLESS a real on-brand asset URL exists
+  (e.g. a creator upload). NEVER invent a stock or external URL — a dead link is a blank hero.
+  Direct the MOOD/treatment in words; do not fabricate asset links.
 - PRODUCT TILES: specify on-brand placeholder names/categories/prices that fit THIS brand (not
   "Essential Tee"), to go in placeholders.json.
 
 WHAT YOUR BRIEF MUST DELIVER (the quality bar — the current pipeline fails all of these):
-- A HERO that is never blank: set the hero entry in content/placeholders.json (a real on-brand
-  video/image URL only if one truly exists, else null → the template renders a deliberate brand
-  treatment), and write the hero headline/subline/cta into content/copy.json.
+- A HERO that is never blank: a real on-brand hero image is already live (pre-generated into
+  site_assets; the hero block renders it automatically). Your job is to art-direct ON TOP of it:
+  write the hero headline/subline/cta into content/copy.json as an overlay on a real photograph,
+  and leave placeholders.json hero fields null unless a real creator asset exists.
+- A HERO DECISION, stated explicitly: choose WHICH hero block this brand opens with (e.g. hero /
+  hero-video / hero-carousel — whatever TEMPLATE.md offers), name it in the block-by-block plan
+  with a one-line justification drawn from the brand's vibe/site wishes, and have the forge
+  compose that block in app/page.tsx. Do NOT silently accept the template default — two brands
+  with different energy should not open with the same hero treatment.
 - A styled, high-contrast, obviously-working primary CTA.
 - On-brand placeholder product tiles in content/placeholders.json — never the template's generic
   defaults. These auto-swap for the creator's real products later.
@@ -261,6 +270,7 @@ function briefAuthorInput(input: ProvisionInput, template: string, templateMd: s
 - Palette (roled hexes): ${brand.designSystem.palette.map((p) => `${p.role} ${p.hex}`).join(', ')}
 - Typography: display "${brand.designSystem.typography.display}", body "${brand.designSystem.typography.body}"
 - Font presets CHOSEN for this brand (already live via site_config; brand.json fontPresets mirrors them — treat as law): display "${pickFontPairing(brand, input.slug).display}", body "${pickFontPairing(brand, input.slug).body}"
+- Hero image: pre-generated on-brand and applied to the live hero slot (site_assets) at provision — art-direct the headline/subline/CTA as an overlay on a real photograph, and pick the hero block accordingly.
 - Texture cues: ${brand.designSystem.texture.join(', ')}
 - Motion cues: ${brand.designSystem.motion.join(', ')}
 
@@ -426,13 +436,13 @@ export async function provisionStorefront(input: ProvisionInput): Promise<void> 
       throw new Error(`repo create failed: ${created.status} ${(await created.text()).slice(0, 200)}`);
     }
 
-    // 2. Give the brand its OWN typography before anything builds: write the curated font
-    //    pairing to stores.site_config.fonts — the live-read layer every template renders, so
-    //    the site has brand type from its first deploy. Only when unset: a creator's
-    //    ✦ Customize pick is never clobbered by a re-provision. Non-fatal on failure.
+    // 2. Give the brand its OWN typography + hero image before anything builds — both land in
+    //    the live-read layers every template renders (site_config.fonts, site_assets.hero), so
+    //    the site has brand type AND a real hero from its first deploy. Only when unset: a
+    //    creator's ✦ Customize / Design-tab pick is never clobbered. Non-fatal on failure.
     try {
       const [row] = await db
-        .select({ siteConfig: schema.stores.siteConfig })
+        .select({ siteConfig: schema.stores.siteConfig, siteAssets: schema.stores.siteAssets })
         .from(schema.stores)
         .where(eq(schema.stores.id, input.storeId))
         .limit(1);
@@ -445,8 +455,19 @@ export async function provisionStorefront(input: ProvisionInput): Promise<void> 
           .where(eq(schema.stores.id, input.storeId));
         console.log(`[provision] ${input.slug} fonts → display ${fonts.display}, body ${fonts.body}`);
       }
+      const assets = (row?.siteAssets ?? {}) as { hero?: { imageUrl?: string | null; videoUrl?: string | null; poster?: string | null } };
+      if (!assets.hero?.imageUrl && !assets.hero?.videoUrl) {
+        const heroUrl = await generateHeroImage(input.brand); // one Nano Banana render, best-effort
+        if (heroUrl) {
+          await db
+            .update(schema.stores)
+            .set({ siteAssets: { ...assets, hero: { ...(assets.hero ?? {}), imageUrl: heroUrl } } })
+            .where(eq(schema.stores.id, input.storeId));
+          console.log(`[provision] ${input.slug} hero image → ${heroUrl}`);
+        }
+      }
     } catch (e) {
-      console.warn(`[provision] ${input.slug} font write skipped: ${e instanceof Error ? e.message : e}`);
+      console.warn(`[provision] ${input.slug} font/hero write skipped: ${e instanceof Error ? e.message : e}`);
     }
 
     // 3. Build the brand content here, then enqueue. The forge worker writes brand.json +

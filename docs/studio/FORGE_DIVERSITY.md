@@ -53,17 +53,22 @@ Every new brand now gets its own typography at provision, before the first deplo
 pushed (new provisions clone it); the app change rides the normal Railway deploy. Existing
 brands are untouched (their `site_config.fonts` is empty → template default, or their own pick).
 
-## Track 2 — Heroes & layout *(NEXT)*
+## Track 2 — Heroes & layout *(hero decision + hero image SHIPPED 2026-07-04; layout knobs open)*
 
-- **Require a hero decision in the brief**: `briefAuthorSystem` must pick `hero` /
-  `hero-video` / `hero-carousel` + treatment, justified from the vibe. (The forge's edit surface
-  already allows composing existing blocks in `page.tsx` — it's just never told to.)
-- **Variant props on existing blocks** (hero alignment/height/scrim/split; grid density) read
+- ✅ **Provision-time hero image** (`src/lib/hero-image.ts`): ONE art-directed Nano Banana render
+  from the brand's own interview data (vibe, palette, story, products; style-specific mood; 16:9
+  with headline negative space; hard "no text" rule), hosted on Cloudinary and written to
+  `stores.site_assets.hero.imageUrl` — the live-read slot every template's hero already prefers
+  (`getHeroMedia`), so it needs ZERO template/forge changes and the creator's Design-tab pick
+  replaces it any time. Only written when the hero slot is empty; best-effort (failure → the
+  brand-tinted fallback, reason logged). Verified live: on-brand photorealistic hero in ~8s.
+- ✅ **Hero decision required in the brief** (`briefAuthorSystem`): the brief must NAME the hero
+  block (hero / hero-video / hero-carousel per TEMPLATE.md) with a one-line vibe justification —
+  "do NOT silently accept the template default". The quality bar + IMAGES/VIDEO rules now state
+  the pre-generated live hero so Venus art-directs copy OVER a real photograph.
+- ⬜ **Variant props on existing blocks** (hero alignment/height/scrim/split; grid density) read
   from a `brand.json.layout` object — multiplies combinations with zero new components.
-- **Provision-time hero image**: reuse the metered app-side generation (the same path that
-  makes assets for site edits) to generate ONE on-brand hero image from vibeKeywords and hand
-  the hosted URL to the brief. Kills the blank-hero default.
-- **Structural unlock**: replace the hardcoded `page.tsx` skeleton with an ordered
+- ⬜ **Structural unlock**: replace the hardcoded `page.tsx` skeleton with an ordered
   `sections[]` list in `brand.json`, validated against TEMPLATE.md's block inventory —
   templates become block libraries with a default composition.
 
