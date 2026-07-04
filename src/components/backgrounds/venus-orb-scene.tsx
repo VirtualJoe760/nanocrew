@@ -616,9 +616,9 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const vH = Math.tan((cam.fov * Math.PI) / 360) * 2; // half-height of the view at the orb plane
     const vW = vH * cam.aspect;
 
-    // FRAMING GUARD: the cloud spans ~2.9R across the arms; on narrow aspects shrink the whole
-    // constellation (orbGroup scale + the lattice landing copy) so nothing clips.
-    const layoutScale = Math.min(1, (0.92 * Math.min(vW, vH)) / (ORB_R * 1.45));
+    // FRAMING GUARD: fit the ganglia HULL (~1.15R), not the arm tips — the wispy arms are
+    // ALLOWED to run off-frame (the mind extends past the screen; reads larger, not cropped).
+    const layoutScale = Math.min(1, (0.96 * Math.min(vW, vH)) / (ORB_R * 1.15));
 
     const scene = new THREE.Group();
     const dotTex = makeDotTexture();
