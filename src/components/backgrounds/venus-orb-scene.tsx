@@ -157,8 +157,6 @@ function bakeConnectome(R: number): {
   somaPositions: Float32Array;
   yMin: number;
   ySpan: number;
-  xMax: number;
-  zMax: number;
 } {
   const rnd = mulberry32(NET_SEED);
   const gauss = () => Math.sqrt(-2 * Math.log(Math.max(1e-9, rnd()))) * Math.cos(2 * Math.PI * rnd());
@@ -237,6 +235,29 @@ function bakeConnectome(R: number): {
     if (!inEnvelope(p) || p.length() < CLEAR_R) continue;
     somas.push({ p, gang: 0 });
     strays++;
+  }
+  const INNER_N = somas.length; // = ORB_DOTS — the lattice/shape-morph contract covers ONLY these
+
+  // 4b) THE OUTER REACHES — "just keep building the net": ~10 more ganglia in an even-azimuth
+  // ring out to ~2.2R, alternating high/low, so the network PHYSICALLY extends past the screen
+  // diagonal in every direction (including depth) — rotation can never show its end. Coverage
+  // by construction, not by stretching. These somas are wiring/Points only (not morph targets).
+  const outerCenters: THREE.Vector3[] = [];
+  for (let gi = 0; gi < 10; gi++) {
+    const az = (gi / 10) * Math.PI * 2 + (rnd() - 0.5) * 0.5;
+    const rad = R * (1.35 + 0.75 * rnd());
+    const yy = (gi % 2 === 0 ? 1 : -1) * R * (0.2 + 1.1 * rnd());
+    const c = new THREE.Vector3(Math.cos(az) * rad, yy, Math.sin(az) * rad);
+    outerCenters.push(c);
+    const tilt = new THREE.Quaternion().setFromAxisAngle(randDir(), rnd() * Math.PI * 2);
+    const pop = 34 + Math.floor(rnd() * 16);
+    const sig = new THREE.Vector3(0.18 + 0.12 * rnd(), 0.16 + 0.1 * rnd(), 0.18 + 0.12 * rnd()).multiplyScalar(R);
+    for (let k = 0; k < pop; k++) {
+      const p = new THREE.Vector3(gauss() * sig.x, gauss() * sig.y, gauss() * sig.z)
+        .applyQuaternion(tilt)
+        .add(c);
+      somas.push({ p, gang: 8 + gi });
+    }
   }
   const N = somas.length;
 
@@ -333,6 +354,23 @@ function bakeConnectome(R: number): {
     rootPaths.push([h, best]);
   }
   for (const [a, b] of rootPaths) addEdge(a, b, 1);
+  // outer roots: each outer ganglion grafts onto the nearest inner tissue — ONE net, kept
+  // growing outward (the BFS growth field and the energy crawl extend into it naturally).
+  for (let gi = 0; gi < outerCenters.length; gi++) {
+    let oc = -1, od = 1e9;
+    for (let i = INNER_N; i < N; i++) {
+      if (somas[i].gang !== 8 + gi) continue;
+      const d = somas[i].p.distanceTo(outerCenters[gi]);
+      if (d < od) { od = d; oc = i; }
+    }
+    if (oc < 0) continue;
+    let bi = -1, bd = 1e9;
+    for (let i = 0; i < INNER_N; i++) {
+      const d = somas[i].p.distanceTo(somas[oc].p);
+      if (d < bd) { bd = d; bi = i; }
+    }
+    if (bi >= 0) addEdge(oc, bi, 1);
+  }
 
   // 8) aGrow — BFS depth from the nucleus ring, normalized: the network "wires itself outward
   //    from the nucleus" as the drive sweeps uGrow 0→1 during assembly.
@@ -444,7 +482,10 @@ function bakeConnectome(R: number): {
   // the fine fuzz that makes every cell read ALIVE up close. Tip-tapered in the shader.
   for (let i = 0; i < N; i++) {
     const nStubs = degree[i] >= 4 ? 4 : 2;
-    const away = somas[i].gang > 0 ? somas[i].p.clone().sub(centers[somas[i].gang - 1]) : somas[i].p.clone();
+    // "away" = out of the owning ganglion (inner table, outer ring, or radially for gang 0)
+    const g = somas[i].gang;
+    const gc = g === 0 ? null : g <= GANGLIA.length ? centers[g - 1] : outerCenters[g - 8];
+    const away = gc ? somas[i].p.clone().sub(gc) : somas[i].p.clone();
     for (let w = 0; w < nStubs; w++) {
       let dir = away.lengthSq() > 1e-8 ? away.clone().normalize() : randDir();
       dir = dir.add(randDir().multiplyScalar(0.7)).normalize();
@@ -457,10 +498,10 @@ function bakeConnectome(R: number): {
     }
   }
 
-  // fine web (aClass 0): 1,000 dim long-range threads — with the ghost dust this replaces the
-  // deleted veils' volumetric depth.
+  // fine web (aClass 0): 1,300 dim long-range threads — with the ghost dust this replaces the
+  // deleted veils' volumetric depth (raised for the outer reaches).
   let fine = 0, fineGuard = 0;
-  while (fine < 1000 && fineGuard++ < 20000) {
+  while (fine < 1300 && fineGuard++ < 26000) {
     const i = Math.floor(rnd() * N), j = Math.floor(rnd() * N);
     if (i === j || somas[i].gang === somas[j].gang) continue;
     const a = somas[i].p, b = somas[j].p;
@@ -472,14 +513,14 @@ function bakeConnectome(R: number): {
   }
 
   // VOID THREADS (aClass 0): the net does not END — ~300 dim threads continue radially outward
-  // from peripheral somas to 1.6–3.0× their radius, running past the screen diagonal at every
-  // rotation ("like our universe expands — we shouldn't see the end of the net").
+  // from the (now much farther) periphery, running past the screen diagonal at every rotation
+  // ("like our universe expands — we shouldn't see the end of the net").
   let voids = 0, voidGuard = 0;
   while (voids < 300 && voidGuard++ < 6000) {
     const i = Math.floor(rnd() * N);
     const a = somas[i].p;
-    if (a.length() < 0.75 * R) continue;
-    const b = a.clone().multiplyScalar(1.6 + 1.4 * rnd()).add(randDir().multiplyScalar(0.22 * R));
+    if (a.length() < 1.3 * R) continue;
+    const b = a.clone().multiplyScalar(1.35 + 0.8 * rnd()).add(randDir().multiplyScalar(0.22 * R));
     const ctrl = a.clone().add(b).multiplyScalar(0.5).addScaledVector(perpOf(a, b), 0.08 * a.distanceTo(b));
     emit(quadBezier(a, ctrl, b, 4, 0.012 * R), 0, 0, rnd(), 0.4 + 0.5 * rnd(), 0.85 + 0.15 * rnd(), 0.7);
     voids++;
@@ -524,9 +565,9 @@ function bakeConnectome(R: number): {
   nodes.setAttribute('aHub', new THREE.BufferAttribute(nHub, 1));
   nodes.setAttribute('aGrow', new THREE.BufferAttribute(nGr, 1));
 
-  // ghost dust: 400 motes in the envelope (interstitial fill) + 300 in an OUTER SHELL out to
-  // ~2.3R — with the void threads, the far field never ends on-screen.
-  const DUST_N = 700;
+  // ghost dust: 400 motes in the envelope (interstitial fill) + 500 in an OUTER SHELL out to
+  // ~2.6R — with the void threads, the far field never ends on-screen.
+  const DUST_N = 900;
   const dustPos = new Float32Array(DUST_N * 3), dPh = new Float32Array(DUST_N);
   let dCount = 0, dGuard = 0;
   while (dCount < 400 && dGuard++ < 40000) {
@@ -539,7 +580,7 @@ function bakeConnectome(R: number): {
     dCount++;
   }
   while (dCount < DUST_N) {
-    const p = randDir().multiplyScalar(R * (1.05 + 1.25 * rnd()));
+    const p = randDir().multiplyScalar(R * (1.05 + 1.55 * rnd()));
     dustPos[dCount * 3] = p.x;
     dustPos[dCount * 3 + 1] = p.y;
     dustPos[dCount * 3 + 2] = p.z;
@@ -550,14 +591,7 @@ function bakeConnectome(R: number): {
   dust.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
   dust.setAttribute('aPhase', new THREE.BufferAttribute(dPh, 1));
 
-  // per-axis SOMA extents — the framing math equalizes the rotating footprint from these
-  let xMax = 1e-4, zMax = 1e-4;
-  somas.forEach((s) => {
-    xMax = Math.max(xMax, Math.abs(s.p.x));
-    zMax = Math.max(zMax, Math.abs(s.p.z));
-  });
-
-  return { lines, nodes, dust, somaPositions: nodePos, yMin, ySpan: Math.max(1e-4, yMax - yMin), xMax, zMax };
+  return { lines, nodes, dust, somaPositions: nodePos, yMin, ySpan: Math.max(1e-4, yMax - yMin) };
 }
 
 // STATIC FAR WEB — a dim backdrop of threads filling the whole view rect (+35% overshoot)
@@ -677,8 +711,14 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const g = globalThis as {
       __venusOrbShape?: (s: VenusOrbShape) => void;
       __venusOrbDebug?: () => unknown;
+      __venusOrbSpin?: (rad: number) => void;
     };
     g.__venusOrbShape = (s) => setVenusOrbShape(s);
+    // set the spin angle directly — coverage must be verified as a SWEEP over rotation angles
+    // (single-angle stills repeatedly passed while live rotation found the gaps)
+    g.__venusOrbSpin = (rad: number) => {
+      spinRef.current = rad % (Math.PI * 2);
+    };
     // Dev-only introspection for the deterministic-stills workflow: the live shape-machine state
     // plus the bounding box of the face dots' CURRENT landing targets (cloud ≈ wide irregular box;
     // a flat object ≈ thin z). See docs/studio/VENUS_AVATAR.md.
@@ -701,6 +741,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     return () => {
       delete g.__venusOrbShape;
       delete g.__venusOrbDebug;
+      delete g.__venusOrbSpin;
     };
   }, []);
 
@@ -720,29 +761,27 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // (a) THE UNIFIED LATTICE — ambient background dots + the soma landing dots in ONE buffer.
     //     The face targets ARE the soma positions (stretched): dot skin = neuron field, so the
     //     tee/heart/bolt shape-morph system keeps working unchanged.
-    const { lines: netGeo, nodes: nodeGeo, dust: dustGeo, somaPositions, yMin, ySpan, xMax, zMax } =
+    const { lines: netGeo, nodes: nodeGeo, dust: dustGeo, somaPositions, yMin, ySpan } =
       bakeConnectome(ORB_R);
 
-    // FRAMING: fill the RECT at EVERY rotation — per-axis stretch from the ACTUAL baked extents:
-    // x and y overshoot their view extents by 12%; DEPTH is stretched so the z-footprint EQUALS
-    // the x-footprint (the baked cloud is shallow, and a shallow cloud shows its edges when the
-    // Y-spin turns the wide side into the screen). With z ≈ x, the rotating silhouette never
-    // thins — combined with the void threads, you can't see the end of the net. Core meshes
-    // (nucleus/sheath/halos) scale UNIFORMLY by sCore so they stay round-ish.
-    const sx = (1.12 * vW) / xMax;
-    const sy = (1.12 * vH) / Math.max(Math.abs(yMin), Math.abs(yMin + ySpan));
-    const szDepth = (sx * xMax) / zMax; // stretched z extent == stretched x extent
-    const sCore = Math.min(sx, sy);
+    // FRAMING: coverage comes from CONSTRUCTION, not stretching — the net is BUILT past the
+    // screen diagonal in every direction (outer ganglia to ~2.2R, isotropic in azimuth), so no
+    // rotation angle can show its end. One UNIFORM scale only adapts the whole organism to very
+    // wide viewports (built xz reach must exceed ~1.1× the view half-diagonal).
+    const diag = Math.sqrt(vW * vW + vH * vH);
+    const s = Math.max(1, (1.1 * diag) / (ORB_R * 2.1));
+    const sCore = s;
     const stretch = (geo: THREE.BufferGeometry) => {
       const a = geo.getAttribute('position') as THREE.BufferAttribute;
-      for (let i = 0; i < a.count; i++) a.setXYZ(i, a.getX(i) * sx, a.getY(i) * sy, a.getZ(i) * szDepth);
+      for (let i = 0; i < a.count; i++) a.setXYZ(i, a.getX(i) * s, a.getY(i) * s, a.getZ(i) * s);
       a.needsUpdate = true;
     };
     stretch(netGeo);
-    stretch(nodeGeo); // NOTE: nodeGeo shares its buffer with somaPositions — both now stretched
+    stretch(nodeGeo); // NOTE: nodeGeo shares its buffer with somaPositions — both now scaled
     stretch(dustGeo);
     const somaGeo = new THREE.BufferGeometry();
-    somaGeo.setAttribute('position', new THREE.BufferAttribute(somaPositions.slice(), 3));
+    // the lattice/shape-morph contract covers ONLY the inner 880 somas (outer reaches excluded)
+    somaGeo.setAttribute('position', new THREE.BufferAttribute(somaPositions.slice(0, ORB_DOTS * 3), 3));
     bakeAurora(somaGeo);
     const { geometry: latGeo, faceCentroid } = bakeUnifiedLattice(somaGeo, { vW, vH }, new THREE.Matrix4());
     const latticeMat = new THREE.ShaderMaterial({
@@ -787,7 +826,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       });
       // unit shapes span ±1, so cap the sampler scale to 92% of the short half-extent
       const shapeS = Math.min(ORB_R * 1.15 * sCore, 0.92 * Math.min(vW, vH));
-      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY, shapeS, yMin: yMin * sy, ySpan: ySpan * sy };
+      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY, shapeS, yMin: yMin * s, ySpan: ySpan * s };
     }
 
     // (b) the stream field — a volumetric shell of dots looping INTO the mind (the depth-feed).
@@ -853,7 +892,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       uTalk: { value: 0 }, uSpeak: { value: 0 }, uGrow: { value: 0 }, uIgnite: { value: 0 },
       uTrunk: { value: 0 }, uHotGang: { value: 1 }, uGangFlare: { value: 0 },
       uOrbR: { value: ORB_R }, uCrawlPos: { value: 0 }, uExpand: { value: 0 },
-      uYMin: { value: yMin * sy }, uYSpan: { value: ySpan * sy },
+      uYMin: { value: yMin * s }, uYSpan: { value: ySpan * s },
       uColA: { value: new THREE.Color(NET_A) }, uColB: { value: new THREE.Color(NET_B) },
       uColMix: { value: 0 }, uBeatPop: { value: 0 },
       uPlatinum: { value: new THREE.Color(PLATINUM) },

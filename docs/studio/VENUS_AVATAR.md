@@ -535,14 +535,16 @@ landed dots stay glued to their spinning somas.
   facets that reform as the field flows + a per-facet fast tremor ("crystallized water
   vibrating"), forward-difference normals so the fresnel breaks into facet glints; the sheath
   runs LIQUID at rest (uAmp base 0.14, cap 0.3).
-Dust additionally free-orbits (not dot-coupled). FRAMING is BOUNDLESS at every rotation: the
-baked cloud is stretched PER-AXIS from its ACTUAL extents (x/y overshoot the view by 12%;
-DEPTH stretched so z-footprint == x-footprint — a shallow cloud shows its edges mid-spin);
-the GANGLIA table's z values spread the centers in AZIMUTH around the spin axis (clustered
-azimuths made the sides go sparse — z moves don't change the head-on look); ~300 VOID THREADS
-continue radially past the screen diagonal; and a STATIC FAR WEB (`bakeFarWeb`, shares netMat,
-never rotates — far things don't parallax) guarantees corner coverage at every angle. Core
-meshes (nucleus/sheath/halos) scale uniformly by `sCore`; shape objects use capped `shapeS`.
+Dust additionally free-orbits (not dot-coupled). FRAMING is BOUNDLESS BY CONSTRUCTION (Joe:
+"just keep building the net instead of trying to expand it" — stretching a finite cloud kept
+failing at some rotation angle): 10 OUTER GANGLIA in an even-azimuth ring out to ~2.2R
+(alternating high/low, each grafted onto the nearest inner tissue — one net, kept growing;
+NOT part of the 880-dot morph contract), plus ~300 void threads from the new periphery, outer
+dust to ~2.6R, and the static FAR WEB. The network physically extends past the screen diagonal
+in every direction, so no spin angle can show its end. ONE uniform scale (`s`, ≥1) adapts to
+very wide viewports; core meshes share it. Shape objects use capped `shapeS`. **Verify coverage
+as a SWEEP**: `__venusOrbSpin(rad)` sets the spin angle directly — screenshot 4+ azimuths
+(single-angle stills repeatedly passed while live rotation found the gaps).
 
 **COLOR (80bpm)**: brand-cyan-only is retired for the orb — each part owns a palette pair and
 an INDEPENDENT hue clock (`uColMix`/`uLimMix` + `uBeatPop`): net aqua-teal↔azure (gradient
