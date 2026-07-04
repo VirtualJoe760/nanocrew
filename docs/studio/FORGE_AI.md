@@ -177,3 +177,9 @@ Three coordinated fixes, mapped to the build-quality epic:
 - Removing a `|| true` or adding a real quality gate changes the `ready`-flip contract in
   `processProvision` — reflect it in [`STOREFRONT_ENGINE.md`](../storefront/STOREFRONT_ENGINE.md)'s
   pipeline description too.
+
+## Continuation: diversity
+
+The "every site looks the same" arc (fonts, hero variety, personality→design, quality loop)
+continues in [FORGE_DIVERSITY.md](FORGE_DIVERSITY.md) — track 1 (per-brand font pairings at
+provision) shipped 2026-07-04.

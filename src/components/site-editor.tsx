@@ -36,15 +36,41 @@ const COLOR_FIELDS: { key: string; label: string }[] = [
   { key: 'accent', label: 'Accent' },
 ];
 
-// Same preset keys the templates map to font stacks (lib/site-config.ts FONT_PRESETS).
+// Same preset keys the templates map to font stacks (templates FONT_PRESETS — ⚠ key sync point
+// with templates/_shared/lib/site-config.ts + street's copy + lib/font-pairings.ts).
 const FONTS: { key: string; label: string }[] = [
   { key: 'sans', label: 'Sans' },
   { key: 'serif', label: 'Serif' },
+  { key: 'mono', label: 'Mono' },
   { key: 'inter', label: 'Inter' },
   { key: 'grotesk', label: 'Grotesk' },
+  { key: 'manrope', label: 'Manrope' },
+  { key: 'work-sans', label: 'Work Sans' },
+  { key: 'sora', label: 'Sora' },
+  { key: 'outfit', label: 'Outfit' },
+  { key: 'epilogue', label: 'Epilogue' },
+  { key: 'jost', label: 'Jost' },
+  { key: 'montserrat', label: 'Montserrat' },
+  { key: 'archivo', label: 'Archivo' },
+  { key: 'syne', label: 'Syne' },
+  { key: 'anton', label: 'Anton' },
+  { key: 'oswald', label: 'Oswald' },
+  { key: 'bebas', label: 'Bebas' },
+  { key: 'archivo-black', label: 'Archivo Black' },
+  { key: 'barlow', label: 'Barlow Cond.' },
+  { key: 'unbounded', label: 'Unbounded' },
   { key: 'playfair', label: 'Playfair' },
   { key: 'fraunces', label: 'Fraunces' },
-  { key: 'mono', label: 'Mono' },
+  { key: 'cormorant', label: 'Cormorant' },
+  { key: 'dm-serif', label: 'DM Serif' },
+  { key: 'libre-caslon', label: 'Libre Caslon' },
+  { key: 'crimson', label: 'Crimson' },
+  { key: 'spectral', label: 'Spectral' },
+  { key: 'lora', label: 'Lora' },
+  { key: 'marcellus', label: 'Marcellus' },
+  { key: 'italiana', label: 'Italiana' },
+  { key: 'plex-mono', label: 'Plex Mono' },
+  { key: 'jetbrains', label: 'JetBrains' },
 ];
 
 // Color helpers + the draggable gradient bar are shared with the brand-review picker.

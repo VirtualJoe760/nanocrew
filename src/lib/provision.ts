@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
+import { pickFontPairing } from '@/lib/font-pairings';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Storefront provisioning v2 (see docs/STOREFRONT_ENGINE.md):
@@ -89,6 +90,11 @@ function buildBrandJson(input: ProvisionInput, cfg: NonNullable<ReturnType<typeo
     logoUrl: input.logoUrl ?? '',
     palette,
     typography: brand.designSystem.typography,
+    // The CONCRETE font presets picked for this brand (curated per-style pairing scored against
+    // the vibe — lib/font-pairings.ts). The same keys are written to stores.site_config.fonts at
+    // provision (what the live storefront actually renders); this copy makes the choice visible
+    // to the forge/brief as brand law.
+    fontPresets: pickFontPairing(brand, input.slug),
     designStyle: brand.designStyle,
     voice: brand.voice,
     story: brand.story,
@@ -254,6 +260,7 @@ function briefAuthorInput(input: ProvisionInput, template: string, templateMd: s
 - Logo: ${input.logoUrl ?? 'none yet'} — direction: ${brand.logo.direction}
 - Palette (roled hexes): ${brand.designSystem.palette.map((p) => `${p.role} ${p.hex}`).join(', ')}
 - Typography: display "${brand.designSystem.typography.display}", body "${brand.designSystem.typography.body}"
+- Font presets CHOSEN for this brand (already live via site_config; brand.json fontPresets mirrors them — treat as law): display "${pickFontPairing(brand, input.slug).display}", body "${pickFontPairing(brand, input.slug).body}"
 - Texture cues: ${brand.designSystem.texture.join(', ')}
 - Motion cues: ${brand.designSystem.motion.join(', ')}
 
@@ -419,7 +426,30 @@ export async function provisionStorefront(input: ProvisionInput): Promise<void> 
       throw new Error(`repo create failed: ${created.status} ${(await created.text()).slice(0, 200)}`);
     }
 
-    // 2. Build the brand content here, then enqueue. The forge worker writes brand.json +
+    // 2. Give the brand its OWN typography before anything builds: write the curated font
+    //    pairing to stores.site_config.fonts — the live-read layer every template renders, so
+    //    the site has brand type from its first deploy. Only when unset: a creator's
+    //    ✦ Customize pick is never clobbered by a re-provision. Non-fatal on failure.
+    try {
+      const [row] = await db
+        .select({ siteConfig: schema.stores.siteConfig })
+        .from(schema.stores)
+        .where(eq(schema.stores.id, input.storeId))
+        .limit(1);
+      const existing = (row?.siteConfig ?? {}) as { fonts?: { display?: string; body?: string } };
+      if (!existing.fonts?.display && !existing.fonts?.body) {
+        const fonts = pickFontPairing(input.brand, input.slug);
+        await db
+          .update(schema.stores)
+          .set({ siteConfig: { ...existing, fonts } })
+          .where(eq(schema.stores.id, input.storeId));
+        console.log(`[provision] ${input.slug} fonts → display ${fonts.display}, body ${fonts.body}`);
+      }
+    } catch (e) {
+      console.warn(`[provision] ${input.slug} font write skipped: ${e instanceof Error ? e.message : e}`);
+    }
+
+    // 3. Build the brand content here, then enqueue. The forge worker writes brand.json +
     //    briefs, runs Claude, gates on the build, pushes to main, and deploys to Vercel.
     //    The brief is AUTHORED by AI (art-directed build prompt; mail-merge fallback).
     const brandBrief = await authorBrandBrief(input, template);
