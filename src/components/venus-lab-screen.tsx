@@ -15,7 +15,9 @@ import type { SimliVenusHandle } from '@/components/simli-venus-html';
 // docs/studio/VENUS_AVATAR.md.
 
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
-type Mode = '3d' | 'simli';
+// orb = the JARVIS-style sphere of light (the DEFAULT embodiment app-wide); face = the Cortana-era
+// humanoid build (kept for comparison); simli = the photoreal renderer POC.
+type Mode = 'orb' | 'face' | 'simli';
 
 // Quick lines to tap in Simli mode (so you can sample her voice without typing each time).
 const SIMLI_LINES = [
@@ -27,7 +29,7 @@ const SIMLI_LINES = [
 export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
-  const [mode, setMode] = useState<Mode>('3d');
+  const [mode, setMode] = useState<Mode>('orb');
   const simliRef = useRef<SimliVenusHandle>(null);
   const [line, setLine] = useState("Hi, I'm Venus — how do I sound?");
   const [speaking, setSpeaking] = useState(false);
@@ -52,7 +54,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   // dot-field background (one field that becomes her), over the near-black bed.
   return (
     <View style={styles.root}>
-      {mode === '3d' ? <VenusAvatar stage={stage} /> : <SimliVenus ref={simliRef} />}
+      {mode === 'simli' ? <SimliVenus ref={simliRef} /> : <VenusAvatar stage={stage} variant={mode} />}
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
@@ -60,21 +62,23 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
           <Text style={styles.backText}>‹ back</Text>
         </Pressable>
         <Text style={styles.title}>VENUS · LAB</Text>
-        {/* renderer toggle: current 3D build vs the Simli photoreal renderer */}
+        {/* embodiment toggle: the JARVIS orb (default) vs the Cortana face vs the Simli renderer */}
         <View style={styles.modeRow}>
-          {(['3d', 'simli'] as Mode[]).map((m) => {
+          {(['orb', 'face', 'simli'] as Mode[]).map((m) => {
             const active = mode === m;
             return (
               <Pressable key={m} onPress={() => setMode(m)} style={[styles.modePill, active && styles.pillActive]}>
-                <Text style={[styles.pillText, active && styles.pillTextActive]}>{m === '3d' ? '3D' : 'Simli'}</Text>
+                <Text style={[styles.pillText, active && styles.pillTextActive]}>
+                  {m === 'orb' ? 'Orb' : m === 'face' ? 'Face' : 'Simli'}
+                </Text>
               </Pressable>
             );
           })}
         </View>
       </View>
 
-      {/* stage control — toggle her lifecycle stage to test each phase (3D build only) */}
-      {mode === '3d' ? (
+      {/* stage control — toggle her lifecycle stage to test each phase (3D builds only) */}
+      {mode !== 'simli' ? (
         <View style={[styles.stageBar, { bottom: insets.bottom + 42 }]} pointerEvents="box-none">
           {STAGES.map((s) => {
             const active = stage === s;

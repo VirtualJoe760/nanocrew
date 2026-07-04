@@ -487,3 +487,32 @@ server, and renders the live avatar (`connection state … -> connected`).
   renders directly. `npx tsc --noEmit` must pass before committing. Verify the native bundle with
   `npx expo export --platform ios` (three is now reachable in the production bundle via the gated
   Lab, so the babel static-block plugin must compile it).
+
+## 🧠 ORB v2 — "the JARVIS brain" (the DEFAULT embodiment, 2026-07-04)
+
+Venus's default look is now the ORB (`venus-orb-scene.tsx` + `venus-plasma.ts`), not the face —
+`<VenusAvatar variant>` defaults to `'orb'`; the Cortana face stays behind the Lab's Face toggle.
+Art direction (Joe): translucent glass sphere, a central NUCLEUS, and a neuron-network web —
+"not a planet". Built by a 3-lens design panel + judge (plasma-star base, retuned to glass).
+
+**Layers** (all additive, no postprocessing; same lattice morph + stream field as the face):
+lattice dots (0) · stream field (1) · 3-sprite halo stack (2-4, fake bloom; wide one pulses with
+her voice) · BackSide interior far-wall (5) · NUCLEUS core (6, CORE shader) · SYNAPSES (7,
+LineSegments — per-edge phase, traveling signal packets, `bakeNeuralNet`: 150 nodes wired to 2
+nearest + spokes into the nucleus) · NEURONS (8, Points — flash when their packet lands, hubs
+bigger) · glass MEMBRANE (9, PLASMA shader retuned translucent: clear face, luminous limb, razor
+rim, glass speculars, BOUNDED swirl — unbounded differential spin sheared it into planet bands)
+· two gauze veils (10-11). The netGroup tumbles slowly in 3D (the volume tell).
+
+**Speech**: firing rate + packet brightness ride spk·tk, the nucleus flares on syllables, the
+bottom→top thought-pulse band crosses lattice + membrane + web on ONE clock (fract(t·0.5), width
+55 — the same constants as LATTICE_VERT), and the room halo pulses per phrase.
+
+**Radius ladder (load-bearing)**: membrane 0.88R (uAmp ≤ 0.12 → crests ≤ 0.986R) < dot skin 1.0R
+< veilA 1.045R < veilB 1.10R; network fills 0.30R–0.80R; nucleus 0.22R.
+
+**⚠ Verifying in an automated/hidden tab**: Chrome suspends rAF for hidden tabs — R3F renders
+NOTHING there (the scene is NOT broken; bring the tab forward and it runs). React commits render
+single frames but do NOT tick useFrame. For deterministic stills use the `__DEV__` hook
+`__venusOrbStep(tSeconds)` (steps one frame via R3F advance): step a loop of 1/60s increments,
+then screenshot. This is how the orb was art-directed from stills.
