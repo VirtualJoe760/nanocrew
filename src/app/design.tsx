@@ -233,6 +233,29 @@ function DesignScreen() {
   const [placements, setPlacements] = useState<{ key: string; label: string; allOver: boolean }[]>([]);
   const [placementsLoading, setPlacementsLoading] = useState(false);
   const [chosenPlacement, setChosenPlacement] = useState('front');
+  // MULTI-DESIGN staging for the Combine sheet: "Add another design" banks the current
+  // design+placement here, the sheet steps aside, and dropping the next design on the SAME
+  // product re-opens it with the bank intact. One Combine then builds a single multi-placement
+  // composition. Keyed to one product — a drop on a different product clears the bank.
+  const [combineStaged, setCombineStaged] = useState<{ designNodeId: string; designId: string; placement: string }[]>([]);
+  const combineStagedRef = useRef(combineStaged);
+  combineStagedRef.current = combineStaged;
+  const stageForTplRef = useRef<string | null>(null);
+  const clearCombine = () => {
+    setCombineTarget(null);
+    setCombineStaged([]);
+    stageForTplRef.current = null;
+  };
+  const stageAndContinue = () => {
+    if (!combineTarget) return;
+    Haptics.selectionAsync().catch(() => {});
+    stageForTplRef.current = combineTarget.tplNodeId;
+    setCombineStaged((prev) => [
+      ...prev,
+      { designNodeId: combineTarget.designNodeId, designId: combineTarget.designId, placement: chosenPlacement },
+    ]);
+    setCombineTarget(null); // sheet steps aside — drag the next design onto the same product
+  };
   // On-model PREVIEW for the Combine sheet — generated on demand (Nano Banana), cached per
   // design+blank+placement so switching placements or re-opening the sheet doesn't re-charge.
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -323,9 +346,10 @@ function DesignScreen() {
       .then(readJson<{ placements?: { key: string; label: string; allOver: boolean }[] }>)
       .then((d) => {
         setPlacements(d.placements ?? []);
-        if (d.placements?.length && !d.placements.some((p) => p.key === 'front')) {
-          setChosenPlacement(d.placements[0].key);
-        }
+        // Default to the first placement NOT already staged (multi-design combine banks placements).
+        const stagedSet = new Set(combineStagedRef.current.map((s) => s.placement));
+        const free = (d.placements ?? []).filter((p) => !stagedSet.has(p.key));
+        if (free.length) setChosenPlacement(free.find((p) => p.key === 'front')?.key ?? free[0].key);
       })
       .catch(() => setPlacements([]))
       .finally(() => setPlacementsLoading(false));
@@ -987,6 +1011,11 @@ function DesignScreen() {
         // design stays exactly where it was dropped until the user confirms — the
         // organized row layout happens in doCombine.
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        // The staged multi-design bank belongs to ONE product — dropping on another clears it.
+        if (stageForTplRef.current && stageForTplRef.current !== tpl.id) {
+          stageForTplRef.current = null;
+          setCombineStaged([]);
+        }
         setCombineTarget({ designNodeId: id, designId: moved.refId, tplNodeId: tpl.id, blankId: tpl.refId });
       } else {
         // Dropped on an existing composite → add this design as another placement.
@@ -1019,11 +1048,20 @@ function DesignScreen() {
     const target = combineTarget;
     setCombineTarget(null);
     if (!target) return;
-    combiningRef.current = true;
+    // Full combine list = the staged multi-design bank (same product only) + the current pick.
+    // The FIRST entry is the primary — it drives the composite preview and any knit adaptation.
+    const staged = stageForTplRef.current === target.tplNodeId ? combineStagedRef.current : [];
+    setCombineStaged([]);
+    stageForTplRef.current = null;
     const prev = nodesRef.current;
-    const designNode = prev.find((n) => n.id === target.designNodeId);
+    const entries = [
+      ...staged,
+      { designNodeId: target.designNodeId, designId: target.designId, placement },
+    ].filter((e) => prev.some((n) => n.id === e.designNodeId));
     const tpl = prev.find((n) => n.id === target.tplNodeId);
-    if (!designNode || !tpl) return;
+    if (!entries.length || !tpl) return;
+    combiningRef.current = true;
+    const primary = entries[0];
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
@@ -1036,9 +1074,12 @@ function DesignScreen() {
     // (a session counter resets on reload and collides across sessions).
     const groupNodeId = `g${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
     const groupName = `Group ${prev.filter((n) => n.kind === 'group').length + 1}`;
+    // Designs stack VERTICALLY in the left column (front on top), product + composite to the right.
+    const ROW = NODE_H + 40;
+    const designPos = new Map(entries.map((e, i) => [e.designNodeId, gy + i * ROW]));
     let next = prev.map((n) =>
-      n.id === designNode.id
-        ? { ...n, x: gx, y: gy, groupId: groupNodeId }
+      designPos.has(n.id)
+        ? { ...n, x: gx, y: designPos.get(n.id)!, groupId: groupNodeId }
         : n.id === tpl.id
           ? { ...n, x: gx + GROUP_COL, y: gy, groupId: groupNodeId }
           : n,
@@ -1052,7 +1093,7 @@ function DesignScreen() {
         x: gx + 2 * GROUP_COL,
         y: gy,
         groupId: groupNodeId,
-        designRef: target.designId,
+        designRef: primary.designId,
         blankRef: target.blankId,
         status: 'generating' as const,
       },
@@ -1063,7 +1104,7 @@ function DesignScreen() {
         x: gx - GROUP_PAD,
         y: gy - GROUP_PAD,
         width: 2 * GROUP_COL + NODE_W + 2 * GROUP_PAD,
-        height: NODE_H + 2 * GROUP_PAD,
+        height: Math.max(NODE_H, entries.length * ROW - 40) + 2 * GROUP_PAD,
       },
     ];
     nodesRef.current = next;
@@ -1085,9 +1126,13 @@ function DesignScreen() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         catalogueId: catalogueRef.current?.id,
-        designId: target.designId,
+        designId: primary.designId,
         templateKey: target.blankId,
-        placement,
+        placement: primary.placement,
+        // Multi-design combine → every staged placement in one composition row.
+        ...(entries.length > 1
+          ? { placements: entries.map((e) => ({ designId: e.designId, placement: e.placement })) }
+          : {}),
       }),
     })
       .then(
@@ -1100,7 +1145,7 @@ function DesignScreen() {
       .then(
         (d) => {
           const compositionId = d.composition?.id ?? null;
-          let designId = target.designId;
+          let designId = primary.designId;
           let designUrl: string | undefined;
           if (d.adaptedDesign) {
             // Fabrication requirement (e.g. knitwear): the design was regenerated to
@@ -1129,10 +1174,10 @@ function DesignScreen() {
               ),
             );
           }
-          renderComposite(nodeId, compositionId, designId, target.blankId, placement, designUrl);
+          renderComposite(nodeId, compositionId, designId, target.blankId, primary.placement, designUrl);
         },
       )
-      .catch(() => renderComposite(nodeId, null, target.designId, target.blankId, placement))
+      .catch(() => renderComposite(nodeId, null, primary.designId, target.blankId, primary.placement))
       .finally(() => {
         combiningRef.current = false;
       });
@@ -1876,17 +1921,41 @@ function DesignScreen() {
 
       {/* Combine sheet — design clicked onto a product; choose the print placement */}
       {combineTarget ? (
-        <Modal visible transparent animationType="slide" onRequestClose={() => setCombineTarget(null)}>
+        <Modal visible transparent animationType="slide" onRequestClose={clearCombine}>
           <View style={styles.modalBackdrop}>
             <ThemedView type="background" style={styles.sheet}>
               <View style={styles.sheetHeader}>
-                <ThemedText type="smallBold">Print this design on the product</ThemedText>
-                <Pressable onPress={() => setCombineTarget(null)} hitSlop={10}>
+                <ThemedText type="smallBold">
+                  {combineStaged.length ? `Print ${combineStaged.length + 1} designs on the product` : 'Print this design on the product'}
+                </ThemedText>
+                <Pressable onPress={clearCombine} hitSlop={10}>
                   <ThemedText type="small" themeColor="textSecondary">
                     Cancel
                   </ThemedText>
                 </Pressable>
               </View>
+
+              {/* The staged bank — designs already placed via "Add another design". */}
+              {combineStaged.length ? (
+                <View style={styles.stagedRow}>
+                  {combineStaged.map((s) => {
+                    const sd = designs.find((x) => x.id === s.designId);
+                    const lbl = placements.find((p) => p.key === s.placement)?.label ?? s.placement;
+                    return (
+                      <View key={s.placement} style={styles.stagedItem}>
+                        {sd?.image ? (
+                          <Image source={{ uri: sd.image }} style={styles.stagedThumb} contentFit="contain" />
+                        ) : (
+                          <DesignTile color={sd?.color ?? '#888'} style={styles.stagedThumb} />
+                        )}
+                        <ThemedText type="code" themeColor="textSecondary" style={styles.stagedLabel} numberOfLines={1}>
+                          {shortPlacement(lbl)} ✓
+                        </ThemedText>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
 
               <View style={styles.combineRow}>
                 {(() => {
@@ -1923,15 +1992,18 @@ function DesignScreen() {
                   {(placements.length
                     ? placements
                     : [{ key: 'front', label: 'Front print', allOver: false }]
-                  ).map((p) => (
-                    <ActionTile
-                      key={p.key}
-                      icon={placementIcon(p.key)}
-                      label={shortPlacement(p.label)}
-                      selected={chosenPlacement === p.key}
-                      onPress={() => setChosenPlacement(p.key)}
-                    />
-                  ))}
+                  )
+                    // Placements already banked by "Add another design" are taken.
+                    .filter((p) => !combineStaged.some((s) => s.placement === p.key))
+                    .map((p) => (
+                      <ActionTile
+                        key={p.key}
+                        icon={placementIcon(p.key)}
+                        label={shortPlacement(p.label)}
+                        selected={chosenPlacement === p.key}
+                        onPress={() => setChosenPlacement(p.key)}
+                      />
+                    ))}
                 </ScrollView>
               )}
 
@@ -1965,10 +2037,22 @@ function DesignScreen() {
                 </ThemedView>
               </Pressable>
 
+              {/* Bank this design+placement and pick another — the sheet steps aside; dropping the
+                  next design on the SAME product re-opens it with the bank intact. */}
+              {(placements.length ? placements.length : 1) - combineStaged.length > 1 ? (
+                <Pressable onPress={stageAndContinue}>
+                  <ThemedView type="backgroundElement" style={styles.previewBtn}>
+                    <ThemedText type="small" themeColor="text">
+                      ＋ Add another design — then drag it onto this product
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              ) : null}
+
               <Pressable onPress={() => doCombine(chosenPlacement)}>
                 <View style={[styles.generate, { backgroundColor: theme.text }]}>
                   <ThemedText type="smallBold" style={{ color: theme.background }}>
-                    Combine
+                    {combineStaged.length ? `Combine ${combineStaged.length + 1} designs` : 'Combine'}
                   </ThemedText>
                 </View>
               </Pressable>
@@ -2816,6 +2900,10 @@ const styles = StyleSheet.create({
   },
   combineThumb: { width: 72, height: 72, borderRadius: Spacing.two },
   previewStrip: { gap: Spacing.two, paddingVertical: Spacing.one },
+  stagedRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three, alignItems: 'flex-start' },
+  stagedItem: { alignItems: 'center', gap: 3, width: 56 },
+  stagedThumb: { width: 48, height: 48, borderRadius: Spacing.two },
+  stagedLabel: { fontSize: 9 },
   previewShot: { width: 132, height: 168, borderRadius: Spacing.two, backgroundColor: 'rgba(255,255,255,0.04)' },
   previewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.two, paddingVertical: Spacing.three, borderRadius: 999 },
   trashZone: { position: 'absolute', width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)' },

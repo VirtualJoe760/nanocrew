@@ -19,28 +19,41 @@ export async function POST(req: Request) {
       designId?: string;
       templateKey?: string;
       placement?: string;
+      /** Multi-design combine (front/back/sleeves…) — overrides designId/placement when given. */
+      placements?: { designId: string; placement: string }[];
     } | null;
-    if (!body?.catalogueId || !body.designId || !body.templateKey) {
-      return Response.json({ error: 'catalogueId, designId, templateKey required' }, { status: 400 });
+    // Normalize to a placement list: explicit placements[] (multi-design combine), else the legacy
+    // single designId+placement pair. The FIRST entry is the primary (drives preview + knit adapt).
+    const list = body?.placements?.length
+      ? body.placements.filter((p) => p?.designId && p?.placement)
+      : body?.designId
+        ? [{ designId: body.designId, placement: body.placement || 'front' }]
+        : [];
+    if (!body?.catalogueId || !body.templateKey || !list.length) {
+      return Response.json({ error: 'catalogueId, templateKey, designId(s) required' }, { status: 400 });
     }
     const storeId = await assertCatalogueOwner(body.catalogueId, user.id);
-    // IDOR FIX: the catalogue is the caller's, but the design id comes from the client — verify the
-    // caller owns that design too AND that it lives in the SAME store, or one creator could bake another
+    // IDOR FIX: the catalogue is the caller's, but the design ids come from the client — verify the
+    // caller owns EVERY design AND that each lives in the SAME store, or one creator could bake another
     // creator's private design into their own composition/product (realized downstream in publish).
-    const designStoreId = await assertDesignOwner(body.designId, user.id);
-    if (designStoreId !== storeId) {
-      throw new TenantError('design does not belong to this store', 403);
+    for (const id of [...new Set(list.map((p) => p.designId))]) {
+      const designStoreId = await assertDesignOwner(id, user.id);
+      if (designStoreId !== storeId) {
+        throw new TenantError('design does not belong to this store', 403);
+      }
     }
 
-    let designId = body.designId;
+    let designId = list[0].designId;
     let adaptedDesign: { id: string; url: string; prompt: string } | null = null;
 
+    // Knit adaptation applies to the PRIMARY design only — multi-placement knitwear is an edge case
+    // and extra placements pass through unadapted rather than blocking the combine.
     const meta = await getProductMeta(body.templateKey).catch(() => null);
     if (meta?.technique === 'KNITWEAR') {
       const [original] = await db
         .select({ url: schema.designs.url, prompt: schema.designs.prompt })
         .from(schema.designs)
-        .where(and(eq(schema.designs.id, body.designId), eq(schema.designs.storeId, storeId)))
+        .where(and(eq(schema.designs.id, designId), eq(schema.designs.storeId, storeId)))
         .limit(1);
       if (original && !original.url.startsWith('data:')) {
         try {
@@ -62,6 +75,14 @@ export async function POST(req: Request) {
       }
     }
 
+    // Primary lands on the legacy designId/placement columns; a multi-design combine ALSO writes
+    // the placements[] source of truth (position null = Printful auto-fit until the editor sets one).
+    // The primary's id reflects any knit adaptation.
+    const finalList = list.map((p, i) => ({
+      placement: p.placement,
+      designId: i === 0 ? designId : p.designId,
+      position: null,
+    }));
     const [row] = await db
       .insert(schema.compositions)
       .values({
@@ -69,7 +90,8 @@ export async function POST(req: Request) {
         catalogueId: body.catalogueId,
         designId,
         templateKey: String(body.templateKey),
-        placement: body.placement || 'front',
+        placement: finalList[0].placement,
+        ...(finalList.length > 1 ? { placements: finalList } : {}),
       })
       .returning({ id: schema.compositions.id });
     return Response.json({
