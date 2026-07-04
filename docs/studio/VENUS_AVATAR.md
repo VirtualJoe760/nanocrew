@@ -517,10 +517,14 @@ ONLY surviving plasma) · SOMAS (8, procedural two-gaussian sprite, power-law si
 while a shape object shows) + bounded sway + a long-period 2% swell. Accumulating rotation is
 safe ONLY because the lattice shader rotates/swells the dot LANDING TARGETS by the same
 `uSpinY`/`uTgtScale` uniforms (defaults 0 → head scene unchanged) — landed dots stay glued to
-their spinning somas. A HEARTBEAT clock (`uBeatPhase`, delta-integrated so rate changes stay
-phase-continuous; idle ~27bpm, quickens talking) kicks the nucleus first (JS scale + flare),
-then a lub-dub pressure wave ripples OUTWARD through wiring/somas/dust (radius-delayed in the
-verts: a few % radial swell + a passing glow). Dust additionally free-orbits (not dot-coupled).
+their spinning somas. The wires CRAWL: two slow waves traveling ALONG each wire (aT-coupled
+phase in NET_VERT, endpoint-anchored so nothing detaches; whisker tips swing free, trunks stiff),
+and a luminous ENERGY FRONT creeps through the limbs along the aGrow BFS field (`uCrawlPos`,
+delta-integrated, one lap ~12s idle / quicker talking) — it follows actual wire paths nucleus →
+tips, so it never reads as a radial ring (a RADIAL pulse was tried and rejected: "water
+droplet"). Dust additionally free-orbits (not dot-coupled). The layout deliberately OVERSHOOTS
+the short view extent by 12% (`layoutScale`, uncapped) — the outer network runs off the
+viewport; shape objects use a separate capped `shapeS` so tee/heart/bolt still fit the frame.
 
 **The lattice dots land ON the soma positions** (dot skin = neuron field), so the tee/heart/bolt
 shape-morph survives: dissolve → retarget → re-form, `uLead` makes the dots carry the object,

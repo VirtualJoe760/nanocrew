@@ -563,9 +563,9 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
 
   // Continuous-motion clocks, integrated on delta (rate changes stay phase-continuous):
   // spin = the slow constellation rotation (paused while a shape object is showing);
-  // beatPhase = the heartbeat clock shared by the JS nucleus kick and the shader ripple.
+  // crawl = the luminous energy front creeping through the limbs along the aGrow field.
   const spinRef = useRef(0);
-  const beatPhaseRef = useRef(0);
+  const crawlRef = useRef(0);
 
   // SHAPE-MORPH state: bus requests are polled per frame; a transition dissolves the dots
   // (reveal dips), swaps their targets to the new silhouette, then re-forms. The gate dims the
@@ -576,7 +576,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     idx: number[];
     orbTargets: Float32Array;
     orbFaceY: Float32Array;
-    layoutScale: number;
+    shapeS: number; // object sampler scale — unlike the cloud, objects must FIT the viewport
     yMin: number;
     ySpan: number;
   } | null>(null);
@@ -622,9 +622,10 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const vH = Math.tan((cam.fov * Math.PI) / 360) * 2; // half-height of the view at the orb plane
     const vW = vH * cam.aspect;
 
-    // FRAMING GUARD: fit the ganglia HULL (~1.15R), not the arm tips — the wispy arms are
-    // ALLOWED to run off-frame (the mind extends past the screen; reads larger, not cropped).
-    const layoutScale = Math.min(1, (0.96 * Math.min(vW, vH)) / (ORB_R * 1.15));
+    // FRAMING: the ganglia HULL (~1.15R) deliberately OVERSHOOTS the short view extent by 12% —
+    // the outer network expands off the viewport on every aspect (the mind is bigger than the
+    // frame). No upper cap: wide screens scale the whole constellation up to match.
+    const layoutScale = (1.12 * Math.min(vW, vH)) / (ORB_R * 1.15);
 
     const scene = new THREE.Group();
     const dotTex = makeDotTexture();
@@ -680,7 +681,9 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         orbTargets[k * 3 + 2] = tgt.getZ(li);
         orbFaceY[k] = fy.getX(li);
       });
-      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY, layoutScale, yMin: yMin * layoutScale, ySpan: ySpan * layoutScale };
+      // unit shapes span ±1, so cap the sampler scale to 92% of the short half-extent
+      const shapeS = Math.min(ORB_R * 1.15 * layoutScale, 0.92 * Math.min(vW, vH));
+      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY, shapeS, yMin: yMin * layoutScale, ySpan: ySpan * layoutScale };
     }
 
     // (b) the stream field — a volumetric shell of dots looping INTO the mind (the depth-feed).
@@ -730,8 +733,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const dustMat = new THREE.ShaderMaterial({
       uniforms: {
         uDot: { value: dotTex }, uTime: { value: 0 }, uOpacity: { value: 0 },
-        uOrbR: { value: ORB_R }, uBeatPhase: { value: 0 }, uBeatAmp: { value: 0.035 },
-        uCyan: { value: new THREE.Color(CYAN) },
+        uOrbR: { value: ORB_R }, uCyan: { value: new THREE.Color(CYAN) },
       },
       vertexShader: DUST_VERT, fragmentShader: DUST_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -744,7 +746,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       uTime: { value: 0 }, uOpacity: { value: 0 }, uRate: { value: 0.16 }, uFire: { value: 0.6 },
       uTalk: { value: 0 }, uSpeak: { value: 0 }, uGrow: { value: 0 }, uIgnite: { value: 0 },
       uTrunk: { value: 0 }, uHotGang: { value: 1 }, uGangFlare: { value: 0 },
-      uOrbR: { value: ORB_R }, uBeatPhase: { value: 0 }, uBeatAmp: { value: 0.035 },
+      uOrbR: { value: ORB_R }, uCrawlPos: { value: 0 },
       uYMin: { value: yMin * layoutScale }, uYSpan: { value: ySpan * layoutScale },
       uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
     });
@@ -861,8 +863,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       if (R < 0.45 && shapeRig.current) {
         // …and at the bottom of the dip, swap her dots' landing targets to the new silhouette.
         const sr = shapeRig.current;
-        const S = ORB_R * 1.15 * sr.layoutScale;
-        const pts = ss.pending === 'orb' ? sr.orbTargets : sampleShape(ss.pending, sr.idx.length, S);
+        const pts = ss.pending === 'orb' ? sr.orbTargets : sampleShape(ss.pending, sr.idx.length, sr.shapeS);
         const tgt = sr.latGeo.getAttribute('aTarget') as THREE.BufferAttribute;
         const fy = sr.latGeo.getAttribute('aFaceY') as THREE.BufferAttribute;
         sr.idx.forEach((li, k) => {
@@ -912,26 +913,19 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     r.dustMat.uniforms.uTime.value = t;
     r.dustMat.uniforms.uOpacity.value = 0.5 * seg(0.6, 0.95) * lit * mindDim;
 
-    // HEARTBEAT — one lub-dub clock (idle ~27bpm meditative, quickens while talking). The
-    // nucleus kicks first (JS), then the pressure wave ripples outward through wiring/somas/dust
-    // (shader, delayed by radius). Growth reads as: each beat pushes the web a few % outward.
-    const beatRate = 0.45 + 0.35 * tk;
-    beatPhaseRef.current = (beatPhaseRef.current + delta * beatRate) % 1;
-    const bp = beatPhaseRef.current;
-    const d1 = bp - 0.1, d2 = bp - 0.3;
-    const beat = Math.exp(-d1 * d1 * 260) + 0.55 * Math.exp(-d2 * d2 * 300);
-    const beatAmp = 0.035 + 0.02 * spk * tk;
-    nm.uBeatPhase.value = bp; nd.uBeatPhase.value = bp;
-    nm.uBeatAmp.value = beatAmp; nd.uBeatAmp.value = beatAmp;
-    r.dustMat.uniforms.uBeatPhase.value = bp;
-    r.dustMat.uniforms.uBeatAmp.value = beatAmp;
+    // ENERGY CRAWL — a luminous front creeping through the LIMBS along the BFS growth field
+    // (nucleus → ganglia → arm tips, following actual wire paths). One lap ~12s at idle,
+    // quicker while talking. Delta-integrated so rate changes stay phase-continuous.
+    crawlRef.current = (crawlRef.current + delta * (0.08 + 0.04 * tk + 0.1 * spk * tk)) % 1;
+    nm.uCrawlPos.value = crawlRef.current;
+    nd.uCrawlPos.value = crawlRef.current;
 
-    // nucleus + sheath — the mind condenses FIRST; the heart BEATS, and flares on syllables.
+    // nucleus + sheath — the mind condenses FIRST; the heart flares on syllables.
     const nu = r.nucleusMat.uniforms;
     nu.uTime.value = t;
     nu.uOpacity.value = (0.7 + 0.15 * Math.sin(t * 0.5)) * seg(0.42, 0.7) * lit * mindDim;
-    nu.uFlare.value = 0.9 * spk * tk + 1.6 * ignite + 0.25 * beat;
-    r.nucleus.scale.setScalar((1.0 + 0.15 * spk * tk) * (1.0 + 0.06 * beat)); // the systole kick
+    nu.uFlare.value = 0.9 * spk * tk + 1.6 * ignite;
+    r.nucleus.scale.setScalar(1.0 + 0.15 * spk * tk);   // syllable swell
     const sh = r.sheathMat.uniforms;
     sh.uTime.value = t;
     sh.uOpacity.value = 0.5 * seg(0.42, 0.7) * lit * mindDim;
