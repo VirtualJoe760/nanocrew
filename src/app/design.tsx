@@ -34,6 +34,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { DesignTile, tileColor } from '@/components/design-tile';
 import { DesignCanvas, NODE_H, NODE_W, WEB_SLOT_LABELS, type CanvasNode } from '@/components/designer/DesignCanvas';
+import { DesignEditor } from '@/components/designer/DesignEditor';
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { ProductDetailSheet } from '@/components/designer/ProductDetailSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
@@ -1170,6 +1171,19 @@ function DesignScreen() {
     else if (node?.kind === 'template') openProductDetail(node);
   };
 
+  // Double-tap a design node → the Nano Banana design EDITOR (retouch / word swap / concept remix).
+  // Needs a hosted image (the edit route re-fetches it server-side); still-generating designs skip.
+  const [editorDesign, setEditorDesign] = useState<Design | null>(null);
+  const onNodeEdit = (id: string) => {
+    const node = nodesRef.current.find((n) => n.id === id);
+    if (node?.kind !== 'design') return;
+    const d = designs.find((x) => x.id === node.refId);
+    if (d?.image?.startsWith('http')) {
+      Haptics.selectionAsync().catch(() => {});
+      setEditorDesign(d);
+    }
+  };
+
   // The product detail sheet replaces the old inline colour picker: product photo, selectable
   // colourways, sizes and starting price — all from /api/blank/:id/variants.
   const openProductDetail = (node: CanvasNode) => {
@@ -1523,6 +1537,7 @@ function DesignScreen() {
           onNodeMove={onNodeMove}
           onNodeTap={onNodeTap}
           onNodeRemove={onNodeRemove}
+          onNodeEdit={onNodeEdit}
           onNodeResize={onNodeResize}
           onGroupMove={onGroupMove}
           onUngroup={onUngroup}
@@ -1688,6 +1703,19 @@ function DesignScreen() {
           </Animated.View>
         </>
       ) : null}
+
+      {/* Design editor — double-tap a design on the canvas. Every edit saves as a NEW design. */}
+      <DesignEditor
+        design={editorDesign?.image ? { id: editorDesign.id, image: editorDesign.image, prompt: editorDesign.prompt } : null}
+        catalogueId={catalogue?.id}
+        onClose={() => setEditorDesign(null)}
+        onSaved={(d) =>
+          setDesigns((prev) => [
+            { id: d.id, prompt: d.prompt, color: tileColor(d.prompt), image: d.url, status: 'ready' as const },
+            ...prev,
+          ])
+        }
+      />
 
       <GenerateModal
         open={generateOpen}

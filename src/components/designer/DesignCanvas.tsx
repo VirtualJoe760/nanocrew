@@ -77,6 +77,8 @@ type Props = {
   onNodeMove: (id: string, x: number, y: number) => void;
   onNodeTap: (id: string) => void;
   onNodeRemove: (id: string) => void;
+  /** Double-tap on a DESIGN node → open it in the editor. */
+  onNodeEdit?: (id: string) => void;
   onNodeResize: (id: string, scale: number) => void;
   onGroupMove: (id: string, x: number, y: number) => void;
   onUngroup: (id: string) => void;
@@ -104,6 +106,7 @@ function NodeView({
   onMoveEnd,
   onTap,
   onRemove,
+  onEdit,
 }: {
   node: CanvasNode;
   design?: DesignRef;
@@ -120,6 +123,7 @@ function NodeView({
   onMoveEnd: (id: string, x: number, y: number) => void;
   onTap: (id: string) => void;
   onRemove: (id: string) => void;
+  onEdit?: (id: string) => void;
 }) {
   const theme = useTheme();
   const x = useSharedValue(node.x);
@@ -190,7 +194,15 @@ function NodeView({
       runOnJS(onTap)(node.id);
     }
   });
-  const gesture = Gesture.Race(pan, tap);
+  // Double-tap a DESIGN → open the editor. Exclusive() makes the single tap wait for the
+  // double-tap to fail, so only design nodes pay that ~250ms selection delay.
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (onEdit) runOnJS(onEdit)(node.id);
+    });
+  const taps = node.kind === 'design' && onEdit ? Gesture.Exclusive(doubleTap, tap) : tap;
+  const gesture = Gesture.Race(pan, taps);
 
   const style = useAnimatedStyle(() => {
     // While this node's group is being dragged, follow the broadcast delta LIVE so the
@@ -397,6 +409,7 @@ export function DesignCanvas({
   onNodeMove,
   onNodeTap,
   onNodeRemove,
+  onNodeEdit,
   onNodeResize,
   onGroupMove,
   onUngroup,
@@ -694,6 +707,7 @@ export function DesignCanvas({
                 onMoveEnd={onNodeMove}
                 onTap={handleNodeTap}
                 onRemove={onNodeRemove}
+                onEdit={onNodeEdit}
               />
             ))}
           </Animated.View>
