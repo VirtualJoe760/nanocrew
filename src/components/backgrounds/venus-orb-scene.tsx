@@ -4,69 +4,79 @@ import * as THREE from 'three';
 
 import { createVenusLipsync, type VenusLipsync, type VisemeWeights } from '@/lib/venus-lipsync';
 import { LATTICE_VERT, LATTICE_FRAG, motionSelect } from './venus-points';
-import { CORE_VERT, CORE_FRAG, STREAM_VERT, STREAM_FRAG } from './venus-shaders';
+import { STREAM_VERT, STREAM_FRAG } from './venus-shaders';
 import { makeAuraTexture, makeDotTexture } from './venus-textures';
 import { bakeAurora, bakeStreamField, bakeUnifiedLattice, LAT_ROWS } from './venus-geometry';
 import {
-  PLASMA_VERT, PLASMA_FRAG, INNER_FRAG, VEIL_VERT, VEIL_FRAG,
-  NET_VERT, NET_FRAG, NODE_VERT, NODE_FRAG,
+  PLASMA_VERT, SHEATH_FRAG, NUCLEUS_VERT, NUCLEUS_FRAG,
+  NET_VERT, NET_FRAG, NODE_VERT, NODE_FRAG, DUST_VERT, DUST_FRAG,
 } from './venus-plasma';
 import { getVenusOrbShapeRequest, setVenusOrbShape, type VenusOrbShape } from './venus-orb-bus';
 import type { VenusStage } from './venus-head-scene';
 
-// ── Venus ORB v2 — the "CONTAINED STAR" (R3F) ───────────────────────────────
-// Venus as a JARVIS-style brain: a contained miniature star. The app's dot-field background
-// still peels up and cyclones into her (the SAME unified lattice + morph as the face build) —
-// but what ignites underneath is now a churning PHOTOSPHERE: a displaced sphere running
-// domain-warped 3D fbm in differentially-rotating spherical coords (the equator spins faster
-// than the poles, like a real star), navy troughs → cyan flow → platinum crests, a white-hot
-// heart through inverse-fresnel, Eddington limb darkening, and a razor platinum rim. A BackSide
-// interior pass counter-rotates behind the surface so you can see INTO the volume (parallax),
-// two gauze veils replace the old wireframe cage, and a 3-sprite halo stack fakes bloom (no
-// postprocessing). Idle = slow convection + ±0.8% breath; talking = the surface BOILS, the
-// heart flares on syllables, the thought-pulse band sweeps bottom→top in the SAME clock as the
-// lattice dot wave, and the room halo pulses with her voice.
-// Full spec + tuning knobs: docs/studio/VENUS_AVATAR.md (orb v2). Shaders: venus-plasma.ts.
+// ── Venus ORB v3 — the "NEURAL CONSTELLATION" (R3F) ─────────────────────────
+// Art direction 2026-07-04: "get away from it looking like an orb… keeping the nucleus…
+// really we want it looking like a visual representation of a neural network… way more detail."
+// Every spherical surface is GONE. Venus is now an irregular, tilted 3D constellation of ~880
+// neuron somas grouped into 7 art-directed ganglia + 3 reaching dendritic arms, wired by ~34k
+// verts of curved dendrites, braided 3-strand trunk axons, tip-tapered whisker fuzz, and a dim
+// long-range web — all rooted into a white-hot nucleus wrapped in a small boiling plasma sheath
+// (the only surviving plasma surface). Signal packets race the wires on a per-ganglion staggered
+// clock; at idle one ganglion at a time flares (she is thinking); talking sets the whole web
+// storming. The app's dot-field background still peels up and cyclones onto the SOMA positions
+// (the same unified lattice + morph as ever), so the tee/heart/bolt shape-morph system survives.
+// Full spec + tuning knobs: docs/studio/VENUS_AVATAR.md (orb v3). Shaders: venus-plasma.ts.
 //
 // Same public shape as VenusHeadScene ({ stage, onReveal }); the Cortana face build stays
 // available behind the Lab's Face toggle.
 
-const ORB_R = 0.26; // orb radius — camera at z=2 / fov 22 gives ~0.39 half-height at the origin
-const ORB_DOTS = 880; // lattice dots that peel from the background onto the sphere (face used ~900)
+const ORB_R = 0.26; // the scale unit ("R") — camera at z=2 / fov 22 gives ~0.39 half-height
+const ORB_DOTS = 880; // lattice dots = soma count (1:1 dots↔somas is the morph contract)
 const CYAN = '#5BD8E6';
 const PLATINUM = '#cdd1d9';
 const NAVY = '#0B1626';
-const KEY_VS = new THREE.Vector3(-0.4, 0.55, 0.73); // key light (view-space) — matches makeSkinMatcap's key
-const FILL_VS = new THREE.Vector3(0.55, -0.4, 0.6); // faint lower-right counter-glint
+const NET_SEED = 1337; // mulberry32 seed — the whole constellation is reproducible frame-to-frame
 
-// THE RADIUS LADDER (load-bearing): body sphere 0.88·ORB_R with uAmp clamped ≤ 0.12 → displaced
-// crests ≤ 0.986·ORB_R < 1.00·ORB_R (the lattice dot skin — dots read as sparks floating just
-// above the photosphere and the morph landing stays correct) < 1.045·ORB_R veilA (platinum)
-// < 1.10·ORB_R veilB (cyan). Raising uAmp past 0.12 or the body past 0.88 swallows the dots.
-const BODY_R = ORB_R * 0.88;
+// THE RADIUS LADDER (load-bearing): nucleus 0.18R < sheath 0.30R < clearance gap (no somas)
+// to 0.38R < nucleus ring 0.40–0.44R < ganglia cloud 0.42R–1.15R < arms out to 1.42R (hard cap).
+// The gap between sheath and ring is a composition beat — core, a breath of black, then the web.
+const NUC_R = ORB_R * 0.18;
+const SHEATH_R = ORB_R * 0.3;
+const CLEAR_R = ORB_R * 0.38;
+const ARM_CAP = ORB_R * 1.42;
 
-// Even sphere-surface points (fibonacci lattice) with the aurora bake (constant cyan color +
-// normalized height aY — which is exactly what drives the talking light wave — + per-dot random).
-function bakeOrbDots(count: number, radius: number): THREE.BufferGeometry {
-  const pos = new Float32Array(count * 3);
-  const golden = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < count; i++) {
-    const y = 1 - (i / (count - 1)) * 2;
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const th = golden * i;
-    pos[i * 3] = Math.cos(th) * r * radius;
-    pos[i * 3 + 1] = y * radius;
-    pos[i * 3 + 2] = Math.sin(th) * r * radius;
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  bakeAurora(g);
-  return g;
+// GANGLIA TABLE (art-directed — iterate these rows from __venusOrbStep stills; the camera is
+// fixed at +z so the projected XY layout IS the composition). Units of R:
+// [ cx, cy, cz,  sx, sy, sz,  weight ] — per-axis gaussian spreads; each ganglion also gets a
+// seeded random tilt so every cluster is a tilted LENS, not an axis-aligned puff.
+const GANGLIA: number[][] = [
+  [0.62, 0.3, 0.1, 0.28, 0.2, 0.22, 0.2],     // G1 right lobe
+  [-0.7, 0.12, -0.15, 0.24, 0.26, 0.2, 0.18], // G2 left lobe, slightly behind
+  [0.18, -0.58, 0.2, 0.22, 0.18, 0.24, 0.15], // G3 lower, slightly front
+  [-0.3, 0.62, 0.05, 0.2, 0.22, 0.18, 0.13],  // G4 upper-left
+  [0.95, -0.25, -0.2, 0.14, 0.12, 0.14, 0.08],  // G5 OUTRIGGER (breaks the hull)
+  [-0.85, -0.55, 0.15, 0.12, 0.14, 0.12, 0.07], // G6 OUTRIGGER
+  [0.05, 0.15, -0.55, 0.26, 0.24, 0.2, 0.19],   // G7 rear depth ganglion (the parallax layer)
+];
+// soma budget: 640 ganglia (by weight) + 180 arm (3 arms × 5 clusters × 12) + 20 nucleus ring
+// + 40 interstitial strays = 880 = ORB_DOTS exactly.
+const GANG_POPS = [128, 115, 96, 83, 51, 45, 122];
+
+// Deterministic PRNG — the bake must produce the SAME constellation every mount so tuning
+// sessions (and the ganglia table) stay comparable still-to-still.
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 // ── SHAPE MORPH: 2D object silhouettes the dots can re-form into ────────────
 // Flat point clouds facing the fixed camera read crisply. Each sampler rejection-fills a unit
-// silhouette, scaled to ~1.3R with a little z-jitter for depth sparkle.
+// silhouette; the caller scales by ~1.15R·layoutScale (objects hold scale vs the wide cloud).
 function pointInPoly(x: number, y: number, poly: number[][]): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -92,11 +102,8 @@ function insideShape(name: VenusOrbShape, x: number, y: number): boolean {
   }
   return x * x + y * y <= 1;
 }
-function sampleShape(name: VenusOrbShape, count: number, R: number): Float32Array {
+function sampleShape(name: VenusOrbShape, count: number, S: number): Float32Array {
   const out = new Float32Array(count * 3);
-  // ~orb-sized: unit shapes span ±1, so S=R keeps the object inside the old silhouette and the
-  // dot density high enough to read (at 1.3R the tee filled the whole canvas and read as dust).
-  const S = R;
   let i = 0, guard = 0;
   while (i < count && guard < count * 400) {
     guard++;
@@ -105,7 +112,7 @@ function sampleShape(name: VenusOrbShape, count: number, R: number): Float32Arra
     if (!insideShape(name, x, y)) continue;
     out[i * 3] = x * S;
     out[i * 3 + 1] = y * S;
-    out[i * 3 + 2] = (Math.random() - 0.5) * R * 0.12;
+    out[i * 3 + 2] = (Math.random() - 0.5) * S * 0.05;
     i++;
   }
   return out;
@@ -114,93 +121,403 @@ function sampleShape(name: VenusOrbShape, count: number, R: number): Float32Arra
 type OrbRig = {
   latticeMat: THREE.ShaderMaterial;
   streamMat: THREE.ShaderMaterial;
-  bodyMat: THREE.ShaderMaterial;
-  innerMat: THREE.ShaderMaterial;
+  sheathMat: THREE.ShaderMaterial;
   nucleusMat: THREE.ShaderMaterial;
+  nucleus: THREE.Mesh;
   netMat: THREE.ShaderMaterial;
   nodeMat: THREE.ShaderMaterial;
+  dustMat: THREE.ShaderMaterial;
   netGroup: THREE.Group;
-  veilAMat: THREE.ShaderMaterial;
-  veilBMat: THREE.ShaderMaterial;
-  veilA: THREE.Mesh;
-  veilB: THREE.Mesh;
   haloTightMat: THREE.MeshBasicMaterial;
-  haloMidMat: THREE.MeshBasicMaterial;
   haloWideMat: THREE.MeshBasicMaterial;
   orbGroup: THREE.Group;
 };
 
-// Bake the NEURON NETWORK once: nodes fill the shell between the nucleus and the membrane
-// (biased outward so the middle stays airy), each wired to its nearest neighbours, and a share
-// of nodes get a SPOKE down toward the nucleus so the whole web reads as rooted at the centre.
-// Returns LineSegments geometry (synapses: per-vertex aT 0→1 + per-edge phase) and Points
-// geometry (neurons: per-node phase + size, hubs bigger).
-function bakeNeuralNet(count: number, R: number): { lines: THREE.BufferGeometry; nodes: THREE.BufferGeometry } {
-  const pos: number[] = [];
-  for (let i = 0; i < count; i++) {
-    // uniform direction, radius biased outward between 0.30R (nucleus clearance) and 0.80R
-    const u = Math.random() * 2 - 1;
-    const ph = Math.random() * Math.PI * 2;
-    const sxy = Math.sqrt(Math.max(0, 1 - u * u));
-    const r = R * (0.3 + 0.5 * Math.cbrt(Math.random()));
-    pos.push(sxy * Math.cos(ph) * r, u * r, sxy * Math.sin(ph) * r);
+// ── bakeConnectome — the whole constellation, built ONCE (all positions in R units; the
+// framing scale is applied on orbGroup + the lattice handoff copy). Returns the merged wiring
+// LineSegments (aClass 0 fine web / 1 dendrite / 2 trunk / 3 whisker), the soma Points, the
+// ghost dust Points, an aurora-baked soma geometry for the unified lattice, and the cloud's
+// y extents (drives the world-Y talking band).
+function bakeConnectome(R: number): {
+  lines: THREE.BufferGeometry;
+  nodes: THREE.BufferGeometry;
+  dust: THREE.BufferGeometry;
+  somaPositions: Float32Array;
+  yMin: number;
+  ySpan: number;
+} {
+  const rnd = mulberry32(NET_SEED);
+  const gauss = () => Math.sqrt(-2 * Math.log(Math.max(1e-9, rnd()))) * Math.cos(2 * Math.PI * rnd());
+  const randDir = () => {
+    const u = rnd() * 2 - 1;
+    const ph = rnd() * Math.PI * 2;
+    const s = Math.sqrt(Math.max(0, 1 - u * u));
+    return new THREE.Vector3(s * Math.cos(ph), u, s * Math.sin(ph));
+  };
+
+  type Soma = { p: THREE.Vector3; gang: number };
+  const somas: Soma[] = [];
+  const centers = GANGLIA.map((g) => new THREE.Vector3(g[0], g[1], g[2]).multiplyScalar(R));
+
+  // 1) ganglia — tilted gaussian lenses, kept off the nucleus and inside a loose hull
+  GANGLIA.forEach((g, gi) => {
+    const tilt = new THREE.Quaternion().setFromAxisAngle(randDir(), rnd() * Math.PI * 2);
+    for (let k = 0; k < GANG_POPS[gi]; k++) {
+      const p = new THREE.Vector3();
+      for (let attempt = 0; attempt < 8; attempt++) {
+        p.set(gauss() * g[3] * R, gauss() * g[4] * R, gauss() * g[5] * R)
+          .applyQuaternion(tilt)
+          .add(centers[gi]);
+        const len = p.length();
+        if (len >= CLEAR_R && len <= R * 1.55) break;
+        if (attempt === 7) p.setLength(THREE.MathUtils.clamp(len, CLEAR_R, R * 1.55));
+      }
+      somas.push({ p, gang: gi + 1 });
+    }
+  });
+
+  // 2) three dendritic ARMS reaching past the hull (from the peripheral ganglia) — these break
+  //    the round outline more than anything else.
+  const armClusters: number[][] = [];
+  for (const gi of [4, 5, 2]) {
+    let c = centers[gi].clone();
+    let dir = c.clone().normalize();
+    for (let step = 0; step < 5; step++) {
+      dir = dir.add(randDir().multiplyScalar(0.15)).normalize();
+      c = c.clone().addScaledVector(dir, 0.09 * R);
+      if (c.length() > ARM_CAP) c.setLength(ARM_CAP);
+      const members: number[] = [];
+      for (let k = 0; k < 12; k++) {
+        const p = c.clone().add(new THREE.Vector3(gauss(), gauss(), gauss()).multiplyScalar(0.05 * R));
+        members.push(somas.length);
+        somas.push({ p, gang: gi + 1 });
+      }
+      armClusters.push(members);
+    }
   }
-  const p = (i: number) => new THREE.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
-  // wire each node to its 2 nearest neighbours (deduped), max reach 0.55R
-  const edges: [number, number][] = [];
+
+  // 3) nucleus ring — the roots the trunks dive into (gang 0, grow≈0: they light FIRST)
+  const ringStart = somas.length;
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < 20; i++) {
+    const y = 1 - (i / 19) * 2;
+    const rr = Math.sqrt(Math.max(0, 1 - y * y));
+    const th = golden * i;
+    const p = new THREE.Vector3(Math.cos(th) * rr, y, Math.sin(th) * rr)
+      .add(randDir().multiplyScalar(0.06))
+      .normalize()
+      .multiplyScalar(R * (0.4 + 0.04 * rnd()));
+    somas.push({ p, gang: 0 });
+  }
+  const ringEnd = somas.length;
+
+  // 4) interstitial strays — lone cells in the superquadric envelope (the loose overall hull)
+  const inEnvelope = (p: THREE.Vector3) =>
+    Math.pow(Math.abs(p.x - 0.06 * R) / (1.3 * R), 2.2) +
+      Math.pow(Math.abs(p.y + 0.04 * R) / (1.02 * R), 2.2) +
+      Math.pow(Math.abs(p.z) / (0.8 * R), 2.2) <=
+    1;
+  let strays = 0, strayGuard = 0;
+  while (strays < 40 && strayGuard++ < 4000) {
+    const p = new THREE.Vector3((rnd() * 2 - 1) * 1.3 * R, (rnd() * 2 - 1) * 1.02 * R, (rnd() * 2 - 1) * 0.8 * R);
+    if (!inEnvelope(p) || p.length() < CLEAR_R) continue;
+    somas.push({ p, gang: 0 });
+    strays++;
+  }
+  const N = somas.length;
+
+  // 5) hubs — the soma nearest each ganglion center, snapped exactly onto it
+  const hubIdx = centers.map((c, gi) => {
+    let best = 0, bd = 1e9;
+    somas.forEach((s, i) => {
+      if (s.gang !== gi + 1) return;
+      const d = s.p.distanceTo(c);
+      if (d < bd) { bd = d; best = i; }
+    });
+    somas[best].p.copy(c);
+    return best;
+  });
+  const hubSet = new Set(hubIdx);
+
+  // 6) spatial hash (cell 0.15R) — keeps the kNN pass O(n·k)
+  const cell = 0.15 * R;
+  const cellKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
+  const grid = new Map<string, number[]>();
+  somas.forEach((s, i) => {
+    const k = cellKey(Math.floor(s.p.x / cell), Math.floor(s.p.y / cell), Math.floor(s.p.z / cell));
+    const bucket = grid.get(k);
+    if (bucket) bucket.push(i);
+    else grid.set(k, [i]);
+  });
+  const neighbors = (i: number, maxD: number, sameGang: boolean): { j: number; d: number }[] => {
+    const s = somas[i];
+    const cx = Math.floor(s.p.x / cell), cy = Math.floor(s.p.y / cell), cz = Math.floor(s.p.z / cell);
+    const range = Math.ceil(maxD / cell);
+    const out: { j: number; d: number }[] = [];
+    for (let dx = -range; dx <= range; dx++)
+      for (let dy = -range; dy <= range; dy++)
+        for (let dz = -range; dz <= range; dz++) {
+          const bucket = grid.get(cellKey(cx + dx, cy + dy, cz + dz));
+          if (!bucket) continue;
+          for (const j of bucket) {
+            if (j === i) continue;
+            const same = somas[j].gang === s.gang;
+            if (sameGang ? !same : same || somas[j].gang === 0) continue;
+            const d = s.p.distanceTo(somas[j].p);
+            if (d <= maxD) out.push({ j, d });
+          }
+        }
+    return out.sort((a, b) => a.d - b.d);
+  };
+
+  // 7) node-level edges (pre-curve) — dendrites intra-ganglion, a sparse cross-stitch, arm
+  //    chain links, and the trunk paths. This graph also feeds the BFS growth field.
+  type Edge = { a: number; b: number; cls: number };
+  const nodeEdges: Edge[] = [];
   const seen = new Set<string>();
-  const degree = new Array(count).fill(0);
-  for (let i = 0; i < count; i++) {
-    const a = p(i);
-    const near = Array.from({ length: count }, (_, j) => j)
-      .filter((j) => j !== i)
-      .map((j) => ({ j, d: a.distanceTo(p(j)) }))
-      .sort((x, y) => x.d - y.d)
-      .slice(0, 2)
-      .filter((x) => x.d < R * 0.55);
-    for (const { j } of near) {
-      const key = i < j ? `${i}-${j}` : `${j}-${i}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        edges.push([i, j]);
-        degree[i]++; degree[j]++;
+  const degree = new Array<number>(N).fill(0);
+  const addEdge = (a: number, b: number, cls: number) => {
+    const k = a < b ? `${a}-${b}` : `${b}-${a}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    nodeEdges.push({ a, b, cls });
+    degree[a]++;
+    degree[b]++;
+  };
+  for (let i = 0; i < N; i++) {
+    if (somas[i].gang === 0) continue;
+    const k = somas[i].gang <= 2 ? 3 : 2; // the big lobes wire denser
+    for (const { j } of neighbors(i, 0.3 * R, true).slice(0, k)) addEdge(i, j, 1);
+  }
+  for (let i = 0; i < N; i++) {
+    if (somas[i].gang === 0 || rnd() >= 0.15) continue;
+    const near = neighbors(i, 0.45 * R, false);
+    if (near.length) addEdge(i, near[0].j, 1);
+  }
+  for (let a = 0; a < armClusters.length; a++) {
+    if (a % 5 === 0) continue; // the first cluster of each arm reaches its ganglion via kNN
+    const prev = armClusters[a - 1], cur = armClusters[a];
+    let bi = -1, bj = -1, bd = 1e9;
+    for (const i of cur)
+      for (const j of prev) {
+        const d = somas[i].p.distanceTo(somas[j].p);
+        if (d < bd) { bd = d; bi = i; bj = j; }
+      }
+    if (bi >= 0) addEdge(bi, bj, 1);
+  }
+  // trunks: hub↔hub arterials + every hub roots to its nearest nucleus-ring soma
+  const HUB_PAIRS: [number, number][] = [[1, 2], [1, 3], [1, 5], [2, 4], [2, 6], [3, 6], [3, 7], [4, 7], [1, 7], [2, 7]];
+  const trunkPaths: [number, number][] = HUB_PAIRS.map(([a, b]) => [hubIdx[a - 1], hubIdx[b - 1]]);
+  for (const h of hubIdx) {
+    let best = ringStart, bd = 1e9;
+    for (let i = ringStart; i < ringEnd; i++) {
+      const d = somas[h].p.distanceTo(somas[i].p);
+      if (d < bd) { bd = d; best = i; }
+    }
+    trunkPaths.push([h, best]); // packet direction hub→ring: signals flow INTO the nucleus
+  }
+  for (const [a, b] of trunkPaths) addEdge(a, b, 2);
+
+  // 8) aGrow — BFS depth from the nucleus ring, normalized: the network "wires itself outward
+  //    from the nucleus" as the drive sweeps uGrow 0→1 during assembly.
+  const adj: number[][] = Array.from({ length: N }, () => []);
+  for (const e of nodeEdges) {
+    adj[e.a].push(e.b);
+    adj[e.b].push(e.a);
+  }
+  const depth = new Array<number>(N).fill(-1);
+  const queue: number[] = [];
+  for (let i = ringStart; i < ringEnd; i++) {
+    depth[i] = 0;
+    queue.push(i);
+  }
+  for (let qi = 0; qi < queue.length; qi++) {
+    const i = queue[qi];
+    for (const j of adj[i])
+      if (depth[j] < 0) {
+        depth[j] = depth[i] + 1;
+        queue.push(j);
+      }
+  }
+  let maxDepth = 1;
+  for (const d of depth) if (d > maxDepth) maxDepth = d;
+  const grow = depth.map((d) => (d < 0 ? 0.7 + 0.3 * rnd() : d / maxDepth));
+  for (let i = ringStart; i < ringEnd; i++) grow[i] = 0.05;
+
+  // 9) curve emission → ONE merged LineSegments buffer
+  const lp: number[] = [], lT: number[] = [], lPh: number[] = [], lCl: number[] = [];
+  const lGa: number[] = [], lBr: number[] = [], lGr: number[] = [], lJit: number[] = [];
+  const emit = (pts: THREE.Vector3[], cls: number, gang: number, phase: number, bright: number, growVal: number, jitScale: number) => {
+    const jd = randDir().multiplyScalar(jitScale);
+    const S = pts.length - 1;
+    for (let s = 0; s < S; s++) {
+      for (const [pt, tt] of [
+        [pts[s], s / S],
+        [pts[s + 1], (s + 1) / S],
+      ] as [THREE.Vector3, number][]) {
+        lp.push(pt.x, pt.y, pt.z);
+        lT.push(tt);
+        lPh.push(phase);
+        lCl.push(cls);
+        lGa.push(gang);
+        lBr.push(bright);
+        lGr.push(growVal);
+        lJit.push(jd.x, jd.y, jd.z);
       }
     }
+  };
+  const perpOf = (a: THREE.Vector3, b: THREE.Vector3) => {
+    const ab = b.clone().sub(a);
+    let perp = new THREE.Vector3().crossVectors(ab, randDir());
+    if (perp.lengthSq() < 1e-8) perp = new THREE.Vector3().crossVectors(ab, new THREE.Vector3(0, 1, 0));
+    if (perp.lengthSq() < 1e-8) perp.set(1, 0, 0);
+    return perp.normalize();
+  };
+  const quadBezier = (a: THREE.Vector3, c: THREE.Vector3, b: THREE.Vector3, S: number, jitAmp: number) => {
+    const pts: THREE.Vector3[] = [];
+    for (let s = 0; s <= S; s++) {
+      const t = s / S, u = 1 - t;
+      const p = new THREE.Vector3().addScaledVector(a, u * u).addScaledVector(c, 2 * u * t).addScaledVector(b, t * t);
+      if (s > 0 && s < S) p.add(randDir().multiplyScalar(jitAmp)); // frozen organic wobble
+      pts.push(p);
+    }
+    return pts;
+  };
+
+  // dendrites (aClass 1): quadratic arcs, S=6
+  for (const e of nodeEdges) {
+    if (e.cls !== 1) continue;
+    const a = somas[e.a].p, b = somas[e.b].p;
+    const len = a.distanceTo(b);
+    const ctrl = a.clone().add(b).multiplyScalar(0.5).addScaledVector(perpOf(a, b), len * (0.1 + 0.1 * rnd()));
+    emit(quadBezier(a, ctrl, b, 6, 0.01 * R), 1, somas[e.a].gang, rnd(), 0.6 + 0.8 * rnd(), Math.max(grow[e.a], grow[e.b]), 1.0);
   }
-  // spokes: ~30% of nodes also connect inward to the nucleus surface
-  const spokeEnds: THREE.Vector3[] = [];
-  for (let i = 0; i < count; i++) {
-    if (i % 3 === 0) {
-      const a = p(i);
-      spokeEnds.push(a.clone().setLength(R * 0.24));
-      edges.push([i, count + spokeEnds.length - 1]);
+
+  // trunks (aClass 2): cubic S-bends sagging toward the origin, 3 braided strands, S=12
+  for (const [ai, bi] of trunkPaths) {
+    const a = somas[ai].p, b = somas[bi].p;
+    const len = a.distanceTo(b);
+    const perp = perpOf(a, b);
+    const sag = (v: THREE.Vector3) => v.addScaledVector(v.clone().normalize(), -0.1 * R);
+    const c1 = sag(a.clone().lerp(b, 1 / 3).addScaledVector(perp, 0.18 * len));
+    const c2 = sag(a.clone().lerp(b, 2 / 3).addScaledVector(perp, -0.18 * len));
+    const cubic = (t: number) => {
+      const u = 1 - t;
+      return new THREE.Vector3()
+        .addScaledVector(a, u * u * u)
+        .addScaledVector(c1, 3 * u * u * t)
+        .addScaledVector(c2, 3 * u * t * t)
+        .addScaledVector(b, t * t * t);
+    };
+    const phase = rnd();
+    const gang = somas[ai].gang || somas[bi].gang;
+    const gVal = Math.max(grow[ai], grow[bi]);
+    for (let strand = 0; strand < 3; strand++) {
+      const pts: THREE.Vector3[] = [];
+      for (let s = 0; s <= 12; s++) {
+        const t = s / 12;
+        const p = cubic(t);
+        const tang = cubic(Math.min(1, t + 0.01)).sub(cubic(Math.max(0, t - 0.01))).normalize();
+        const n1 = new THREE.Vector3().crossVectors(tang, perp);
+        if (n1.lengthSq() < 1e-8) n1.set(0, 1, 0);
+        n1.normalize();
+        const n2 = new THREE.Vector3().crossVectors(tang, n1).normalize();
+        const ang = (strand / 3) * Math.PI * 2 + t * Math.PI * 3; // 1.5 braid turns
+        p.addScaledVector(n1, Math.cos(ang) * 0.012 * R).addScaledVector(n2, Math.sin(ang) * 0.012 * R);
+        if (s > 0 && s < 12) p.add(randDir().multiplyScalar(0.004 * R));
+        pts.push(p);
+      }
+      emit(pts, 2, gang, phase, 0.9 + 0.4 * rnd(), gVal, 0.4);
     }
   }
-  const at = (i: number) => (i < count ? p(i) : spokeEnds[i - count]);
-  // synapse lines: 2 verts per edge, aT 0→1, shared per-edge phase
-  const lp: number[] = [], lt: number[] = [], lph: number[] = [];
-  for (const [i, j] of edges) {
-    const a = at(i), b = at(j);
-    const phase = Math.random();
-    lp.push(a.x, a.y, a.z, b.x, b.y, b.z);
-    lt.push(0, 1);
-    lph.push(phase, phase);
+
+  // whiskers (aClass 3): 2 stubs per soma (4 on busy hubs), curling outward from the ganglion —
+  // the fine fuzz that makes every cell read ALIVE up close. Tip-tapered in the shader.
+  for (let i = 0; i < N; i++) {
+    const nStubs = degree[i] >= 4 ? 4 : 2;
+    const away = somas[i].gang > 0 ? somas[i].p.clone().sub(centers[somas[i].gang - 1]) : somas[i].p.clone();
+    for (let w = 0; w < nStubs; w++) {
+      let dir = away.lengthSq() > 1e-8 ? away.clone().normalize() : randDir();
+      dir = dir.add(randDir().multiplyScalar(0.7)).normalize();
+      const len = R * (0.03 + 0.05 * rnd());
+      const p0 = somas[i].p;
+      const p1 = p0.clone().addScaledVector(dir, len * 0.5);
+      const curl = dir.clone().addScaledVector(perpOf(p0, p1), 0.36).normalize();
+      const p2 = p1.clone().addScaledVector(curl, len * 0.5);
+      emit([p0, p1, p2], 3, somas[i].gang, rnd(), 0.6 + 0.8 * rnd(), Math.min(1, grow[i] + 0.06), 1.5);
+    }
   }
+
+  // fine web (aClass 0): 1,000 dim long-range threads — with the ghost dust this replaces the
+  // deleted veils' volumetric depth.
+  let fine = 0, fineGuard = 0;
+  while (fine < 1000 && fineGuard++ < 20000) {
+    const i = Math.floor(rnd() * N), j = Math.floor(rnd() * N);
+    if (i === j || somas[i].gang === somas[j].gang) continue;
+    const a = somas[i].p, b = somas[j].p;
+    const len = a.distanceTo(b);
+    if (len > 1.3 * R) continue;
+    const ctrl = a.clone().add(b).multiplyScalar(0.5).addScaledVector(perpOf(a, b), 0.06 * len);
+    emit(quadBezier(a, ctrl, b, 4, 0.01 * R), 0, 0, rnd(), 0.6 + 0.8 * rnd(), 0.75 + 0.2 * rnd(), 0.7);
+    fine++;
+  }
+
   const lines = new THREE.BufferGeometry();
   lines.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lp), 3));
-  lines.setAttribute('aT', new THREE.BufferAttribute(new Float32Array(lt), 1));
-  lines.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(lph), 1));
-  // neuron points: hubs (degree ≥ 3) render bigger
-  const nph = new Float32Array(count), nsz = new Float32Array(count);
-  for (let i = 0; i < count; i++) {
-    nph[i] = Math.random();
-    nsz[i] = degree[i] >= 3 ? 30 : 18;
-  }
+  lines.setAttribute('aT', new THREE.BufferAttribute(new Float32Array(lT), 1));
+  lines.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(lPh), 1));
+  lines.setAttribute('aClass', new THREE.BufferAttribute(new Float32Array(lCl), 1));
+  lines.setAttribute('aGang', new THREE.BufferAttribute(new Float32Array(lGa), 1));
+  lines.setAttribute('aBright', new THREE.BufferAttribute(new Float32Array(lBr), 1));
+  lines.setAttribute('aGrow', new THREE.BufferAttribute(new Float32Array(lGr), 1));
+  lines.setAttribute('aJit', new THREE.BufferAttribute(new Float32Array(lJit), 3));
+
+  // soma Points: power-law sizes (many grains, few anchors) with hub/ring floors
+  const nodePos = new Float32Array(N * 3);
+  const nPh = new Float32Array(N), nSz = new Float32Array(N), nGa = new Float32Array(N);
+  const nHub = new Float32Array(N), nGr = new Float32Array(N);
+  let yMin = 1e9, yMax = -1e9;
+  somas.forEach((s, i) => {
+    nodePos[i * 3] = s.p.x;
+    nodePos[i * 3 + 1] = s.p.y;
+    nodePos[i * 3 + 2] = s.p.z;
+    yMin = Math.min(yMin, s.p.y);
+    yMax = Math.max(yMax, s.p.y);
+    nPh[i] = rnd() + s.gang * 0.13; // folds the per-ganglion stagger into the phase
+    let sz = 9 + 46 * Math.pow(rnd(), 3);
+    if (hubSet.has(i)) sz = Math.max(sz, 40);
+    else if (degree[i] >= 4) sz = Math.max(sz, 28);
+    else if (i >= ringStart && i < ringEnd) sz = Math.max(sz, 22);
+    nSz[i] = sz;
+    nGa[i] = s.gang;
+    nHub[i] = hubSet.has(i) ? 1 : 0;
+    nGr[i] = grow[i];
+  });
   const nodes = new THREE.BufferGeometry();
-  nodes.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
-  nodes.setAttribute('aPhase', new THREE.BufferAttribute(nph, 1));
-  nodes.setAttribute('aSize', new THREE.BufferAttribute(nsz, 1));
-  return { lines, nodes };
+  nodes.setAttribute('position', new THREE.BufferAttribute(nodePos, 3));
+  nodes.setAttribute('aPhase', new THREE.BufferAttribute(nPh, 1));
+  nodes.setAttribute('aSize', new THREE.BufferAttribute(nSz, 1));
+  nodes.setAttribute('aGang', new THREE.BufferAttribute(nGa, 1));
+  nodes.setAttribute('aHub', new THREE.BufferAttribute(nHub, 1));
+  nodes.setAttribute('aGrow', new THREE.BufferAttribute(nGr, 1));
+
+  // ghost dust: 400 near-invisible motes in the envelope (interstitial volume fill)
+  const dustPos = new Float32Array(400 * 3), dPh = new Float32Array(400);
+  let dCount = 0, dGuard = 0;
+  while (dCount < 400 && dGuard++ < 40000) {
+    const p = new THREE.Vector3((rnd() * 2 - 1) * 1.3 * R, (rnd() * 2 - 1) * 1.02 * R, (rnd() * 2 - 1) * 0.8 * R);
+    if (!inEnvelope(p) || p.length() < SHEATH_R * 1.1) continue;
+    dustPos[dCount * 3] = p.x;
+    dustPos[dCount * 3 + 1] = p.y;
+    dustPos[dCount * 3 + 2] = p.z;
+    dPh[dCount] = rnd();
+    dCount++;
+  }
+  const dust = new THREE.BufferGeometry();
+  dust.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  dust.setAttribute('aPhase', new THREE.BufferAttribute(dPh, 1));
+
+  return { lines, nodes, dust, somaPositions: nodePos, yMin, ySpan: Math.max(1e-4, yMax - yMin) };
 }
 
 function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (r: number) => void }) {
@@ -210,6 +527,8 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
   // __DEV__ Lab hook (like the face scene's __venusRevealOverride): step simulated time from the
   // console — `__venusOrbStep(tSeconds)` advances one frame. Hidden/automated tabs get no rAF, so
   // this is how stills are captured deterministically (see VENUS_AVATAR.md "judge the morph live").
+  // NOTE: advance()'s DELTA runs on real wall-clock time between calls — damped values (reveal,
+  // uSpeak, the shape gate) need real waits interleaved between step bursts.
   useEffect(() => {
     if (!__DEV__) return;
     (globalThis as { __venusOrbStep?: (ts: number) => void }).__venusOrbStep = (ts: number) => advance(ts);
@@ -217,11 +536,12 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       delete (globalThis as { __venusOrbStep?: (ts: number) => void }).__venusOrbStep;
     };
   }, [advance]);
+
   const rig = useRef<OrbRig | null>(null);
   const onRevealRef = useRef(onReveal);
   onRevealRef.current = onReveal;
 
-  // ── stage → reveal clock (0 = scattered dust, 1 = formed star) + talking flag ──
+  // ── stage → reveal clock (0 = scattered dust, 1 = formed constellation) + talking flag ──
   const reveal = useRef(0);
   const revealTarget = useRef(stage === 'pre-render' ? 0 : 1);
   const talkingRef = useRef(stage === 'talking');
@@ -236,16 +556,24 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
   }, [stage]);
   useEffect(() => { if (root) reveal.current = 0; }, [root]);
 
-  // Speech drive: the SAME lip-sync pipeline as the face — but jawOpen energy lights the star
-  // instead of moving a mouth. (Web: AnalyserDriver; native: the formant SpeechLevelDriver.)
+  // Speech drive: the SAME lip-sync pipeline as the face — jawOpen energy storms the network.
   const lipRef = useRef<VenusLipsync | null>(null);
   if (!lipRef.current) lipRef.current = createVenusLipsync();
   const lipTargets = useRef<VisemeWeights>({});
 
   // SHAPE-MORPH state: bus requests are polled per frame; a transition dissolves the dots
-  // (reveal dips), swaps their targets to the new silhouette, then re-forms. shapeGate dims the
-  // sphere-shaped layers (membrane/net/nucleus/veils) while a non-orb object is showing.
-  const shapeRig = useRef<{ latGeo: THREE.BufferGeometry; idx: number[]; orbTargets: Float32Array; orbFaceY: Float32Array } | null>(null);
+  // (reveal dips), swaps their targets to the new silhouette, then re-forms. The gate dims the
+  // whole constellation (mind) and the halos while a non-orb object is showing; uLead makes the
+  // dots carry the drawing.
+  const shapeRig = useRef<{
+    latGeo: THREE.BufferGeometry;
+    idx: number[];
+    orbTargets: Float32Array;
+    orbFaceY: Float32Array;
+    layoutScale: number;
+    yMin: number;
+    ySpan: number;
+  } | null>(null);
   const shapeState = useRef({ seq: 0, showing: 'orb' as VenusOrbShape, pending: null as VenusOrbShape | null, gate: 0 });
   useEffect(() => {
     if (!__DEV__) return;
@@ -255,8 +583,8 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     };
     g.__venusOrbShape = (s) => setVenusOrbShape(s);
     // Dev-only introspection for the deterministic-stills workflow: the live shape-machine state
-    // plus the bounding box of the face dots' CURRENT landing targets (sphere ≈ cube ±R; a flat
-    // object ≈ thin z). See docs/studio/VENUS_AVATAR.md.
+    // plus the bounding box of the face dots' CURRENT landing targets (cloud ≈ wide irregular box;
+    // a flat object ≈ thin z). See docs/studio/VENUS_AVATAR.md.
     g.__venusOrbDebug = () => {
       const sr = shapeRig.current;
       let box: number[] | null = null;
@@ -288,14 +616,24 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const vH = Math.tan((cam.fov * Math.PI) / 360) * 2; // half-height of the view at the orb plane
     const vW = vH * cam.aspect;
 
+    // FRAMING GUARD: the cloud spans ~2.9R across the arms; on narrow aspects shrink the whole
+    // constellation (orbGroup scale + the lattice landing copy) so nothing clips.
+    const layoutScale = Math.min(1, (0.92 * Math.min(vW, vH)) / (ORB_R * 1.45));
+
     const scene = new THREE.Group();
     const dotTex = makeDotTexture();
     const auraTex = makeAuraTexture();
 
-    // (a) THE UNIFIED LATTICE — ambient background dots + the orb's dot skin in ONE buffer.
-    //     Identity transform: the orb lives at the world origin, so target points are world-space.
-    const orbDots = bakeOrbDots(ORB_DOTS, ORB_R);
-    const { geometry: latGeo, faceCentroid } = bakeUnifiedLattice(orbDots, { vW, vH }, new THREE.Matrix4());
+    // (a) THE UNIFIED LATTICE — ambient background dots + the soma landing dots in ONE buffer.
+    //     The face targets ARE the soma positions (scaled): dot skin = neuron field, so the
+    //     tee/heart/bolt shape-morph system keeps working unchanged.
+    const { lines: netGeo, nodes: nodeGeo, dust: dustGeo, somaPositions, yMin, ySpan } = bakeConnectome(ORB_R);
+    const somaGeo = new THREE.BufferGeometry();
+    const scaledSomas = new Float32Array(somaPositions.length);
+    for (let i = 0; i < somaPositions.length; i++) scaledSomas[i] = somaPositions[i] * layoutScale;
+    somaGeo.setAttribute('position', new THREE.BufferAttribute(scaledSomas, 3));
+    bakeAurora(somaGeo);
+    const { geometry: latGeo, faceCentroid } = bakeUnifiedLattice(somaGeo, { vW, vH }, new THREE.Matrix4());
     const latticeMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 }, uMorph: { value: 0 }, uReveal: { value: 0 }, uLead: { value: 0 },
@@ -319,7 +657,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     latticePts.frustumCulled = false;
     scene.add(latticePts);
 
-    // SHAPE-MORPH rig: remember which lattice dots are hers (aIsFace) and their sphere landing
+    // SHAPE-MORPH rig: remember which lattice dots are hers (aIsFace) and their soma landing
     // spots, so setVenusOrbShape() can retarget them to an object silhouette and back.
     {
       const isFace = latGeo.getAttribute('aIsFace');
@@ -335,10 +673,10 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         orbTargets[k * 3 + 2] = tgt.getZ(li);
         orbFaceY[k] = fy.getX(li);
       });
-      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY };
+      shapeRig.current = { latGeo, idx, orbTargets, orbFaceY, layoutScale, yMin: yMin * layoutScale, ySpan: ySpan * layoutScale };
     }
 
-    // (b) the stream field — a volumetric shell of dots looping INTO the star (the depth-feed).
+    // (b) the stream field — a volumetric shell of dots looping INTO the mind (the depth-feed).
     const streamMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 }, uReveal: { value: 0 }, uCenter: { value: new THREE.Vector3(0, 0, 0) },
@@ -356,9 +694,9 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     streamPts.renderOrder = 1;
     scene.add(streamPts);
 
-    // (c) the star body. The camera is FIXED at +z, so static planes inside orbGroup ARE
-    //     billboards — the 3-sprite halo stack is the fake bloom (no postprocessing).
+    // (c) the constellation. Camera FIXED at +z → static planes inside orbGroup ARE billboards.
     const orbGroup = new THREE.Group();
+    orbGroup.scale.setScalar(layoutScale);
 
     const haloMat = (map: THREE.Texture, color?: string) =>
       new THREE.MeshBasicMaterial({
@@ -374,122 +712,79 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const haloWide = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 6.0, ORB_R * 6.0), haloWideMat);
     haloWide.position.z = -0.02;
     haloWide.renderOrder = 2; // the room glow — near-invisible at idle, pulses with her voice
-    const haloMidMat = haloMat(auraTex);
-    const haloMid = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 4.4, ORB_R * 4.4), haloMidMat);
-    haloMid.position.z = -0.015;
-    haloMid.renderOrder = 3; // the mid bloom falloff
     const haloTightMat = haloMat(dotTex, CYAN);
-    const haloTight = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 3.0, ORB_R * 3.0), haloTightMat);
+    const haloTight = new THREE.Mesh(new THREE.PlaneGeometry(ORB_R * 1.1, ORB_R * 1.1), haloTightMat);
     haloTight.position.z = -0.01;
-    haloTight.renderOrder = 4; // hot bleed hugging the limb — makes the razor rim read emissive
-    orbGroup.add(haloWide, haloMid, haloTight);
+    haloTight.renderOrder = 3; // the nucleus bleed — hot air around the core, NOT a limb
+    orbGroup.add(haloWide, haloTight);
 
-    // Shared geometry + shared PLASMA_VERT: the displaced silhouettes of the interior (BackSide)
-    // and the surface (FrontSide) stay coincident — feed BOTH the same uTime/uAmp every frame.
-    const bodyGeo = new THREE.SphereGeometry(BODY_R, 60, 44);
-    const innerMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 }, uAmp: { value: 0.03 }, uFlow: { value: 0.1 }, uOpacity: { value: 0 },
-        uCyan: { value: new THREE.Color(CYAN) }, uNavy: { value: new THREE.Color(NAVY) },
-      },
-      vertexShader: PLASMA_VERT,
-      fragmentShader: INNER_FRAG,
-      side: THREE.BackSide,
-      transparent: true, depthTest: true, depthWrite: false,
-      blending: THREE.AdditiveBlending,
+    // THE MIND — dust, wiring and somas live in netGroup (bounded sway = cheap parallax).
+    const netGroup = new THREE.Group();
+    const dustMat = new THREE.ShaderMaterial({
+      uniforms: { uDot: { value: dotTex }, uTime: { value: 0 }, uOpacity: { value: 0 }, uCyan: { value: new THREE.Color(CYAN) } },
+      vertexShader: DUST_VERT, fragmentShader: DUST_FRAG,
+      transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const inner = new THREE.Mesh(bodyGeo, innerMat);
-    inner.renderOrder = 5; // the glowing far wall — drawn BEFORE the front pass, condenses first
-    const bodyMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 }, uAmp: { value: 0.03 }, uFlow: { value: 0.1 }, uOpacity: { value: 0 },
-        uBoil: { value: 0.15 }, uSpeak: { value: 0 }, uTalk: { value: 0 },
-        uBlip: { value: 1 }, uIgnite: { value: 0 },
-        uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
-        uNavy: { value: new THREE.Color(NAVY) },
-        uKeyVS: { value: KEY_VS.clone() }, uFillVS: { value: FILL_VS.clone() },
-      },
-      vertexShader: PLASMA_VERT,
-      fragmentShader: PLASMA_FRAG,
-      side: THREE.FrontSide,
-      transparent: true, depthTest: true, depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.renderOrder = 9; // the glass membrane draws over the brain
-    orbGroup.add(inner, body);
+    const dustPts = new THREE.Points(dustGeo, dustMat);
+    dustPts.renderOrder = 4;
+    dustPts.frustumCulled = false;
 
-    // THE NUCLEUS — the bright center of the mind (inverse-fresnel glow ball, reuses CORE shader).
-    const nucleusMat = new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: new THREE.Color('#8FE9F5') }, uOpacity: { value: 0 } },
-      vertexShader: CORE_VERT,
-      fragmentShader: CORE_FRAG,
-      transparent: true, depthTest: true, depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const nucleus = new THREE.Mesh(new THREE.IcosahedronGeometry(ORB_R * 0.22, 3), nucleusMat);
-    nucleus.renderOrder = 6;
-    orbGroup.add(nucleus);
-
-    // THE NEURON NETWORK — nodes + synapses inside the glass, slowly rotating in 3D (nodes
-    // crossing in front of/behind the nucleus is the parallax that sells real volume).
-    const { lines: netGeo, nodes: nodeGeo } = bakeNeuralNet(150, ORB_R);
-    const netUniforms = {
-      uTime: { value: 0 }, uOpacity: { value: 0 }, uRate: { value: 0.22 }, uFire: { value: 0.7 },
-      uTalk: { value: 0 }, uSpeak: { value: 0 }, uOrbR: { value: ORB_R },
+    const wireUniforms = () => ({
+      uTime: { value: 0 }, uOpacity: { value: 0 }, uRate: { value: 0.16 }, uFire: { value: 0.6 },
+      uTalk: { value: 0 }, uSpeak: { value: 0 }, uGrow: { value: 0 }, uIgnite: { value: 0 },
+      uTrunk: { value: 0 }, uHotGang: { value: 1 }, uGangFlare: { value: 0 },
+      uYMin: { value: yMin * layoutScale }, uYSpan: { value: ySpan * layoutScale },
       uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
-    };
+    });
     const netMat = new THREE.ShaderMaterial({
-      uniforms: netUniforms,
+      uniforms: { ...wireUniforms(), uJitAmp: { value: 1 }, uOrbR: { value: ORB_R } },
       vertexShader: NET_VERT, fragmentShader: NET_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const synapses = new THREE.LineSegments(netGeo, netMat);
-    synapses.renderOrder = 7;
+    const wiring = new THREE.LineSegments(netGeo, netMat);
+    wiring.renderOrder = 5;
+    wiring.frustumCulled = false;
     const nodeMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uDot: { value: dotTex },
-        uTime: { value: 0 }, uOpacity: { value: 0 }, uRate: { value: 0.22 }, uFire: { value: 0.7 },
-        uTalk: { value: 0 }, uSpeak: { value: 0 }, uOrbR: { value: ORB_R },
-        uCyan: { value: new THREE.Color(CYAN) },
-      },
+      uniforms: wireUniforms(),
       vertexShader: NODE_VERT, fragmentShader: NODE_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const neurons = new THREE.Points(nodeGeo, nodeMat);
-    neurons.renderOrder = 8;
-    neurons.frustumCulled = false;
-    const netGroup = new THREE.Group();
-    netGroup.add(synapses, neurons);
+    const somaPts = new THREE.Points(nodeGeo, nodeMat);
+    somaPts.renderOrder = 8;
+    somaPts.frustumCulled = false;
+    netGroup.add(dustPts, wiring, somaPts);
     orbGroup.add(netGroup);
 
-    // The gauze veils (replace the old wireframe cage): counter-drift happens IN-SHADER on the
-    // sample coords, so the meshes never spin — only their slow tilts animate.
-    const veilUniforms = (color: string, spin: number) => ({
-      uTime: { value: 0 }, uSpin: { value: spin }, uOpacity: { value: 0 }, uFlare: { value: 0 },
-      uColor: { value: new THREE.Color(color) },
-    });
-    const veilAMat = new THREE.ShaderMaterial({
-      uniforms: veilUniforms(PLATINUM, 0.12),
-      vertexShader: VEIL_VERT, fragmentShader: VEIL_FRAG,
+    // THE NUCLEUS — hero core (inverse-fresnel heart + 2-tap mottle) inside its plasma sheath.
+    const nucleusMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 }, uOpacity: { value: 0 }, uFlare: { value: 0 },
+        uCyan: { value: new THREE.Color('#8FE9F5') },
+      },
+      vertexShader: NUCLEUS_VERT, fragmentShader: NUCLEUS_FRAG,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const veilA = new THREE.Mesh(new THREE.SphereGeometry(ORB_R * 1.045, 32, 24), veilAMat);
-    veilA.renderOrder = 7;
-    const veilBMat = new THREE.ShaderMaterial({
-      uniforms: veilUniforms(CYAN, -0.08),
-      vertexShader: VEIL_VERT, fragmentShader: VEIL_FRAG,
+    const nucleus = new THREE.Mesh(new THREE.IcosahedronGeometry(NUC_R, 3), nucleusMat);
+    nucleus.renderOrder = 6;
+    const sheathMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 }, uAmp: { value: 0.06 }, uFlow: { value: 0.1 }, uOpacity: { value: 0 },
+        uBoil: { value: 0.15 }, uBlip: { value: 1 }, uIgnite: { value: 0 },
+        uCyan: { value: new THREE.Color(CYAN) }, uPlatinum: { value: new THREE.Color(PLATINUM) },
+        uNavy: { value: new THREE.Color(NAVY) },
+      },
+      vertexShader: PLASMA_VERT, fragmentShader: SHEATH_FRAG,
+      side: THREE.FrontSide,
       transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const veilB = new THREE.Mesh(new THREE.SphereGeometry(ORB_R * 1.1, 32, 24), veilBMat);
-    veilB.renderOrder = 8;
-    orbGroup.add(veilA, veilB);
+    const sheath = new THREE.Mesh(new THREE.SphereGeometry(SHEATH_R, 40, 28), sheathMat);
+    sheath.renderOrder = 7;
+    orbGroup.add(nucleus, sheath);
     scene.add(orbGroup);
 
     rig.current = {
-      latticeMat, streamMat, bodyMat, innerMat, nucleusMat, netMat, nodeMat, netGroup,
-      veilAMat, veilBMat, veilA, veilB,
-      haloTightMat, haloMidMat, haloWideMat, orbGroup,
+      latticeMat, streamMat, sheathMat, nucleusMat, nucleus, netMat, nodeMat, dustMat, netGroup,
+      haloTightMat, haloWideMat, orbGroup,
     };
     setRoot(scene);
     // camera never changes after this; the build is aspect-dependent, so rebuild if it did.
@@ -510,7 +805,7 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       return x * x * (3 - 2 * x);
     };
 
-    // speech energy — jawOpen from the shared driver; the star's "voice" signal.
+    // speech energy — jawOpen from the shared driver; the network's "voice" signal.
     const lip = lipRef.current;
     const talking = talkingRef.current || (lip?.speaking?.() ?? false);
     lipTargets.current = talking && lip ? lip.sample() : {};
@@ -518,9 +813,9 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const talk = talkingRef.current ? 1 : 0;
     // Brightness model — same as the face: silent 0.88, talking ~1.0 (+ a punch on energy).
     const lit = 0.88 + 0.12 * talk + 0.06 * speak * talk;
-    const blip = Math.random() < 0.003 ? 0.82 : 1.0; // the ONE allowed instability (shared: lattice + rim)
+    const blip = Math.random() < 0.003 ? 0.82 : 1.0; // the ONE allowed instability (lattice + sheath rim)
 
-    // lattice: ambient Skia look + the cyclone + the talking bottom→top wave (aFaceY = orb height).
+    // lattice: ambient Skia look + the cyclone + the talking bottom→top wave (aFaceY = cloud height).
     const u = r.latticeMat.uniforms;
     const { selA, selB, fade } = motionSelect(t);
     u.uTime.value = t;
@@ -554,12 +849,13 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
       if (R < 0.45 && shapeRig.current) {
         // …and at the bottom of the dip, swap her dots' landing targets to the new silhouette.
         const sr = shapeRig.current;
-        const pts = ss.pending === 'orb' ? sr.orbTargets : sampleShape(ss.pending, sr.idx.length, ORB_R);
+        const S = ORB_R * 1.15 * sr.layoutScale;
+        const pts = ss.pending === 'orb' ? sr.orbTargets : sampleShape(ss.pending, sr.idx.length, S);
         const tgt = sr.latGeo.getAttribute('aTarget') as THREE.BufferAttribute;
         const fy = sr.latGeo.getAttribute('aFaceY') as THREE.BufferAttribute;
         sr.idx.forEach((li, k) => {
           tgt.setXYZ(li, pts[k * 3], pts[k * 3 + 1], pts[k * 3 + 2]);
-          fy.setX(li, ss.pending === 'orb' ? sr.orbFaceY[k] : THREE.MathUtils.clamp(pts[k * 3 + 1] / (2.6 * ORB_R) + 0.5, 0, 1));
+          fy.setX(li, ss.pending === 'orb' ? sr.orbFaceY[k] : THREE.MathUtils.clamp((pts[k * 3 + 1] - sr.yMin) / sr.ySpan, 0, 1));
         });
         tgt.needsUpdate = true;
         fy.needsUpdate = true;
@@ -568,59 +864,67 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
         revealTarget.current = 1; // …then cyclone onto the object
       }
     }
-    // While a non-orb object is showing, the sphere-shaped layers step back and the dots lead.
+    // While a non-orb object is showing, the constellation steps back and the dots lead.
     ss.gate = THREE.MathUtils.damp(ss.gate, ss.showing !== 'orb' || ss.pending ? 1 : 0, 4, delta);
-    const sphereDim = 1 - 0.97 * ss.gate; // membrane/inner/veils/halos — the sphere must GO AWAY
-    const mindDim = 1 - 0.88 * ss.gate;   // nucleus/net (a faint mind lingers inside the object)
+    const sphereDim = 1 - 0.97 * ss.gate; // halos — the round glow must go away entirely
+    const mindDim = 1 - 0.88 * ss.gate;   // wiring/somas/dust/nucleus/sheath (a faint mind lingers)
     u.uLead.value = ss.gate;              // dots take over the drawing while an object shows
 
-    // ── the plasma drive block (spec: docs/studio/VENUS_AVATAR.md orb v2) ─────
-    const spk = Math.min(1, u.uSpeak.value / 1.2); // normalized damped speech (lattice damps toward speak*1.2)
+    // ── the constellation drive block (spec: docs/studio/VENUS_AVATAR.md orb v3) ─────
+    const spk = Math.min(1, u.uSpeak.value / 1.2); // normalized damped speech
     const tk = u.uTalk.value;                      // damped talking gate
     const formed = seg(0.45, 0.8);
-    // SILHOUETTE LOCK: body and inner MUST receive identical uTime/uAmp/uFlow.
-    // The blob MORPHS while she talks: big displacement lobes riding speech energy (crests
-    // deliberately break the dot skin now — sparks half-buried in plasma read organic).
-    const amp = Math.min(0.3, 0.05 + 0.015 * Math.sin(t * 0.5) + 0.26 * spk * tk);
-    const flow = 0.1 + 0.08 * tk + 0.45 * spk * tk; // the noise field streams faster on syllables
-    const surge = seg(0.6, 0.85) * (1 - seg(0.85, 0.97));  // newborn churn at formation
-    const ignite = seg(0.5, 0.8) * (1 - seg(0.82, 0.96));  // landing brightness flash
-    const b = r.bodyMat.uniforms, n = r.innerMat.uniforms;
-    b.uTime.value = t; n.uTime.value = t;
-    b.uAmp.value = amp; n.uAmp.value = amp;
-    b.uFlow.value = flow; n.uFlow.value = flow;
-    b.uBoil.value = THREE.MathUtils.damp(b.uBoil.value, 0.15 + 0.55 * tk + 0.45 * spk + 0.6 * surge, 4, delta);
-    b.uSpeak.value = spk; b.uTalk.value = tk; b.uBlip.value = blip; b.uIgnite.value = ignite;
-    b.uOpacity.value = 0.55 * formed * lit * sphereDim; // TRANSLUCENT membrane — the brain must read through
-    n.uOpacity.value = 0.4 * seg(0.42, 0.72) * lit * sphereDim; // faint far wall
+    const growSweep = seg(0.48, 0.92);             // the network wires itself outward from the nucleus
+    const ignite = seg(0.55, 0.8) * (1 - seg(0.8, 0.96)); // boot storm as she comes online
 
-    // the brain: nucleus condenses first, then the web ignites; firing rate rides her voice
-    r.nucleusMat.uniforms.uOpacity.value = (0.7 + 0.15 * Math.sin(t * 0.5) + 0.9 * spk * tk) * seg(0.42, 0.72) * lit * mindDim;
     const nm = r.netMat.uniforms, nd = r.nodeMat.uniforms;
     nm.uTime.value = t; nd.uTime.value = t;
+    nm.uGrow.value = growSweep; nd.uGrow.value = growSweep;
+    nm.uIgnite.value = ignite;
+    nm.uRate.value = 0.16 + 0.12 * tk + 0.85 * spk * tk; // the storm rides syllables
+    nd.uRate.value = nm.uRate.value;
+    nm.uFire.value = 0.6 + 1.5 * spk * tk;
+    nd.uFire.value = nm.uFire.value;
+    nm.uJitAmp.value = 1.0 + 0.6 * spk;                  // the web trembles on syllables
+    nm.uTrunk.value = THREE.MathUtils.damp(nm.uTrunk.value, spk * tk, 6, delta); // trunks flare per phrase
     nm.uTalk.value = tk; nd.uTalk.value = tk;
     nm.uSpeak.value = spk; nd.uSpeak.value = spk;
-    nm.uRate.value = 0.22 + 0.15 * tk + 0.9 * spk * tk;   // synapses fire faster as she speaks
-    nd.uRate.value = nm.uRate.value;
-    nm.uFire.value = 0.7 + 1.3 * spk * tk;
-    nd.uFire.value = nm.uFire.value;
-    nm.uOpacity.value = 0.9 * formed * lit * mindDim;
-    nd.uOpacity.value = formed * lit * mindDim;
-    // slow 3D tumble — neurons crossing in front of/behind the nucleus = the volume tell
-    r.netGroup.rotation.y = t * 0.1;
-    r.netGroup.rotation.x = Math.sin(t * 0.13) * 0.15;
-    r.veilAMat.uniforms.uTime.value = t; r.veilBMat.uniforms.uTime.value = t;
-    r.veilAMat.uniforms.uOpacity.value = 0.15 * lit * seg(0.55, 0.85) * sphereDim;
-    r.veilBMat.uniforms.uOpacity.value = 0.11 * lit * seg(0.6, 0.9) * sphereDim;
-    r.veilAMat.uniforms.uFlare.value = 0.3 * spk * tk;  // corona surges on syllables (0 at idle)
-    r.veilBMat.uniforms.uFlare.value = 0.22 * spk * tk;
-    r.haloTightMat.opacity = 0.42 * lit * formed * sphereDim;
-    r.haloMidMat.opacity = 0.2 * lit * seg(0.55, 0.9) * sphereDim;
-    r.haloWideMat.opacity = (0.07 + 0.3 * spk * tk) * seg(0.65, 0.95) * sphereDim; // she lights the room on each phrase
-    r.veilA.rotation.x = Math.sin(t * 0.19) * 0.22; // slow tilts (the spin lives in-shader)
-    r.veilB.rotation.z = Math.sin(t * 0.14) * 0.18;
+    // idle cognition: every ~7s (faster while talking) ONE ganglion flares and decays — thinking.
+    const per = 7 - 3 * tk;
+    const hot = Math.floor((t / per) % 7) + 1;
+    const flare = Math.exp(-3 * ((t / per) % 1)) * (1 + 0.5 * tk);
+    nm.uHotGang.value = hot; nd.uHotGang.value = hot;
+    nm.uGangFlare.value = flare; nd.uGangFlare.value = flare;
+    nm.uOpacity.value = 0.9 * seg(0.5, 0.85) * lit * mindDim;
+    nd.uOpacity.value = 1.0 * seg(0.45, 0.8) * lit * mindDim;
+    r.dustMat.uniforms.uTime.value = t;
+    r.dustMat.uniforms.uOpacity.value = 0.5 * seg(0.6, 0.95) * lit * mindDim;
 
-    // the whole star hovers — a slow bob, nothing humanoid.
+    // nucleus + sheath — the mind condenses FIRST; the heart flares on syllables.
+    const nu = r.nucleusMat.uniforms;
+    nu.uTime.value = t;
+    nu.uOpacity.value = (0.7 + 0.15 * Math.sin(t * 0.5)) * seg(0.42, 0.7) * lit * mindDim;
+    nu.uFlare.value = 0.9 * spk * tk + 1.6 * ignite;
+    r.nucleus.scale.setScalar(1.0 + 0.15 * spk * tk);    // syllable swell
+    const sh = r.sheathMat.uniforms;
+    sh.uTime.value = t;
+    sh.uOpacity.value = 0.5 * seg(0.42, 0.7) * lit * mindDim;
+    sh.uAmp.value = Math.min(0.22, 0.06 + 0.01 * Math.sin(t * 0.5) + 0.16 * spk * tk);
+    sh.uFlow.value = 0.1 + 0.45 * spk * tk;
+    sh.uBoil.value = THREE.MathUtils.damp(sh.uBoil.value, 0.15 + 0.55 * tk + 0.45 * spk, 4, delta);
+    sh.uBlip.value = blip;
+    sh.uIgnite.value = ignite;
+
+    // halos — nucleus bleed + the room pulse (the only round glows left; shape-gate kills them)
+    r.haloTightMat.opacity = 0.3 * lit * seg(0.5, 0.8) * sphereDim;
+    r.haloWideMat.opacity = (0.04 + 0.25 * spk * tk) * seg(0.65, 0.95) * sphereDim;
+
+    // BOUNDED sway — never accumulate (the lattice dot targets are world-space); the rear
+    // ganglion crossing behind the nucleus is the parallax that sells the volume.
+    r.netGroup.rotation.y = Math.sin(t * 0.07) * 0.12;
+    r.netGroup.rotation.x = Math.sin(t * 0.05 + 1.7) * 0.08;
+
+    // the whole mind hovers — a slow bob, nothing humanoid.
     r.orbGroup.position.y = Math.sin(t * 0.5) * 0.006;
   });
 

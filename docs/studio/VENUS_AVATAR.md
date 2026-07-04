@@ -488,31 +488,53 @@ server, and renders the live avatar (`connection state … -> connected`).
   `npx expo export --platform ios` (three is now reachable in the production bundle via the gated
   Lab, so the babel static-block plugin must compile it).
 
-## 🧠 ORB v2 — "the JARVIS brain" (the DEFAULT embodiment, 2026-07-04)
+## 🧠 ORB v3 — "the NEURAL CONSTELLATION" (the DEFAULT embodiment, 2026-07-04)
 
-Venus's default look is now the ORB (`venus-orb-scene.tsx` + `venus-plasma.ts`), not the face —
+Venus's default look is the ORB scene (`venus-orb-scene.tsx` + `venus-plasma.ts`), not the face —
 `<VenusAvatar variant>` defaults to `'orb'`; the Cortana face stays behind the Lab's Face toggle.
-Art direction (Joe): translucent glass sphere, a central NUCLEUS, and a neuron-network web —
-"not a planet". Built by a 3-lens design panel + judge (plasma-star base, retuned to glass).
+Art direction (Joe, same day, two passes): first "translucent… not a planet", then "get away from
+it looking like an orb… keeping the nucleus… really we want a visual representation of a neural
+network… way more detail". v3 (3-lens panel + judge, ultracode) deleted EVERY spherical surface
+(membrane, interior wall, both veils, mid halo). The network IS the object.
 
-**Layers** (all additive, no postprocessing; same lattice morph + stream field as the face):
-lattice dots (0) · stream field (1) · 3-sprite halo stack (2-4, fake bloom; wide one pulses with
-her voice) · BackSide interior far-wall (5) · NUCLEUS core (6, CORE shader) · SYNAPSES (7,
-LineSegments — per-edge phase, traveling signal packets, `bakeNeuralNet`: 150 nodes wired to 2
-nearest + spokes into the nucleus) · NEURONS (8, Points — flash when their packet lands, hubs
-bigger) · glass MEMBRANE (9, PLASMA shader retuned translucent: clear face, luminous limb, razor
-rim, glass speculars, BOUNDED swirl — unbounded differential spin sheared it into planet bands)
-· two gauze veils (10-11). The netGroup tumbles slowly in 3D (the volume tell).
+**Geometry** (`bakeConnectome`, build-once, seeded `mulberry32(1337)` — reproducible): ~880 somas
+= 7 art-directed GANGLIA (const table at the top of the scene file — the camera is fixed at +z so
+the table's XY layout IS the composition; iterate it from stills) + 3 dendritic ARMS chaining
+mini-clusters past the hull (the outline breakers) + a 20-soma nucleus ring + 40 strays. Wiring
+in ONE LineSegments buffer (~34k verts) with `aClass`: 0 = dim long-range web (1,000 threads,
+the volume fill) · 1 = dendrites (quadratic Bézier arcs, S=6, intra-ganglion kNN) · 2 = trunk
+axons (10 hub↔hub + 7 hub→ring, cubic S-bends sagging toward the origin, 3 braided strands) ·
+3 = whisker fuzz (2–4 tip-tapered stubs per soma). `aGrow` = BFS depth from the nucleus ring —
+during assembly the network **wires itself outward from the nucleus** (`uGrow` sweep 0.48–0.92).
 
-**Speech**: firing rate + packet brightness ride spk·tk, the nucleus flares on syllables, the
-bottom→top thought-pulse band crosses lattice + membrane + web on ONE clock (fract(t·0.5), width
-55 — the same constants as LATTICE_VERT), and the room halo pulses per phrase.
+**Layers** (9 draws, all additive, no postprocessing): lattice dots (0) · stream field (1) ·
+haloWide room-pulse (2) · haloTight nucleus bleed 1.1R (3) · ghost dust 400 pts (4) · WIRING (5)
+· NUCLEUS 0.18R (6, NUCLEUS_FRAG: inverse fresnel + 2-tap mottle + uFlare) · plasma SHEATH 0.30R
+(7, PLASMA_VERT + SHEATH_FRAG — the old membrane slimmed: no band, no speculars, soft rim; the
+ONLY surviving plasma) · SOMAS (8, procedural two-gaussian sprite, power-law sizes, hub floors).
+netGroup sway is BOUNDED sin() only — dot targets are world-space; never accumulate rotation.
 
-**Radius ladder (load-bearing)**: membrane 0.88R (uAmp ≤ 0.12 → crests ≤ 0.986R) < dot skin 1.0R
-< veilA 1.045R < veilB 1.10R; network fills 0.30R–0.80R; nucleus 0.22R.
+**The lattice dots land ON the soma positions** (dot skin = neuron field), so the tee/heart/bolt
+shape-morph survives: dissolve → retarget → re-form, `uLead` makes the dots carry the object,
+the mind dims 88% behind it. Object scale 1.15R·layoutScale; `layoutScale` (framing guard for
+narrow aspects) lives on `orbGroup.scale` + is baked into the lattice handoff copy only.
+
+**Speech**: firing rate + packet brightness + packet WIDTH ride spk·tk, the web trembles
+(uJitAmp), trunks flare per phrase (uTrunk), the nucleus swells + flares on syllables, the sheath
+boils, and the bottom→top thought band crosses lattice + wiring + somas on ONE clock
+(fract(t·0.5), width 55, WORLD-y normalized by the baked cloud extents uYMin/uYSpan). At idle,
+one ganglion at a time flares every ~7s (`uHotGang`/`uGangFlare`) — she is visibly thinking.
+
+**Radius ladder (load-bearing)**: nucleus 0.18R < sheath 0.30R < CLEAR gap (no somas) to 0.38R
+< nucleus ring 0.40–0.44R < ganglia cloud to ~1.15R < arms capped 1.42R.
 
 **⚠ Verifying in an automated/hidden tab**: Chrome suspends rAF for hidden tabs — R3F renders
 NOTHING there (the scene is NOT broken; bring the tab forward and it runs). React commits render
-single frames but do NOT tick useFrame. For deterministic stills use the `__DEV__` hook
-`__venusOrbStep(tSeconds)` (steps one frame via R3F advance): step a loop of 1/60s increments,
-then screenshot. This is how the orb was art-directed from stills.
+single frames but do NOT tick useFrame; the lazy chunk also mounts late (take a screenshot to
+poke the tab, then re-probe). For deterministic stills use the `__DEV__` hooks
+`__venusOrbStep(tSeconds)` (steps one frame via R3F advance), `__venusOrbShape('tee')`, and
+`__venusOrbDebug()` (shape-machine state + dot-target bounding box). **advance()'s DELTA runs on
+real wall-clock time between calls** — uTime-driven shader effects follow your fake timestamps,
+but every damped value (reveal, uSpeak/uTalk, the shape gate) moves on real time, so interleave
+real 3–5s waits between step bursts when verifying the state machine. This is how v3 was
+art-directed from stills.
