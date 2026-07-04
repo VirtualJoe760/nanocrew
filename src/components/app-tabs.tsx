@@ -5,16 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabBarBlur } from '@/components/tab-bar-blur';
 import { ThemedText } from '@/components/themed-text';
-import { TourAnchor } from '@/components/tour-anchors';
 import { Colors, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 // Nano Crew tab bar — a JS (expo-router/ui) bar drawn to MIMIC the native iOS UITabBar: opaque,
 // mode-aware background; thin outline glyphs; platinum-silver selected tint with the rest dimmed.
-// It's built from RN Views (not expo-router/unstable-native-tabs) for two reasons: the native bar
-// can't be measured from JS — so the guided tour can now spotlight each tab EXACTLY via <TourAnchor>
-// (see tour-anchors.tsx) — and it drops a dependency on an unstable API. ONE file serves both
-// platforms (the blur is platform-split in tab-bar-blur — native expo-blur, web CSS backdrop-filter).
+// It's built from RN Views (not expo-router/unstable-native-tabs) to drop a dependency on an unstable
+// API. ONE file serves both platforms (the blur is platform-split in tab-bar-blur — native expo-blur,
+// web CSS backdrop-filter).
 
 type TabDef = {
   name: string;
@@ -61,19 +59,19 @@ export default function AppTabs() {
 }
 
 // Receives the trigger slot props (isFocused, onPress, …) via TabTrigger asChild. The Pressable is the
-// trigger; the TourAnchor inside wraps the icon+label cluster so the tour measures EXACTLY that target.
+// trigger; the inner View holds the icon+label cluster.
 function TabButton({ tab, tint, isFocused, style: triggerStyle, ...props }: TabTriggerSlotProps & { tab: TabDef; tint: string }) {
   return (
     // Flatten the (Radix-merged) trigger style + ours into ONE object: the raw Slot in TabTrigger
     // spreads style by object, so an array here becomes {0:..,1:..} and crashes react-dom on web.
     <Pressable {...props} style={StyleSheet.flatten([triggerStyle, styles.tab])}>
-      <TourAnchor name={`tab-${tab.name}`} style={[styles.tabInner, { opacity: isFocused ? 1 : 0.5 }]}>
+      <View style={[styles.tabInner, { opacity: isFocused ? 1 : 0.5 }]}>
         <Ionicons name={tab.icon} size={26} color={tint} />
         {/* Tab labels are intentionally 11pt to match the native UITabBar labelStyle (no token is that small). */}
         <ThemedText type="small" style={[styles.label, { color: tint }]}>
           {tab.label}
         </ThemedText>
-      </TourAnchor>
+      </View>
     </Pressable>
   );
 }

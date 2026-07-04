@@ -4,7 +4,6 @@ import { Image } from 'expo-image';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
-import { TourAnchor } from '@/components/tour-anchors';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { apiUrl, readJson } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
@@ -190,13 +189,10 @@ export function StudioDashboard({
                   <View style={s.bountyBox}>
                     <ThemedText type="code" style={s.eyebrow}>FINISH YOUR SITE</ThemedText>
                     {todo.map((b) => (
-                      // Anchored so the build-journey tour (act 2) can spotlight the exact row.
-                      <TourAnchor key={b.key} name={`finish-${b.key}`}>
-                        <Pressable style={s.bountyRow} onPress={() => onBounty(b.panel, b.slot)}>
-                          <ThemedText type="small" style={s.ink}>○  {b.label}</ThemedText>
-                          <ThemedText type="small" style={s.accent}>→</ThemedText>
-                        </Pressable>
-                      </TourAnchor>
+                      <Pressable key={b.key} style={s.bountyRow} onPress={() => onBounty(b.panel, b.slot)}>
+                        <ThemedText type="small" style={s.ink}>○  {b.label}</ThemedText>
+                        <ThemedText type="small" style={s.accent}>→</ThemedText>
+                      </Pressable>
                     ))}
                   </View>
                 ) : null}

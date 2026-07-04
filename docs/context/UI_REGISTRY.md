@@ -17,7 +17,6 @@ The **living catalogue** of reusable app components — what exists (reuse it) a
 | `GlowInput` | `glow-input.tsx` | `…TextInputProps`, `containerStyle`, `style` | The standard text input — never use a bare TextInput |
 | `DesignTile` | `design-tile.tsx` | `color`, `label`, `style` | Square brand-tinted tile w/ label (design canvas) |
 | `GarmentMockup` | `designer/garment-mockup.tsx` (+ `.web`) | `garmentUri`, `designUri`, `rect`, `blend` | Supplier-agnostic "printed" mockup (Skia native / CSS-blend web) |
-| `TourAnchor` | `tour-anchors.tsx` | `name`, `children` | Marks a real on-screen target (measures its window rect) so `OnboardingTour` spotlights the actual button, not a guessed position. Needs `TourAnchorProvider` above it; the tour reads rects via `useTourAnchorRects()`. |
 
 ## Chrome — Studio surface helpers (`nc-screen.tsx`)
 | Component / hook | Props | Notes |
