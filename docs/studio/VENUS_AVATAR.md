@@ -564,3 +564,18 @@ real wall-clock time between calls** — uTime-driven shader effects follow your
 but every damped value (reveal, uSpeak/uTalk, the shape gate) moves on real time, so interleave
 real 3–5s waits between step bursts when verifying the state machine. This is how v3 was
 art-directed from stills.
+
+**SPEECH SIGNAL (researched retune, 2026-07-04 — "stop and go / glitchy" fix).** A 4-domain
+research pass (metering ballistics, production voice orbs, visualizer engines, speech dynamics)
+diagnosed and fixed four causes; the values are all evidence-based — don't re-tune by feel:
+- jaw signal → **median-of-3** despike → **Schmitt gate** (open 0.10 / close 0.04, 2-frame
+  debounce, **250ms hangover**) — the gate is a STATE, it never multiplies the signal;
+- ONE asymmetric follower: **attack τ25ms (λ40) / HOLD 150ms flat / release τ200ms (λ5)** —
+  articulates syllables (125–250ms), bridges consonant dips, band-limits to the 2–8Hz speech
+  modulation spectrum. The old λ8→λ10 cascade (~225ms onset lag) is deleted;
+- waveform history is a **ring buffer + write head + fractional phase** (`uHistHead`/
+  `uHistPhase`/`uEnvNow`, C0-continuous `sampleWave()` in the verts) — the old whole-array
+  shift with nearest-slot indexing stepped the entire net at 18Hz (the "glitch");
+- **channel ownership**: voice owns brightness/displacement (perceptual `pow(w,0.6)` curve);
+  the 80bpm beat owns the hue clocks and its brightness pop **ducks 22%→~3% while speaking**
+  (state-driven crossfade ~165ms). One rhythm per channel.

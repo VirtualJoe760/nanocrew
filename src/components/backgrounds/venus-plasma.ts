@@ -200,7 +200,22 @@ attribute float aT, aPhase, aClass, aGang, aBright, aGrow;
 attribute vec3 aJit;
 uniform float uTime, uJitAmp, uOrbR, uExpand;
 uniform float uWave[32];
+uniform float uHistHead, uHistPhase, uEnvNow;
 varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth, vWave;
+// C0-continuous waveform sampling: fractional slots-back coordinate against a ring buffer
+// (write head decrements; uHistPhase 0..1 advances every frame → the flow never steps).
+// ES 1.00-safe: float ring math, no integer modulo; k<0 bridges to the LIVE envelope.
+float histAt(float k) {
+  if (k < 0.0) return uEnvNow;
+  float idx = uHistHead + min(k, 31.0);
+  idx = idx - floor(idx / 32.0) * 32.0;
+  return uWave[int(idx + 0.5)];
+}
+float sampleWave(float depth) {
+  float p = depth - uHistPhase;
+  float i = floor(p);
+  return mix(histAt(i), histAt(i + 1.0), p - i);
+}
 void main(){
   vT = aT; vPhase = aPhase; vClass = aClass; vGang = aGang; vBright = aBright; vGrow = aGrow;
   // CRAWL — slow two-frequency waves traveling ALONG each wire (aT-coupled phase): the limbs
@@ -218,7 +233,7 @@ void main(){
   p += normalize(position + vec3(1e-5)) * (uOrbR * uExpand * aGrow);
   // SOUND WAVE — the voice envelope HISTORY mapped outward along the growth field (uniform
   // array indexing is vertex-legal in ES2): wires swell smoothly where the waveform is loud.
-  vWave = uWave[int(clamp(aGrow, 0.0, 0.96) * 32.0)];
+  vWave = sampleWave(clamp(aGrow, 0.0, 0.96) * 31.0);
   p += (aJit * 0.7 + normalize(position + vec3(1e-5)) * 0.5) * (uOrbR * 0.035 * vWave * anchor);
   vWy = (modelMatrix * vec4(p, 1.0)).y;              // WORLD y — the band stays vertical under sway
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
@@ -290,7 +305,7 @@ void main(){
   float dcr = abs(vGrow - uCrawlPos);
   dcr = min(dcr, 1.0 - dcr);
   col *= 1.0 + 0.55 * exp(-dcr * dcr * 130.0);
-  col *= (1.0 + 0.2 * uBeatPop) * (1.0 + 0.55 * vWave);              // 80bpm pop + the WAVEFORM passing through
+  col *= (1.0 + 0.2 * uBeatPop) * (1.0 + 0.55 * pow(max(vWave, 0.0001), 0.6)); // beat (ducked in JS) + waveform, perceptual curve
   col *= smoothstep(vGrow - 0.15, vGrow, uGrow);                    // wires outward from the nucleus
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, uOpacity * (0.5 * isFine + (1.0 - isFine)));
@@ -305,7 +320,19 @@ precision highp float;
 attribute float aPhase, aSize, aGang, aHub, aGrow;
 uniform float uTime, uOrbR, uExpand;
 uniform float uWave[32];
+uniform float uHistHead, uHistPhase, uEnvNow;
 varying float vPhase, vGang, vHub, vGrow, vWy, vDepth, vWave;
+float histAt(float k) {
+  if (k < 0.0) return uEnvNow;
+  float idx = uHistHead + min(k, 31.0);
+  idx = idx - floor(idx / 32.0) * 32.0;
+  return uWave[int(idx + 0.5)];
+}
+float sampleWave(float depth) {
+  float p = depth - uHistPhase;
+  float i = floor(p);
+  return mix(histAt(i), histAt(i + 1.0), p - i);
+}
 void main(){
   vPhase = aPhase; vGang = aGang; vHub = aHub; vGrow = aGrow;
   // cells ride the same differential expansion as their wires (roots anchored, periphery out)
@@ -313,7 +340,7 @@ void main(){
   vWy = (modelMatrix * vec4(p, 1.0)).y;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDepth = clamp((-mv.z - 1.45) / 1.1, 0.0, 1.0);
-  vWave = uWave[int(clamp(aGrow, 0.0, 0.96) * 32.0)];
+  vWave = sampleWave(clamp(aGrow, 0.0, 0.96) * 31.0);
   float breathe = 1.0 + 0.12 * sin(uTime * 0.8 + aPhase * 6.2831) + 0.35 * vWave;
   gl_PointSize = clamp(aSize * breathe * (1.0 / max(0.1, -mv.z)), 2.0, 30.0);
   gl_Position = projectionMatrix * mv;
@@ -348,7 +375,7 @@ void main(){
   float dcr = abs(vGrow - uCrawlPos);
   dcr = min(dcr, 1.0 - dcr);
   col *= 1.0 + 0.45 * exp(-dcr * dcr * 60.0);
-  col *= (1.0 + 0.25 * uBeatPop) * (1.0 + 0.6 * vWave);               // 80bpm pop + the WAVEFORM passing through
+  col *= (1.0 + 0.25 * uBeatPop) * (1.0 + 0.6 * pow(max(vWave, 0.0001), 0.6)); // beat (ducked in JS) + waveform, perceptual curve
   col *= smoothstep(vGrow - 0.10, vGrow, uGrow);
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, clamp(core + halo, 0.0, 1.0) * uOpacity);
