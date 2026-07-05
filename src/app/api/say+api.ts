@@ -12,7 +12,12 @@ import { guardRate } from '@/lib/rate-limit';
 // straight from a .wav file. Body: { text }. Returns: { audio: base64 WAV }.
 
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
-const VENUS_VOICE = 'Aoede'; // the DEFAULT — MUST match LiveVoiceSession's voiceName + studio LIVE_VOICE
+const VENUS_VOICE = 'Kore'; // Joe's pick — MUST match studio LIVE_VOICE ('Kore', british-robot delivery)
+// Her ASSIGNED delivery (matches the live session's DELIVERY instruction). Auto-applied to
+// production calls; requests that specify a `voice` (the Lab audition) compose their own
+// direction client-side and are passed through untouched.
+const VENUS_TONE =
+  'Speak as a refined female British AI — a crisp received-pronunciation accent with a precise, calm, subtly robotic cadence, perfectly articulated: ';
 const RATE = 24000; // Gemini TTS PCM sample rate (Hz), mono, 16-bit
 // Voice AUDITION (the Lab's orb-mode picker): the request may name any Gemini prebuilt voice.
 // This is the FULL catalog (gemini-2.5 TTS + native-audio Live). NB Sulafat broke the LIVE
@@ -56,14 +61,20 @@ export async function POST(req: Request) {
 
   let text: string;
   let voice = VENUS_VOICE;
+  let explicitVoice = false;
   try {
     const body = (await req.json()) as { text?: string; voice?: string };
     text = typeof body.text === 'string' ? body.text.trim().slice(0, 500) : ''; // 500: leaves room for a tone-direction prefix
     if (!text) throw new Error();
-    if (typeof body.voice === 'string' && VOICE_OPTIONS.includes(body.voice)) voice = body.voice;
+    if (typeof body.voice === 'string' && VOICE_OPTIONS.includes(body.voice)) {
+      voice = body.voice;
+      explicitVoice = true; // the Lab audition — it composes its own tone direction
+    }
   } catch {
     return Response.json({ error: 'text is required' }, { status: 400 });
   }
+  // production calls speak IN CHARACTER: her assigned british-robot delivery wraps the line
+  if (!explicitVoice) text = `${VENUS_TONE}"${text}"`;
 
   try {
     const ai = new GoogleGenAI({ apiKey });

@@ -52,7 +52,7 @@ import { InterviewTopics } from '@/components/interview-topics';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // Venus runs on Gemini Live (realtime speech-to-speech) — see docs/studio/GEMINI_LIVE.md.
-const LIVE_VOICE = 'Aoede'; // known-good native-audio voice (Sulafat/en-GB broke the session → no audio); pick the fashionable voice via the sampler
+const LIVE_VOICE = 'Kore'; // Joe's pick (Lab audition 2026-07-05): Kore × the 'british robot' delivery (see liveSystemInstruction). Sulafat once broke the session — retest before ever using it
 
 // The Studio: a voice-first brand interview. A nano-entity — flickering pixel core inside
 // counter-rotating rings, digital rain behind — talks you through building your brand. Venus
@@ -995,7 +995,7 @@ function StudioScreen() {
       setCreated(d.store.slug);
       setHasStore(true);
       setLogoUrl(d.store.logoUrl ?? null);
-      // The entity announces the launch — in Venus's OWN Gemini voice (Aoede), the same voice as the
+      // The entity announces the launch — in Venus's OWN Gemini voice (Kore), the same voice as the
       // live interview, NOT the legacy ElevenLabs `/api/voice` path. The live session is already torn
       // down by finalize() at this point, so this one-shot /api/say keeps the voice consistent.
       try {

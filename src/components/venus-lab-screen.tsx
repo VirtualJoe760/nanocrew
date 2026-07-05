@@ -38,11 +38,11 @@ const AUDITION_LINES = [
 ];
 
 // The FULL 30-voice Gemini catalog (matches the /api/say allowlist), female-leaning first.
-// 'Aoede' is today's default. Making a different one THE voice = change VENUS_VOICE in
-// /api/say + LIVE_VOICE in studio.tsx (they must match). NB 'Sulafat' broke the LIVE session
-// once — retest before making it live.
+// HER VOICE IS 'Kore' × the 'british robot' tone (Joe, 2026-07-05) — VENUS_VOICE in /api/say,
+// LIVE_VOICE + the DELIVERY instruction in studio.tsx/live-voice.ts all match. Changing it =
+// change all three. NB 'Sulafat' broke the LIVE session once — retest before making it live.
 const VOICES = [
-  'Aoede', 'Leda', 'Kore', 'Zephyr', 'Callirrhoe', 'Autonoe', 'Despina', 'Erinome', 'Laomedeia',
+  'Kore', 'Aoede', 'Leda', 'Zephyr', 'Callirrhoe', 'Autonoe', 'Despina', 'Erinome', 'Laomedeia',
   'Vindemiatrix', 'Achernar', 'Sulafat', 'Puck', 'Charon', 'Fenrir', 'Orus', 'Enceladus',
   'Iapetus', 'Umbriel', 'Algieba', 'Algenib', 'Rasalgethi', 'Alnilam', 'Schedar', 'Gacrux',
   'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Sadachbia', 'Sadaltager',
@@ -98,8 +98,8 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const [panel, setPanel] = useState<Panel>('stage');
   const [collapsed, setCollapsed] = useState(false);
   const [line, setLine] = useState("Hi, I'm Venus — how do I sound?");
-  const [voice, setVoice] = useState('Aoede');
-  const [tone, setTone] = useState('natural');
+  const [voice, setVoice] = useState('Kore');
+  const [tone, setTone] = useState('british robot');
   const [speaking, setSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
