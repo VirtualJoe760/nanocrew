@@ -58,7 +58,7 @@ export async function POST(req: Request) {
   let voice = VENUS_VOICE;
   try {
     const body = (await req.json()) as { text?: string; voice?: string };
-    text = typeof body.text === 'string' ? body.text.trim().slice(0, 300) : '';
+    text = typeof body.text === 'string' ? body.text.trim().slice(0, 500) : ''; // 500: leaves room for a tone-direction prefix
     if (!text) throw new Error();
     if (typeof body.voice === 'string' && VOICE_OPTIONS.includes(body.voice)) voice = body.voice;
   } catch {

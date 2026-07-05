@@ -32,11 +32,50 @@ const AUDITION_LINES = [
   'Your store is live. Go check it out!',
 ];
 
-// Gemini prebuilt voices to audition — a curated female-leaning shortlist (the /api/say
-// allowlist accepts the FULL 30-voice catalog; type any name in code to try others).
-// 'Aoede' is today's default. Making a different one THE voice = change VENUS_VOICE in
-// /api/say + LIVE_VOICE in studio.tsx (they must match).
-const VOICES = ['Aoede', 'Leda', 'Kore', 'Zephyr', 'Callirrhoe', 'Autonoe', 'Despina', 'Erinome', 'Laomedeia', 'Vindemiatrix'];
+// The FULL 30-voice Gemini catalog (matches the /api/say allowlist). 'Aoede' is today's
+// default. Making a different one THE voice = change VENUS_VOICE in /api/say + LIVE_VOICE in
+// studio.tsx (they must match). NB 'Sulafat' broke the LIVE session once — retest before live.
+const VOICES = [
+  'Aoede', 'Leda', 'Kore', 'Zephyr', 'Callirrhoe', 'Autonoe', 'Despina', 'Erinome', 'Laomedeia',
+  'Vindemiatrix', 'Achernar', 'Sulafat', 'Puck', 'Charon', 'Fenrir', 'Orus', 'Enceladus',
+  'Iapetus', 'Umbriel', 'Algieba', 'Algenib', 'Rasalgethi', 'Alnilam', 'Schedar', 'Gacrux',
+  'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Sadachbia', 'Sadaltager',
+];
+
+// TONE direction — Gemini TTS follows natural-language style instructions prefixed to the
+// line (it performs the direction, it doesn't read it aloud). The tone applies to ANY voice,
+// so hunt the combo: e.g. "british robot" × Erinome/Kore/Charon/Schedar. For the LIVE
+// interview, the winning tone gets baked into the session's system instruction instead.
+// Every direction specifies a FEMALE character (Joe: "the british robot and jarvis are awesome…
+// but i'd prefer a female") — the voice chip sets the underlying timbre (the first ~11 voices
+// are the female-leaning ones), the tone makes her British/robotic.
+const TONES: { key: string; prefix: string }[] = [
+  { key: 'natural', prefix: '' },
+  {
+    key: 'british robot',
+    prefix:
+      'Speak as a refined female British AI — a crisp received-pronunciation accent with a precise, calm, subtly robotic cadence, perfectly articulated: ',
+  },
+  {
+    key: 'FRIDAY',
+    prefix:
+      'Speak like a polished female British AI assistant — composed, dry wit, quietly confident, measured pacing, warm but precise: ',
+  },
+  {
+    key: 'synthetic',
+    prefix:
+      'Speak like an ethereal female synthetic intelligence — calm, precise, softly resonant, faintly otherworldly: ',
+  },
+  {
+    key: 'computer',
+    prefix:
+      'Speak as a female starship computer — flat, clipped, machine-precise enunciation, even pitch: ',
+  },
+  {
+    key: 'BBC',
+    prefix: 'Speak like a formal female BBC news presenter, received pronunciation: ',
+  },
+];
 
 /** Decode the /api/say WAV (base64, 44-byte header, PCM16 mono 24kHz) into samples. */
 function wavToPcm(b64: string): Int16Array {
@@ -54,15 +93,18 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const [shape, setShape] = useState<VenusOrbShape>('orb');
   const [line, setLine] = useState("Hi, I'm Venus — how do I sound?");
   const [voice, setVoice] = useState('Aoede');
+  const [tone, setTone] = useState('natural');
   const [speaking, setSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Audition: synth the line in the selected voice, play it, and feed the PCM into the
-  // speech-level bus so the orb's voice layer (color + nucleus) reacts to it.
+  // Audition: synth the line in the selected voice + TONE direction, play it, and feed the PCM
+  // into the speech-level bus so the orb's voice layer (the nucleus) reacts to it.
   const speak = async (textArg?: string) => {
-    const text = (textArg ?? line).trim();
-    if (!text || speaking) return;
+    const base = (textArg ?? line).trim();
+    if (!base || speaking) return;
     if (textArg) setLine(textArg);
+    const prefix = TONES.find((t) => t.key === tone)?.prefix ?? '';
+    const text = prefix ? `${prefix}"${base}"` : base;
     setSpeaking(true);
     try {
       const synth = () =>
@@ -118,7 +160,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
         </View>
       </View>
 
-      {/* VOICE AUDITION (orb mode, web) — pick a voice, tap a line; the orb reacts to her audio */}
+      {/* VOICE AUDITION (orb mode, web) — pick a voice + tone, tap a line; the orb reacts */}
       {mode === 'orb' && Platform.OS === 'web' ? (
         <View style={[styles.auditionBlock, { bottom: insets.bottom + 142 }]} pointerEvents="box-none">
           <View style={styles.voiceRow}>
@@ -127,6 +169,19 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
               return (
                 <Pressable key={v} onPress={() => setVoice(v)} style={[styles.voiceChip, active && styles.pillActive]}>
                   <Text style={[styles.voiceText, active && styles.pillTextActive]}>{v}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.voiceRow}>
+            {TONES.map((tn) => {
+              const active = tone === tn.key;
+              return (
+                <Pressable
+                  key={tn.key}
+                  onPress={() => setTone(tn.key)}
+                  style={[styles.voiceChip, styles.toneChip, active && styles.pillActive]}>
+                  <Text style={[styles.voiceText, active && styles.pillTextActive]}>♪ {tn.key}</Text>
                 </Pressable>
               );
             })}
@@ -251,6 +306,7 @@ const styles = StyleSheet.create({
   pillText: { color: 'rgba(207,232,243,0.6)', fontFamily: 'Jost-Light', fontSize: 12, letterSpacing: 0.5 },
   pillTextActive: { color: '#dff4ff', fontFamily: 'Jost-Medium' },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
+  toneChip: { borderColor: 'rgba(199,125,255,0.35)' }, // violet ring — tones are DIRECTION, not voices
   preset: {
     maxWidth: 220,
     paddingVertical: 6,
