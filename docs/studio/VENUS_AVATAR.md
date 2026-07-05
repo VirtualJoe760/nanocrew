@@ -355,30 +355,16 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    it doesn't gape). Further fine-tuning is just the exported knobs (`jawGain`, the F1/F2 anchors,
    `setVenusSpeechLatency`) if a future voice needs it. Open polish: a tap-to-pause hit-target on her face.
 
-## Simli (alternative photoreal renderer — POC, in the Lab)
-Per Joe's pivot ("let's use Simli"), the Lab has a **3D ⇄ Simli toggle** (top-right) to compare the
-current wireframe build against **Simli** — a real-time photoreal talking-head streamed over WebRTC.
-**Verified on web** (Lab → Simli): mints a session token, loads the SDK, connects to Simli's LiveKit
-server, and renders the live avatar (`connection state … -> connected`).
-
-- **Why a frame, not the bundled SDK:** `simli-client` is browser/WebRTC-only (it `new`s an
-  AudioContext on construct) AND its npm build is broken for **case-sensitive** bundlers — `index.js`
-  does `require("./Client")` but ships `client.js` (lowercase), so it 500s on Metro **and** esm.sh/
-  jsdelivr's package root. So we DON'T bundle it: we run it inside a frame that imports the working
-  module path **`https://esm.sh/simli-client@3.0.2/dist/client.js`**. **Web** = `<iframe srcDoc>`
-  (`src/components/simli-venus.web.tsx`); **native** = `react-native-webview` (`src/components/simli-venus.tsx`).
-  Both build the SAME HTML via `src/components/simli-venus-html.ts`.
-- **Security — the key never reaches the client.** A tester-gated server route
-  **`POST /api/venus/simli-session`** (`src/app/api/venus/simli-session+api.ts`) mints a short-lived
-  **session token** from `SIMLI_API_KEY` server-side; only the token is injected into the frame.
-  LiveKit transport supplies its own ICE, so no key/ICE is needed client-side.
-- **Config:** `SIMLI_API_KEY` (set in `.env.local`) + optional `SIMLI_FACE_ID`. The POC uses Simli's
-  public **sample** face (`5514e24d-…`, a generic man) — **the next step is creating a custom VENUS
-  face** on Simli from the target render and setting `SIMLI_FACE_ID`.
-- **Status / next:** idle render verified (`handleSilence`). **Driving her with Venus's Gemini voice**
-  (PCM16 16kHz → `sendAudioData`, postMessaged into the frame) is the next phase. **Native** (WebRTC in
-  WKWebView) is wired but needs a **dev build** to verify.
-- **Cost:** Simli sessions are metered (per-minute) — that's why the route is gated to the tester email.
+## Simli — REMOVED (2026-07-04)
+The photoreal-renderer POC is GONE per Joe ("we are not using simli — remove all code having to
+do anything with simli"): the neural-constellation orb won as Venus's embodiment. Deleted:
+`simli-venus.tsx` / `simli-venus.web.tsx` / `simli-venus-html.ts`, the `/api/simli/tts` and
+`/api/venus/simli-session` routes, and the Lab's Simli mode. `SIMLI_API_KEY`/`SIMLI_FACE_ID` env
+vars are dead (safe to delete from `.env.local`/Railway). VOICE AUDITION moved to the Lab's ORB
+mode: voice chips + preset lines → `/api/say` (which now accepts an allowlisted `voice` from the
+full 30-voice Gemini catalog) → the WAV plays while its PCM is pushed into the venus-speech-level
+bus, so the orb's VOICE layer reacts — you audition voices on the actual product. If Simli is
+ever wanted again, resurrect from git history (this section's last full version: commit ba3aa64).
 
 ## Gotchas (read before editing)
 - **The Venus Lab is opened from the Account screen** (Developer → "Venus Lab (test)", gated to

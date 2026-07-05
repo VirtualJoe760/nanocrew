@@ -12,8 +12,18 @@ import { guardRate } from '@/lib/rate-limit';
 // straight from a .wav file. Body: { text }. Returns: { audio: base64 WAV }.
 
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
-const VENUS_VOICE = 'Aoede'; // MUST match LiveVoiceSession's default voiceName
+const VENUS_VOICE = 'Aoede'; // the DEFAULT — MUST match LiveVoiceSession's voiceName + studio LIVE_VOICE
 const RATE = 24000; // Gemini TTS PCM sample rate (Hz), mono, 16-bit
+// Voice AUDITION (the Lab's orb-mode picker): the request may name any Gemini prebuilt voice.
+// This is the FULL catalog (gemini-2.5 TTS + native-audio Live). NB Sulafat broke the LIVE
+// session once (studio.tsx) — auditioning it here via TTS is fine, just don't make it LIVE_VOICE
+// without re-testing. Making a choice permanent = VENUS_VOICE here + LIVE_VOICE in studio.tsx.
+const VOICE_OPTIONS = [
+  'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe', 'Autonoe',
+  'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib', 'Rasalgethi',
+  'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Achird',
+  'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat',
+];
 
 /** Wrap raw PCM16 mono into a minimal 44-byte WAV container so any audio player can decode it. */
 function pcmToWav(pcm: Buffer, sampleRate = RATE): Buffer {
@@ -45,10 +55,12 @@ export async function POST(req: Request) {
   if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });
 
   let text: string;
+  let voice = VENUS_VOICE;
   try {
-    const body = (await req.json()) as { text?: string };
+    const body = (await req.json()) as { text?: string; voice?: string };
     text = typeof body.text === 'string' ? body.text.trim().slice(0, 300) : '';
     if (!text) throw new Error();
+    if (typeof body.voice === 'string' && VOICE_OPTIONS.includes(body.voice)) voice = body.voice;
   } catch {
     return Response.json({ error: 'text is required' }, { status: 400 });
   }
@@ -60,7 +72,7 @@ export async function POST(req: Request) {
       contents: [{ role: 'user', parts: [{ text }] }],
       config: {
         responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VENUS_VOICE } } },
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
       },
     });
     const data = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData?.data;
