@@ -199,7 +199,8 @@ precision highp float;
 attribute float aT, aPhase, aClass, aGang, aBright, aGrow;
 attribute vec3 aJit;
 uniform float uTime, uJitAmp, uOrbR, uExpand;
-varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth;
+uniform float uWave[32];
+varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth, vWave;
 void main(){
   vT = aT; vPhase = aPhase; vClass = aClass; vGang = aGang; vBright = aBright; vGrow = aGrow;
   // CRAWL — slow two-frequency waves traveling ALONG each wire (aT-coupled phase): the limbs
@@ -215,6 +216,10 @@ void main(){
   // differential EXPANSION — the net grows outward: roots stay anchored (aGrow≈0), the
   // periphery breathes off the frame (aGrow≈1). Slow clock, no ring read.
   p += normalize(position + vec3(1e-5)) * (uOrbR * uExpand * aGrow);
+  // SOUND WAVE — the voice envelope HISTORY mapped outward along the growth field (uniform
+  // array indexing is vertex-legal in ES2): wires swell smoothly where the waveform is loud.
+  vWave = uWave[int(clamp(aGrow, 0.0, 0.96) * 32.0)];
+  p += (aJit * 0.7 + normalize(position + vec3(1e-5)) * 0.5) * (uOrbR * 0.035 * vWave * anchor);
   vWy = (modelMatrix * vec4(p, 1.0)).y;              // WORLD y — the band stays vertical under sway
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDepth = clamp((-mv.z - 1.45) / 1.1, 0.0, 1.0);   // 0 near → 1 far across the ACTUAL cloud z-extent
@@ -227,7 +232,7 @@ uniform float uTime, uOpacity, uRate, uFire, uTalk, uSpeak, uGrow, uIgnite, uTru
 uniform float uHotGang, uGangFlare, uYMin, uYSpan, uCrawlPos;
 uniform float uColMix, uLimMix, uBeatPop, uVoice;
 uniform vec3 uColA, uColB, uLimA, uLimB;
-varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth;
+varying float vT, vPhase, vClass, vGang, vBright, vGrow, vWy, vDepth, vWave;
 void main(){
   float isFine  = 1.0 - step(0.5, vClass);
   float isDend  = step(0.5, vClass) * (1.0 - step(1.5, vClass));
@@ -285,7 +290,7 @@ void main(){
   float dcr = abs(vGrow - uCrawlPos);
   dcr = min(dcr, 1.0 - dcr);
   col *= 1.0 + 0.55 * exp(-dcr * dcr * 130.0);
-  col *= (1.0 + 0.2 * uBeatPop) * (1.0 + 0.35 * uVoice);              // 80bpm pop + the voice surge
+  col *= (1.0 + 0.2 * uBeatPop) * (1.0 + 0.55 * vWave);              // 80bpm pop + the WAVEFORM passing through
   col *= smoothstep(vGrow - 0.15, vGrow, uGrow);                    // wires outward from the nucleus
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, uOpacity * (0.5 * isFine + (1.0 - isFine)));
@@ -299,7 +304,8 @@ export const NODE_VERT = /* glsl */ `
 precision highp float;
 attribute float aPhase, aSize, aGang, aHub, aGrow;
 uniform float uTime, uOrbR, uExpand;
-varying float vPhase, vGang, vHub, vGrow, vWy, vDepth;
+uniform float uWave[32];
+varying float vPhase, vGang, vHub, vGrow, vWy, vDepth, vWave;
 void main(){
   vPhase = aPhase; vGang = aGang; vHub = aHub; vGrow = aGrow;
   // cells ride the same differential expansion as their wires (roots anchored, periphery out)
@@ -307,7 +313,8 @@ void main(){
   vWy = (modelMatrix * vec4(p, 1.0)).y;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDepth = clamp((-mv.z - 1.45) / 1.1, 0.0, 1.0);
-  float breathe = 1.0 + 0.12 * sin(uTime * 0.8 + aPhase * 6.2831);
+  vWave = uWave[int(clamp(aGrow, 0.0, 0.96) * 32.0)];
+  float breathe = 1.0 + 0.12 * sin(uTime * 0.8 + aPhase * 6.2831) + 0.35 * vWave;
   gl_PointSize = clamp(aSize * breathe * (1.0 / max(0.1, -mv.z)), 2.0, 30.0);
   gl_Position = projectionMatrix * mv;
 }
@@ -318,7 +325,7 @@ uniform float uTime, uOpacity, uRate, uFire, uTalk, uSpeak, uGrow;
 uniform float uHotGang, uGangFlare, uYMin, uYSpan, uCrawlPos;
 uniform float uColMix, uBeatPop, uVoice;
 uniform vec3 uColA, uColB, uPlatinum;
-varying float vPhase, vGang, vHub, vGrow, vWy, vDepth;
+varying float vPhase, vGang, vHub, vGrow, vWy, vDepth, vWave;
 void main(){
   vec2 pc = gl_PointCoord * 2.0 - 1.0;
   float r2 = dot(pc, pc);
@@ -341,7 +348,7 @@ void main(){
   float dcr = abs(vGrow - uCrawlPos);
   dcr = min(dcr, 1.0 - dcr);
   col *= 1.0 + 0.45 * exp(-dcr * dcr * 60.0);
-  col *= (1.0 + 0.25 * uBeatPop) * (1.0 + 0.4 * uVoice);              // 80bpm pop + the voice surge
+  col *= (1.0 + 0.25 * uBeatPop) * (1.0 + 0.6 * vWave);               // 80bpm pop + the WAVEFORM passing through
   col *= smoothstep(vGrow - 0.10, vGrow, uGrow);
   col = col / (1.0 + 0.25 * col);
   gl_FragColor = vec4(col, clamp(core + halo, 0.0, 1.0) * uOpacity);
