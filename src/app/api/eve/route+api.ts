@@ -1,0 +1,124 @@
+import { GoogleGenAI } from '@google/genai';
+
+import { getUserFromRequest } from '@/lib/auth';
+import { guardRate } from '@/lib/rate-limit';
+
+// POST /api/eve/route — Eve's VOICE-INTENT ROUTER (docs/studio/VENUS_CENTRAL.md §3).
+//
+// Native-audio Gemini Live can't do reliable tool-calling, so the client distills instead: every
+// committed user turn in Eve's home state is POSTed here (~300ms flash call, non-blocking) and a
+// hit transitions her surface (edit-site → developing, new-design → the design bus, …).
+//
+// PRECISION over recall by design: a missed command costs the user a repeat; a false positive
+// yanks them out of a conversation mid-sentence. When in doubt → 'none'. And the router must
+// never break the session — every failure path returns { intent: 'none' }, not an error.
+
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const TRANSIENT = /unavailable|overloaded|try again|503|429|rate.?limit|deadline|temporar/i;
+
+const INTENTS = new Set(['create-brand', 'edit-site', 'new-design', 'write-post', 'done', 'none'] as const);
+type Intent = 'create-brand' | 'edit-site' | 'new-design' | 'write-post' | 'done' | 'none';
+
+const SYSTEM = `You classify ONE spoken utterance from a clothing-brand creator talking with Eve, their AI studio assistant. Decide whether it is a CLEAR task command to switch what they're working on, and respond with STRICT JSON only:
+{"intent":"create-brand"|"edit-site"|"new-design"|"write-post"|"done"|"none","storeSlug":"...","idea":"...","topic":"...","ask":"..."}
+(omit fields that don't apply)
+
+Intents:
+- "edit-site": they clearly want to change/edit/fix their EXISTING website ("I want to edit my site", "let's change the homepage", "can we update the hero on my store"). If the utterance names one of the provided stores, set storeSlug to that store's slug (must be from the list). If several stores could match and it's ambiguous, keep intent "edit-site", omit storeSlug, and set ask to a one-line question naming the options.
+- "create-brand": they clearly want to start/build a NEW brand ("let's build another brand", "I want to start a new label").
+- "new-design": they clearly ask to create a design, graphic, or meme ("make me a meme about mondays", "new tee design with a chrome skull"). Put their concept in idea, short.
+- "write-post": they clearly ask to write/draft a blog post. topic = short topic.
+- "done": they are clearly finished with Eve ("that's all for now", "we're done", "goodbye Eve").
+- "none": EVERYTHING else — answers to Eve's questions, brand-interview content (names, products, colors, style talk), chit-chat, thinking aloud, vague wishes. PRECISION over recall: when in doubt, return "none".
+
+If interviewActive is true they are mid brand-interview: near-everything is interview content — return "none" unless the utterance is an explicit redirect AWAY from it ("actually forget this, I want to edit my site instead").`;
+
+async function generate(ai: GoogleGenAI, params: Parameters<GoogleGenAI['models']['generateContent']>[0], attempts = 2) {
+  let lastErr: unknown;
+  for (const model of MODELS) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await ai.models.generateContent({ ...params, model });
+      } catch (e) {
+        lastErr = e;
+        if (!TRANSIENT.test(e instanceof Error ? e.message : String(e))) throw e;
+        await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+const NONE = { intent: 'none' as const };
+
+export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  // Per-turn cadence — one call per committed utterance; 60/min is generous headroom.
+  const limited = await guardRate(`eve-route:${user.id}`, 60, 60);
+  if (limited) return limited;
+
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
+  if (!apiKey) return Response.json(NONE);
+
+  let turn: string;
+  let recent: { role: string; text: string }[];
+  let stores: { name: string; slug: string; hasSite: boolean }[];
+  let interviewActive: boolean;
+  try {
+    const body = (await req.json()) as {
+      turn?: string;
+      recent?: { role: string; text: string }[];
+      stores?: { name: string; slug: string; hasSite?: boolean }[];
+      interviewActive?: boolean;
+    };
+    turn = (body.turn ?? '').trim().slice(0, 600);
+    if (!turn) throw new Error();
+    recent = (body.recent ?? []).slice(-6).map((m) => ({ role: m.role === 'user' ? 'Creator' : 'Eve', text: String(m.text).slice(0, 300) }));
+    stores = (body.stores ?? []).slice(0, 12).map((s) => ({ name: String(s.name).slice(0, 80), slug: String(s.slug).slice(0, 80), hasSite: !!s.hasSite }));
+    interviewActive = !!body.interviewActive;
+  } catch {
+    return Response.json({ error: 'invalid body' }, { status: 400 });
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const brief = [
+      `Stores: ${stores.length ? stores.map((s) => `"${s.name}" (slug: ${s.slug}${s.hasSite ? ', has a live site' : ', NO site yet'})`).join('; ') : 'none'}`,
+      `interviewActive: ${interviewActive}`,
+      recent.length ? `Recent conversation:\n${recent.map((m) => `${m.role}: ${m.text}`).join('\n')}` : '',
+      `Utterance: "${turn}"`,
+      'Return the JSON.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    const res = await generate(ai, {
+      model: MODELS[0],
+      contents: [{ role: 'user', parts: [{ text: brief }] }],
+      config: { systemInstruction: SYSTEM, temperature: 0, responseMimeType: 'application/json' },
+    });
+    const raw = res.text?.trim();
+    if (!raw) return Response.json(NONE);
+    const parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '')) as {
+      intent?: string;
+      storeSlug?: string;
+      idea?: string;
+      topic?: string;
+      ask?: string;
+    };
+    const intent = (INTENTS.has(parsed.intent as Intent) ? parsed.intent : 'none') as Intent;
+    // storeSlug must be one of the caller's stores — the model may not invent targets.
+    const storeSlug = stores.some((s) => s.slug === parsed.storeSlug) ? parsed.storeSlug : undefined;
+    const out = {
+      intent,
+      ...(intent === 'edit-site' && storeSlug ? { storeSlug } : {}),
+      ...(intent === 'edit-site' && parsed.ask ? { ask: String(parsed.ask).slice(0, 200) } : {}),
+      ...(intent === 'new-design' && parsed.idea ? { idea: String(parsed.idea).slice(0, 300) } : {}),
+      ...(intent === 'write-post' && parsed.topic ? { topic: String(parsed.topic).slice(0, 200) } : {}),
+    };
+    if (intent !== 'none') console.log(`[eve:route] "${turn.slice(0, 80)}" → ${JSON.stringify(out)}`);
+    return Response.json(out);
+  } catch {
+    return Response.json(NONE); // routing is best-effort — never surface an error mid-conversation
+  }
+}

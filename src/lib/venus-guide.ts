@@ -11,6 +11,9 @@ export type VenusSuggestion = {
   key: VenusToolKey;
   label: string;
   detail: string;
+  /** For 'edit-site': WHICH brand this chip is about, so the handler edits that store — not just
+   *  the first store that happens to have a site (a multi-brand creator would land on the wrong one). */
+  storeSlug?: string;
 };
 
 export type VenusGuidance = {
@@ -50,6 +53,7 @@ export function venusGuide(opts: { firstName?: string; stores: StoreLite[] }): V
       key: 'edit-site',
       label: 'Finalize your website',
       detail: `Get “${unfinished.name}” polished and live.`,
+      storeSlug: unfinished.slug,
     });
   } else if (live.length) {
     const s = live[0];
@@ -58,6 +62,7 @@ export function venusGuide(opts: { firstName?: string; stores: StoreLite[] }): V
       key: 'edit-site',
       label: 'Edit your site',
       detail: 'Circle anything on the page and tell me what to change.',
+      storeSlug: s.slug,
     });
   } else {
     situation = 'What shall we make today?';

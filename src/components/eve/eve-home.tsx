@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import {
   ActivityIndicator,
@@ -27,8 +27,9 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
-import { emitEveEvent } from '@/lib/eve-bus';
-import { venusGuide, type VenusGuidance, type VenusToolKey } from '@/lib/venus-guide';
+import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
+import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
+import { venusGuide, type VenusGuidance, type VenusSuggestion } from '@/lib/venus-guide';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // EVE'S HOME STATE — her steady state inside the overlay (docs/studio/VENUS_CENTRAL.md). This is
@@ -57,16 +58,29 @@ function stageFor(state: EntityState, intro: boolean): VenusStage {
 const BG = '#08080a'; // dark ink for text ON the gold accent buttons
 const AI_NAME = 'Eve';
 
+type StoreLite = { name: string; slug: string; status: string; deploymentUrl?: string | null; customDomain?: string | null };
+
+/** The REAL storefront URL — same rule as /api/store/[slug]: prefer the custom domain, else a
+ *  non-placeholder deploymentUrl. Never fabricated from the slug (a brand can have no site). */
+function siteUrlFor(s: StoreLite): string | null {
+  if (s.customDomain) return `https://${s.customDomain}`;
+  if (s.deploymentUrl && !s.deploymentUrl.includes('github.com')) return s.deploymentUrl;
+  return null;
+}
+
 export function EveHome({
   open,
   ready,
   onRequestClose,
+  onGo,
 }: {
   /** The overlay is on screen (gates the live session — she is never vocal while hidden). */
   open: boolean;
   /** Slide-in finished — safe to mount the GL avatar. */
   ready: boolean;
   onRequestClose: () => void;
+  /** Transition Eve's surface in place (home → developing/design) — the overlay's open(). */
+  onGo: (s: EveSummon) => void;
 }) {
   const insets = useSafeAreaInsets();
   const p = usePalette();
@@ -88,6 +102,9 @@ export function EveHome({
   const [appActive, setAppActive] = useState(true);
   const [guidance, setGuidance] = useState<VenusGuidance | null>(null);
   const [hasStore, setHasStore] = useState(false);
+  const [stores, setStores] = useState<StoreLite[]>([]);
+  const [meResolved, setMeResolved] = useState(false); // instruction is chosen from this — never start before it
+  const [micOk, setMicOk] = useState<boolean | null>(null); // guide-view auto-voice needs an answered mic prompt
 
   const messages = useRef<ChatMessage[]>([]);
   const playCount = useRef(0);
@@ -104,17 +121,20 @@ export function EveHome({
       try {
         const r = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } });
         const d = (await r.json().catch(() => ({}))) as {
-          profile?: { name?: string };
-          stores?: { name: string; slug: string; status: string }[];
+          creator?: { name?: string | null };
+          stores?: StoreLite[];
         };
         if (!alive) return;
-        const firstName = (d.profile?.name ?? (session.user?.user_metadata?.name as string | undefined))
+        const firstName = (d.creator?.name ?? (session.user?.user_metadata?.name as string | undefined))
           ?.trim()
           .split(/\s+/)[0];
+        setStores(d.stores ?? []);
         setHasStore((d.stores?.length ?? 0) > 0);
         setGuidance(venusGuide({ firstName, stores: d.stores ?? [] }));
       } catch {
         if (alive) setGuidance(venusGuide({ stores: [] }));
+      } finally {
+        if (alive) setMeResolved(true);
       }
     })();
     return () => {
@@ -122,16 +142,37 @@ export function EveHome({
     };
   }, [open, session]);
 
-  // ---- Gemini Live wiring (the realtime speech-to-speech interview; GEMINI_LIVE.md) ----
+  // Returning creators get VOICE in the guide too (that's how intent routing hears them) — ask for
+  // the mic once, on summon. Denied → the guide still works by chips; the interview falls back to
+  // typing via its own path.
+  useEffect(() => {
+    if (!open || !meResolved || !hasStore || micOk !== null) return;
+    (async () => {
+      const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
+      setMicOk(!!perm?.granted);
+    })();
+  }, [open, meResolved, hasStore, micOk]);
+
+  // ---- Gemini Live wiring (the realtime speech-to-speech session; GEMINI_LIVE.md) ----
   const creatorName =
     (session?.user?.user_metadata?.name as string | undefined) ??
     (session?.user?.user_metadata?.full_name as string | undefined) ??
     undefined;
+  // Persona: first-brand creators get the pure interview (liveSystemInstruction default); returning
+  // creators get the CENTRAL persona — greeting + task awareness + the interview module verbatim
+  // (the "ready to build your brand" cue survives, so buildReady below keeps working). The hook
+  // reads opts at start() time and we never start before meResolved, so the choice is always final.
+  const centralInstruction = useMemo(
+    () => (hasStore ? eveCentralInstruction(creatorName, stores.map((s) => s.name)) : undefined),
+    [hasStore, creatorName, stores],
+  );
   const live = useLiveVoice({
     accessToken: session?.access_token,
     userName: creatorName,
     firstTime: !hasStore,
     voiceName: LIVE_VOICE,
+    instruction: centralInstruction,
+    greeting: hasStore ? EVE_CENTRAL_GREETING : undefined,
     onBrand: (b, transcript) => {
       setBrand(b);
       if (transcript?.length) messages.current = transcript;
@@ -150,25 +191,141 @@ export function EveHome({
 
   // Build is GATED: Eve gathers the essentials first, then invites them to build — that's when the
   // button appears. Latch "ready" when she signals it, floored at 3 answers; a 6-answer safety net
-  // ensures the button always eventually appears. Resets when a fresh interview clears the transcript.
+  // ensures the button always eventually appears. ONLY the interview may unlock it — for a returning
+  // creator the guide voice shares the session, so without this gate 6 turns of guide small talk
+  // would light up "✓ Build my brand" before any interview happened (and finalize over chatter).
   const [buildReady, setBuildReady] = useState(false);
   useEffect(() => {
-    if (!live.messages.length) { setBuildReady(false); return; }
+    if (view !== 'interview' || !live.messages.length) { setBuildReady(false); return; }
     if (buildReady) return;
     const userTurns = live.messages.filter((m) => m.role === 'user').length;
     const lastEve = [...live.messages].reverse().find((m) => m.role === 'assistant')?.text ?? '';
     const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we)\s+need|got everything|let'?s build|time to build|shall we build)\b/i;
     if (userTurns >= 6 || (userTurns >= 3 && cue.test(lastEve))) setBuildReady(true);
-  }, [live.messages, buildReady]);
+  }, [view, live.messages, buildReady]);
 
-  // The ONE rule for when Eve is live: her overlay is on screen, in the interview, app foregrounded,
-  // and not paused / already done. Anything else → stop, so she's never vocal outside her view.
+  // ---- VOICE-INTENT ROUTING (VENUS_CENTRAL.md §3): distill-then-execute, per committed turn ----
+  // Native-audio Live can't tool-call, so each new user utterance goes to /api/eve/route (~300ms
+  // flash, non-blocking, fail-open to 'none'). Returning creators only — a first-brand creator is
+  // the interview funnel. The endpoint is precision-biased; interviewActive makes it stricter still.
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  // Cleared when EveHome unmounts (the home→developing transition swaps components) so a routing
+  // response that resolves late — the flash call retries 2×2 with backoff, seconds — can't fire
+  // onGo/onRequestClose/router.push after we've already left the guide and torn the session down.
+  const routingAlive = useRef(true);
+  useEffect(() => () => { routingAlive.current = false; }, []);
+  const enterInterview = useCallback(() => {
+    // A returning creator's guide session must NOT bleed into the interview: stop it so the gate
+    // effect starts a FRESH interview session (start() clears live.messages), and drop any latched
+    // build state so the "✓ Build my brand" pill can't appear over an empty transcript.
+    live.stop();
+    setBuildReady(false);
+    setKeyboardMode(false);
+    setView('interview');
+  }, [live.stop]);
+  const routeTurn = useCallback(
+    async (turn: string) => {
+      if (!session) return;
+      try {
+        const r = await fetch(apiUrl('/api/eve/route'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            turn,
+            recent: live.messages.slice(-6).map((m) => ({ role: m.role, text: m.text })),
+            stores: stores.map((s) => ({ name: s.name, slug: s.slug, hasSite: !!siteUrlFor(s) })),
+            interviewActive: viewRef.current === 'interview',
+          }),
+        });
+        const d = (await r.json().catch(() => ({}))) as {
+          intent?: string;
+          storeSlug?: string;
+          idea?: string;
+          ask?: string;
+        };
+        if (!routingAlive.current) return; // left the guide while this classified — don't act
+        switch (d.intent) {
+          case 'edit-site': {
+            const withSites = stores.filter((s) => siteUrlFor(s));
+            const target = d.storeSlug
+              ? stores.find((s) => s.slug === d.storeSlug)
+              : withSites.length === 1
+                ? withSites[0]
+                : undefined;
+            const url = target ? siteUrlFor(target) : null;
+            if (target && url) {
+              onGo({ state: 'developing', payload: { slug: target.slug, url, name: target.name } });
+            } else if (target && !url) {
+              // They NAMED a real brand, but it has no live site yet — say so about that brand,
+              // not a nonsensical "did you mean <the other one>?".
+              live.sendContext(
+                `(They asked to edit "${target.name}", but that brand has no live site yet — tell them gently, and suggest launching its site from the Studio first.)`,
+              );
+            } else if (!withSites.length) {
+              live.sendContext(
+                '(They asked to edit their website, but none of their brands has a live site yet — tell them gently, and suggest launching the site from the Studio first.)',
+              );
+            } else {
+              live.sendContext(
+                `(They asked to edit a site but it's unclear which brand — ask whether they mean ${withSites.map((s) => `"${s.name}"`).join(' or ')}.${d.ask ? ` Their app suggests asking: ${d.ask}` : ''})`,
+              );
+            }
+            return;
+          }
+          case 'create-brand':
+            if (viewRef.current === 'guide') enterInterview();
+            return;
+          case 'new-design':
+            onRequestClose();
+            sendDesignCommand({ kind: 'open-generate', prompt: d.idea, meme: /\bmeme\b/i.test(turn) });
+            router.push('/design');
+            return;
+          case 'write-post':
+            live.sendContext(
+              '(Writing posts by voice lands soon — in one sentence, tell them they can write posts from the Studio composer for now.)',
+            );
+            return;
+          case 'done':
+            onRequestClose();
+            return;
+        }
+      } catch {
+        // routing is best-effort — a missed command costs a repeat, never an error
+      }
+    },
+    [session, stores, live.messages, live.sendContext, onGo, onRequestClose, enterInterview],
+  );
+  const routedUsers = useRef(0);
+  useEffect(() => {
+    const said = live.messages.filter((m) => m.role === 'user');
+    if (said.length < routedUsers.current) routedUsers.current = said.length; // session reset cleared messages
+    // Gated (first-brand interview, or mid brand-review): mark the transcript CONSUMED without routing,
+    // so when hasStore flips true after a first launch we don't burst-route the whole interview (a
+    // closing "that's everything" would classify 'done' and close the overlay).
+    if (!hasStore || brand) { routedUsers.current = said.length; return; }
+    for (let i = routedUsers.current; i < said.length; i++) {
+      const t = said[i].text.trim();
+      if (t) void routeTurn(t);
+    }
+    routedUsers.current = said.length;
+  }, [live.messages, hasStore, brand, routeTurn]);
+
+  // The ONE rule for when Eve is live: her overlay is on screen, app foregrounded, persona resolved,
+  // not paused / already done — in the interview always, and in the GUIDE for returning creators
+  // once the mic prompt is answered (that's the voice the intent router listens to). Anything else
+  // → stop, so she's never vocal outside her view.
   // (Pause is a VOICE concept — in keyboard mode it must not gate the session or typed turns hang.)
   useEffect(() => {
-    const inHerView = view === 'interview' && !brand && open && appActive;
+    const voiceView = view === 'interview' || (view === 'guide' && hasStore && micOk === true);
+    // Only the returning-creator GUIDE persona (eveCentralInstruction) is built from /api/me, so only
+    // it waits on meResolved. The first-brand interview uses the default persona and must never hang
+    // on a stalled /api/me (which has no timeout) — otherwise typed turns vanish into a dead session.
+    const personaReady = view === 'interview' ? true : meResolved;
+    const inHerView = voiceView && !brand && open && appActive && personaReady;
     if (inHerView && (keyboardMode || !paused)) live.start();
     else live.stop();
-  }, [view, brand, paused, keyboardMode, open, appActive, live.start, live.stop]);
+  }, [view, hasStore, micOk, meResolved, brand, paused, keyboardMode, open, appActive, live.start, live.stop]);
   // Keyboard/chat mode mutes the mic so Eve doesn't react to the room while you type.
   useEffect(() => { live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
   useEffect(() => {
@@ -219,8 +376,11 @@ export function EveHome({
   );
 
   // Entering the interview requests the mic HERE — the OS dialog appears when the user chooses to
-  // talk, before the Live session opens its recorder. On denial, fall back to typing.
+  // talk, before the Live session opens its recorder. On denial, fall back to typing. Stop any guide
+  // session first (enterInterview) so the interview starts fresh — no carried-over transcript.
   const startVoice = useCallback(async () => {
+    live.stop();
+    setBuildReady(false);
     setKeyboardMode(false);
     setPaused(false);
     pausedRef.current = false;
@@ -230,13 +390,7 @@ export function EveHome({
       setError('No microphone access — you can type your answers, or enable the mic in Settings.');
     }
     setView('interview');
-  }, []);
-  const startText = useCallback(() => {
-    setKeyboardMode(true);
-    setPaused(false);
-    pausedRef.current = false;
-    setView('interview');
-  }, []);
+  }, [live.stop]);
 
   const togglePause = useCallback(() => {
     setPaused((prev) => {
@@ -323,17 +477,27 @@ export function EveHome({
     }
   }, [session, brand, playSpeech]);
 
-  // Guide chips: build-brand starts the interview HERE; the rest route into the app beneath.
+  // The no-voice fallback chips: build-brand starts the interview HERE; the rest route into the app.
   const runTool = useCallback(
-    (key: VenusToolKey) => {
-      switch (key) {
+    (s: VenusSuggestion) => {
+      switch (s.key) {
         case 'build-brand':
           void startVoice();
           return;
-        case 'edit-site':
-          onRequestClose();
-          router.push('/studio');
+        case 'edit-site': {
+          // Edit the brand THIS chip is about (s.storeSlug), not just the first store with a site —
+          // and only open developing when that brand actually has a live site; otherwise the Studio,
+          // where its site is finalized/launched.
+          const target = s.storeSlug ? stores.find((x) => x.slug === s.storeSlug) : stores.find((x) => siteUrlFor(x));
+          const url = target ? siteUrlFor(target) : null;
+          if (target && url) {
+            onGo({ state: 'developing', payload: { slug: target.slug, url, name: target.name } });
+          } else {
+            onRequestClose();
+            router.push('/studio');
+          }
           return;
+        }
         case 'create-designs':
           onRequestClose();
           sendDesignCommand({ kind: 'open-generate' });
@@ -350,7 +514,7 @@ export function EveHome({
           return;
       }
     },
-    [startVoice, onRequestClose],
+    [startVoice, onRequestClose, onGo, stores],
   );
 
   // Play her materialize (`morphing`) for ~4.2s each time the interview view (re)appears.
@@ -475,24 +639,37 @@ export function EveHome({
             bg={BG}
           />
         ) : view === 'guide' ? (
-          <View style={styles.guideWrap}>
-            <ThemedText style={[styles.greeting, { color: p.ink }]}>{guidance?.greeting ?? '…'}</ThemedText>
-            <View style={styles.chips}>
-              {(guidance?.suggestions ?? []).map((s) => (
-                <Pressable key={s.key} onPress={() => runTool(s.key)} style={[styles.chip, { borderColor: `${p.accent}38` }]}>
-                  <ThemedText style={[styles.chipLabel, { color: p.ink }]}>{s.label}</ThemedText>
-                  <ThemedText style={[styles.chipDetail, { color: p.dim }]}>{s.detail}</ThemedText>
+          // LAB LOOK — the orb owns the screen. Eve greets and directs by VOICE; the intent router
+          // hears "edit my site", "make a meme", "start a new brand". No button wall over her.
+          <View style={styles.voiceView}>
+            <View style={styles.subs}>
+              {heard ? (
+                <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
+                  {'you > ' + heard}
+                </ThemedText>
+              ) : null}
+              {/* Her spoken line once she talks; until then, her opening as a subtitle. */}
+              <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
+                {line || guidance?.greeting || '…'}
+              </ThemedText>
+              {hasStore && micOk ? (
+                <Pressable onPress={togglePause} hitSlop={12} style={[styles.pausePill, { borderColor: paused ? p.accent : `${p.dim}66` }]}>
+                  <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 13, letterSpacing: 1 }}>
+                    {paused ? '▶  Resume' : '❚❚  Pause'}
+                  </ThemedText>
                 </Pressable>
-              ))}
+              ) : (
+                // No live voice (web / mic denied) — a slim quick-actions row so no one's stranded,
+                // pinned to the very bottom edge, never over the orb.
+                <View style={styles.quickRow}>
+                  {(guidance?.suggestions ?? []).map((s) => (
+                    <Pressable key={s.key} onPress={() => runTool(s)} hitSlop={6} style={[styles.quickChip, { borderColor: `${p.dim}55` }]}>
+                      <ThemedText type="code" style={{ color: p.dim, fontSize: 12 }}>{s.label}</ThemedText>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
             </View>
-            {!hasStore ? (
-              <Pressable onPress={startText} hitSlop={8} style={{ marginTop: Spacing.three, alignSelf: 'center' }}>
-                <ThemedText type="code" style={{ color: p.dim }}>I’d rather type</ThemedText>
-              </Pressable>
-            ) : null}
-            <ThemedText type="code" style={[styles.guideFoot, { color: p.faint }]}>
-              slide up to pause {AI_NAME} · she asks for your mic only when you start talking
-            </ThemedText>
           </View>
         ) : keyboardMode ? null : (
           <>
@@ -579,18 +756,12 @@ const styles = StyleSheet.create({
   guideTitle: { fontSize: 28, textAlign: 'center' },
   guideBody: { textAlign: 'center', maxWidth: 320, lineHeight: 22, marginTop: Spacing.two },
   ctaPrimary: { borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.four },
-  greeting: { textAlign: 'center', fontSize: 17, lineHeight: 25, maxWidth: 420, marginBottom: Spacing.four },
-  chips: { alignSelf: 'stretch', maxWidth: 460, width: '100%', gap: 8, marginHorizontal: 'auto' },
-  chip: {
-    borderWidth: 1,
-    backgroundColor: 'rgba(12,18,26,0.72)',
-    borderRadius: 14,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-  },
-  chipLabel: { fontSize: 14, fontFamily: 'Jost-Medium' },
-  chipDetail: { fontSize: 12, marginTop: 1 },
-  guideFoot: { fontSize: 11, letterSpacing: 0.6, marginTop: Spacing.four, textAlign: 'center' },
+
+  // The voice surface (guide + interview share it): the orb owns the screen, chrome hugs the bottom.
+  voiceView: { flex: 1, justifyContent: 'flex-end' },
+  subs: { alignItems: 'center', gap: Spacing.two, paddingBottom: Spacing.two, minHeight: 96 },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Spacing.two, marginTop: Spacing.two },
+  quickChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
 
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.four },
   hint: { letterSpacing: 1 },

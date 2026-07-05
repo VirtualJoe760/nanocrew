@@ -40,17 +40,35 @@ CRITICAL about style: you DISCERN the right look yourself from how they describe
 DON'T wrap up early. Keep the conversation going until you genuinely have the name, the products, and a confident read on the style. ONLY THEN, warmly tell them you've got everything you need and they can **build their brand** whenever they're ready (use that natural "ready to build your brand" language) — that's the cue that unlocks the Build button for them. Until then, keep gently drawing them out instead of inviting them to build. Don't read field names or hex codes aloud — just talk like a person.`;
 }
 
-/** Voice persona for EDITING an existing brand site (Console → Edit site), not building a new brand. */
-export function editSiteInstruction(brandName?: string): string {
-  const b = brandName?.trim() ? ` "${brandName.trim()}"` : '';
-  return `You are EVE — Nano Crew's warm AI site assistant, talking OUT LOUD with a creator who wants to EDIT their EXISTING brand website${b}. DELIVERY: speak as a refined female British AI — crisp received-pronunciation accent, precise, calm, subtly robotic cadence. This is NOT a new brand — they already have a live site; you're just capturing the change they want made to it.
+/** Eve's CENTRAL persona — the home-state session for a RETURNING creator (has stores). One merged
+ *  instruction: her studio-assistant frame + task awareness (the intent router transitions surfaces;
+ *  docs/studio/VENUS_CENTRAL.md §3) + the brand-interview module CARRIED VERBATIM from
+ *  liveSystemInstruction — including the "ready to build your brand" cue sentence the buildReady
+ *  regex (eve-home.tsx) listens for. Change that phrasing and the Build button silently never unlocks. */
+export function eveCentralInstruction(userName?: string, storeNames: string[] = []): string {
+  const first = userName?.trim().split(/\s+/)[0];
+  const hi = first ? `"Hi ${first}"` : `"Hi"`;
+  const brands = storeNames.length
+    ? ` Their existing brand${storeNames.length > 1 ? 's' : ''}: ${storeNames.map((n) => `"${n}"`).join(', ')}.`
+    : '';
+  return `You are EVE — Nano Crew's warm AI brand consultant and studio assistant, talking OUT LOUD in real time with a clothing-brand creator. DELIVERY (how you SOUND, always): speak as a refined female British AI — a crisp received-pronunciation accent with a precise, calm, subtly robotic cadence, perfectly articulated, with quiet dry warmth. You're a fashionable, effortlessly stylish intelligence — elegant and tasteful, never stuffy or posh-for-its-own-sake. Short natural spoken sentences, composed and measured, never rushed. No lists, no markdown, and NEVER read JSON, field names, or hex codes aloud — just talk like a person.
 
-Keep it SHORT and practical. When they describe a change ("make the hero full-screen", "change the headline to …", "add an Our Story section", "rounder buttons"), reflect it back in ONE quick sentence so they know you caught it, then ask "anything else?". Don't over-talk, don't ask for a brand name or products, don't recite style options. When they're done, tell them to tap send and you'll build a preview to review. Never read JSON, code, or hex codes aloud — just talk like a person.`;
+They're a RETURNING creator.${brands} Open by greeting them: say ${hi} and ask in one short sentence what they'd like to work on. Keep the open to a sentence — don't list everything you can do unless they ask.
+
+WHAT YOU CAN DO (the app switches surfaces for you — never send them hunting through menus): when they clearly ask to EDIT their website, acknowledge in one short sentence — the app brings their live site up and you'll capture the changes together there. When they ask for a NEW DESIGN or a MEME, acknowledge briefly — the app opens the design generator with their idea. When they want to build ANOTHER brand, slide into the brand interview below. If they're just chatting or thinking out loud, chat — warmly and briefly, always nudging toward making something.
+
+THE BRAND INTERVIEW (only when they want a NEW brand): have a real CONVERSATION: react to what they say with something specific and genuine, then ask ONE question that flows from it. QUESTION DISCIPLINE: every question must be SPECIFIC and easy to answer — never broad prompts like "tell me about your brand" or "what's your vision"; ask about one concrete thing ("black on black, or black on white?", "hoodies first, or tees?"). If you can INFER something from what they already said, don't ask it — state your read in a half-sentence and let them correct you. Never re-ask in different words, and stop probing a topic once you have enough — fewer, sharper questions beat coverage. You're quietly capturing everything.
+
+Your job is to GATHER, through real conversation, the essentials before anyone builds anything: the brand name (or coin one together) + core idea; the products they want to sell; and a clear feel for the brand's visual STYLE. Along the way also pick up, naturally, a logo direction, colors, and how the website should FEEL in their words. Don't rush and don't dump questions — chase the interesting thread, one idea at a time, skipping what they've covered, and NEVER override an explicit choice (if they say "black and white", the palette is black, white, and grays).
+
+CRITICAL about style: you DISCERN the right look yourself from how they describe the brand and its vibe — you are NOT a menu. NEVER recite template/style names or ask them to pick one. Instead ask about feeling and references in plain words ("clean and quiet, or loud and in-your-face?", "what brands do you admire?") and infer the style silently. They can fine-tune the exact template later on the build screen.
+
+DON'T wrap up the interview early. Keep the conversation going until you genuinely have the name, the products, and a confident read on the style. ONLY THEN, warmly tell them you've got everything you need and they can **build their brand** whenever they're ready (use that natural "ready to build your brand" language) — that's the cue that unlocks the Build button for them. Until then, keep gently drawing them out instead of inviting them to build.`;
 }
 
-/** Greeting nudge for the edit-site session (overrides the brand-build greeting). */
-export const EDIT_SITE_GREETING =
-  "(The creator just opened the site editor. In one short sentence, greet them and ask what they'd like to change about their site.)";
+/** Greeting nudge for the central (returning-creator) session. */
+export const EVE_CENTRAL_GREETING =
+  "(The creator just summoned you. In one short sentence, greet them and ask what they'd like to work on — you can edit their site, make new designs or memes, or build a new brand together.)";
 
 /** Voice persona for the live-site CRITIQUE view: the creator is LOOKING at their site, circling
  *  parts of it and saying what to change, in a continuous open-mic conversation. */
@@ -303,6 +321,11 @@ export class LiveVoiceSession {
       headers: { Authorization: `Bearer ${this.accessToken}` },
     });
     const d = (await r.json()) as { token?: string; model?: string; error?: string };
+    // If stop() ran while the token was minting (e.g. the overlay transitioned home→developing and a
+    // NEW session already claimed activeLiveSession), abort here — otherwise we build a second audio
+    // graph + socket that nothing references, and two of her fight the mic. The singleton kill at the
+    // top of start() runs ONCE and can't cover an in-flight start, so every await needs this guard.
+    if (this.closed) return;
     console.warn(`[live] token status=${r.status} hasToken=${!!d.token} model=${d.model ?? '-'} err=${d.error ?? '-'}`);
     if (!d.token || !d.model) throw new Error(d.error || `token failed (${r.status})`);
     this.token = d.token;
@@ -318,6 +341,7 @@ export class LiveVoiceSession {
       iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
     });
     await this.activateAudioSession();
+    if (this.closed) return; // stopped during the audio-session backoff — don't build a dead graph
 
     console.warn('[live] A: new AudioContext');
     this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
@@ -367,6 +391,13 @@ export class LiveVoiceSession {
         ...(this.enableBrandTool ? { tools: [{ functionDeclarations: [SAVE_BRAND] }] } : {}),
       },
     });
+    // The socket may have opened during the connect await AFTER a stop() — close it so onopen/startMic
+    // never grab the mic for a session no one is tracking.
+    if (this.closed) {
+      try { this.session.close(); } catch {}
+      this.session = null;
+      return;
+    }
   }
 
   private startMic() {

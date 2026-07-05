@@ -12,6 +12,7 @@ import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiUrl, readJson } from '@/lib/api';
+import { summonEve } from '@/lib/eve-bus';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // Venus's management surface for a returning creator: request site changes in plain
@@ -21,10 +22,13 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 type StoreRow = { slug: string; name: string; deploymentUrl?: string | null; ogImageUrl?: string | null; status?: string; customDomain?: string | null };
 
 /** The public storefront URL — only when a real site is deployed. A brand can live on
- *  the Nano Crew shop with no website, so we never fabricate a URL that would 404. */
+ *  the Nano Crew shop with no website, so we never fabricate a URL that would 404. Prefer the
+ *  custom domain (matches /api/store/[slug] and eve-home) so Eve's developing WebView opens the
+ *  SAME origin no matter which entry point summoned it. */
 function siteUrlFor(s: StoreRow | undefined): string | null {
-  if (!s?.deploymentUrl || s.deploymentUrl.includes('github.com')) return null;
-  return s.deploymentUrl;
+  if (s?.customDomain) return `https://${s.customDomain}`;
+  if (s?.deploymentUrl && !s.deploymentUrl.includes('github.com')) return s.deploymentUrl;
+  return null;
 }
 type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; coverImageUrl?: string | null; isPublished: boolean };
 type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null; createdAt?: string };
@@ -679,7 +683,17 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               {siteUrl ? (
                 <>
                   <ThemedText type="code" style={styles.sectionLabel}>YOUR SITE</ThemedText>
-                  <Pressable onPress={() => { setPreviewTarget(siteUrl); setCritiquePreview(true); }} style={styles.previewFrame}>
+                  <Pressable
+                    onPress={() => {
+                      // Site editing is EVE's developing state now (VENUS_CENTRAL.md §2). Close the
+                      // composer first — a native Modal would sit above her overlay. Review & Approve
+                      // below deliberately keeps the old Modal (no Eve in review).
+                      if (active && siteUrl) {
+                        onClose();
+                        summonEve({ state: 'developing', payload: { slug: active, url: siteUrl, name: activeStore?.name ?? brandName } });
+                      }
+                    }}
+                    style={styles.previewFrame}>
                     {ogImageUrl ? (
                       <Image source={{ uri: ogImageUrl }} style={styles.previewImg} contentFit="cover" />
                     ) : (

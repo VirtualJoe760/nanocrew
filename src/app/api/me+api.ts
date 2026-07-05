@@ -46,10 +46,22 @@ export async function GET(req: Request) {
         logoUrl: schema.stores.logoUrl,
         ogImageUrl: schema.stores.ogImageUrl,
         siteAssets: schema.stores.siteAssets,
+        // Eve's developing state (edit-site) needs the real storefront URL — it is never derived
+        // from the slug (github.com deploymentUrl = placeholder, no site yet). Client applies the
+        // same rule as /api/store/[slug]: customDomain ? https://custom : non-github deploymentUrl.
+        deploymentUrl: schema.stores.deploymentUrl,
+        customDomain: schema.stores.customDomain,
       })
       .from(schema.stores)
       .where(inArray(schema.stores.id, await accessibleStoreIds(user.id)));
-    return Response.json({ creator: { id: user.id, email: user.email }, stores });
+    // Read back the stored (backfilled) name so Eve can greet returning creators by name even when
+    // the auth token metadata lacks it (e.g. Apple sign-in after the first login).
+    const [profile] = await db
+      .select({ name: schema.creators.name })
+      .from(schema.creators)
+      .where(eq(schema.creators.id, user.id))
+      .limit(1);
+    return Response.json({ creator: { id: user.id, email: user.email, name: profile?.name ?? user.name ?? null }, stores });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status: 500 });
   }

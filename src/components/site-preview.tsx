@@ -168,7 +168,7 @@ export function SitePreview({
   );
 }
 
-function PreviewContent({ url, onClose, critique, review }: { url: string; onClose: () => void; critique?: Critique; review?: Review }) {
+export function PreviewContent({ url, onClose, critique, review }: { url: string; onClose: () => void; critique?: Critique; review?: Review }) {
   const insets = useSafeAreaInsets();
   const ref = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);

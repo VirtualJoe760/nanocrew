@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -9,7 +9,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
+import { EveDeveloping } from '@/components/eve/eve-developing';
 import { EveHome } from '@/components/eve/eve-home';
 import {
   registerEveSummonListener,
@@ -39,13 +41,15 @@ export default function EveOverlay() {
   const [eve, setEve] = useState<EveState>('hidden');
   const [mounted, setMounted] = useState(false); // content exists while open or animating out
   const [ready, setReady] = useState(false); // slide-in done — safe to mount the GL avatar
-  const payloadRef = useRef<Record<string, unknown> | undefined>(undefined);
+  const [payload, setPayload] = useState<Record<string, unknown> | undefined>(undefined);
 
   const ty = useSharedValue(-winH);
 
+  // Summon AND in-place state transition (home→developing routes through here too — when already
+  // on screen the 0→0 timing is a no-op and only the state/payload change).
   const open = useCallback(
     (s: EveSummon) => {
-      payloadRef.current = s.payload;
+      setPayload(s.payload);
       setEve(s.state);
       setMounted(true);
       ty.value = withTiming(0, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) }, (done) => {
@@ -70,9 +74,9 @@ export default function EveOverlay() {
     const off = registerEveSummonListener(open);
     if (__DEV__) {
       // deterministic testability, same idiom as __venusOrbStep / the old __venusSheet
-      (globalThis as { __eve?: (state: EveState | null) => void }).__eve = (state) => {
+      (globalThis as { __eve?: (state: EveState | null, payload?: Record<string, unknown>) => void }).__eve = (state, p) => {
         if (!state || state === 'hidden') close();
-        else open({ state });
+        else open({ state, payload: p });
       };
     }
     return () => {
@@ -111,13 +115,28 @@ export default function EveOverlay() {
         </GestureDetector>
       ) : null}
 
-      {mounted ? (
+      {/* DEVELOPING: the WebView + circle-pen own every gesture. The slide-up-to-dismiss pan and the
+          bottom pill are DELIBERATELY absent here — an upward scroll or an upward circle stroke would
+          otherwise trigger close() and silently drop captured-but-unsubmitted edits, and the pill
+          overlaps PreviewContent's Submit bar. EveDeveloping has its own exits (header ✕ → home;
+          submit → Studio review). */}
+      {mounted && eve === 'developing' ? (
+        <Animated.View style={[styles.overlay, overlayStyle]}>
+          <EveDeveloping
+            url={typeof payload?.url === 'string' ? payload.url : undefined}
+            slug={typeof payload?.slug === 'string' ? payload.slug : undefined}
+            onExit={() => open({ state: 'home' })}
+            onSubmitted={(slug) => {
+              close();
+              router.push({ pathname: '/studio', params: { reviewSlug: slug } });
+            }}
+          />
+        </Animated.View>
+      ) : mounted ? (
         <GestureDetector gesture={dismissPan}>
           <Animated.View style={[styles.overlay, overlayStyle]}>
-            {eve === 'home' || eve === 'developing' || eve === 'design' ? (
-              // developing/design render home until Phases B/C land — the machine is already typed.
-              <EveHome open={mounted} ready={ready} onRequestClose={close} />
-            ) : null}
+            {/* design renders home until Phase C lands — the machine is already typed. */}
+            <EveHome open={mounted} ready={ready} onRequestClose={close} onGo={open} />
             {/* PRESENT: the dismiss handle on the bottom lip — slide up (or tap) to pause. */}
             <Pressable
               accessibilityLabel="Pause Eve"
