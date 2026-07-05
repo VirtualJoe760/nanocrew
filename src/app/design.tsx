@@ -51,6 +51,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch, readJson } from '@/lib/api';
+import { registerDesignCommandListener, sendDesignCommand, type DesignCommand } from '@/lib/design-bus';
 import { buildMemePrompt, buildMemePromptForProduct, MEME_PLACEHOLDER } from '@/lib/meme';
 import type { CatalogBlank } from '@/lib/printful';
 import { EFFORT_LABELS, EFFORT_TIERS, type Effort } from '@/lib/effort';
@@ -215,6 +216,10 @@ function DesignScreen() {
   const [designs, setDesigns] = useState<Design[]>([]);
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [generateOpen, setGenerateOpen] = useState(false);
+  // Prefill for the generator when opened by the COMMAND BUS (deep links / Venus) — cleared on close.
+  const [generatePrefill, setGeneratePrefill] = useState<{ prompt?: string; meme?: boolean } | null>(null);
+  // Instruction prefill for the editor when opened by the command bus.
+  const [editorInstruction, setEditorInstruction] = useState<string | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [mergeTarget, setMergeTarget] = useState<{ aId: string; bId: string } | null>(null);
   // Tap a product on the canvas → open its detail sheet (photo · colourways · sizes · price).
@@ -396,13 +401,32 @@ function DesignScreen() {
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   // Remembered product collection so the "Collection designs" segment can flip back out of Site assets.
   const lastProductCatRef = useRef<{ id: string; name: string } | null>(null);
-  // Deep-link from a Studio bounty (?panel=web) just expands the dock so the designs panel is visible.
-  const { panel: panelParam } = useLocalSearchParams<{ panel?: string }>();
+  // Deep-link from a Studio bounty (?panel=web) just expands the dock so the designs panel is
+  // visible. NEW deep links translate into DESIGN COMMAND BUS commands (one code path with
+  // Venus): ?action=generate&prompt=…&meme=1 opens the generator prefilled; ?edit=<designId>
+  // opens the editor on that design.
+  const { panel: panelParam, action: actionParam, prompt: promptParam, meme: memeParam, edit: editParam } =
+    useLocalSearchParams<{ panel?: string; action?: string; prompt?: string; meme?: string; edit?: string }>();
   useEffect(() => {
     if (panelParam === 'products' || panelParam === 'web' || panelParam === 'content') {
       setDockCollapsed(false);
     }
   }, [panelParam]);
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current) return;
+    if (actionParam === 'generate') {
+      deepLinkHandled.current = true;
+      sendDesignCommand({
+        kind: 'open-generate',
+        prompt: typeof promptParam === 'string' && promptParam ? promptParam : undefined,
+        meme: memeParam === '1' || memeParam === 'true',
+      });
+    } else if (typeof editParam === 'string' && editParam) {
+      deepLinkHandled.current = true;
+      sendDesignCommand({ kind: 'open-editor', designId: editParam });
+    }
+  }, [actionParam, promptParam, memeParam, editParam]);
 
   // A product on the canvas with no design yet → the next step is to pick/generate a design, so
   // OPEN the design panel and pulse Generate. (The dock now holds designs, not products, so we
@@ -677,8 +701,10 @@ function DesignScreen() {
     const screenY = height * 0.4 + off * 14;
     const x = (screenX - (vp?.tx.value ?? 0)) / s - NODE_W / 2;
     const y = (screenY - (vp?.ty.value ?? 0)) / s - NODE_H / 2;
-    setNodes((n) => [...n, { id: `n${++nodeCounter}`, kind, refId, x, y }]);
+    const node: CanvasNode = { id: `n${++nodeCounter}`, kind, refId, x, y };
+    setNodes((n) => [...n, node]);
     scheduleSave();
+    return node;
   };
 
   // Add a batch of products from the picker — laid out as a vertical stack (top to bottom), one
@@ -1229,6 +1255,96 @@ function DesignScreen() {
     }
   };
 
+  // ── THE DESIGN COMMAND BUS (src/lib/design-bus.ts) ────────────────────────
+  // External actors (deep links today, Venus tomorrow — VENUS_CENTRAL.md) drive the canvas
+  // through commands: open the generator prefilled, land an external image in the collection,
+  // show it, edit it. The handler lives in a ref so the registered listener never closes over
+  // stale state; commands whose data isn't loaded yet (catalogue / designs) wait in a retry queue.
+  const pendingCmdsRef = useRef<DesignCommand[]>([]);
+  const runDesignCommand = async (cmd: DesignCommand) => {
+    switch (cmd.kind) {
+      case 'open-generate':
+        setGeneratePrefill({ prompt: cmd.prompt, meme: cmd.meme });
+        setDockCollapsed(false);
+        setGenerateOpen(true);
+        break;
+      case 'show-design': {
+        const d = designs.find((x) => x.id === cmd.designId);
+        if (!d) {
+          pendingCmdsRef.current.push(cmd);
+          return;
+        }
+        focusNode(addNode('design', d.id));
+        break;
+      }
+      case 'open-editor': {
+        const d = designs.find((x) => x.id === cmd.designId);
+        if (!d) {
+          pendingCmdsRef.current.push(cmd);
+          return;
+        }
+        if (d.image?.startsWith('http')) {
+          setEditorInstruction(cmd.instruction ?? null);
+          setEditorDesign(d);
+        }
+        break;
+      }
+      case 'ingest-design': {
+        // An externally-generated image (Venus's meme, a workflow output…) becomes a REAL design
+        // row in the current collection, appears in the dock, and optionally lands on the canvas
+        // and straight into the editor for review.
+        const catId = catalogueRef.current?.id;
+        if (!catId) {
+          pendingCmdsRef.current.push(cmd);
+          return;
+        }
+        try {
+          const isData = cmd.url.startsWith('data:');
+          const res = await apiFetch('/api/designs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(
+              isData
+                ? { catalogueId: catId, dataUrl: cmd.url, name: cmd.prompt }
+                : { catalogueId: catId, url: cmd.url, name: cmd.prompt },
+            ),
+          });
+          const data = (await res.json().catch(() => ({}))) as { design?: { id: string; url: string } };
+          if (!data.design) return;
+          const row: Design = {
+            id: data.design.id,
+            prompt: cmd.prompt,
+            color: tileColor(cmd.prompt || data.design.id),
+            image: data.design.url,
+            status: 'ready',
+          };
+          setDesigns((prev) => [row, ...prev]);
+          setDockCollapsed(false);
+          if (cmd.addToCanvas !== false) focusNode(addNode('design', row.id));
+          if (cmd.openEditor && row.image?.startsWith('http')) {
+            setEditorInstruction(null);
+            setEditorDesign(row);
+          }
+        } catch {
+          // ingest failed — nothing lands; the caller's surface reports its own errors
+        }
+        break;
+      }
+    }
+  };
+  const runDesignCommandRef = useRef(runDesignCommand);
+  runDesignCommandRef.current = runDesignCommand;
+  useEffect(() => registerDesignCommandListener((cmd) => void runDesignCommandRef.current(cmd)), []);
+  // Retry queued commands once their prerequisites arrive (catalogue picked / designs loaded).
+  useEffect(() => {
+    if (!pendingCmdsRef.current.length) return;
+    if (!catalogue?.id && !designs.length) return;
+    const q = pendingCmdsRef.current;
+    pendingCmdsRef.current = [];
+    q.forEach((c) => void runDesignCommandRef.current(c));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogue?.id, designs.length]);
+
   // The product detail sheet replaces the old inline colour picker: product photo, selectable
   // colourways, sizes and starting price — all from /api/blank/:id/variants.
   const openProductDetail = (node: CanvasNode) => {
@@ -1753,7 +1869,11 @@ function DesignScreen() {
       <DesignEditor
         design={editorDesign?.image ? { id: editorDesign.id, image: editorDesign.image, prompt: editorDesign.prompt } : null}
         catalogueId={catalogue?.id}
-        onClose={() => setEditorDesign(null)}
+        initialInstruction={editorInstruction ?? undefined}
+        onClose={() => {
+          setEditorDesign(null);
+          setEditorInstruction(null);
+        }}
         onSaved={(d) =>
           setDesigns((prev) => [
             { id: d.id, prompt: d.prompt, color: tileColor(d.prompt), image: d.url, status: 'ready' as const },
@@ -1765,10 +1885,16 @@ function DesignScreen() {
       <GenerateModal
         open={generateOpen}
         webMode={assetMode}
-        onClose={() => setGenerateOpen(false)}
+        initialPrompt={generatePrefill?.prompt}
+        initialMeme={generatePrefill?.meme}
+        onClose={() => {
+          setGenerateOpen(false);
+          setGeneratePrefill(null);
+        }}
         onCommit={(staged) => {
           void commitDesign(staged);
           setGenerateOpen(false);
+          setGeneratePrefill(null);
         }}
       />
 
@@ -2376,6 +2502,8 @@ function GenerateModal({
   onClose,
   onCommit,
   webMode,
+  initialPrompt,
+  initialMeme,
 }: {
   open: boolean;
   onClose: () => void;
@@ -2384,6 +2512,10 @@ function GenerateModal({
   // True when the active collection is "Site assets" → generate web graphics; else product designs.
   // Replaces the old Design/Web-assets/Video tab picker: the brand+collection screen decides this.
   webMode: boolean;
+  // COMMAND-BUS prefill (deep links / Venus): applied when the modal OPENS; the creator still
+  // reviews/edits before generating — external actors suggest, the user decides.
+  initialPrompt?: string;
+  initialMeme?: boolean;
 }) {
   const theme = useTheme();
   const modality: Modality = webMode ? 'graphics' : 'design';
@@ -2405,6 +2537,14 @@ function GenerateModal({
   const [error, setError] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false); // advanced options (effort, aspect ratio) collapsed by default
   const canGo = prompt.trim().length > 0 || !!refImage;
+
+  // Command-bus prefill lands when the modal opens (and only then — typing is never clobbered).
+  useEffect(() => {
+    if (!open) return;
+    if (initialPrompt != null) setPrompt(initialPrompt);
+    if (initialMeme != null) setMeme(initialMeme);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const reset = () => {
     setPrompt('');

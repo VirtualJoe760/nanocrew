@@ -30,12 +30,15 @@ const MODES: { key: EditMode; icon: keyof typeof Ionicons.glyphMap; label: strin
 export function DesignEditor({
   design,
   catalogueId,
+  initialInstruction,
   onClose,
   onSaved,
 }: {
   /** The design being edited (null = closed). */
   design: { id: string; image: string; prompt: string } | null;
   catalogueId?: string;
+  /** Command-bus prefill (deep links / Venus): a suggested instruction, applied on open. */
+  initialInstruction?: string;
   onClose: () => void;
   /** Fired for every successful edit — the new design row (caller adds it to the dock). */
   onSaved: (d: EditedDesign) => void;
@@ -48,13 +51,14 @@ export function DesignEditor({
   // The latest edit result — shown large, and used as the SOURCE of the next edit (iteration).
   const [result, setResult] = useState<EditedDesign | null>(null);
 
-  // Fresh session whenever a different design opens.
+  // Fresh session whenever a different design opens (bus-suggested instruction lands here).
   useEffect(() => {
-    setMode('inpaint');
-    setInstruction('');
+    setMode(initialInstruction ? 'custom' : 'inpaint');
+    setInstruction(initialInstruction ?? '');
     setError(null);
     setResult(null);
     setBusy(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [design?.id]);
 
   if (!design) return null;
