@@ -340,3 +340,29 @@ Joe: Venus is renamed **EVE**. Rename strategy (to keep the churn sane):
   its own cleanup commit after Phase A stabilizes (it touches ~40 files and the docs tree; doing
   it mid-build multiplies merge pain for zero user value).
 - Voice/delivery unchanged: Kore × british robot. The buildReady cue phrase is unchanged.
+
+## PHASE A SHIPPED (2026-07-05, commit efb1efc)
+
+Eve is live as the full-screen overlay. What landed:
+
+- **eve-bus** (`src/lib/eve-bus.ts`): `summonEve({state})` / `registerEveSummonListener` +
+  `emitEveEvent` / `addEveEventListener` (`store-created`, `dismissed`). Queue+listener idiom.
+- **eve-overlay** (`src/components/eve/eve-overlay.tsx`): slide-down full-screen stage, mounted once
+  in `_layout` above the tabs. Hidden → visible top handle (slide down / tap). Present → bottom
+  handle (slide up / tap to pause). GL mounts only after slide-in (`ready`), torn down before
+  slide-out. `__eve('home'|null)` dev hook. States typed `hidden|home|developing|design`;
+  developing/design render home until Phases B/C.
+- **eve-home** (`src/components/eve/eve-home.tsx`): guide view (venus-guide greeting + chips;
+  build-brand starts the interview IN PLACE, others route out) + the ENTIRE interview moved verbatim
+  from studio.tsx — buildReady cue regex intact, mic permission requested on start, BrandReview,
+  createStore (+ its own Paywall on 402), Kore launch fanfare, mic-busy modal, keyboard chat.
+- **Studio is viewing-only**: dashboard + composer. `New brand`, the empty state, and the legacy
+  `?mode=interview` deep link all summon Eve. Dashboard refetches on `store-created`.
+- **Rename**: persona strings are EVE in live-voice.ts; UI says Eve. Legacy `venus-*` file/identifier
+  names (venus-avatar, venus-guide, curVenus, isVenusLive…) keep their names until the mechanical
+  rename commit. venus-sheet.tsx deleted (bones live on in eve-overlay).
+
+Verified on web (signed-out path + summon/dismiss/handles/orb). The signed-in interview path is the
+same code, type-checked; live-voice it end-to-end on device next session.
+
+NEXT: Phase B — intent router + `developing` state (VenusBubble, console loading, submit→home).
