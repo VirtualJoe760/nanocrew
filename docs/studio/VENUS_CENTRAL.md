@@ -303,3 +303,24 @@ Files: `api/venus/draft-post+api.ts`; draft card in `venus-home.tsx`; schema `sc
 8. **Voice-triggered spend** — design edits (8cr) fire from distilled speech; mishears burn credits. Keep edits cheap-tier only by voice, tap-confirm anything ≥ 60cr, and keep the discard path (DELETE) one utterance away.
 
 **Verify-before-build:** whether platform-api has a scheduler (Phase D trigger); the exact `siteUrl` source for `venusGo('developing')` (composer derives it — expose via `/api/me` or `stores/:slug`); web behavior (live voice is native-only — overlay should fall back to text lane or hide on web, as `site-preview` does with `IS_WEB`).
+
+---
+
+## ADDENDUM (2026-07-05): PRODUCT MANAGEMENT TOOLS
+
+Joe: Venus should have access to PRODUCT DETAILS — including taking a product OFF a store.
+Add to the tool registry (both map to routes that exist today):
+
+| Tool | Maps to | Status |
+|---|---|---|
+| `get_products` | `GET /api/creator/products?storeSlug=` (name/image/video/model shots/published state) | **exists-today** |
+| `remove_product` | `DELETE /api/creator/products/:id` ("remove a product everywhere the creator owns it") | **exists-today** |
+| `unpublish_product` | the PATCH publish toggle on `/api/creator/products/:id` (softer than delete — off the storefront, kept in the catalog) | **exists-today** (verify PATCH shape) |
+
+Conversation design: "take the hoodie off my store" → she reads get_products for the store,
+matches by name (disambiguate via ask if fuzzy), then — GUARDRAIL — product removal is
+DESTRUCTIVE: she states exactly what will be removed and from where, and requires a TAP
+confirmation in the overlay (never a spoken "yes"). Prefer offering `unpublish` first
+("shall I just take it off the site but keep it in your catalog?"); `remove_product` only on
+explicit "delete it completely". Surfaces in HOME state (voice) from Phase B's router
+(intent: `manage-products{storeSlug, productRef, action}`).
