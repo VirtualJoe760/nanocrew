@@ -141,3 +141,26 @@ Conversational video (`/api/video`, `/api/creator/scene-video` with model-tier c
 8. **Spend-by-conversation** — Venus triggering debits from voice mishears is a refund-and-trust problem; tap-confirm on every debit is non-negotiable, and the existing debit-refund-on-failure semantics must be verified for every tool she gets (note: `revision` cost is defined but never debited today — charging it later changes her critique-flow pitch).
 9. **Memory privacy** — persisting general transcripts (not just brand interviews) stores personal chatter; scope `venus_memory` to brand-relevant facts and make conversations deletable.
 10. **Transition-period double-Venus** — until Phase 2, the sheet and the in-tab embeds coexist; `isVenusLive()` gating must be airtight or two sessions will fight over the mic (the `activeLiveSession` teardown makes the failure mode "the interview dies mid-sentence," which looks like a crash to users).
+
+---
+
+## PIVOT + PHASE 1 SHIPPED (2026-07-05, same day)
+
+Joe sharpened the vision: **Studio becomes the viewing space** (brand/site details, stats);
+**Venus's steady state becomes the doing space** — the interview and site editing MOVE into her.
+Interaction contract: **slide down from the top edge to ACTIVATE Venus, slide up to PAUSE her.**
+Her tools: build brand · edit site · create designs · memes · **blog posts (+ scheduling — the
+posts API has no scheduledAt yet; needs a column + a publisher tick)**.
+
+SHIPPED (the steady-state MVP):
+- `src/lib/venus-guide.ts` — her guidance brain: greeting + next-best-action from /api/me
+  (no store → build; store not live → finalize; live → edit/create), max 4 chips.
+- `src/components/venus-sheet.tsx` — the global top sheet (mounted in `_layout.tsx`):
+  slide-down zone (RNGH pan) + `openVenusSheet()` + `__venusSheet(bool)` dev hook; VenusBubble
+  avatar; tool chips route into the real flows — interview (`/studio?mode=interview`, new param
+  handled in studio.tsx), console, and the DESIGN COMMAND BUS (`src/lib/design-bus.ts`:
+  open-generate / ingest-design / show-design / open-editor — deep links `?action=generate
+  &prompt=&meme=1`, `?edit=<id>` share the same path Venus will use).
+- Verified live: personalized greeting from real store data; chips navigate and the generator
+  opens prefilled. NEXT here: the chat lane (`/api/venus/chat`, function-calling) speaks
+  through this same surface; then the interview/critique sessions re-point to the provider.

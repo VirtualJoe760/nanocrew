@@ -598,7 +598,7 @@ function StudioScreen() {
   const [hasStore, setHasStore] = useState(false);
 
   // Deep-link from a tapped "changes ready" push → open that store's Console on the Edit tab (review).
-  const reviewParams = useLocalSearchParams<{ reviewSlug?: string; reviewName?: string }>();
+  const reviewParams = useLocalSearchParams<{ reviewSlug?: string; reviewName?: string; mode?: string }>();
   const reviewHandled = useRef<string | null>(null);
   useEffect(() => {
     const slug = reviewParams.reviewSlug;
@@ -608,6 +608,15 @@ function StudioScreen() {
       setShowComposer(true);
     }
   }, [reviewParams.reviewSlug, reviewParams.reviewName]);
+  // Deep-link from the VENUS SHEET ("Build your brand") → straight into her interview view.
+  const modeHandled = useRef(false);
+  useEffect(() => {
+    if (reviewParams.mode === 'interview' && voiceResolved && !modeHandled.current) {
+      modeHandled.current = true;
+      setMode('interview');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewParams.mode, voiceResolved]);
   const [paywall, setPaywall] = useState<'subscription_required' | 'brand_limit' | 'manage' | null>(null);
 
   // ── First-launch welcome + onboarding intent ───────────────────────────────────────────────
