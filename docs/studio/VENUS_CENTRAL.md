@@ -324,3 +324,19 @@ confirmation in the overlay (never a spoken "yes"). Prefer offering `unpublish` 
 ("shall I just take it off the site but keep it in your catalog?"); `remove_product` only on
 explicit "delete it completely". Surfaces in HOME state (voice) from Phase B's router
 (intent: `manage-products{storeSlug, productRef, action}`).
+
+---
+
+## ADDENDUM (2026-07-05): SHE IS NOW **EVE**
+
+Joe: Venus is renamed **EVE**. Rename strategy (to keep the churn sane):
+- **User-facing NOW (Phase A):** every string a creator sees/hears — her self-introduction in
+  the live personas ("You are EVE…"), overlay wordmark (EVE), captions label, Lab audition
+  lines, /api/say fanfare copy, onboarding copy, dashboard "Meet Eve" CTA.
+- **New code NOW:** everything built for the overlay is named eve-* (src/components/eve/…,
+  src/state/eve-provider.tsx, openEve(), __eve dev hook).
+- **Legacy identifiers LATER:** the venus-* files/exports (venus-orb-scene, venus-lipsync,
+  live-voice's venus callbacks, VENUS_* consts) keep working — a mechanical repo-wide rename is
+  its own cleanup commit after Phase A stabilizes (it touches ~40 files and the docs tree; doing
+  it mid-build multiplies merge pain for zero user value).
+- Voice/delivery unchanged: Kore × british robot. The buildReady cue phrase is unchanged.
