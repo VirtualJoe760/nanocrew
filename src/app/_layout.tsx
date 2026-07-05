@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
-import VenusSheet from '@/components/venus-sheet';
+import EveOverlay from '@/components/eve/eve-overlay';
 import { attachReviewDeepLink } from '@/lib/push';
 
 // The VENUS LAB — our tool for iterating on Venus's APPEARANCE — now opens as a gated full-screen
@@ -51,7 +51,7 @@ export default function TabLayout() {
       <AppTabs />
       {/* VENUS'S STEADY STATE — slide down from the top edge to activate her, up to pause
           (docs/studio/VENUS_CENTRAL.md). Mounted once, above the tabs. */}
-      <VenusSheet />
+      <EveOverlay />
     </GestureHandlerRootView>
   );
 }
