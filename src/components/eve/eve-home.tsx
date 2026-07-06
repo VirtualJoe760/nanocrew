@@ -29,6 +29,7 @@ import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
 import { EveOrbRing } from '@/components/eve/eve-orbs';
 import { eveChildren, eveRootNodes, type EveNode } from '@/lib/eve-capabilities';
+import { buildDigest, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
 import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
@@ -206,6 +207,23 @@ export function EveHome({
     if (userTurns >= 6 || (userTurns >= 3 && cue.test(lastEve))) setBuildReady(true);
   }, [view, live.messages, buildReady]);
 
+  // The digest — Eve's proactive status report. Fetched lazily the first time it's opened.
+  const [digest, setDigest] = useState<Digest | 'loading' | null>(null);
+  const [showDigest, setShowDigest] = useState(false);
+  const openDigest = useCallback(async () => {
+    setShowDigest(true);
+    setDigest((cur) => (cur && cur !== 'loading' ? cur : 'loading'));
+    if (digest && digest !== 'loading') return; // already have it
+    if (!session?.access_token) { setDigest(buildDigest([])); return; }
+    try {
+      const r = await fetch(apiUrl('/api/creator/stats'), { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const d = (await r.json().catch(() => ({}))) as { stores?: DigestStore[] };
+      setDigest(buildDigest(d.stores ?? []));
+    } catch {
+      setDigest(buildDigest([]));
+    }
+  }, [digest, session]);
+
   // ---- VOICE-INTENT ROUTING (VENUS_CENTRAL.md §3): distill-then-execute, per committed turn ----
   // Native-audio Live can't tool-call, so each new user utterance goes to /api/eve/route (~300ms
   // flash, non-blocking, fail-open to 'none'). Returning creators only — a first-brand creator is
@@ -293,6 +311,12 @@ export function EveHome({
               '(Writing posts by voice lands soon — in one sentence, tell them they can write posts from the Studio composer for now.)',
             );
             return;
+          case 'digest':
+            void openDigest();
+            live.sendContext(
+              "(Their digest is now on screen. In one short sentence, give them the headline — how they're doing — and offer a next step.)",
+            );
+            return;
           case 'done':
             onRequestClose();
             return;
@@ -301,7 +325,7 @@ export function EveHome({
         // routing is best-effort — a missed command costs a repeat, never an error
       }
     },
-    [session, stores, live.messages, live.sendContext, onGo, onRequestClose, enterInterview],
+    [session, stores, live.messages, live.sendContext, onGo, onRequestClose, enterInterview, openDigest],
   );
   const routedUsers = useRef(0);
   useEffect(() => {
@@ -524,6 +548,9 @@ export function EveHome({
             onGo({ state: 'design' });
           }
           return;
+        case 'digest':
+          void openDigest();
+          return;
         case 'write-post':
         case 'manage-brand':
           onRequestClose();
@@ -535,7 +562,7 @@ export function EveHome({
           return;
       }
     },
-    [hasStore, stores, startVoice, onRequestClose, onGo],
+    [hasStore, stores, startVoice, onRequestClose, onGo, openDigest],
   );
 
   // An orb was tapped: a branch blooms its children; a leaf fires (and drops us back to the root).
@@ -772,6 +799,34 @@ export function EveHome({
           bg={BG}
         />
       ) : null}
+
+      {/* THE DIGEST — Eve's proactive status report, over the home state. */}
+      {showDigest ? (
+        <Pressable style={styles.digestBackdrop} onPress={() => setShowDigest(false)}>
+          <Pressable style={[styles.digestCard, { backgroundColor: p.bgTop, borderColor: p.line }]} onPress={() => {}}>
+            <ThemedText type="code" style={[styles.digestEyebrow, { color: p.accent }]}>YOUR DIGEST</ThemedText>
+            {digest && digest !== 'loading' ? (
+              <>
+                <ThemedText style={[styles.digestHeadline, { color: p.ink }]}>{digest.headline}</ThemedText>
+                <View style={styles.digestTiles}>
+                  {digest.tiles.map((t) => (
+                    <View key={t.label} style={styles.digestTile}>
+                      <ThemedText style={[styles.digestValue, { color: p.ink }]}>{t.value}</ThemedText>
+                      <ThemedText type="code" style={[styles.digestTileLabel, { color: p.dim }]}>{t.label}</ThemedText>
+                    </View>
+                  ))}
+                </View>
+                <ThemedText type="small" style={[styles.digestSuggestion, { color: p.dim }]}>{digest.suggestion}</ThemedText>
+              </>
+            ) : (
+              <ActivityIndicator color={p.accent} style={{ marginVertical: Spacing.six }} />
+            )}
+            <Pressable onPress={() => setShowDigest(false)} hitSlop={8} style={[styles.digestClose, { borderColor: `${p.dim}66` }]}>
+              <ThemedText type="code" style={{ color: p.dim }}>Close</ThemedText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -825,4 +880,15 @@ const styles = StyleSheet.create({
   },
   error: { color: '#ff8a8a', textAlign: 'center' },
   errorDismiss: { color: '#ff8a8a99', fontSize: 11, letterSpacing: 1 },
+
+  digestBackdrop: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)', padding: Spacing.four },
+  digestCard: { width: '100%', maxWidth: 380, borderRadius: 20, borderWidth: 1, padding: Spacing.five, alignItems: 'center' },
+  digestEyebrow: { fontSize: 11, letterSpacing: 2, marginBottom: Spacing.three },
+  digestHeadline: { fontSize: 19, lineHeight: 26, textAlign: 'center', fontFamily: 'Jost-Medium', marginBottom: Spacing.four },
+  digestTiles: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch', marginBottom: Spacing.four },
+  digestTile: { flex: 1, alignItems: 'center', paddingVertical: Spacing.three, borderRadius: 12, backgroundColor: 'rgba(124,199,223,0.08)' },
+  digestValue: { fontSize: 20, fontFamily: 'Jost-Medium' },
+  digestTileLabel: { fontSize: 10, letterSpacing: 0.5, marginTop: 2 },
+  digestSuggestion: { textAlign: 'center', lineHeight: 21, marginBottom: Spacing.four },
+  digestClose: { borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.two },
 });

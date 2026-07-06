@@ -29,7 +29,7 @@ export function venusGuide(opts: { firstName?: string; stores: StoreLite[] }): V
   } else if (unfinished) {
     situation = `“${unfinished.name}” isn't live yet — shall we finalize the website?`;
   } else if (live.length) {
-    situation = `“${live[0].name}” is live. What shall we make today?`;
+    situation = `“${live[0].name}” is live. Want your digest, or shall we make something?`;
   } else {
     situation = 'What shall we make today?';
   }

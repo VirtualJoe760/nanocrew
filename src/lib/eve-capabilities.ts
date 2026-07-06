@@ -31,6 +31,7 @@ export type EveAction =
   | { type: 'new-design'; meme?: boolean }
   | { type: 'write-post' }
   | { type: 'manage-brand' }
+  | { type: 'digest' }
   | { type: 'nav'; route: string };
 
 export type EveNode = {
@@ -108,6 +109,16 @@ const NODES: Record<string, EveNode> = {
     when: (c) => c.hasStore,
     action: () => ({ type: 'write-post' }),
   },
+  'digest': {
+    id: 'digest',
+    label: 'Digest',
+    detail: 'Your numbers at a glance.',
+    kind: 'act',
+    icon: 'digest',
+    voiceIntent: 'digest',
+    when: (c) => c.hasStore,
+    action: () => ({ type: 'digest' }),
+  },
   // Branch: brand management, grouped so the root ring stays calm for returning creators.
   'brand': {
     id: 'brand',
@@ -123,13 +134,15 @@ const NODES: Record<string, EveNode> = {
 /** The root ring — contextual by store status. First-timers see the direct build + create verbs;
  *  returning creators get a Brand branch (grouping site/new-brand/manage) alongside create + post. */
 export function eveRootNodes(ctx: EveCtx): EveNode[] {
+  // Returning creators lead with Digest — Eve's proactive "here's how you're doing" — then the
+  // Brand branch + create verbs. First-timers get the direct build + create verbs.
   const ids = ctx.hasStore
-    ? ['brand', 'new-design', 'make-meme', 'write-post']
+    ? ['digest', 'brand', 'new-design', 'make-meme', 'write-post']
     : ['build-brand', 'new-design', 'make-meme'];
   return ids
     .map((id) => NODES[id])
     .filter((n) => n && n.when(ctx))
-    .slice(0, 4);
+    .slice(0, 5);
 }
 
 /** The visible children of a branch node (filtered by availability). */

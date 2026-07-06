@@ -16,11 +16,11 @@ import { guardRate } from '@/lib/rate-limit';
 const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 const TRANSIENT = /unavailable|overloaded|try again|503|429|rate.?limit|deadline|temporar/i;
 
-const INTENTS = new Set(['create-brand', 'edit-site', 'new-design', 'write-post', 'done', 'none'] as const);
-type Intent = 'create-brand' | 'edit-site' | 'new-design' | 'write-post' | 'done' | 'none';
+const INTENTS = new Set(['create-brand', 'edit-site', 'new-design', 'write-post', 'digest', 'done', 'none'] as const);
+type Intent = 'create-brand' | 'edit-site' | 'new-design' | 'write-post' | 'digest' | 'done' | 'none';
 
 const SYSTEM = `You classify ONE spoken utterance from a clothing-brand creator talking with Eve, their AI studio assistant. Decide whether it is a CLEAR task command to switch what they're working on, and respond with STRICT JSON only:
-{"intent":"create-brand"|"edit-site"|"new-design"|"write-post"|"done"|"none","storeSlug":"...","idea":"...","topic":"...","ask":"..."}
+{"intent":"create-brand"|"edit-site"|"new-design"|"write-post"|"digest"|"done"|"none","storeSlug":"...","idea":"...","topic":"...","ask":"..."}
 (omit fields that don't apply)
 
 Intents:
@@ -28,6 +28,7 @@ Intents:
 - "create-brand": they clearly want to start/build a NEW brand ("let's build another brand", "I want to start a new label").
 - "new-design": they clearly ask to create a design, graphic, or meme ("make me a meme about mondays", "new tee design with a chrome skull"). Put their concept in idea, short.
 - "write-post": they clearly ask to write/draft a blog post. topic = short topic.
+- "digest": they ask how their store/brand is doing, for stats, sales, orders, views, revenue, or a status update ("how am I doing", "yes" to a digest offer, "show my numbers", "any sales?").
 - "done": they are clearly finished with Eve ("that's all for now", "we're done", "goodbye Eve").
 - "none": EVERYTHING else — answers to Eve's questions, brand-interview content (names, products, colors, style talk), chit-chat, thinking aloud, vague wishes. PRECISION over recall: when in doubt, return "none".
 
