@@ -28,7 +28,7 @@ import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
 import { EveOrbRing } from '@/components/eve/eve-orbs';
-import { visibleEveNodes, type EveNode } from '@/lib/eve-capabilities';
+import { eveChildren, eveRootNodes, type EveNode } from '@/lib/eve-capabilities';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
 import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
@@ -479,11 +479,16 @@ export function EveHome({
     }
   }, [session, brand, playSpeech]);
 
-  // Fire a capability node from the registry — the ONE dispatcher an orb tap (and, at the handler
-  // level, voice) both land in. The registry hands back a pure action descriptor; this turns it into
-  // the app calls (interview / developing / design bus / router).
+  // Which branch the orb ring is currently inside — null = the root ring. Resets to root each time
+  // Eve is (re)summoned (EveHome remounts).
+  const [orbBranch, setOrbBranch] = useState<EveNode | null>(null);
+
+  // Fire a LEAF capability node — the ONE dispatcher an orb tap (and, at the handler level, voice)
+  // both land in. The registry hands back a pure action descriptor; this turns it into the app calls
+  // (interview / developing / design bus / router).
   const runNode = useCallback(
     (node: EveNode) => {
+      if (!node.action) return; // a branch — traversed by onOrbSelect, never dispatched here
       const action = node.action({ hasStore, stores });
       switch (action.type) {
         case 'build-brand':
@@ -509,6 +514,7 @@ export function EveHome({
           router.push('/design');
           return;
         case 'write-post':
+        case 'manage-brand':
           onRequestClose();
           router.push('/studio');
           return;
@@ -519,6 +525,19 @@ export function EveHome({
       }
     },
     [hasStore, stores, startVoice, onRequestClose, onGo],
+  );
+
+  // An orb was tapped: a branch blooms its children; a leaf fires (and drops us back to the root).
+  const onOrbSelect = useCallback(
+    (node: EveNode) => {
+      if (node.kind === 'branch') {
+        setOrbBranch(node);
+        return;
+      }
+      setOrbBranch(null);
+      runNode(node);
+    },
+    [runNode],
   );
 
   // Play her materialize (`morphing`) for ~4.2s each time the interview view (re)appears.
@@ -547,8 +566,11 @@ export function EveHome({
   const stage: VenusStage = view === 'interview' ? stageFor(state, intro) : 'silence';
 
   const bottomPad = insets.bottom + 44; // clear the overlay's dismiss handle
-  // The energy orbs that bloom in the guide — the registry decides which by store status.
-  const rootNodes = useMemo(() => visibleEveNodes({ hasStore, stores }), [hasStore, stores]);
+  // The energy orbs to bloom right now: a branch's children if we're inside one, else the root ring.
+  const orbNodes = useMemo(
+    () => (orbBranch ? eveChildren(orbBranch, { hasStore, stores }) : eveRootNodes({ hasStore, stores })),
+    [orbBranch, hasStore, stores],
+  );
 
   return (
     <View style={styles.fill}>
@@ -661,7 +683,13 @@ export function EveHome({
               </ThemedText>
             </View>
             <View style={styles.orbDock}>
-              <EveOrbRing nodes={rootNodes} onSelect={runNode} />
+              {/* key re-blooms the whole ring on every branch change (root ⇄ children) */}
+              <EveOrbRing
+                key={orbBranch?.id ?? 'root'}
+                nodes={orbNodes}
+                onSelect={onOrbSelect}
+                onBack={orbBranch ? () => setOrbBranch(null) : undefined}
+              />
             </View>
           </View>
         ) : keyboardMode ? null : (

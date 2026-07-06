@@ -62,6 +62,13 @@ function OrbIcon({ icon }: { icon: EveIcon }) {
           <Path d="M8.5 12 h6 M8.5 15 h6" {...s} />
         </G>
       );
+    case 'store': // shopping bag
+      return (
+        <G>
+          <Path d="M5 7 h12 l-1 11 h-10 Z" {...s} />
+          <Path d="M8 8 v-1.5 a3 3 0 0 1 6 0 V8" {...s} />
+        </G>
+      );
     case 'digest': // pulse line
       return <Path d="M2.5 13 l3 0 2 -6 3 10 2 -8 2 4 4 0" {...s} />;
     default: // nav chevron
@@ -111,19 +118,36 @@ function Orb({ node, index, onPress }: { node: EveNode; index: number; onPress: 
   );
 }
 
-/** The ring of energy orbs — one per visible capability node. */
-export function EveOrbRing({ nodes, onSelect }: { nodes: EveNode[]; onSelect: (node: EveNode) => void }) {
+/** The ring of energy orbs — one per visible capability node. `onBack`, when present, means we're
+ *  inside a branch: a back affordance appears so the creator can rise back to the parent ring. */
+export function EveOrbRing({
+  nodes,
+  onSelect,
+  onBack,
+}: {
+  nodes: EveNode[];
+  onSelect: (node: EveNode) => void;
+  onBack?: () => void;
+}) {
   if (!nodes.length) return null;
   return (
-    <View style={styles.ring}>
-      {nodes.map((n, i) => (
-        <Orb key={n.id} node={n} index={i} onPress={() => onSelect(n)} />
-      ))}
+    <View style={styles.dock}>
+      <View style={styles.ring}>
+        {nodes.map((n, i) => (
+          <Orb key={n.id} node={n} index={i} onPress={() => onSelect(n)} />
+        ))}
+      </View>
+      {onBack ? (
+        <Pressable onPress={onBack} hitSlop={10} accessibilityLabel="Back" style={styles.back}>
+          <ThemedText type="code" style={styles.backLabel}>‹ back</ThemedText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  dock: { alignItems: 'center', gap: Spacing.two },
   ring: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -135,4 +159,6 @@ const styles = StyleSheet.create({
   item: { alignItems: 'center', width: SIZE + 18, gap: 5 },
   orb: { width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' },
   label: { color: 'rgba(223,244,255,0.82)', fontSize: 11, textAlign: 'center', letterSpacing: 0.2 },
+  back: { paddingVertical: 4, paddingHorizontal: 12 },
+  backLabel: { color: 'rgba(207,232,243,0.6)', fontSize: 13, letterSpacing: 0.5 },
 });
