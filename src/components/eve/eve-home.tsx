@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import {
   ActivityIndicator,
   AppState,
@@ -27,9 +27,11 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
+import { EveOrbRing } from '@/components/eve/eve-orbs';
+import { visibleEveNodes, type EveNode } from '@/lib/eve-capabilities';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
-import { venusGuide, type VenusGuidance, type VenusSuggestion } from '@/lib/venus-guide';
+import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // EVE'S HOME STATE — her steady state inside the overlay (docs/studio/VENUS_CENTRAL.md). This is
@@ -477,18 +479,21 @@ export function EveHome({
     }
   }, [session, brand, playSpeech]);
 
-  // The no-voice fallback chips: build-brand starts the interview HERE; the rest route into the app.
-  const runTool = useCallback(
-    (s: VenusSuggestion) => {
-      switch (s.key) {
+  // Fire a capability node from the registry — the ONE dispatcher an orb tap (and, at the handler
+  // level, voice) both land in. The registry hands back a pure action descriptor; this turns it into
+  // the app calls (interview / developing / design bus / router).
+  const runNode = useCallback(
+    (node: EveNode) => {
+      const action = node.action({ hasStore, stores });
+      switch (action.type) {
         case 'build-brand':
           void startVoice();
           return;
         case 'edit-site': {
-          // Edit the brand THIS chip is about (s.storeSlug), not just the first store with a site —
-          // and only open developing when that brand actually has a live site; otherwise the Studio,
-          // where its site is finalized/launched.
-          const target = s.storeSlug ? stores.find((x) => x.slug === s.storeSlug) : stores.find((x) => siteUrlFor(x));
+          // Open developing on a brand with a LIVE site; otherwise the Studio, where its site is
+          // finalized/launched. (Prefer an unfinished brand — that's the one to get live.)
+          const unfinished = stores.find((s) => s.status !== 'live' && s.status !== 'suspended');
+          const target = unfinished ?? stores.find((s) => siteUrlFor(s));
           const url = target ? siteUrlFor(target) : null;
           if (target && url) {
             onGo({ state: 'developing', payload: { slug: target.slug, url, name: target.name } });
@@ -498,23 +503,22 @@ export function EveHome({
           }
           return;
         }
-        case 'create-designs':
+        case 'new-design':
           onRequestClose();
-          sendDesignCommand({ kind: 'open-generate' });
+          sendDesignCommand({ kind: 'open-generate', meme: action.meme });
           router.push('/design');
           return;
-        case 'make-meme':
-          onRequestClose();
-          sendDesignCommand({ kind: 'open-generate', meme: true });
-          router.push('/design');
-          return;
-        case 'blog-post':
+        case 'write-post':
           onRequestClose();
           router.push('/studio');
           return;
+        case 'nav':
+          onRequestClose();
+          router.push(action.route as Href);
+          return;
       }
     },
-    [startVoice, onRequestClose, onGo, stores],
+    [hasStore, stores, startVoice, onRequestClose, onGo],
   );
 
   // Play her materialize (`morphing`) for ~4.2s each time the interview view (re)appears.
@@ -543,6 +547,8 @@ export function EveHome({
   const stage: VenusStage = view === 'interview' ? stageFor(state, intro) : 'silence';
 
   const bottomPad = insets.bottom + 44; // clear the overlay's dismiss handle
+  // The energy orbs that bloom in the guide — the registry decides which by store status.
+  const rootNodes = useMemo(() => visibleEveNodes({ hasStore, stores }), [hasStore, stores]);
 
   return (
     <View style={styles.fill}>
@@ -639,10 +645,11 @@ export function EveHome({
             bg={BG}
           />
         ) : view === 'guide' ? (
-          // LAB LOOK — the orb owns the screen. Eve greets and directs by VOICE; the intent router
-          // hears "edit my site", "make a meme", "start a new brand". No button wall over her.
-          <View style={styles.voiceView}>
-            <View style={styles.subs}>
+          // LAB LOOK — the orb owns the middle. Subtitles ride ABOVE her; her energy condenses into
+          // tappable nodes along the LOWER screen. No pause button — swipe up on the overlay pauses.
+          // Voice still routes ("edit my site", "make a meme") through the same registry nodes.
+          <View style={styles.guideView}>
+            <View style={styles.subsTop}>
               {heard ? (
                 <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
                   {'you > ' + heard}
@@ -652,23 +659,9 @@ export function EveHome({
               <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
                 {line || guidance?.greeting || '…'}
               </ThemedText>
-              {hasStore && micOk ? (
-                <Pressable onPress={togglePause} hitSlop={12} style={[styles.pausePill, { borderColor: paused ? p.accent : `${p.dim}66` }]}>
-                  <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 13, letterSpacing: 1 }}>
-                    {paused ? '▶  Resume' : '❚❚  Pause'}
-                  </ThemedText>
-                </Pressable>
-              ) : (
-                // No live voice (web / mic denied) — a slim quick-actions row so no one's stranded,
-                // pinned to the very bottom edge, never over the orb.
-                <View style={styles.quickRow}>
-                  {(guidance?.suggestions ?? []).map((s) => (
-                    <Pressable key={s.key} onPress={() => runTool(s)} hitSlop={6} style={[styles.quickChip, { borderColor: `${p.dim}55` }]}>
-                      <ThemedText type="code" style={{ color: p.dim, fontSize: 12 }}>{s.label}</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
+            </View>
+            <View style={styles.orbDock}>
+              <EveOrbRing nodes={rootNodes} onSelect={runNode} />
             </View>
           </View>
         ) : keyboardMode ? null : (
@@ -757,11 +750,10 @@ const styles = StyleSheet.create({
   guideBody: { textAlign: 'center', maxWidth: 320, lineHeight: 22, marginTop: Spacing.two },
   ctaPrimary: { borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.four },
 
-  // The voice surface (guide + interview share it): the orb owns the screen, chrome hugs the bottom.
-  voiceView: { flex: 1, justifyContent: 'flex-end' },
-  subs: { alignItems: 'center', gap: Spacing.two, paddingBottom: Spacing.two, minHeight: 96 },
-  quickRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Spacing.two, marginTop: Spacing.two },
-  quickChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  // The guide: subtitles pinned at the TOP, the energy-orb dock at the BOTTOM, orb full-bleed between.
+  guideView: { flex: 1, justifyContent: 'space-between' },
+  subsTop: { alignItems: 'center', gap: Spacing.two, minHeight: 72 },
+  orbDock: { alignItems: 'center', paddingBottom: Spacing.two },
 
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.four },
   hint: { letterSpacing: 1 },
