@@ -13,7 +13,10 @@ import { usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';
 
+import { EveDesign } from '@/components/eve/eve-design';
+import { EveDeveloping } from '@/components/eve/eve-developing';
 import { EveGlyph } from '@/components/eve/eve-glyph';
+import { EveHome } from '@/components/eve/eve-home';
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
@@ -23,12 +26,14 @@ import { useAuth } from '@/hooks/use-auth';
 import { apiUrl, readJson } from '@/lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Welcome, type OnboardChoice } from '@/components/welcome';
-import { addEveEventListener, summonEve } from '@/lib/eve-bus';
+import { EVE_SCRIM } from '@/components/screen-fade';
+import { addEveEventListener, registerEveSummonListener, type EveSummon } from '@/lib/eve-bus';
 
-// The Studio is VIEWING — brand details, the dashboard, the composer. DOING (the voice interview,
-// site edits, designs) lives with EVE, the full-screen overlay assistant: the interview moved
-// wholesale to src/components/eve/eve-home.tsx (docs/studio/VENUS_CENTRAL.md). "New brand" and the
-// old ?mode=interview deep link now summon her.
+// THE EVE TAB — her page. The pull-down overlay is retired: this tab hosts Eve's voice machine
+// (home = the interview/guide · developing = site edits · design) directly OVER the persistent
+// root Eve (eve-background). While a voice surface is up the page swaps to it and drops its scrim,
+// so she performs at full brightness; otherwise the tab is the quiet dashboard (brands, composer).
+// summonEve() still works app-wide — the listener registers here and queued summons flush on mount.
 
 // Dark ink used for text ON the gold accent buttons — gold is light, so dark text reads in
 // both modes. (The screen background comes from the palette below.)
@@ -53,7 +58,7 @@ function ManageIcon() {
 
 // ---------- Screen ----------
 
-export default withScreenFade(StudioScreen, { eveThrough: true });
+export default withScreenFade(StudioScreen, { eveThrough: 'clear' });
 
 function StudioScreen() {
   const insets = useSafeAreaInsets();
@@ -66,6 +71,12 @@ function StudioScreen() {
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
   const [hasStore, setHasStore] = useState(false);
 
+  // Eve's in-tab voice machine — null means the quiet dashboard; otherwise which surface is up.
+  // Summons from anywhere in the app (the composer's site tile, deep links) land here; the bus
+  // queues any summon fired before this tab mounts.
+  const [eve, setEve] = useState<EveSummon | null>(null);
+  useEffect(() => registerEveSummonListener((s) => setEve(s)), []);
+
   // Deep-link from a tapped "changes ready" push → open that store's Console on the Edit tab (review).
   const reviewParams = useLocalSearchParams<{ reviewSlug?: string; reviewName?: string; mode?: string }>();
   const reviewHandled = useRef<string | null>(null);
@@ -77,12 +88,12 @@ function StudioScreen() {
       setShowComposer(true);
     }
   }, [reviewParams.reviewSlug, reviewParams.reviewName]);
-  // Legacy ?mode=interview deep link → the interview lives with Eve now; summon her.
+  // Legacy ?mode=interview deep link → straight into the voice surface.
   const modeHandled = useRef(false);
   useEffect(() => {
     if (reviewParams.mode === 'interview' && !modeHandled.current) {
       modeHandled.current = true;
-      summonEve({ state: 'home' });
+      setEve({ state: 'home' });
     }
   }, [reviewParams.mode]);
   // Eve built a store while the Studio sat beneath her → refetch the dashboard.
@@ -183,9 +194,9 @@ function StudioScreen() {
     if (voiceResolved) setMode('dashboard');
   }, [voiceResolved]);
 
-  // Another brand (or the first) — the interview is Eve's now; summon her.
+  // Another brand (or the first) — straight into Eve's voice surface.
   const onNewBrand = useCallback(() => {
-    summonEve({ state: 'home' });
+    setEve({ state: 'home' });
   }, []);
 
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
@@ -198,6 +209,10 @@ function StudioScreen() {
 
   return (
     <View style={styles.container}>
+      {/* The page's own scrim (withScreenFade is 'clear' here): dims the root Eve for dashboard
+          legibility, DROPPED while a voice surface is up so she performs at full brightness. */}
+      {!eve ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: EVE_SCRIM }]} /> : null}
+
       <Modal
         visible={welcomeVisible}
         animationType="fade"
@@ -211,6 +226,33 @@ function StudioScreen() {
         <Welcome onChoose={handleChoose} topInset={insets.top} bottomInset={insets.bottom} />
       </Modal>
 
+      {/* Eve's voice machine — swaps IN PLACE of the dashboard (nothing underneath to bleed through). */}
+      {eve && session ? (
+        eve.state === 'developing' ? (
+          <EveDeveloping
+            url={typeof eve.payload?.url === 'string' ? eve.payload.url : undefined}
+            slug={typeof eve.payload?.slug === 'string' ? eve.payload.slug : undefined}
+            onExit={() => setEve({ state: 'home' })}
+            onSubmitted={(slug) => {
+              // Changes submitted — land on that store's composer review, voice surface closed.
+              setEve(null);
+              setConsoleBrand({ slug, name: slug });
+              setShowComposer(true);
+            }}
+          />
+        ) : eve.state === 'design' ? (
+          <EveDesign
+            idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
+            onExit={() => setEve({ state: 'home' })}
+            onHandoff={() => {
+              setEve(null);
+              router.push('/design');
+            }}
+          />
+        ) : (
+          <EveHome open onRequestClose={() => setEve(null)} onGo={setEve} />
+        )
+      ) : (
       <View style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <View style={styles.headerRow}>
           <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>
@@ -314,11 +356,12 @@ function StudioScreen() {
               </ThemedText>
             </Pressable>
             <ThemedText type="code" style={[styles.introFoot, { color: p.faint }]}>
-              Tip: slide down from the top edge anytime — that’s Eve.
+              Just talk — she designs, builds, and launches.
             </ThemedText>
           </View>
         )}
       </View>
+      )}
     </View>
   );
 }

@@ -3,7 +3,7 @@
 // command bus: senders never import the overlay, and a summon fired before the overlay mounts
 // flushes on mount.
 //
-// Eve's STATES (the machine lives in eve-overlay.tsx):
+// Eve's STATES (the machine lives on the Eve tab, studio.tsx):
 //   hidden     — overlay off-screen; the top-edge handle is armed
 //   home       — her steady state: full-screen orb, greeting + tools, the brand interview
 //   developing — site-editing UI (Phase B)

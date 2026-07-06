@@ -16,7 +16,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { BrandReview } from '@/components/brand-review';
 import { ChatInterview } from '@/components/chat-interview';
-import VenusAvatar, { type VenusStage } from '@/components/venus-avatar';
+import { setEveStage } from '@/lib/eve-stage-bus';
 import { InterviewTopics } from '@/components/interview-topics';
 import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
@@ -33,28 +33,20 @@ import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
 import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
-// EVE'S HOME STATE — her steady state inside the overlay (docs/studio/VENUS_CENTRAL.md). This is
-// the brand INTERVIEW, moved wholesale out of studio.tsx (the Studio is now viewing-only): the
-// full-bleed neural-constellation avatar, live Gemini voice, subtitles, the buildReady gate, the
+// EVE'S HOME STATE — her voice surface, hosted by the Eve tab (/studio) since the overlay
+// retirement. This is the brand INTERVIEW: live Gemini voice, subtitles, the buildReady gate, the
 // BrandReview → createStore finish, and the launch fanfare — plus her GUIDE view (greeting +
-// next-best-action chips) for creators who already have a store.
+// digest) for creators who already have a store.
 //
 // Two views:  guide  — greeting + tools (build brand · edit site · designs · memes · posts)
 //             interview — the voice interview → BrandReview when she's extracted the brand
 //
-// The GL avatar mounts only when `ready` (the overlay's slide-in is done) and only in views that
-// show her (never behind BrandReview or the full-screen chat) — one GL context, ever.
+// She has NO avatar of her own: the persistent root Eve (eve-background) is already behind this
+// surface, and EveHome DRIVES it through the stage bus — one GL context, ever.
 
 const LIVE_VOICE = 'Kore'; // Joe's pick (Lab audition 2026-07-05): Kore × the 'british robot' delivery
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
-
-// Map the interview's EntityState → the avatar's lifecycle stage. Formed + listening at rest;
-// `talking` only while Eve speaks. The materialize (`morphing`) plays as an intro on entry.
-function stageFor(state: EntityState, intro: boolean): VenusStage {
-  if (intro) return 'morphing';
-  return state === 'speaking' ? 'talking' : 'silence';
-}
 
 const BG = '#08080a'; // dark ink for text ON the gold accent buttons
 const AI_NAME = 'Eve';
@@ -71,16 +63,13 @@ function siteUrlFor(s: StoreLite): string | null {
 
 export function EveHome({
   open,
-  ready,
   onRequestClose,
   onGo,
 }: {
-  /** The overlay is on screen (gates the live session — she is never vocal while hidden). */
+  /** The surface is on screen (gates the live session — she is never vocal while hidden). */
   open: boolean;
-  /** Slide-in finished — safe to mount the GL avatar. */
-  ready: boolean;
   onRequestClose: () => void;
-  /** Transition Eve's surface in place (home → developing/design) — the overlay's open(). */
+  /** Transition Eve's surface in place (home → developing/design) — the host's state machine. */
   onGo: (s: EveSummon) => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -96,7 +85,6 @@ export function EveHome({
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [intro, setIntro] = useState(false);
   const [paywall, setPaywall] = useState<'subscription_required' | 'brand_limit' | null>(null);
   const [keyboardMode, setKeyboardMode] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -506,14 +494,14 @@ export function EveHome({
     }
   }, [session, brand, playSpeech]);
 
-  // Play her materialize (`morphing`) for ~4.2s each time the interview view (re)appears.
-  const inVoiceInterview = view === 'interview' && !brand && !keyboardMode;
+  // Drive the SHARED root avatar (eve-background) — this surface no longer mounts its own GL.
+  // 'talking' raises her energy while she speaks (syllable-level reactivity rides the module-level
+  // speech envelope with no plumbing); anything else rests at 'silence'. The old 'morphing' intro is
+  // deliberately dropped: it re-plays the assembly, which reads as the app background disintegrating.
   useEffect(() => {
-    if (!inVoiceInterview || !ready) { setIntro(false); return; }
-    setIntro(true);
-    const t = setTimeout(() => setIntro(false), 4200);
-    return () => clearTimeout(t);
-  }, [inVoiceInterview, ready]);
+    setEveStage(state === 'speaking' ? 'talking' : 'silence');
+  }, [state]);
+  useEffect(() => () => setEveStage('silence'), []); // rest when this surface unmounts
 
   const hint =
     state === 'listening'
@@ -526,20 +514,12 @@ export function EveHome({
             ? '[ paused — tap to resume ]'
             : '[ connecting… ]';
 
-  // The avatar renders full-bleed in the guide and the voice interview — never behind the
-  // BrandReview scroll or the full-screen chat (GL off while she's not the face of the moment).
-  const showAvatar = ready && !brand && !keyboardMode;
-  const stage: VenusStage = view === 'interview' ? stageFor(state, intro) : 'silence';
-
-  const bottomPad = insets.bottom + 44; // clear the overlay's dismiss handle
+  // Hosted inside the tab slot — the tab bar sits BELOW this surface, so no home-indicator
+  // clearance is needed; just breathing room above the bar.
+  const bottomPad = Spacing.five;
 
   return (
     <View style={styles.fill}>
-      {showAvatar ? (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <VenusAvatar stage={stage} />
-        </View>
-      ) : null}
 
       {/* Mic-busy: iOS refused the audio session — almost always an active phone/FaceTime call. */}
       <Modal visible={live.audioBusy} animationType="fade" transparent onRequestClose={live.dismissAudioBusy}>

@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 import { createVenusLipsync, type VenusLipsync, type VisemeWeights } from '@/lib/venus-lipsync';
+import { speechActiveAt } from '@/lib/venus-speech-level';
 import { LATTICE_VERT, LATTICE_FRAG, motionSelect } from './venus-points';
 import { STREAM_VERT, STREAM_FRAG } from './venus-shaders';
 import { makeAuraTexture, makeDotTexture } from './venus-textures';
@@ -12,7 +13,9 @@ import {
   NET_VERT, NET_FRAG, NODE_VERT, NODE_FRAG, DUST_VERT, DUST_FRAG,
 } from './venus-plasma';
 import { getVenusOrbShapeRequest, setVenusOrbShape, type VenusOrbShape } from './venus-orb-bus';
-import type { VenusStage } from './venus-head-scene';
+
+// Her lifecycle (formerly declared in venus-head-scene, the retired Cortana face build).
+type VenusStage = 'pre-render' | 'morphing' | 'silence' | 'talking';
 
 // ── Venus ORB v3 — the "NEURAL CONSTELLATION" (R3F) ─────────────────────────
 // Art direction 2026-07-04: "get away from it looking like an orb… keeping the nucleus…
@@ -27,8 +30,8 @@ import type { VenusStage } from './venus-head-scene';
 // (the same unified lattice + morph as ever), so the tee/heart/bolt shape-morph system survives.
 // Full spec + tuning knobs: docs/studio/VENUS_AVATAR.md (orb v3). Shaders: venus-plasma.ts.
 //
-// Same public shape as VenusHeadScene ({ stage, onReveal }); the Cortana face build stays
-// available behind the Lab's Face toggle.
+// This is Venus's ONLY embodiment now — the Cortana-era humanoid build (venus-head-scene)
+// has been retired and deleted.
 
 const ORB_R = 0.26; // the scale unit ("R") — camera at z=2 / fov 22 gives ~0.39 half-height
 const ORB_DOTS = 880; // lattice dots = soma count (1:1 dots↔somas is the morph contract)
@@ -642,9 +645,22 @@ function bakeFarWeb(vW: number, vH: number): THREE.BufferGeometry {
   return g;
 }
 
-function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (r: number) => void }) {
+function Orb({ stage = 'talking', lowPower = false, onReveal }: { stage?: VenusStage; lowPower?: boolean; onReveal?: (r: number) => void }) {
   const { camera, advance } = useThree();
+  const invalidate = useThree((s) => s.invalidate);
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
+
+  // LOW-POWER ticker: with frameloop='demand' the loop only runs when invalidate() is called, so
+  // tick a coarse clock — ~6fps at rest, 30fps while her voice is audible (speechActiveAt) so the
+  // nucleus stays voice-reactive on non-Eve pages.
+  useEffect(() => {
+    if (!lowPower) return;
+    let n = 0;
+    const id = setInterval(() => {
+      if (speechActiveAt() || n++ % 5 === 0) invalidate();
+    }, 33);
+    return () => clearInterval(id);
+  }, [lowPower, invalidate]);
 
   // __DEV__ Lab hook (like the face scene's __venusRevealOverride): step simulated time from the
   // console — `__venusOrbStep(tSeconds)` advances one frame. Hidden/automated tabs get no rAF, so
@@ -981,6 +997,26 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // camera never changes after this; the build is aspect-dependent, so rebuild if it did.
   }, [camera]);
 
+  // NATIVE PRESENT GUARD — take over the render step. On expo-gl a frame only reaches the screen
+  // when gl.endFrameEXP() is called after drawing. R3F v9's native Canvas patches gl.render to do
+  // that, but its dep-less configure() re-runs on every Canvas re-render and can lose the patch —
+  // frames then render into the buffer and are never presented. A priority>0 subscriber sets
+  // internal.priority, which disables R3F's auto-render, so this is the ONLY render per frame.
+  // The fingerprint keeps presents single: if gl.render is still the patched closure we captured
+  // at first frame, it presents internally; if anything replaced it, we present explicitly.
+  const present = useRef<{ fingerprint: unknown; ctx: { endFrameEXP?: () => void } | null }>({ fingerprint: null, ctx: null });
+  useFrame((st) => {
+    const gl = st.gl as unknown as { render: (s: THREE.Scene, c: THREE.Camera) => void; getContext?: () => { endFrameEXP?: () => void } };
+    if (present.current.fingerprint === null) {
+      present.current.fingerprint = gl.render; // the (possibly patched) render at first frame
+      present.current.ctx = gl.getContext ? gl.getContext() : null;
+    }
+    st.gl.render(st.scene, st.camera);
+    // R3F's own patch presents; only present ourselves when that patch is gone (or never worked
+    // because the context predates it — endFrameEXP is a no-op on web, so this is native-only).
+    if (gl.render !== present.current.fingerprint) present.current.ctx?.endFrameEXP?.();
+  }, 1);
+
   useFrame((st, delta) => {
     const r = rig.current;
     if (!r) return;
@@ -1205,12 +1241,22 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
   return root ? <primitive object={root} /> : null;
 }
 
-// Same contract as VenusHeadScene: transparent canvas (the lattice IS the background),
-// `stage` drives the lifecycle, `onReveal` reports assembly progress.
-export default function VenusOrbScene({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (r: number) => void }) {
+// Transparent canvas (the lattice IS the background), `stage` drives the lifecycle, `onReveal`
+// reports assembly progress. `lowPower` runs the loop on demand — Orb's coarse invalidate ticker
+// replaces the 60fps rAF (for pages where she's ambient, not the star).
+//
+// frameloop MUST be switched via the Canvas PROP, not useThree().set: the native Canvas re-runs
+// configure() on every re-render and force-resyncs state.frameloop from the prop. NB the prop
+// switch resets clock.elapsedTime, so the t-based sway/bob jump once per mode change (the %600
+// mediump guard already tolerates it) — spin/crawl/bpm/hue clocks live in refs and survive.
+export default function VenusOrbScene({ stage = 'talking', lowPower = false, onReveal }: { stage?: VenusStage; lowPower?: boolean; onReveal?: (r: number) => void }) {
   return (
-    <Canvas camera={{ position: [0, 0, 2], fov: 22 }} style={{ flex: 1 }} gl={{ alpha: true }}>
-      <Orb stage={stage} onReveal={onReveal} />
+    <Canvas
+      camera={{ position: [0, 0, 2], fov: 22 }}
+      style={{ flex: 1 }}
+      gl={{ alpha: true }}
+      frameloop={lowPower ? 'demand' : 'always'}>
+      <Orb stage={stage} lowPower={lowPower} onReveal={onReveal} />
     </Canvas>
   );
 }

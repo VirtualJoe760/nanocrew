@@ -45,7 +45,9 @@ export default function AppTabs() {
         <View
           style={StyleSheet.flatten([
             styles.bar,
-            { borderTopColor: c.backgroundSelected, paddingBottom: insets.bottom + Spacing.four },
+            // Native UITabBar metrics: ~49pt of content sitting ON the home-indicator inset. The
+            // old `insets.bottom + Spacing.four` left a ~50pt dead lip under the labels.
+            { borderTopColor: c.backgroundSelected, paddingBottom: Math.max(insets.bottom, Spacing.two) },
           ])}>
           {/* Frosted-glass blur behind the bar — the native translucent iOS bar look (web uses backdrop-filter). */}
           <TabBarBlur dark={dark} />
@@ -68,7 +70,7 @@ function TabButton({ tab, tint, isFocused, style: triggerStyle, ...props }: TabT
     // spreads style by object, so an array here becomes {0:..,1:..} and crashes react-dom on web.
     <Pressable {...props} style={StyleSheet.flatten([triggerStyle, styles.tab])}>
       <View style={[styles.tabInner, { opacity: isFocused ? 1 : 0.5 }]}>
-        <Ionicons name={tab.icon} size={26} color={tint} />
+        <Ionicons name={tab.icon} size={24} color={tint} />
         {/* Tab labels are intentionally 11pt to match the native UITabBar labelStyle (no token is that small). */}
         <ThemedText type="small" style={[styles.label, { color: tint }]}>
           {tab.label}
@@ -83,7 +85,7 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: Spacing.three,
+    paddingTop: 6, // native UITabBar: icon sits ~6pt under the hairline
     paddingHorizontal: Spacing.three, // keep edge labels (Account) off the screen edge
     overflow: 'hidden', // clip the BlurView to the bar
   },

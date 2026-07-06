@@ -17,17 +17,14 @@ import { pushSpeechChunk } from '@/lib/venus-speech-level';
 // horizontal scrollers instead of chip walls, and a collapse toggle so the avatar owns the
 // screen ("clean up our lab testing ui — the ui is a complete mess").
 //
-// VOICE AUDITION (orb mode, web): pick a Gemini voice + a TONE direction, tap ▶ — /api/say
+// VOICE AUDITION (web): pick a Gemini voice + a TONE direction, tap ▶ — /api/say
 // synthesizes it and we (a) play the WAV, (b) push its PCM into the venus-speech-level bus, so
 // the orb's voice layer (the nucleus) reacts exactly as it does to the live session. Audition
 // in the `talking` stage.
 
 const STAGES: VenusStage[] = ['pre-render', 'morphing', 'silence', 'talking'];
-// Orb-mode shape morphs — the dots dissolve and re-form as the object (venus-orb-bus).
+// Shape morphs — the dots dissolve and re-form as the object (venus-orb-bus).
 const SHAPES: VenusOrbShape[] = ['orb', 'tee', 'heart', 'bolt'];
-// orb = the NEURAL CONSTELLATION (the DEFAULT embodiment app-wide); face = the Cortana-era
-// humanoid build (kept for comparison).
-type Mode = 'orb' | 'face';
 type Panel = 'stage' | 'shape' | 'voice';
 
 // Quick lines to audition (so you can sample voices without typing each time).
@@ -93,7 +90,6 @@ function wavToPcm(b64: string): Int16Array {
 export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<VenusStage>('talking');
-  const [mode, setMode] = useState<Mode>('orb');
   const [shape, setShape] = useState<VenusOrbShape>('orb');
   const [panel, setPanel] = useState<Panel>('stage');
   const [collapsed, setCollapsed] = useState(false);
@@ -103,7 +99,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const [speaking, setSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const voicePanelAvailable = mode === 'orb' && Platform.OS === 'web';
+  const voicePanelAvailable = Platform.OS === 'web';
 
   // Audition: synth the line in the selected voice + TONE direction, play it, and feed the PCM
   // into the speech-level bus so the orb's voice layer (the nucleus) reacts to it.
@@ -153,7 +149,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   // dot-field background (one field that becomes her), over the near-black bed.
   return (
     <View style={styles.root}>
-      <VenusAvatar stage={stage} variant={mode} />
+      <VenusAvatar stage={stage} />
 
       {/* top chrome */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
@@ -161,11 +157,9 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
           <Text style={styles.backText}>‹ back</Text>
         </Pressable>
         <Text style={styles.title}>VENUS · LAB</Text>
-        {/* embodiment toggle: the neural constellation (default) vs the Cortana face */}
-        <View style={styles.modeRow}>
-          {(['orb', 'face'] as Mode[]).map((m) =>
-            chip(m === 'orb' ? 'Orb' : 'Face', mode === m, () => setMode(m), m),
-          )}
+        {/* spacer balances the back button so space-between keeps the title centered */}
+        <View style={styles.back}>
+          <Text style={[styles.backText, styles.hidden]}>‹ back</Text>
         </View>
       </View>
 
@@ -182,7 +176,6 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
           <View style={styles.cardHeader}>
             <View style={styles.tabRow}>
               {(['stage', 'shape', 'voice'] as Panel[]).map((p) => {
-                if (p === 'shape' && mode !== 'orb') return null;
                 if (p === 'voice' && !voicePanelAvailable) return null;
                 const active = panel === p;
                 return (
@@ -205,7 +198,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
           ) : null}
 
           {/* shape panel — the dots re-form as an object */}
-          {panel === 'shape' && mode === 'orb' ? (
+          {panel === 'shape' ? (
             <View style={styles.rowWrap}>
               {SHAPES.map((s) =>
                 chip(s === 'orb' ? '● orb' : s, shape === s, () => {
@@ -267,8 +260,8 @@ const styles = StyleSheet.create({
   },
   back: { paddingVertical: 4, paddingHorizontal: 4 },
   backText: { color: 'rgba(244,244,246,0.7)', fontFamily: 'Jost-Light', fontSize: 15 },
+  hidden: { opacity: 0 },
   title: { color: '#f4f4f6', fontFamily: 'Jost-Thin', fontSize: 16, letterSpacing: 3 },
-  modeRow: { flexDirection: 'row', gap: 6 },
 
   card: {
     position: 'absolute',

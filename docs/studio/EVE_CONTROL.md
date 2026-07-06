@@ -173,3 +173,37 @@ facet → the scene dolly-zooms + palette-morphs); (4) per-page overlaid compone
 
 **Still ambient-only:** the root Eve sits at a fixed `stage="silence"` — she doesn't yet react to
 voice or drive per-page palettes. Wiring her lifecycle/voice + the camera facets is next (step 3).
+
+### The overlay retirement (2026-07-06)
+
+Joe on build 40: "get rid of the pull over effect — she needs to just have her own button on the
+bottom bar." Steps 2/5/6/7 of the pivot landed together:
+
+- **The pull-down overlay is GONE** (`eve-overlay.tsx`, `eve-background-bus.ts` deleted). The Eve
+  tab (`studio.tsx`) hosts the voice machine: `EveSummon | null` state renders EveHome / EveDeveloping /
+  EveDesign IN PLACE of the dashboard (a swap, not a layered overlay — nothing bleeds through, no
+  backdrop needed). `summonEve()` works app-wide via `registerEveSummonListener` in the tab; the
+  bus's queued-flush covers pre-mount summons (the composer's site tile).
+- **One GL context, no gate.** EveHome no longer mounts an avatar — it drives the ROOT one through
+  `eve-stage-bus` ('silence' | 'talking' ONLY; 'morphing' is destructive on a formed background —
+  it ping-pongs the reveal). Syllable-level reactivity rides the module-level speech envelope.
+- **Scrim control:** `withScreenFade(..., { eveThrough: 'clear' })` = transparent bed, NO wrapper
+  scrim; the Eve tab renders its own EVE_SCRIM and DROPS it while a voice surface is up (she
+  performs at full brightness).
+- **Low power off the Eve tab:** `EveBackground` reads `usePathname()`; non-/studio routes pass
+  `lowPower` → the Canvas `frameloop` prop flips to 'demand' + a coarse invalidate ticker in Orb
+  (~6fps ambient, 30fps while speech is audible). MUST stay a Canvas prop — the native Canvas's
+  dep-less configure() resyncs frameloop from props on every re-render. DPR is NOT a lever on
+  native (expo-gl fixed buffer).
+- **Bar proportions fixed:** paddingBottom `insets.bottom + 16` → `max(insets.bottom, 8)` (the old
+  value left a ~50pt dead lip), icon 26→24, paddingTop 12→6 — native UITabBar metrics.
+
+**NATIVE GL — the big unresolved:** on the iOS **simulator** the scene presents NOTHING (proved
+with a raw no-three expo-gl probe: even a manual clear+endFrameEXP loop doesn't paint from the rAF
+loop; a one-shot present from onContextCreate DOES). This matches the documented "simulators don't
+work with three+EXGL" ecosystem stance — the simulator is NOT a valid GL verification target;
+verify on device. Two device-side hardenings landed anyway: a priority-1 useFrame render takeover
+with a fingerprint check (guards R3F v9's native gl.render patch being lost to configure() churn —
+single present in every world, no double), and `@react-three/drei` uninstalled (unused; its
+stats-gl dep bundled a second three copy — the "Multiple instances of Three.js" warning). Whether
+build 40's background was black on Joe's PHONE is unconfirmed — check TestFlight 41 first thing.

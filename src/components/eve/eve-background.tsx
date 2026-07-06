@@ -1,29 +1,32 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { usePathname } from 'expo-router';
 
 import VenusAvatar from '@/components/venus-avatar';
-import { subscribeEveCovered } from '@/lib/eve-background-bus';
+import { subscribeEveStage, type EveStage } from '@/lib/eve-stage-bus';
 
-// THE PERSISTENT EVE (docs/studio/EVE_CONTROL.md — THE PIVOT). Eve is no longer a pull-down; she is
-// the living background of the whole app. Her ONE GL avatar mounts here, at the app root behind every
-// tab page — the pages sit on translucent scrims (withScreenFade `eveThrough`) so she shows through,
-// dimmed for text contrast.
+// THE PERSISTENT EVE (docs/studio/EVE_CONTROL.md — THE PIVOT). Eve is the living background of the
+// whole app: her ONE GL avatar mounts here, at the app root behind every tab page. The pages sit on
+// translucent scrims (withScreenFade `eveThrough`) so she shows through, dimmed for text contrast.
+// This is the only GL context in the app — the pull-down overlay (which mounted its own) is retired;
+// the voice surface on the Eve tab DRIVES this avatar through the stage bus instead.
 //
-// The pull-down overlay (eve-overlay) still slides a full-screen surface over the tabs and mounts its
-// OWN avatar for the home/interview. So while that overlay is up, this root avatar YIELDS — unmounts —
-// keeping exactly one GL context alive at any moment (the hard constraint the scene is built on). She
-// remounts the instant the overlay closes. As the pivot lands (studio merge, overlay retirement) this
-// becomes the single always-on Eve; for now the gate preserves the one-context invariant with zero
-// change to the pull-down's behavior. Always-on battery cost is handled later by the idle throttle.
+// PERFORMANCE: away from the Eve tab she drops to a low-power trickle (frameloop 'demand' + a slow
+// invalidate tick inside the scene) — she's behind a 62% scrim there, so the slow tick is invisible,
+// and ~90% of the GPU/JS frame cost goes away while you're heads-down in Design/Market/Account.
 export default function EveBackground() {
-  const [covered, setCovered] = useState(false);
-  useEffect(() => subscribeEveCovered(setCovered), []);
+  const [stage, setStage] = useState<EveStage>('silence');
+  useEffect(() => subscribeEveStage(setStage), []);
+
+  // The Eve tab is where she performs at full rate; everywhere else is ambience behind a scrim.
+  const pathname = usePathname();
+  const lowPower = !pathname.startsWith('/studio');
 
   // EXPLICIT window size (not flex): at the app root the container's measured size isn't settled at
   // mount, and the R3F Canvas (flex:1) measures its container ONCE — a 0×0 mount sticks the canvas at
   // its 300×150 default forever. A concrete width/height gives it a size to fill. We also defer the
-  // avatar one frame (rAF, after the browser's first layout) so the Canvas never mounts into a
-  // still-zero container. `ready` latches — the context is created once and never torn back down.
+  // avatar one frame (rAF, after the first layout) so the Canvas never mounts into a still-zero
+  // container. `ready` latches — the context is created once and never torn back down.
   const { width, height } = useWindowDimensions();
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -32,10 +35,9 @@ export default function EveBackground() {
   }, []);
 
   return (
-    // A brand-dark bed under the GL so nothing flashes white before/while the context paints. The bed
-    // stays even while the avatar yields, so the area behind the translucent pages is never white.
+    // A brand-dark bed under the GL so nothing flashes white before/while the context paints.
     <View style={[styles.root, styles.bed, { width, height }]} pointerEvents="none">
-      {ready && !covered ? <VenusAvatar stage="silence" /> : null}
+      {ready ? <VenusAvatar stage={stage} lowPower={lowPower} /> : null}
     </View>
   );
 }
