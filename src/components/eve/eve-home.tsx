@@ -279,9 +279,14 @@ export function EveHome({
             if (viewRef.current === 'guide') enterInterview();
             return;
           case 'new-design':
-            onRequestClose();
-            sendDesignCommand({ kind: 'open-generate', prompt: d.idea, meme: /\bmeme\b/i.test(turn) });
-            router.push('/design');
+            if (/\bmeme\b/i.test(turn)) {
+              onRequestClose();
+              sendDesignCommand({ kind: 'open-generate', prompt: d.idea, meme: true });
+              router.push('/design');
+            } else {
+              // Into Eve's design state with the spoken idea — she generates it in her own surface.
+              onGo({ state: 'design', payload: { idea: d.idea } });
+            }
             return;
           case 'write-post':
             live.sendContext(
@@ -509,9 +514,15 @@ export function EveHome({
           return;
         }
         case 'new-design':
-          onRequestClose();
-          sendDesignCommand({ kind: 'open-generate', meme: action.meme });
-          router.push('/design');
+          if (action.meme) {
+            // Memes keep the Design-tab generator — its caption-building lives there.
+            onRequestClose();
+            sendDesignCommand({ kind: 'open-generate', meme: true });
+            router.push('/design');
+          } else {
+            // Plain designs open Eve's hands-free create surface; she asks for the idea.
+            onGo({ state: 'design' });
+          }
           return;
         case 'write-post':
         case 'manage-brand':

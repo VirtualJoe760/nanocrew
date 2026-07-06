@@ -11,6 +11,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
+import { EveDesign } from '@/components/eve/eve-design';
 import { EveDeveloping } from '@/components/eve/eve-developing';
 import { EveHome } from '@/components/eve/eve-home';
 import {
@@ -129,6 +130,19 @@ export default function EveOverlay() {
             onSubmitted={(slug) => {
               close();
               router.push({ pathname: '/studio', params: { reviewSlug: slug } });
+            }}
+          />
+        </Animated.View>
+      ) : mounted && eve === 'design' ? (
+        // Design state: image + text input own the surface. Like developing, no dismiss pan/pill —
+        // it has its own back/handoff exits, and the swipe-up would fight the keyboard/input.
+        <Animated.View style={[styles.overlay, overlayStyle]}>
+          <EveDesign
+            idea={typeof payload?.idea === 'string' ? payload.idea : undefined}
+            onExit={() => open({ state: 'home' })}
+            onHandoff={() => {
+              close();
+              router.push('/design');
             }}
           />
         </Animated.View>
