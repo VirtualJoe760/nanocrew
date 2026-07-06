@@ -45,9 +45,10 @@ export default function AppTabs() {
         <View
           style={StyleSheet.flatten([
             styles.bar,
-            // Native UITabBar metrics: ~49pt of content sitting ON the home-indicator inset. The
-            // old `insets.bottom + Spacing.four` left a ~50pt dead lip under the labels.
-            { borderTopColor: c.backgroundSelected, paddingBottom: Math.max(insets.bottom, Spacing.two) },
+            // Native UITabBar metrics: a tight icon+label cluster sitting ON the home-indicator
+            // inset — labels tuck a few points INTO it, like UIKit's. (The old bar padded a full
+            // Spacing.four below the inset — a ~50pt dead lip.)
+            { borderTopColor: c.backgroundSelected, paddingBottom: Math.max(insets.bottom - 6, 6) },
           ])}>
           {/* Frosted-glass blur behind the bar — the native translucent iOS bar look (web uses backdrop-filter). */}
           <TabBarBlur dark={dark} />
