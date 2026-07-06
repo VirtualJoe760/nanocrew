@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { router, type Href } from 'expo-router';
+import { router } from 'expo-router';
 import {
   ActivityIndicator,
   AppState,
@@ -27,10 +27,6 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
-import { EveOrbField } from '@/components/eve/eve-orb-field';
-import { setVenusOrbShape } from '@/components/backgrounds/venus-orb-bus';
-import { setEveOrbCount } from '@/components/backgrounds/venus-orb-positions-bus';
-import { eveChildren, eveRootNodes, type EveNode } from '@/lib/eve-capabilities';
 import { buildDigest, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
@@ -510,88 +506,6 @@ export function EveHome({
     }
   }, [session, brand, playSpeech]);
 
-  // Which branch the orb ring is currently inside — null = the root ring. Resets to root each time
-  // Eve is (re)summoned (EveHome remounts).
-  const [orbBranch, setOrbBranch] = useState<EveNode | null>(null);
-
-  // Fire a LEAF capability node — the ONE dispatcher an orb tap (and, at the handler level, voice)
-  // both land in. The registry hands back a pure action descriptor; this turns it into the app calls
-  // (interview / developing / design bus / router).
-  const runNode = useCallback(
-    (node: EveNode) => {
-      if (!node.action) return; // a branch — traversed by onOrbSelect, never dispatched here
-      const action = node.action({ hasStore, stores });
-      switch (action.type) {
-        case 'build-brand':
-          void startVoice();
-          return;
-        case 'edit-site': {
-          // Open developing on a brand with a LIVE site; otherwise the Studio, where its site is
-          // finalized/launched. (Prefer an unfinished brand — that's the one to get live.)
-          const unfinished = stores.find((s) => s.status !== 'live' && s.status !== 'suspended');
-          const target = unfinished ?? stores.find((s) => siteUrlFor(s));
-          const url = target ? siteUrlFor(target) : null;
-          if (target && url) {
-            onGo({ state: 'developing', payload: { slug: target.slug, url, name: target.name } });
-          } else {
-            onRequestClose();
-            router.push('/studio');
-          }
-          return;
-        }
-        case 'new-design':
-          if (action.meme) {
-            // Memes keep the Design-tab generator — its caption-building lives there.
-            onRequestClose();
-            sendDesignCommand({ kind: 'open-generate', meme: true });
-            router.push('/design');
-          } else {
-            // Plain designs open Eve's hands-free create surface; she asks for the idea.
-            onGo({ state: 'design' });
-          }
-          return;
-        case 'digest':
-          void openDigest();
-          return;
-        case 'write-post':
-        case 'manage-brand':
-          onRequestClose();
-          router.push('/studio');
-          return;
-        case 'nav':
-          onRequestClose();
-          router.push(action.route as Href);
-          return;
-      }
-    },
-    [hasStore, stores, startVoice, onRequestClose, onGo, openDigest],
-  );
-
-  // An orb was tapped: a branch blooms its children; a leaf fires (and drops us back to the root).
-  const onOrbSelect = useCallback(
-    (node: EveNode) => {
-      if (node.kind === 'branch') {
-        setOrbBranch(node);
-        return;
-      }
-      // A leaf with its own shape flashes the net into that form as she launches into it — the
-      // "morphing into the workflow" beat (C2). Transitions that stay in home settle back via the
-      // orbBranch effect below; those that leave carry the shape as a parting flourish.
-      if (node.shape) setVenusOrbShape(node.shape);
-      setOrbBranch(null);
-      runNode(node);
-    },
-    [runNode],
-  );
-
-  // THE NET RESHAPES as you navigate her tree (C2): entering a branch morphs the constellation to
-  // that branch's shape; the root ring restores the sphere. Reset on unmount so a lingering shape
-  // never carries into the next summon.
-  useEffect(() => {
-    setVenusOrbShape(orbBranch?.shape ?? 'orb');
-  }, [orbBranch]);
-  useEffect(() => () => setVenusOrbShape('orb'), []);
-
   // Play her materialize (`morphing`) for ~4.2s each time the interview view (re)appears.
   const inVoiceInterview = view === 'interview' && !brand && !keyboardMode;
   useEffect(() => {
@@ -618,17 +532,6 @@ export function EveHome({
   const stage: VenusStage = view === 'interview' ? stageFor(state, intro) : 'silence';
 
   const bottomPad = insets.bottom + 44; // clear the overlay's dismiss handle
-  // The capability nodes to show right now: a branch's children if we're inside one, else the root.
-  const orbNodes = useMemo(
-    () => (orbBranch ? eveChildren(orbBranch, { hasStore, stores }) : eveRootNodes({ hasStore, stores })),
-    [orbBranch, hasStore, stores],
-  );
-  // Tell the 3D scene how many capability orbs to light up — the guide's visible nodes, else none.
-  useEffect(() => {
-    const active = view === 'guide' && !brand && ready;
-    setEveOrbCount(active ? orbNodes.length : 0);
-    return () => setEveOrbCount(0);
-  }, [view, brand, ready, orbNodes.length]);
 
   return (
     <View style={styles.fill}>
@@ -725,9 +628,7 @@ export function EveHome({
             bg={BG}
           />
         ) : view === 'guide' ? (
-          // LAB LOOK — the orb owns the middle. Subtitles ride ABOVE her; her energy condenses into
-          // tappable nodes along the LOWER screen. No pause button — swipe up on the overlay pauses.
-          // Voice still routes ("edit my site", "make a meme") through the same registry nodes.
+          // Voice-first: subtitles ride above her; a single CTA below (orbs are gone — nav is the bar).
           <View style={styles.guideView}>
             <View style={styles.subsTop}>
               {heard ? (
@@ -740,15 +641,15 @@ export function EveHome({
                 {line || guidance?.greeting || '…'}
               </ThemedText>
             </View>
-            {/* The capability orbs are 3D nodes IN her net now (venus-orb-scene) — their taps are the
-                EveOrbField overlay at the root. This dock just holds the back rung / a quiet hint. */}
             <View style={styles.orbDock}>
-              {orbBranch ? (
-                <Pressable onPress={() => setOrbBranch(null)} hitSlop={12} style={styles.backLink}>
-                  <ThemedText type="code" style={{ color: p.dim, fontSize: 13, letterSpacing: 0.5 }}>‹ back</ThemedText>
+              {!hasStore ? (
+                <Pressable onPress={() => void startVoice()} style={({ pressed }) => [styles.guideCta, { borderColor: `${p.accent}66` }, pressed && { opacity: 0.7 }]}>
+                  <ThemedText type="smallBold" style={{ color: p.accent }}>🎙  Build your brand</ThemedText>
                 </Pressable>
               ) : (
-                <ThemedText type="code" style={[styles.orbHint, { color: p.faint }]}>reach into the network · or just talk</ThemedText>
+                <Pressable onPress={() => void openDigest()} style={({ pressed }) => [styles.guideCta, { borderColor: `${p.dim}66` }, pressed && { opacity: 0.7 }]}>
+                  <ThemedText type="code" style={{ color: p.dim }}>View your digest</ThemedText>
+                </Pressable>
               )}
             </View>
           </View>
@@ -822,12 +723,6 @@ export function EveHome({
         />
       ) : null}
 
-      {/* The 3D capability orbs' touch layer — invisible targets that track each orb the scene projects
-          to screen. Full-window at the root so its coords match the projection (not the padded content). */}
-      {session && view === 'guide' && !brand && ready ? (
-        <EveOrbField nodes={orbNodes} onSelect={onOrbSelect} />
-      ) : null}
-
       {/* THE DIGEST — Eve's proactive status report, over the home state. */}
       {showDigest ? (
         <Pressable style={styles.digestBackdrop} onPress={() => setShowDigest(false)}>
@@ -872,12 +767,11 @@ const styles = StyleSheet.create({
   guideBody: { textAlign: 'center', maxWidth: 320, lineHeight: 22, marginTop: Spacing.two },
   ctaPrimary: { borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.four },
 
-  // The guide: subtitles pinned at the TOP; the 3D orbs live in her net between; a quiet dock at the BOTTOM.
+  // The guide: subtitles pinned at the TOP; Eve fills the middle; a single CTA at the BOTTOM.
   guideView: { flex: 1, justifyContent: 'space-between' },
   subsTop: { alignItems: 'center', gap: Spacing.two, minHeight: 72 },
   orbDock: { alignItems: 'center', paddingBottom: Spacing.two, minHeight: 28 },
-  backLink: { paddingVertical: 4, paddingHorizontal: 14 },
-  orbHint: { fontSize: 11, letterSpacing: 0.6 },
+  guideCta: { borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.three },
 
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.four },
   hint: { letterSpacing: 1 },

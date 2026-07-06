@@ -100,3 +100,46 @@ suggestion machinery (fold into the wedge). The unread `design ?slot` param (dec
 **Do later:** the mechanical `venus→eve` identifier rename (one commit after C1 stabilizes; ~40 files;
 user-facing strings are already Eve). **Do NOT remove:** `/feed` (v2), `SceneShortComposer` (paused),
 the `?mode=interview` redirect shim.
+
+---
+
+## THE PIVOT — Eve IS the app (2026-07-05)
+
+Joe: "instead of her being a pull down, she just is the background." The pull-down overlay is
+**superseded**. Eve is now the persistent living background of the whole app; you navigate and the
+CAMERA moves to a new facet of her while that page's components overlay on top.
+
+**Architecture:**
+- **One persistent Eve scene** at the app root (venus-orb-scene), always mounted, behind every page.
+  The old page backgrounds (dot-fields on Studio/Market/Account) are scrapped — Eve is the background.
+- **Bottom bar: Eve · Design · Market · Account.** Market STAYS (Joe: "add market keep market there").
+  The **Studio page merges into the Eve page** (dashboard, brand management, interview, digest, orbs).
+- **Navigation = an INFINITE-ZOOM camera flight.** Joe: "like those infinite drawings — it zooms into
+  part of the net and finds a different angle of another orb that is still Eve, from different lighting,
+  maybe different colors." Each page is a FACET: a camera dolly-zoom into a target region of the net +
+  a palette/lighting morph, arriving relit/recolored but unmistakably still her. You never leave her —
+  you go deeper.
+- **Push-to-talk, top-right** on non-Eve pages (Design/Market/Account) — hold to talk to her since
+  she's present but not the focus there. On the Eve page she's the focus (open-mic / the orbs).
+- **Idle throttle** — she calms + slows (frameloop demand / lower rate) when you're heads-down in a
+  page so the always-on scene stays kind to the battery.
+
+**Reused, not rebuilt:** the 3D capability orbs (already in her scene), the capability registry, the
+digest, the design + site-edit flows, the voice session — all re-home from "overlay states" into
+"camera facets + overlays" on the one persistent Eve.
+
+**Technical reads:**
+- A ZOOM (dolly along the view axis) is the SAFEST camera move — the scene's billboards (halos, the
+  tee/heart/bolt silhouettes) face +z and STAY facing the camera as you dolly straight in. So the
+  infinite-zoom is the friendliest of the "dramatic" moves; a gentle pan/tilt toward the target facet
+  plus the net's own spin gives the "different angle."
+- Recolor/relight per facet is nearly FREE — the scene already has full palette machinery (uColMix,
+  uColA/B, the 80bpm color clock, NET/LIM/NUC palettes). Each facet just shifts the palette.
+- The one STRETCH: truly-infinite / seamless-Droste-loop zoom (zoom forever, endless new Eve) needs
+  self-similar geometry or a reset trick. Not needed for the feel — a deep zoom-into-a-facet that
+  arrives recolored + relit sells "infinite drawing" without the infinite math. Push toward looping later.
+
+**Revised sequence:** (1) Eve → app root as persistent background + scrap page bgs; (2) the 4-tab bar
++ merge Studio into the Eve page; (3) the camera-facet system (a facet bus: RN sets the target
+facet → the scene dolly-zooms + palette-morphs); (4) per-page overlaid components; (5) push-to-talk;
+(6) idle throttle; (7) retire the pull-down overlay. Camera-facet spike FIRST (de-risks the flight).

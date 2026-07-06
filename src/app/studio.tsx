@@ -603,7 +603,7 @@ function StudioScreen() {
       <View style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <View style={styles.headerRow}>
           <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>
-            STUDIO
+            EVE
           </ThemedText>
           <View style={styles.headerSpacer} />
           {session && hasStore && mode === 'dashboard' ? (

@@ -12,27 +12,7 @@ import {
   NET_VERT, NET_FRAG, NODE_VERT, NODE_FRAG, DUST_VERT, DUST_FRAG,
 } from './venus-plasma';
 import { getVenusOrbShapeRequest, setVenusOrbShape, type VenusOrbShape } from './venus-orb-bus';
-import { getEveOrbCount, getEveOrbScreenPositions, setEveOrbScreenPositions, type EveOrbScreenPos } from './venus-orb-positions-bus';
 import type { VenusStage } from './venus-head-scene';
-
-// EVE'S CAPABILITY ORBS — real 3D nodes in the net (docs/studio/EVE_CONTROL.md). Art-directed homes
-// in R units (×sCore at build); parented to orbGroup so they hover WITH the mind but don't spin
-// edge-on with the net. Projected to screen each frame for the RN hitbox layer (eve-orb-field).
-const MAX_CAP_ORBS = 6;
-// Placed by DESIRED SCREEN FRACTION [sx, sy in 0..1, z-depth] — the net spills far past the screen
-// edges in portrait, so art-directing world X/Y projects off-screen. Instead we position each orb
-// from where we want it ON screen using the camera's visible half-extents (vW/vH): a gentle fan
-// through the lower half (thumb zone), each at a slight depth so it still reads as a 3D node.
-const CAP_ORB_SCREEN: [number, number, number][] = [
-  [0.5, 0.66, 0.12],
-  [0.26, 0.75, 0.08],
-  [0.74, 0.75, 0.06],
-  [0.35, 0.86, 0.1],
-  [0.65, 0.86, 0.04],
-  [0.5, 0.94, 0.02],
-];
-const CAP_ORB_COLOR = 0x7fd7e6; // the net's teal
-const ORB_TMP = new THREE.Vector3(); // per-frame projection scratch — never allocate in the loop
 
 // ── Venus ORB v3 — the "NEURAL CONSTELLATION" (R3F) ─────────────────────────
 // Art direction 2026-07-04: "get away from it looking like an orb… keeping the nucleus…
@@ -163,7 +143,6 @@ type OrbRig = {
   haloTightMat: THREE.MeshBasicMaterial;
   haloWideMat: THREE.MeshBasicMaterial;
   orbGroup: THREE.Group;
-  capOrbs: THREE.Object3D[]; // the capability orb nodes (index === capability slot)
 };
 
 // ── bakeConnectome — the whole constellation, built ONCE (all positions in R units; the
@@ -675,7 +654,6 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
   useEffect(() => {
     if (!__DEV__) return;
     (globalThis as { __venusOrbStep?: (ts: number) => void }).__venusOrbStep = (ts: number) => advance(ts);
-    (globalThis as { __eveOrbDebug?: () => unknown }).__eveOrbDebug = () => ({ count: getEveOrbCount(), pos: getEveOrbScreenPositions() });
     return () => {
       delete (globalThis as { __venusOrbStep?: (ts: number) => void }).__venusOrbStep;
     };
@@ -993,38 +971,11 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     const sheath = new THREE.Mesh(new THREE.SphereGeometry(SHEATH_R * sCore, 40, 28), sheathMat);
     sheath.renderOrder = 7;
     orbGroup.add(nucleus, sheath);
-
-    // CAPABILITY ORBS — a bright core + a soft halo sphere, additive so they glow like net nodes.
-    // Parented to orbGroup (hover, not spin) so they read as 3D objects in her environment while
-    // staying tappable. Hidden until RN sets the count; positions projected each frame.
-    const capGeo = new THREE.SphereGeometry(0.017 * sCore, 16, 12);
-    const haloGeo = new THREE.SphereGeometry(0.04 * sCore, 16, 12);
-    const capOrbs: THREE.Object3D[] = [];
-    for (let i = 0; i < MAX_CAP_ORBS; i++) {
-      const g = new THREE.Group();
-      const [sx, sy, sz] = CAP_ORB_SCREEN[i];
-      // vW/vH are the camera's visible HALF-extents at the orb plane → map screen fraction → world.
-      g.position.set((sx - 0.5) * 2 * vW, (0.5 - sy) * 2 * vH, sz);
-      g.visible = false;
-      const core = new THREE.Mesh(
-        capGeo,
-        new THREE.MeshBasicMaterial({ color: CAP_ORB_COLOR, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
-      core.renderOrder = 11;
-      const halo = new THREE.Mesh(
-        haloGeo,
-        new THREE.MeshBasicMaterial({ color: CAP_ORB_COLOR, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
-      halo.renderOrder = 10;
-      g.add(halo, core);
-      orbGroup.add(g);
-      capOrbs.push(g);
-    }
     scene.add(orbGroup);
 
     rig.current = {
       latticeMat, streamMat, sheathMat, nucleusMat, nucleus, netMat, nodeMat, dustMat, netGroup,
-      haloTightMat, haloWideMat, orbGroup, capOrbs,
+      haloTightMat, haloWideMat, orbGroup,
     };
     setRoot(scene);
     // camera never changes after this; the build is aspect-dependent, so rebuild if it did.
@@ -1148,7 +1099,6 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
     // beat-duck: while she speaks, the voice OWNS brightness — the 80bpm pop drops 22%→~3%.
     // Driven by the Schmitt STATE (not raw env) so the duck itself can't flicker.
     speakMixRef.current = THREE.MathUtils.damp(speakMixRef.current, sg.on ? 1 : 0, 6, delta);
-    const formed = seg(0.45, 0.8);
     const growSweep = seg(0.48, 0.92);             // the network wires itself outward from the nucleus
     const ignite = seg(0.55, 0.8) * (1 - seg(0.8, 0.96)); // boot storm as she comes online
 
@@ -1250,28 +1200,6 @@ function Orb({ stage = 'talking', onReveal }: { stage?: VenusStage; onReveal?: (
 
     // the whole mind hovers — a slow bob, nothing humanoid.
     r.orbGroup.position.y = Math.sin(t * 0.5) * 0.006;
-
-    // CAPABILITY ORBS — pulse the visible ones and project each to a screen coordinate for the RN
-    // hitbox layer. RN owns the count; the scene shows exactly that many and reports where they are.
-    const capCount = getEveOrbCount();
-    if (r.capOrbs.length) {
-      r.orbGroup.updateMatrixWorld(true); // bake this frame's hover before projecting
-      const out: EveOrbScreenPos[] = [];
-      for (let i = 0; i < r.capOrbs.length; i++) {
-        const orb = r.capOrbs[i];
-        const on = i < capCount;
-        orb.visible = on;
-        if (!on) continue;
-        orb.scale.setScalar(1 + 0.12 * Math.sin(t * 1.6 + i * 1.3)); // gentle breath
-        orb.getWorldPosition(ORB_TMP);
-        ORB_TMP.project(st.camera);
-        const nx = ORB_TMP.x * 0.5 + 0.5;
-        const ny = 1 - (ORB_TMP.y * 0.5 + 0.5);
-        // in front of the camera AND within the frame (small margin) → the RN layer should show it
-        out.push({ i, nx, ny, visible: ORB_TMP.z <= 1 && nx > -0.1 && nx < 1.1 && ny > -0.1 && ny < 1.1 });
-      }
-      setEveOrbScreenPositions(out);
-    }
   });
 
   return root ? <primitive object={root} /> : null;
