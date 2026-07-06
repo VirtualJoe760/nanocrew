@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, usePathname } from 'expo-router';
 import {
   ActivityIndicator,
   Modal,
@@ -7,18 +7,19 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Line, Path } from 'react-native-svg';
 import { usePalette } from '@/components/nc-screen';
 import { EVE_SCRIM, withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';
 
+import { BrandDeck } from '@/components/eve/brand-deck';
 import { EveDesign } from '@/components/eve/eve-design';
 import { EveDeveloping } from '@/components/eve/eve-developing';
 import { EveGlyph } from '@/components/eve/eve-glyph';
 import { EveHome } from '@/components/eve/eve-home';
 import { StudioComposer } from '@/components/studio-composer';
-import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -28,10 +29,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Welcome, type OnboardChoice } from '@/components/welcome';
 import { addEveEventListener, registerEveSummonListener, type EveSummon } from '@/lib/eve-bus';
 
-// THE EVE TAB — her page. The pull-down overlay is retired: this tab hosts Eve's voice machine
-// (home = the interview/guide · developing = site edits · design) directly OVER the persistent
-// root Eve (eve-background). While a voice surface is up the page swaps to it and drops its scrim,
-// so she performs at full brightness; otherwise the tab is the quiet dashboard (brands, composer).
+// THE EVE TAB — her page. DEFAULT is the talk-to-Eve experience (EveHome, over the persistent root
+// Eve). SWIPE DOWN from the top reveals the BrandDeck — a full-screen, swipe-between-brands UI (the
+// reverse of the old pull-down: Eve is the default, you pull the UI down over her). `developing`
+// (site edits) and `design` are deep voice surfaces that swap in full-screen. Eve's live mic is
+// gated on tab focus + the deck being closed, so she only listens when you're actually on her tab.
 // summonEve() still works app-wide — the listener registers here and queued summons flush on mount.
 
 // Dark ink used for text ON the gold accent buttons — gold is light, so dark text reads in
@@ -43,17 +45,6 @@ const ONBOARD_INTENT_KEY = 'nc_onboard_intent';
 const SERIF = 'Jost-Light'; // display title face (was Georgia serif; unified on Jost)
 // Palette + the silk FabricBackground + the NC mark now live in @/components/nc-screen so Studio,
 // Design, Market, and Account all share one look (imported above).
-
-function ManageIcon() {
-  const c = '#9396a0';
-  return (
-    <Svg width={28} height={26} opacity={0.5}>
-      {/* pencil */}
-      <Path d="M7 19 L7 16 L17 6 L20 9 L10 19 Z" fill="none" stroke={c} strokeWidth={1.5} strokeLinejoin="round" />
-      <Line x1={15} y1={8} x2={18} y2={11} stroke={c} strokeWidth={1.5} strokeLinecap="round" />
-    </Svg>
-  );
-}
 
 // ---------- Screen ----------
 
@@ -70,11 +61,24 @@ function StudioScreen() {
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
   const [hasStore, setHasStore] = useState(false);
 
-  // Eve's in-tab voice machine — null means the quiet dashboard; otherwise which surface is up.
-  // Summons from anywhere in the app (the composer's site tile, deep links) land here; the bus
-  // queues any summon fired before this tab mounts.
+  // Eve's in-tab voice machine. `eve` now only carries the DEEP surfaces (developing/design); the
+  // default (eve null or state 'home') is EveHome. Summons from anywhere (the composer's site tile,
+  // deep links) land here; the bus queues any summon fired before this tab mounts.
   const [eve, setEve] = useState<EveSummon | null>(null);
   useEffect(() => registerEveSummonListener((s) => setEve(s)), []);
+
+  // The swipe-down brand deck.
+  const [deckShown, setDeckShown] = useState(false);
+  // Eve only listens when her tab is actually the active one (not just mounted-but-hidden by the
+  // tab navigator) AND the brand deck isn't pulled down over her.
+  const focused = usePathname().startsWith('/studio');
+  const deep = eve?.state === 'developing' || eve?.state === 'design';
+  // Top-edge pull-down (or tap the handle) opens the deck.
+  const summonPan = Gesture.Pan()
+    .activeOffsetY(12)
+    .onEnd((e) => {
+      if (e.translationY > 30 || e.velocityY > 500) runOnJS(setDeckShown)(true);
+    });
 
   // Deep-link from a tapped "changes ready" push → open that store's Console on the Edit tab (review).
   const reviewParams = useLocalSearchParams<{ reviewSlug?: string; reviewName?: string; mode?: string }>();
@@ -163,21 +167,19 @@ function StudioScreen() {
     AsyncStorage.removeItem(ONBOARD_INTENT_KEY).catch(() => {});
     setOnboardIntent(null);
   }, [session, onboardIntent]);
-  // 'loading' until /api/me resolves, then the dashboard (its empty state hands off to Eve).
-  const [mode, setMode] = useState<'loading' | 'dashboard'>('loading');
 
+  // Resolve whether this creator has any brands (gates the swipe-down deck). EveHome does its own
+  // /api/me fetch; this one just decides deck availability + the loading spinner.
   useEffect(() => {
     if (!session) return;
     let alive = true;
     (async () => {
-      // Resolve the landing: a creator who already has brands lands on the dashboard, everyone else
-      // on the primer. AWAIT so hasStore is known before voiceResolved gates the landing decision.
       try {
         const r = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } });
         const d = await readJson<{ stores?: unknown[] }>(r);
         if (alive) setHasStore((d.stores?.length ?? 0) > 0);
       } catch {
-        /* leave hasStore false — lands on the primer, the safe default */
+        /* leave hasStore false */
       } finally {
         if (alive) setVoiceResolved(true);
       }
@@ -187,15 +189,11 @@ function StudioScreen() {
     };
   }, [session]);
 
-  // Decide the landing once auth + store status are known — everyone gets the dashboard now
-  // (its empty state hands off to Eve for the first brand).
-  useEffect(() => {
-    if (voiceResolved) setMode('dashboard');
-  }, [voiceResolved]);
-
-  // Another brand (or the first) — straight into Eve's voice surface.
+  // "Build a new brand" (from the deck) — close the deck; EveHome is the default surface underneath,
+  // already listening. The user just tells her what to build.
   const onNewBrand = useCallback(() => {
-    setEve({ state: 'home' });
+    setDeckShown(false);
+    setEve(null);
   }, []);
 
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
@@ -211,10 +209,6 @@ function StudioScreen() {
 
   return (
     <View style={styles.container}>
-      {/* The page's own scrim (withScreenFade is 'clear' here): dims the root Eve for dashboard
-          legibility, DROPPED while a voice surface is up so she performs at full brightness. */}
-      {!eve ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: EVE_SCRIM }]} /> : null}
-
       <Modal
         visible={welcomeVisible}
         animationType="fade"
@@ -228,142 +222,128 @@ function StudioScreen() {
         <Welcome onChoose={handleChoose} topInset={insets.top} bottomInset={insets.bottom} />
       </Modal>
 
-      {/* Eve's voice machine — swaps IN PLACE of the dashboard (nothing underneath to bleed through). */}
-      {eve && session ? (
-        eve.state === 'developing' ? (
-          <EveDeveloping
-            url={typeof eve.payload?.url === 'string' ? eve.payload.url : undefined}
-            slug={typeof eve.payload?.slug === 'string' ? eve.payload.slug : undefined}
-            onExit={() => setEve({ state: 'home' })}
-            onSubmitted={(slug) => {
-              // Changes submitted — land on that store's composer review, voice surface closed.
-              setEve(null);
-              setConsoleBrand({ slug, name: slug });
-              setShowComposer(true);
+      {/* The composer + paywall stay mounted for a signed-in creator (both gated by `visible`). */}
+      {session ? (
+        <>
+          <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} onDeleted={() => { setShowComposer(false); setConsoleBrand(null); setDashKey((k) => k + 1); }} onBrandRenamed={(name) => { setConsoleBrand((b) => (b ? { ...b, name } : b)); setDashKey((k) => k + 1); }} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
+          <Paywall
+            visible={!!paywall}
+            onClose={() => {
+              setPaywall(null);
+              // If this paywall was opened by a welcome plan CTA, claim the $10 welcome-credit grant
+              // now (the route only grants once a paid plan is truly active).
+              if (pendingSubscribeGrantRef.current && session) {
+                pendingSubscribeGrantRef.current = false;
+                fetch(apiUrl('/api/creator/onboarding'), {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ path: 'subscribe' }),
+                }).catch(() => {});
+              }
             }}
-          />
-        ) : eve.state === 'design' ? (
-          <EveDesign
-            idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
-            onExit={() => setEve({ state: 'home' })}
-            onHandoff={() => {
-              setEve(null);
-              router.push('/design');
-            }}
-          />
-        ) : (
-          <EveHome open onRequestClose={() => setEve(null)} onGo={setEve} />
-        )
-      ) : (
-      <View style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
-        <View style={styles.headerRow}>
-          <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>
-            EVE
-          </ThemedText>
-          <View style={styles.headerSpacer} />
-          {session && hasStore && mode === 'dashboard' ? (
-            <View style={styles.headerIcons}>
-              <Pressable onPress={() => setShowComposer(true)} hitSlop={10}>
-                <ManageIcon />
-              </Pressable>
-            </View>
-          ) : null}
-        </View>
-        {session ? (
-          <>
-            <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} onDeleted={() => { setShowComposer(false); setConsoleBrand(null); setDashKey((k) => k + 1); }} onBrandRenamed={(name) => { setConsoleBrand((b) => (b ? { ...b, name } : b)); setDashKey((k) => k + 1); }} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
-            <Paywall
-              visible={!!paywall}
-              onClose={() => {
-                setPaywall(null);
-                // If this paywall was opened by a welcome plan CTA, claim the $10 welcome-credit grant
-                // now (the route only grants once a paid plan is truly active).
-                if (pendingSubscribeGrantRef.current && session) {
-                  pendingSubscribeGrantRef.current = false;
-                  fetch(apiUrl('/api/creator/onboarding'), {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: 'subscribe' }),
-                  }).catch(() => {});
-                }
-              }}
-              token={session.access_token}
-              reason={paywall}
-              onFreeSlot={() => setPaywall(null)}
-            />
-          </>
-        ) : null}
-
-        {loading ? (
-          <ActivityIndicator style={styles.center} color="#cdd1d9" />
-        ) : !session ? (
-          <View style={styles.introWrap}>
-            <EveGlyph size={132} />
-            <ThemedText type="code" style={[styles.introTag, { color: p.dim }]}>
-              FROM IDEA TO BRAND IN SECONDS
-            </ThemedText>
-            <ThemedText type="title" style={[styles.introTitle, { color: p.ink }]}>
-              Meet Eve
-            </ThemedText>
-            <ThemedText type="small" style={[styles.introBody, { color: p.dim }]}>
-              Your AI brand consultant. Talk it through, and Eve designs your clothing
-              brand, builds the store, and launches your website.
-            </ThemedText>
-            <Pressable
-              onPress={() => router.navigate('/account')}
-              style={({ pressed }) => [styles.ctaPrimary, { backgroundColor: p.accent }, glow(p.accent, 18, pressed ? 0.3 : 0.6), pressed && { transform: [{ scale: 0.98 }] }]}>
-              <ThemedText type="smallBold" style={{ color: BG }}>
-                Create an account
-              </ThemedText>
-            </Pressable>
-            <Pressable onPress={() => router.navigate('/account')} hitSlop={8} style={styles.ctaSecondary}>
-              <ThemedText type="code" style={[styles.ctaSecondaryText, { color: p.dim }]}>
-                I already have one — log in
-              </ThemedText>
-            </Pressable>
-            <ThemedText type="code" style={[styles.introFoot, { color: p.faint }]}>
-              Free to explore. You only need a plan to launch a store.
-            </ThemedText>
-          </View>
-        ) : !voiceResolved || mode === 'loading' ? (
-          <ActivityIndicator style={styles.center} color="#cdd1d9" />
-        ) : hasStore ? (
-          <StudioDashboard
-            key={dashKey}
             token={session.access_token}
-            onEditBrand={(slug, name) => { setConsoleBrand({ slug, name }); setShowComposer(true); }}
-            onNewBrand={onNewBrand}
-            onOpenBilling={() => setPaywall('manage')}
-            onBounty={(panel, slot) => router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`)}
+            reason={paywall}
+            onFreeSlot={() => setPaywall(null)}
           />
+        </>
+      ) : null}
+
+      {/* DEEP voice surfaces — full-screen, over everything. */}
+      {session && eve?.state === 'developing' ? (
+        <EveDeveloping
+          url={typeof eve.payload?.url === 'string' ? eve.payload.url : undefined}
+          slug={typeof eve.payload?.slug === 'string' ? eve.payload.slug : undefined}
+          onExit={() => setEve(null)}
+          onSubmitted={(slug) => {
+            setEve(null);
+            setConsoleBrand({ slug, name: slug });
+            setShowComposer(true);
+          }}
+        />
+      ) : session && eve?.state === 'design' ? (
+        <EveDesign
+          idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
+          onExit={() => setEve(null)}
+          onHandoff={() => {
+            setEve(null);
+            router.push('/design');
+          }}
+        />
+      ) : !deep ? (
+        !session ? (
+          // Signed-out gate — dim Eve with the scrim so the copy reads.
+          <>
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: EVE_SCRIM }]} />
+            <View style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
+              <View style={styles.introWrap}>
+                <EveGlyph size={132} />
+                <ThemedText type="code" style={[styles.introTag, { color: p.dim }]}>
+                  FROM IDEA TO BRAND IN SECONDS
+                </ThemedText>
+                <ThemedText type="title" style={[styles.introTitle, { color: p.ink }]}>
+                  Meet Eve
+                </ThemedText>
+                <ThemedText type="small" style={[styles.introBody, { color: p.dim }]}>
+                  Your AI brand consultant. Talk it through, and Eve designs your clothing
+                  brand, builds the store, and launches your website.
+                </ThemedText>
+                <Pressable
+                  onPress={() => router.navigate('/account')}
+                  style={({ pressed }) => [styles.ctaPrimary, { backgroundColor: p.accent }, glow(p.accent, 18, pressed ? 0.3 : 0.6), pressed && { transform: [{ scale: 0.98 }] }]}>
+                  <ThemedText type="smallBold" style={{ color: BG }}>
+                    Create an account
+                  </ThemedText>
+                </Pressable>
+                <Pressable onPress={() => router.navigate('/account')} hitSlop={8} style={styles.ctaSecondary}>
+                  <ThemedText type="code" style={[styles.ctaSecondaryText, { color: p.dim }]}>
+                    I already have one — log in
+                  </ThemedText>
+                </Pressable>
+                <ThemedText type="code" style={[styles.introFoot, { color: p.faint }]}>
+                  Free to explore. You only need a plan to launch a store.
+                </ThemedText>
+              </View>
+            </View>
+          </>
+        ) : loading || !voiceResolved ? (
+          <>
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: EVE_SCRIM }]} />
+            <ActivityIndicator style={styles.center} color="#cdd1d9" />
+          </>
         ) : (
-          // No store yet — the first brand is built WITH Eve (slide down from the top, or tap).
-          <View style={styles.introWrap}>
-            <EveGlyph size={132} />
-            <ThemedText type="code" style={[styles.introTag, { color: p.dim }]}>
-              YOUR FIRST BRAND
-            </ThemedText>
-            <ThemedText type="title" style={[styles.introTitle, { color: p.ink }]}>
-              Talk it through with Eve
-            </ThemedText>
-            <ThemedText type="small" style={[styles.introBody, { color: p.dim }]}>
-              Eve interviews you — name, products, style — then designs the brand and builds
-              your store. Just talk; she does the rest.
-            </ThemedText>
-            <Pressable
-              onPress={onNewBrand}
-              style={({ pressed }) => [styles.ctaPrimary, { backgroundColor: p.accent }, glow(p.accent, 18, pressed ? 0.3 : 0.6), pressed && { transform: [{ scale: 0.98 }] }]}>
-              <ThemedText type="smallBold" style={{ color: BG }}>
-                🎙  Start with Eve
-              </ThemedText>
-            </Pressable>
-            <ThemedText type="code" style={[styles.introFoot, { color: p.faint }]}>
-              Just talk — she designs, builds, and launches.
-            </ThemedText>
-          </View>
-        )}
-      </View>
-      )}
+          // Signed-in DEFAULT — talk to Eve. Her mic is live only while this tab is focused and the
+          // deck is closed. Swipe down (or tap the top handle) reveals the brand deck over her.
+          <>
+            <EveHome open={focused && !deckShown} onRequestClose={() => setEve(null)} onGo={setEve} />
+            {hasStore ? (
+              <>
+                {!deckShown ? (
+                  <GestureDetector gesture={summonPan}>
+                    <View style={[styles.summonZone, { height: insets.top + 26 }]}>
+                      <Pressable
+                        accessibilityLabel="Show your brands"
+                        hitSlop={{ top: 8, bottom: 16, left: 40, right: 40 }}
+                        onPress={() => setDeckShown(true)}
+                        style={[styles.summonPill, { top: insets.top + 8 }]}
+                      />
+                    </View>
+                  </GestureDetector>
+                ) : null}
+                <BrandDeck
+                  shown={deckShown}
+                  token={session.access_token}
+                  refreshKey={dashKey}
+                  onClose={() => setDeckShown(false)}
+                  onEditBrand={(slug, name) => { setDeckShown(false); setConsoleBrand({ slug, name }); setShowComposer(true); }}
+                  onNewBrand={onNewBrand}
+                  onOpenBilling={() => setPaywall('manage')}
+                  onBounty={(panel, slot) => { setDeckShown(false); router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`); }}
+                />
+              </>
+            ) : null}
+          </>
+        )
+      ) : null}
     </View>
   );
 }
@@ -372,7 +352,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 }, // transparent — the global AppBackground (in _layout) shows through
   content: { flex: 1, paddingHorizontal: Spacing.four },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { color: '#9396a0', letterSpacing: 1 },
   introWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, paddingHorizontal: Spacing.four },
   introTag: { letterSpacing: 3, fontSize: 10, marginTop: Spacing.two },
   introTitle: { fontSize: 30, fontFamily: SERIF, letterSpacing: 0.5 },
@@ -382,7 +361,7 @@ const styles = StyleSheet.create({
   ctaSecondaryText: { color: '#9396a0' },
   introFoot: { color: '#9396a0', fontSize: 12, marginTop: Spacing.three, textAlign: 'center' },
 
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  headerSpacer: { flex: 1 },
-  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  // The always-armed top-edge zone that reveals the brand deck (pull down or tap the pill).
+  summonZone: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 40, alignItems: 'center' },
+  summonPill: { position: 'absolute', width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(207,232,243,0.32)' },
 });
