@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Path } from 'react-native-svg';
 import { usePalette } from '@/components/nc-screen';
-import { withScreenFade } from '@/components/screen-fade';
+import { EVE_SCRIM, withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';
 
 import { EveDesign } from '@/components/eve/eve-design';
@@ -21,12 +21,11 @@ import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiUrl, readJson } from '@/lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Welcome, type OnboardChoice } from '@/components/welcome';
-import { EVE_SCRIM } from '@/components/screen-fade';
 import { addEveEventListener, registerEveSummonListener, type EveSummon } from '@/lib/eve-bus';
 
 // THE EVE TAB — her page. The pull-down overlay is retired: this tab hosts Eve's voice machine
@@ -201,7 +200,10 @@ function StudioScreen() {
 
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
   // comfortable gap so the last row of the dashboard never dips under it.
-  const bottomPad = BottomTabInset + insets.bottom + Spacing.five;
+  // Just a breathing gap above the in-flow tab bar (it sits below this screen and pads its own
+  // home-indicator inset — reserving BottomTabInset + insets.bottom here left a big dead zone that
+  // shrank the content area and pushed the centered gate up).
+  const bottomPad = Spacing.four;
 
   // First-launch welcome: a full-screen Modal presented ABOVE the tab bar so it owns its own swipe
   // gestures (no tab-navigator conflict) and hides the bottom bar during onboarding.

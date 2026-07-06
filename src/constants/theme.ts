@@ -74,5 +74,9 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+// The tab bar (components/app-tabs) is an expo-router/ui `Tabs` bar — a plain View laid out IN A
+// FLEX COLUMN below the screen slot, NOT a floating/native UITabBar. So a screen sits entirely
+// ABOVE it and reserves NOTHING for it (the bar pads its own home-indicator inset). This is 0; the
+// named constant stays as the single knob at every call site in case the bar ever goes floating.
+export const BottomTabInset = 0;
 export const MaxContentWidth = 800;

@@ -37,7 +37,8 @@ export default function AppTabs() {
   const insets = useSafeAreaInsets();
   return (
     <Tabs>
-      {/* The active screen fills the space; the bar floats over the bottom (screens pad BottomTabInset). */}
+      {/* Flex column: the active screen fills the space, the bar sits BELOW it (in-flow, not
+          floating — it's a plain View, not a native UITabBar). Screens reserve nothing for it. */}
       <TabSlot style={styles.slot} />
       <TabList asChild>
         {/* asChild clones this into the tab-list element; on web a STYLE ARRAY here reaches a raw

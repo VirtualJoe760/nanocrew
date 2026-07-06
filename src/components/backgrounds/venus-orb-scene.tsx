@@ -650,14 +650,22 @@ function Orb({ stage = 'talking', lowPower = false, onReveal }: { stage?: VenusS
   const invalidate = useThree((s) => s.invalidate);
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
 
-  // LOW-POWER ticker: with frameloop='demand' the loop only runs when invalidate() is called, so
-  // tick a coarse clock — ~6fps at rest, 30fps while her voice is audible (speechActiveAt) so the
-  // nucleus stays voice-reactive on non-Eve pages.
+  // FRAME-RATE CAP. frameloop is ALWAYS 'demand' (see the Canvas), so this ticker is the only thing
+  // that drives renders — which lets us CAP the rate. Uncapped 'always' follows the display, i.e.
+  // 120Hz on a ProMotion iPhone, and this additive-overdraw scene at native DPR pegs the GPU there
+  // (the whole phone thermally throttles). ~30fps on the Eve page (she's the star), a ~6fps trickle
+  // as an ambient background elsewhere, 30fps whenever her voice is audible. Keeping frameloop fixed
+  // at 'demand' also means the Canvas never reconfigures on navigation (the prop never changes) —
+  // the native reconfigure churn is a crash vector we avoid entirely.
   useEffect(() => {
-    if (!lowPower) return;
-    let n = 0;
+    const restMs = lowPower ? 165 : 33; // ~6fps ambient vs ~30fps on the Eve page
+    let acc = restMs; // render on the first tick after mount / prop change
     const id = setInterval(() => {
-      if (speechActiveAt() || n++ % 5 === 0) invalidate();
+      acc += 33;
+      if (speechActiveAt() || acc >= restMs) {
+        acc = 0;
+        invalidate();
+      }
     }, 33);
     return () => clearInterval(id);
   }, [lowPower, invalidate]);
@@ -1242,20 +1250,20 @@ function Orb({ stage = 'talking', lowPower = false, onReveal }: { stage?: VenusS
 }
 
 // Transparent canvas (the lattice IS the background), `stage` drives the lifecycle, `onReveal`
-// reports assembly progress. `lowPower` runs the loop on demand — Orb's coarse invalidate ticker
-// replaces the 60fps rAF (for pages where she's ambient, not the star).
+// reports assembly progress. `lowPower` sets the ambient render RATE (Orb's invalidate ticker), not
+// whether she animates — she's always alive, just faster on her own tab.
 //
-// frameloop MUST be switched via the Canvas PROP, not useThree().set: the native Canvas re-runs
-// configure() on every re-render and force-resyncs state.frameloop from the prop. NB the prop
-// switch resets clock.elapsedTime, so the t-based sway/bob jump once per mode change (the %600
-// mediump guard already tolerates it) — spin/crawl/bpm/hue clocks live in refs and survive.
+// frameloop is ALWAYS 'demand' — Orb's ticker is the sole render driver, which (a) caps the rate
+// (uncapped 'always' = the display's 120Hz on ProMotion → GPU thermal throttle) and (b) keeps the
+// prop CONSTANT so the native Canvas never reconfigures the GL context on navigation (that churn is
+// a crash vector). Do NOT switch frameloop at runtime; change the ticker rate instead.
 export default function VenusOrbScene({ stage = 'talking', lowPower = false, onReveal }: { stage?: VenusStage; lowPower?: boolean; onReveal?: (r: number) => void }) {
   return (
     <Canvas
       camera={{ position: [0, 0, 2], fov: 22 }}
       style={{ flex: 1 }}
       gl={{ alpha: true }}
-      frameloop={lowPower ? 'demand' : 'always'}>
+      frameloop="demand">
       <Orb stage={stage} lowPower={lowPower} onReveal={onReveal} />
     </Canvas>
   );
