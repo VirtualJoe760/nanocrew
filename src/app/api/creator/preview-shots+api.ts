@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
@@ -25,7 +25,9 @@ export async function POST(req: Request) {
     designId?: string;
     templateKey?: string;
     garmentUrl?: string;
-    placements?: { placement: string; label: string }[];
+    // Optional per-placement designId (multi-design composites — front logo + back art); defaults
+    // to the primary designId. Same shape /api/mockup consumes.
+    placements?: { placement: string; label: string; designId?: string }[];
   } | null;
   if (!body?.designId || (!body.templateKey && !body.garmentUrl)) {
     return Response.json({ error: 'designId and templateKey (or garmentUrl) required' }, { status: 400 });
@@ -42,7 +44,24 @@ export async function POST(req: Request) {
     return Response.json({ error: 'not your design' }, { status: 403 });
   }
 
-  const placements = body.placements?.length ? body.placements : [{ placement: 'front', label: 'front' }];
+  // The flat `preview_shots` debit is priced for 2 renders (credits.ts: "2 Nano Banana renders →
+  // ~2x") and the generator makes ONE render per placement — cap so cost can't outrun the price.
+  const placements = (body.placements?.length ? body.placements : [{ placement: 'front', label: 'front' }]).slice(0, 2);
+
+  // Resolve any secondary designs referenced per placement; every one must live in the SAME store
+  // as the primary (a composition never crosses stores), which the membership check above covers.
+  const designUrlById = new Map<string, string>([[design.id, design.url]]);
+  const extraIds = [...new Set(placements.map((p) => p.designId).filter((id): id is string => !!id && id !== design.id))];
+  if (extraIds.length) {
+    const extras = await db
+      .select({ id: schema.designs.id, url: schema.designs.url, storeId: schema.designs.storeId })
+      .from(schema.designs)
+      .where(inArray(schema.designs.id, extraIds));
+    for (const d of extras) {
+      if (d.storeId !== design.storeId) return Response.json({ error: 'not your design' }, { status: 403 });
+      if (d.url) designUrlById.set(d.id, d.url);
+    }
+  }
 
   try {
     await debit(user.id, 'preview_shots', design.id);
@@ -58,14 +77,16 @@ export async function POST(req: Request) {
     let mockupUrl: string | null = null;
 
     // 1) Ground truth: the real Printful mockup (skipped for data-URL designs — the generator
-    //    needs a hosted image — or when only a garmentUrl was provided).
-    if (body.templateKey && !design.url.startsWith('data:')) {
+    //    needs a hosted image — or when only a garmentUrl was provided). Each placement carries
+    //    its OWN design so a multi-print product mocks up complete.
+    const placementUrl = (p: { designId?: string }) => designUrlById.get(p.designId ?? design.id) ?? design.url;
+    if (body.templateKey && !placements.some((p) => placementUrl(p).startsWith('data:'))) {
       try {
         const variants = await getCatalogVariants(body.templateKey);
         const variantId = variants[0]?.id;
         if (variantId) {
           const meta = await getProductMeta(body.templateKey).catch(() => ({ technique: null, defaultOptions: {} }));
-          const files: MockupFile[] = placements.map((p) => ({ placement: p.placement, image_url: design.url }));
+          const files: MockupFile[] = placements.map((p) => ({ placement: p.placement, image_url: placementUrl(p) }));
           const mockups = await renderMockups(
             body.templateKey,
             variantId,

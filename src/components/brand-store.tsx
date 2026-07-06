@@ -77,11 +77,12 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
   const gutter = Spacing.three;
   const colW = (Math.min(width, 720) - gutter * 3) / 2;
 
-  // Hero carousel above the title (Instagram-style): OG art leads, then the newest product shots.
-  const heroImages = [
-    brand?.ogImageUrl ?? null,
-    ...(data?.collections.flatMap((c) => c.products.map((p) => p.imageUrl)) ?? []),
-  ].filter((u, i, a): u is string => !!u && a.indexOf(u) === i).slice(0, 8);
+  // Hero carousel above the title (Instagram-style): product shots lead; the OG card is only a
+  // fallback for brands that haven't dropped any imagery yet.
+  const productHeroes = (data?.collections.flatMap((c) => c.products.map((p) => p.imageUrl)) ?? [])
+    .filter((u, i, a): u is string => !!u && a.indexOf(u) === i)
+    .slice(0, 8);
+  const heroImages = productHeroes.length ? productHeroes : brand?.ogImageUrl ? [brand.ogImageUrl] : [];
 
   // ── Moderation (Apple Guideline 1.2): report a brand to ops, or block it on this device. ──
   const reportBrand = useCallback(() => {

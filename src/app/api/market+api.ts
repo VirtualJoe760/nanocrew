@@ -19,6 +19,7 @@ export async function GET(req: Request) {
         id: schema.products.id,
         name: schema.products.name,
         imageUrl: schema.products.imageUrl,
+        modelShots: schema.products.modelShots,
         videoUrl: schema.products.videoUrl,
         storeName: schema.stores.name,
         storeSlug: schema.stores.slug,
@@ -72,6 +73,7 @@ export async function GET(req: Request) {
           .select({
             storeId: schema.products.storeId,
             imageUrl: schema.products.imageUrl,
+            modelShots: schema.products.modelShots,
           })
           .from(schema.products)
           .where(and(eq(schema.products.isPublished, true), inArray(schema.products.storeId, brandIds)))
@@ -81,14 +83,17 @@ export async function GET(req: Request) {
 
     const previewsByStore = new Map<string, string[]>();
     for (const row of previewRows) {
-      if (!row.imageUrl) continue;
+      // Prefer an on-model shot over the flat Printful mockup.
+      const src = row.modelShots?.[0] ?? row.imageUrl;
+      if (!src) continue;
       const arr = previewsByStore.get(row.storeId) ?? [];
-      if (arr.length < 4) arr.push(row.imageUrl);
+      if (arr.length < 4) arr.push(src);
       previewsByStore.set(row.storeId, arr);
     }
 
     return Response.json({
-      trending,
+      // Thumbnails lead with an on-model shot when the product has one (same field name for clients).
+      trending: trending.map(({ modelShots, ...t }) => ({ ...t, imageUrl: modelShots?.[0] ?? t.imageUrl })),
       brands: brands.map((b) => ({ ...b, previews: previewsByStore.get(b.id) ?? [] })),
     });
   } catch (e) {

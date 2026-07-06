@@ -69,12 +69,20 @@ export async function POST(req: Request) {
       .limit(1);
     if (!comp) return Response.json({ error: 'composition not found' }, { status: 404 });
 
-    // Idempotent: already published → return the existing product.
+    // Idempotent: already published → return the existing product (including its local catalog
+    // row, so the client can act on the product id — e.g. one-tap model shots after publish).
+    // modelShots rides along so the client knows shots exist and doesn't re-offer a paid generation.
     if (comp.status === 'published' && comp.printfulSyncProductId) {
+      const [existing] = await db
+        .select({ id: schema.products.id, slug: schema.products.slug, modelShots: schema.products.modelShots })
+        .from(schema.products)
+        .where(eq(schema.products.printfulSyncProductId, comp.printfulSyncProductId))
+        .limit(1);
       return Response.json({
         ok: true,
         alreadyPublished: true,
         printfulSyncProductId: comp.printfulSyncProductId,
+        product: existing ?? null,
       });
     }
 

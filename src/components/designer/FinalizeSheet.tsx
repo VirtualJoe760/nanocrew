@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 
 import { PlacementEditorBody } from '@/components/designer/PlacementEditor';
 import { ThemedText } from '@/components/themed-text';
@@ -21,6 +22,8 @@ import { minRetailCents } from '@/lib/pricing';
 
 // Finalize & publish (port of stephen-lawyer's FinalizeForm): pick colors, set one retail
 // price (default ≈ 2× base cost), name it → creates the live Printful sync product.
+
+const MODEL_SHOTS_COST = 25; // display-only mirror of CREDIT_COSTS.model_shots (server is source of truth)
 
 type Variant = { id: number; size: string; color: string; colorCode: string; priceCents: number };
 
@@ -57,6 +60,12 @@ export function FinalizeSheet({
   // Non-blocking POD-provider policy notes (e.g. third-party IP) surfaced AT LAUNCH — the creator
   // owns the design + any copyright, but we tell them the print provider may decline it.
   const [warnings, setWarnings] = useState<string[]>([]);
+  // One-tap model shots right after publish — /api/publish returns the local product id, so the
+  // success screen can kick off on-model advertising photos without leaving the sheet.
+  const [productId, setProductId] = useState<string | null>(null);
+  const [shots, setShots] = useState<string[]>([]);
+  const [shotsBusy, setShotsBusy] = useState(false);
+  const [shotsErr, setShotsErr] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -133,6 +142,7 @@ export function FinalizeSheet({
         const d = (await r.json().catch(() => ({}))) as {
           ok?: boolean;
           printfulSyncProductId?: string;
+          product?: { id: string; slug: string; modelShots?: string[] | null } | null;
           error?: string;
           message?: string;
           warnings?: { reason: string }[];
@@ -141,11 +151,45 @@ export function FinalizeSheet({
           throw new Error(d.message || d.error || 'Publish failed');
         }
         setWarnings((d.warnings ?? []).map((w) => w.reason).filter(Boolean));
+        setProductId(d.product?.id ?? null);
+        // A re-publish of an already-live product carries its existing shots — show the saved
+        // state instead of re-offering the paid generation.
+        setShots(d.product?.modelShots ?? []);
         setPublishedId(d.printfulSyncProductId);
         onPublished(d.printfulSyncProductId);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Publish failed'))
       .finally(() => setPublishing(false));
+  };
+
+  // One-tap advertising: on-model photos of the freshly published product (Nano Banana,
+  // server-side). Saved to products.model_shots — the store page and the market pick them up.
+  const generateShots = () => {
+    if (!productId || shotsBusy) return;
+    setShotsBusy(true);
+    setShotsErr(null);
+    apiFetch('/api/creator/model-shots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId }),
+    })
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as {
+          modelShots?: string[];
+          error?: string;
+          needed?: number;
+          balance?: number;
+        };
+        if (r.status === 402) {
+          throw new Error(
+            `Not enough credits — need ${d.needed ?? MODEL_SHOTS_COST}, you have ${d.balance ?? 0}. Top up in Account.`,
+          );
+        }
+        if (!r.ok || !d.modelShots?.length) throw new Error(d.error || 'Model shots failed');
+        setShots(d.modelShots);
+      })
+      .catch((e) => setShotsErr(e instanceof Error ? e.message : 'Model shots failed'))
+      .finally(() => setShotsBusy(false));
   };
 
   return (
@@ -220,6 +264,55 @@ export function FinalizeSheet({
                       ⚠ {w}
                     </ThemedText>
                   ))}
+                </View>
+              ) : null}
+              {/* One-tap model shots — the easy advertising step, right where publish lands. */}
+              {productId ? (
+                <View style={styles.shotsBlock}>
+                  {shots.length ? (
+                    <>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.shotsStrip}>
+                        {shots.map((uri) => (
+                          <Image key={uri} source={{ uri }} style={styles.shot} contentFit="cover" />
+                        ))}
+                      </ScrollView>
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.shotsHint}>
+                        ✓ Model shots saved — they’ll show on your store and in the market.
+                      </ThemedText>
+                    </>
+                  ) : (
+                    <>
+                      <Pressable onPress={generateShots} disabled={shotsBusy}>
+                        <ThemedView
+                          type="backgroundElement"
+                          style={[styles.shotsBtn, shotsBusy ? { opacity: 0.6 } : null]}>
+                          {shotsBusy ? (
+                            <>
+                              <ActivityIndicator color={theme.text} size="small" />
+                              <ThemedText type="small" themeColor="textSecondary">
+                                Shooting on a model…
+                              </ThemedText>
+                            </>
+                          ) : (
+                            <ThemedText type="small" themeColor="text">
+                              ✦ Generate model shots · {MODEL_SHOTS_COST}
+                            </ThemedText>
+                          )}
+                        </ThemedView>
+                      </Pressable>
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.shotsHint}>
+                        AI shots of a model wearing it — used across your store and the market.
+                      </ThemedText>
+                    </>
+                  )}
+                  {shotsErr ? (
+                    <ThemedText type="small" style={styles.shotsErr}>
+                      {shotsErr}
+                    </ThemedText>
+                  ) : null}
                 </View>
               ) : null}
               <Pressable onPress={onClose}>
@@ -338,6 +431,12 @@ const styles = StyleSheet.create({
   },
   swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.5)' },
   doneWrap: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
+  shotsBlock: { alignSelf: 'stretch', gap: Spacing.two },
+  shotsStrip: { gap: Spacing.two, paddingVertical: Spacing.one },
+  shot: { width: 108, height: 138, borderRadius: Spacing.two, backgroundColor: 'rgba(255,255,255,0.04)' },
+  shotsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.two, paddingVertical: Spacing.three, borderRadius: 999 },
+  shotsHint: { textAlign: 'center' },
+  shotsErr: { color: '#e24b4a', textAlign: 'center' },
   warnBox: { gap: Spacing.one, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 10, backgroundColor: 'rgba(180,140,0,0.10)', alignSelf: 'stretch' },
   warnText: { textAlign: 'center' },
   publish: { alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.three, borderRadius: 999, minHeight: 44 },

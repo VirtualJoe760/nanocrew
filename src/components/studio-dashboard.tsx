@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { apiUrl, readJson } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
-// The returning creator's Studio landing — no auto-AI. A small Venus presence, and per
-// store a thumbnail that's a carousel of product shots (auto-advancing) with the brand's
-// OG card (logo + tagline) leading. No website required, so no 404s. Tap → edit mode.
-// Theme-aware: matches the Studio screen behind it in light and dark.
+// The returning creator's Studio landing — no auto-AI. Eve lives in the background now, so
+// the dashboard is just a quiet ledger over her: a "YOUR BRANDS" eyebrow, a compact credits
+// chip, and per store a thumbnail that's a carousel of product shots (auto-advancing) —
+// the OG card only fills in when a brand has no product imagery yet. No website required,
+// so no 404s. Tap → edit mode. New brands are built with Eve.
 
 type Bounties = { product: boolean; hero: boolean; logo: boolean; cover: boolean };
 type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; ogImageUrl?: string | null; productImages?: string[]; bounties?: Bounties };
 
-const THUMB_H = 200;
+const THUMB_H = 220;
+// Model shots are PORTRAIT (3:4) — a full-card-wide crop beheads the models. Show them as an
+// uncropped 4:5 filmstrip instead; the strip peeks the next tile so it reads as scrollable.
+const TILE_W = Math.round(THUMB_H * 0.8);
+const TILE_GAP = Spacing.two;
 
 // "Finish your site" setup tasks. Each deep-links into the Design tab on the right panel/slot.
 const BOUNTY_STEPS: { key: keyof Bounties; label: string; panel: 'products' | 'web'; slot?: 'hero' | 'cover' | 'logo' }[] = [
@@ -26,36 +30,54 @@ const BOUNTY_STEPS: { key: keyof Bounties; label: string; panel: 'products' | 'w
   { key: 'cover', label: 'Add a collection cover', panel: 'web', slot: 'cover' },
 ];
 
-/** The brand card's thumbnail: a paged, auto-advancing carousel of [OG card, …products].
- *  Falls back to a single image, then to the brand name on the surface colour. */
+/** The brand card's thumbnail: an auto-advancing 4:5 filmstrip of product shots (uncropped
+ *  portraits — the models keep their faces). Falls back to the OG card full-bleed when there
+ *  are no products, then to the brand name. */
 function BrandThumbnail({ name, ogImageUrl, productImages, p }: { name: string; ogImageUrl?: string | null; productImages?: string[]; p: StudioPalette }) {
-  // OG card leads; product shots follow. De-dupe so the OG image isn't repeated.
-  const slides = [ogImageUrl, ...(productImages ?? [])].filter((u): u is string => !!u);
-  const unique = Array.from(new Set(slides));
+  // Product shots represent the brand; the OG card is only the last resort when a store
+  // has no product imagery at all. De-dupe so no shot repeats.
+  const products = Array.from(new Set((productImages ?? []).filter((u): u is string => !!u)));
 
   const [width, setWidth] = useState(0);
-  const [index, setIndex] = useState(0);
   const scroller = useRef<ScrollView>(null);
+  const indexRef = useRef(0);
+  const dragging = useRef(false);
 
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  // Track the nearest tile so the auto-advance resumes from wherever the user left the strip.
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (width > 0) setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
+    indexRef.current = Math.round(e.nativeEvent.contentOffset.x / (TILE_W + TILE_GAP));
   };
 
-  // Auto-advance through the slides while the card is on screen.
+  // Auto-advance one tile at a time; loop back to the start past the end. Paused mid-drag.
   useEffect(() => {
-    if (unique.length < 2 || width === 0) return;
+    if (products.length < 2 || width === 0) return;
+    const maxX = products.length * (TILE_W + TILE_GAP) - width;
+    if (maxX <= 0) return; // everything already fits — nothing to advance
     const id = setInterval(() => {
-      setIndex((i) => {
-        const next = (i + 1) % unique.length;
-        scroller.current?.scrollTo({ x: next * width, animated: true });
-        return next;
-      });
+      if (dragging.current) return;
+      const next = indexRef.current + 1;
+      const x = next * (TILE_W + TILE_GAP);
+      if (x > maxX + TILE_W / 2) {
+        indexRef.current = 0;
+        scroller.current?.scrollTo({ x: 0, animated: true });
+      } else {
+        indexRef.current = next;
+        scroller.current?.scrollTo({ x: Math.min(x, maxX), animated: true });
+      }
     }, 3500);
     return () => clearInterval(id);
-  }, [unique.length, width]);
+  }, [products.length, width]);
 
-  if (!unique.length) {
+  if (!products.length) {
+    // No product imagery: the OG share card (landscape art — full-bleed is its natural crop).
+    if (ogImageUrl) {
+      return (
+        <View style={{ height: THUMB_H, backgroundColor: p.surface, overflow: 'hidden' }}>
+          <Image source={{ uri: ogImageUrl }} style={{ width: '100%', height: THUMB_H }} contentFit="cover" />
+        </View>
+      );
+    }
     return (
       <View style={[{ height: THUMB_H, backgroundColor: p.surface }, styles.thumbFallback]}>
         <ThemedText type="subtitle" style={{ color: p.ink, textAlign: 'center' }} numberOfLines={2}>{name}</ThemedText>
@@ -65,38 +87,22 @@ function BrandThumbnail({ name, ogImageUrl, productImages, p }: { name: string; 
 
   return (
     <View style={{ height: THUMB_H, backgroundColor: p.surface, overflow: 'hidden' }} onLayout={onLayout}>
-      {width > 0 ? (
-        <ScrollView ref={scroller} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
-          {unique.map((uri) => (
-            <Image key={uri} source={{ uri }} style={{ width, height: THUMB_H }} contentFit="cover" />
-          ))}
-        </ScrollView>
-      ) : null}
-      {unique.length > 1 ? (
-        <View style={styles.dots} pointerEvents="none">
-          {unique.map((uri, i) => (
-            <View key={uri} style={[styles.dot, i === index && styles.dotOn]} />
-          ))}
-        </View>
-      ) : null}
+      <ScrollView
+        ref={scroller}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={TILE_W + TILE_GAP}
+        decelerationRate="fast"
+        onScroll={onScroll}
+        onScrollBeginDrag={() => { dragging.current = true; }}
+        onScrollEndDrag={() => { dragging.current = false; }}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ gap: TILE_GAP }}>
+        {products.map((uri) => (
+          <Image key={uri} source={{ uri }} style={{ width: TILE_W, height: THUMB_H }} contentFit="cover" contentPosition="top" />
+        ))}
+      </ScrollView>
     </View>
-  );
-}
-
-/** A small, calm stand-in for the Venus entity — not the full animated orb. */
-function VenusGlyph({ accent }: { accent: string }) {
-  return (
-    <Svg width={40} height={40}>
-      <Defs>
-        <RadialGradient id="vg" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor="#f4f4f6" stopOpacity={1} />
-          <Stop offset="45%" stopColor={accent} stopOpacity={0.9} />
-          <Stop offset="100%" stopColor={accent} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Circle cx={20} cy={20} r={19} fill="none" stroke={accent} strokeWidth={0.8} opacity={0.4} />
-      <Circle cx={20} cy={20} r={9} fill="url(#vg)" />
-    </Svg>
   );
 }
 
@@ -147,17 +153,13 @@ export function StudioDashboard({
 
   return (
     <ScrollView style={styles.fill} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <View style={styles.venusRow}>
-        <VenusGlyph accent={p.accent} />
-        <View style={{ flex: 1 }}>
-          <ThemedText type="code" style={s.eyebrow}>VENUS</ThemedText>
-          <ThemedText type="small" style={s.dim}>Tap a brand to edit, or start a new one.</ThemedText>
-        </View>
+      {/* Header: section eyebrow left, a slim credits chip right (tap → billing). */}
+      <View style={styles.headerRow}>
+        <ThemedText type="code" style={s.sectionLabel}>YOUR BRANDS</ThemedText>
         {credits !== null ? (
-          <Pressable style={s.creditPill} onPress={onOpenBilling} disabled={!onOpenBilling}>
-            {plan ? <ThemedText type="code" style={s.planTag}>{plan.toUpperCase()}</ThemedText> : null}
-            <ThemedText type="code" style={s.creditNum}>{credits}</ThemedText>
-            <ThemedText type="code" style={s.creditLabel}>credits +</ThemedText>
+          <Pressable style={s.creditChip} onPress={onOpenBilling} disabled={!onOpenBilling}>
+            {plan ? <ThemedText type="code" style={s.chipPlan}>{plan.toUpperCase()} · </ThemedText> : null}
+            <ThemedText type="code" style={s.chipCredits}>✦ {credits.toLocaleString()}</ThemedText>
           </Pressable>
         ) : null}
       </View>
@@ -204,7 +206,7 @@ export function StudioDashboard({
             <ThemedText type="code" style={s.plus}>+</ThemedText>
             <View>
               <ThemedText type="smallBold" style={s.accent}>Build a new brand</ThemedText>
-              <ThemedText type="code" style={s.dim}>Start another store with Venus.</ThemedText>
+              <ThemedText type="code" style={s.dim}>Start another brand with Eve.</ThemedText>
             </View>
           </Pressable>
         </>
@@ -217,11 +219,8 @@ export function StudioDashboard({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   scroll: { paddingBottom: BottomTabInset + Spacing.six, gap: Spacing.four },
-  venusRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingTop: Spacing.two },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.three, paddingTop: Spacing.two },
   thumbFallback: { alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
-  dots: { position: 'absolute', bottom: Spacing.three, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 5 },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.55)' },
-  dotOn: { backgroundColor: '#fff', width: 7, height: 7, borderRadius: 4 },
   brandMeta: { padding: Spacing.three, gap: 2 },
   brandGroup: { gap: Spacing.two },
 });
@@ -232,11 +231,13 @@ function makeStyles(p: StudioPalette) {
     dim: { color: p.dim },
     ink: { color: p.ink },
     accent: { color: p.accent },
-    creditPill: { alignItems: 'center', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 14, borderWidth: 1, borderColor: p.line, backgroundColor: p.card },
-    planTag: { color: p.accent2, fontSize: 8, letterSpacing: 1.5, marginBottom: 1 },
-    creditNum: { color: p.accent, fontSize: 18, fontWeight: '700' },
-    creditLabel: { color: p.dim, fontSize: 9, letterSpacing: 1 },
-    brandCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: p.line, backgroundColor: p.card },
+    sectionLabel: { color: p.dim, letterSpacing: 2 },
+    // Slim credits chip — mostly-opaque so it reads over the Eve scrim without shouting.
+    creditChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.three, paddingVertical: Spacing.one + 2, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.7)' },
+    chipPlan: { color: p.dim, fontSize: 11, letterSpacing: 1 },
+    chipCredits: { color: p.ink, fontSize: 11, letterSpacing: 0.5 },
+    // A touch more lift than p.card so the cards stay alive over Eve's animated net.
+    brandCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(205,209,217,0.14)', backgroundColor: 'rgba(24,25,30,0.92)' },
     editTag: { position: 'absolute', right: Spacing.three, bottom: Spacing.three, backgroundColor: p.accent, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 5 },
     editTagText: { color: p.onAccent, fontSize: 11, letterSpacing: 0.5 },
     newBrand: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: p.line, padding: Spacing.four },

@@ -221,6 +221,10 @@ function DesignScreen() {
   // Instruction prefill for the editor when opened by the command bus.
   const [editorInstruction, setEditorInstruction] = useState<string | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  // Mirrored into a ref so slow async work (model shots take tens of seconds) can check which
+  // review modal is open WHEN IT RESOLVES — not which one was open when it started.
+  const reviewIdRef = useRef<string | null>(null);
+  reviewIdRef.current = reviewId;
   const [mergeTarget, setMergeTarget] = useState<{ aId: string; bId: string } | null>(null);
   // Tap a product on the canvas → open its detail sheet (photo · colourways · sizes · price).
   const [detailNode, setDetailNode] = useState<{
@@ -302,6 +306,79 @@ function DesignScreen() {
       setPreviewErr(e instanceof Error ? e.message : 'Preview failed');
     } finally {
       setPreviewBusy(false);
+    }
+  };
+  // On-model shots from the COMPOSITE REVIEW modal — the same ephemeral preview-shots flow the
+  // Combine sheet uses (nothing persisted), cached per composition so re-opening the modal or
+  // regenerating by accident doesn't re-charge.
+  const [reviewShotsBusy, setReviewShotsBusy] = useState(false);
+  const [reviewShotsErr, setReviewShotsErr] = useState<string | null>(null);
+  const [reviewShots, setReviewShots] = useState<string[]>([]);
+  const reviewShotsCache = useRef<Map<string, string[]>>(new Map());
+  // A composite node's shots are keyed by its composition row (falling back to design+blank while
+  // the row is still being created).
+  const reviewShotsKey = (node: CanvasNode) => node.refId || `${node.designRef}:${node.blankRef}`;
+  useEffect(() => {
+    setReviewShotsErr(null);
+    const node = reviewId ? nodesRef.current.find((n) => n.id === reviewId) : null;
+    setReviewShots(node ? reviewShotsCache.current.get(reviewShotsKey(node)) ?? [] : []);
+  }, [reviewId]);
+  const runReviewShots = async (node: CanvasNode) => {
+    if (reviewShotsBusy || !node.designRef || !node.blankRef) return;
+    const b = blanks.find((x) => String(x.id) === node.blankRef);
+    if (!b?.image) {
+      setReviewShotsErr('This product has no image to preview.');
+      return;
+    }
+    setReviewShotsBusy(true);
+    setReviewShotsErr(null);
+    // Generation runs tens of seconds and the modal stays closable: only commit display state if
+    // THIS node's modal is still the open one when we resolve (the cache write is always kept, so
+    // reopening the originating composite finds its shots).
+    const stillOpen = () => reviewIdRef.current === node.id;
+    try {
+      // Pull the composition row's saved placements — EVERY design's, with its designId — so the
+      // shots render the complete product (front logo + back art, not just the primary print) and
+      // reveal the right sides of it. Falls back to a front print if the row isn't readable.
+      let shotPlacements: { placement: string; label: string; designId?: string }[] = [];
+      if (node.refId) {
+        try {
+          const d = await apiFetch(`/api/compositions/${node.refId}`).then(
+            readJson<{ composition?: { placement?: string; placements?: { designId: string; placement: string }[] | null } }>,
+          );
+          const rows = d.composition?.placements ?? [];
+          if (rows.length) {
+            const seen = new Set<string>();
+            shotPlacements = rows
+              .filter((p) => (seen.has(`${p.placement}:${p.designId}`) ? false : (seen.add(`${p.placement}:${p.designId}`), true)))
+              .map((p) => ({ placement: p.placement, label: p.placement.replace(/_/g, ' '), designId: p.designId }));
+          } else if (d.composition?.placement) {
+            shotPlacements = [{ placement: d.composition.placement, label: d.composition.placement.replace(/_/g, ' ') }];
+          }
+        } catch {
+          /* fall through to the front-print default */
+        }
+      }
+      if (!shotPlacements.length) shotPlacements = [{ placement: 'front', label: 'front' }];
+      const res = await apiFetch('/api/creator/preview-shots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          designId: node.designRef,
+          templateKey: node.blankRef, // lets the server ground shots in a real Printful mockup
+          garmentUrl: b.image, // fallback if the mockup task fails
+          placements: shotPlacements,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { shots?: string[]; error?: string; needed?: number };
+      if (res.status === 402) throw new Error(`Not enough credits — need ${data.needed ?? PREVIEW_SHOTS_COST}. Top up in Account.`);
+      if (!res.ok || !data.shots?.length) throw new Error(data.error || 'Preview failed');
+      reviewShotsCache.current.set(reviewShotsKey(node), data.shots);
+      if (stillOpen()) setReviewShots(data.shots);
+    } catch (e) {
+      if (stillOpen()) setReviewShotsErr(e instanceof Error ? e.message : 'Preview failed');
+    } finally {
+      setReviewShotsBusy(false);
     }
   };
   // PlacementEditor — opened from a composite's review modal, or by dropping a design on it.
@@ -1937,6 +2014,8 @@ function DesignScreen() {
                         </ThemedText>
                       </Pressable>
                     </View>
+                    {/* Body scrolls under the pinned header — the shots strip makes it taller than small screens. */}
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.reviewBody}>
                     <View
                       style={[
                         styles.reviewThumb,
@@ -1955,6 +2034,37 @@ function DesignScreen() {
                     <ThemedText themeColor="textSecondary" numberOfLines={2}>
                       {blankName} · {d?.prompt ?? 'design'}
                     </ThemedText>
+                    {/* On-model shots — same ephemeral preview-shots flow as the Combine sheet. */}
+                    {reviewShots.length ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewStrip}>
+                        {reviewShots.map((uri) => (
+                          <Image key={uri} source={{ uri }} style={styles.previewShot} contentFit="cover" />
+                        ))}
+                      </ScrollView>
+                    ) : null}
+                    {reviewShotsErr ? (
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {reviewShotsErr}
+                      </ThemedText>
+                    ) : null}
+                    {node.status !== 'generating' && node.designRef && node.blankRef ? (
+                      <Pressable onPress={() => runReviewShots(node)} disabled={reviewShotsBusy}>
+                        <ThemedView type="backgroundElement" style={[styles.previewBtn, reviewShotsBusy ? { opacity: 0.6 } : null]}>
+                          {reviewShotsBusy ? (
+                            <>
+                              <ActivityIndicator color={theme.text} size="small" />
+                              <ThemedText type="small" themeColor="textSecondary">
+                                Rendering on a model…
+                              </ThemedText>
+                            </>
+                          ) : (
+                            <ThemedText type="small" themeColor="text">
+                              {reviewShots.length ? '↻ Regenerate shots' : `✦ Model shots · ${PREVIEW_SHOTS_COST}`}
+                            </ThemedText>
+                          )}
+                        </ThemedView>
+                      </Pressable>
+                    ) : null}
                     {node.refId && node.blankRef ? (
                       <Pressable
                         onPress={() => {
@@ -1977,6 +2087,7 @@ function DesignScreen() {
                         Discard
                       </ThemedText>
                     </Pressable>
+                    </ScrollView>
                   </ThemedView>
                 </View>
               </Modal>
@@ -3181,10 +3292,15 @@ const styles = StyleSheet.create({
   reviewCard: {
     width: '100%',
     maxWidth: 360,
+    // With a shots strip present the card outgrows small screens — cap it and let the body
+    // scroll (header stays pinned) so Finalize/Discard/Close are always reachable.
+    maxHeight: '88%',
     borderRadius: Spacing.four,
     padding: Spacing.four,
     gap: Spacing.three,
+    overflow: 'hidden',
   },
+  reviewBody: { gap: Spacing.three },
   reviewThumb: {
     width: '100%',
     aspectRatio: 1,

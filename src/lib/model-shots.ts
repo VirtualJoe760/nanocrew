@@ -3,12 +3,22 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { uploadImage } from '@/lib/cloudinary';
 
 // On-model product photography via Nano Banana: feed the flat product image and render the
-// exact garment worn by a model in a few poses, for the product-page gallery. Photoreal,
-// graphic-faithful. Hosted on Cloudinary; returns the URLs (skips poses that fail).
+// exact product worn (or carried/used — bags, hats, accessories) by a model in a few poses,
+// for the product-page gallery. Photoreal, graphic-faithful. Hosted on Cloudinary; returns
+// the URLs (skips poses that fail).
 const MODEL = 'gemini-2.5-flash-image';
 
+// Every shot is PORTRAIT (3:4) — the shape product cards and strips are built around. Passed via
+// config.imageConfig (prompt-text ratios are ignored by the model, same as /api/generate).
+const SHOT_RATIO = '3:4';
+// Framing contract appended to every prompt: these shots sell the product AND the person — a crop
+// that loses the face reads like a mannequin. Head-to-mid-thigh keeps both readable at card size.
+const FRAMING =
+  'Portrait orientation, framed from just above the head to mid-thigh — the model’s face and ' +
+  'the product must BOTH be clearly visible in frame.';
+
 const POSES = [
-  'a clean full-body studio fashion photo, model facing forward, neutral seamless background, soft even lighting',
+  'a clean studio fashion photo, model facing forward, neutral seamless background, soft even lighting',
   'a three-quarter editorial photo, model turned slightly, natural daylight, minimal background',
   'a candid lifestyle photo, model in an urban setting at golden hour, shallow depth of field',
 ];
@@ -41,14 +51,15 @@ export async function generateModelShots(productImageUrl: string, count = 3): Pr
   const out: string[] = [];
   for (let i = 0; i < Math.min(count, POSES.length); i++) {
     const prompt =
-      `Using the provided image as the EXACT garment (keep its print, graphic, colour and ` +
-      `cut faithful), render ${POSES[i]}. The model wears this garment. Photorealistic, ` +
-      `high-resolution fashion photography. No text or watermark.`;
+      `Using the provided image as the EXACT product (keep its print, graphic, colour and ` +
+      `shape faithful), render ${POSES[i]}. The model wears, carries or uses this product as ` +
+      `appropriate for its type (worn if apparel, carried or in use if a bag or accessory). ` +
+      `${FRAMING} Photorealistic, high-resolution fashion photography. No text or watermark.`;
     try {
       const res = (await ai.models.generateContent({
         model: MODEL,
         contents: [{ role: 'user', parts: [{ text: prompt }, product] }],
-        config: { responseModalities: [Modality.IMAGE] },
+        config: { responseModalities: [Modality.IMAGE], imageConfig: { aspectRatio: SHOT_RATIO } },
       })) as GenResponse;
       for (const part of res.candidates?.[0]?.content?.parts ?? []) {
         if (part.inlineData?.data) {
@@ -70,14 +81,14 @@ export async function generateModelShots(productImageUrl: string, count = 3): Pr
 // Angle direction for an on-model PREVIEW, keyed by print placement, so the shot actually reveals
 // where the design sits (front print → facing camera, back print → shot from behind, sleeve → side).
 const PLACEMENT_ANGLE: Record<string, string> = {
-  back: 'The model is photographed from BEHIND so the back of the garment and its print are fully visible.',
+  back: 'The model is photographed from BEHIND so the back of the product and its print are fully visible.',
   left_sleeve: 'A three-quarter angle from the model’s left so the LEFT SLEEVE print reads clearly.',
   right_sleeve: 'A three-quarter angle from the model’s right so the RIGHT SLEEVE print reads clearly.',
   sleeve: 'A three-quarter side angle so the SLEEVE print reads clearly.',
   hood: 'A slightly-behind angle so the HOOD print is visible.',
-  left: 'The model turns to reveal the LEFT side of the garment.',
-  right: 'The model turns to reveal the RIGHT side of the garment.',
-  front: 'The model faces the camera so the FRONT of the garment and its print are fully visible.',
+  left: 'The model turns to reveal the LEFT side of the product.',
+  right: 'The model turns to reveal the RIGHT side of the product.',
+  front: 'The model faces the camera so the FRONT of the product and its print are fully visible.',
 };
 function angleFor(placement: string): string {
   const key = placement.toLowerCase();
@@ -115,15 +126,16 @@ export async function generateModelShotsFromMockup(
   for (const spec of specs) {
     const prompt =
       `The provided image shows the EXACT product as it will be manufactured, including its printed ` +
-      `design. Render a photorealistic, high-resolution fashion photograph of a model wearing/using ` +
-      `this exact product. Reproduce the product and its print EXACTLY as shown — same artwork, same ` +
+      `design. Render a photorealistic, high-resolution fashion photograph of a model wearing, ` +
+      `carrying or using this exact product as appropriate for its type (worn if apparel, carried ` +
+      `or in use if a bag or accessory). Reproduce the product and its print EXACTLY as shown — same artwork, same ` +
       `position, same size, same colours; do NOT add, move, duplicate or restyle the print. ` +
-      `${angleFor(spec.placement)} ${spec.scene} No text or watermark.`;
+      `${angleFor(spec.placement)} ${spec.scene} ${FRAMING} No text or watermark.`;
     try {
       const res = (await ai.models.generateContent({
         model: MODEL,
         contents: [{ role: 'user', parts: [{ text: prompt }, mockup] }],
-        config: { responseModalities: [Modality.IMAGE] },
+        config: { responseModalities: [Modality.IMAGE], imageConfig: { aspectRatio: SHOT_RATIO } },
       })) as GenResponse;
       for (const part of res.candidates?.[0]?.content?.parts ?? []) {
         if (part.inlineData?.data) {
@@ -142,7 +154,7 @@ export async function generateModelShotsFromMockup(
   return out;
 }
 
-// FALLBACK on-model preview (no Printful mockup available): feed the blank garment image (FIRST) +
+// FALLBACK on-model preview (no Printful mockup available): feed the blank product image (FIRST) +
 // the design artwork (SECOND). Placement/scale are the model's guess, so shots may drift from the
 // manufactured result — prefer generateModelShotsFromMockup when a mockup can be rendered.
 export async function generateDesignOnModelShots(
@@ -167,16 +179,17 @@ export async function generateDesignOnModelShots(
   const out: string[] = [];
   for (const spec of specs) {
     const prompt =
-      `Photorealistic, high-resolution fashion photograph. A model wears the garment shown in the ` +
-      `FIRST image. The artwork shown in the SECOND image is printed on the ${spec.label} of that ` +
-      `garment — keep the artwork’s colours, shapes and details faithful, sized and placed naturally ` +
-      `for a ${spec.label} print. ${angleFor(spec.placement)} ${spec.scene} No text, no watermark, and ` +
-      `no graphics other than the provided artwork.`;
+      `Photorealistic, high-resolution fashion photograph. A model wears, carries or uses the product ` +
+      `shown in the FIRST image, as appropriate for its type (worn if apparel, carried or in use if a ` +
+      `bag or accessory). The artwork shown in the SECOND image is printed on the ${spec.label} of that ` +
+      `product — keep the artwork’s colours, shapes and details faithful, sized and placed naturally ` +
+      `for a ${spec.label} print. ${angleFor(spec.placement)} ${spec.scene} ${FRAMING} No text, no ` +
+      `watermark, and no graphics other than the provided artwork.`;
     try {
       const res = (await ai.models.generateContent({
         model: MODEL,
         contents: [{ role: 'user', parts: [{ text: prompt }, garment, design] }],
-        config: { responseModalities: [Modality.IMAGE] },
+        config: { responseModalities: [Modality.IMAGE], imageConfig: { aspectRatio: SHOT_RATIO } },
       })) as GenResponse;
       for (const part of res.candidates?.[0]?.content?.parts ?? []) {
         if (part.inlineData?.data) {

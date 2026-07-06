@@ -13,7 +13,6 @@ import { useLocalSearchParams } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { BrandStore } from '@/components/brand-store';
 import { getBlockedBrands } from '@/lib/blocklist';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -48,6 +47,13 @@ type MarketData = { trending: TrendingItem[]; brands: Brand[] };
 
 const price = (cents: number | null) => (cents != null ? `$${(cents / 100).toFixed(2)}` : '');
 
+// Surfaces tuned to read over Eve's scrimmed net (app is forced dark): mostly-opaque cards with
+// visible platinum hairlines, instead of flat fills that melt into the background.
+const CardBg = 'rgba(24,25,30,0.92)';
+const CardLine = 'rgba(205,209,217,0.16)';
+const TrendBg = 'rgba(24,25,30,0.88)';
+const HairLine = 'rgba(205,209,217,0.12)';
+
 /** Resolve the public website URL for a storefront, preferring a custom domain. */
 function storeUrl(brand: Brand): string | null {
   if (brand.customDomain) return `https://${brand.customDomain}`;
@@ -67,7 +73,8 @@ function TrendingCard({
   return (
     <Pressable style={styles.trendCard} onPress={() => onOpen(item.storeSlug)}>
       {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.trendImg} contentFit="cover" />
+        // Top-anchored crop: thumbnails are portrait model shots — keep the faces, trim the feet.
+        <Image source={{ uri: item.imageUrl }} style={styles.trendImg} contentFit="cover" contentPosition="top" />
       ) : (
         <View style={[styles.trendImg, { backgroundColor: fallback }]} />
       )}
@@ -87,17 +94,15 @@ function BrandCard({
   brand,
   onOpen,
   fallback,
-  line,
 }: {
   brand: Brand;
   onOpen: (slug: string) => void;
   fallback: string;
-  line: string;
 }) {
   const url = storeUrl(brand);
   return (
     <Pressable onPress={() => onOpen(brand.slug)}>
-      <ThemedView type="backgroundElement" style={[styles.brandCard, { borderColor: line }]}>
+      <View style={styles.brandCard}>
         <View style={styles.brandHeader}>
           {brand.logoUrl ? (
             <Image source={{ uri: brand.logoUrl }} style={styles.logo} contentFit="cover" />
@@ -120,12 +125,12 @@ function BrandCard({
         {brand.previews.length ? (
           <View style={styles.previewRow}>
             {brand.previews.slice(0, 4).map((src, i) => (
-              <Image key={`${brand.id}-${i}`} source={{ uri: src }} style={styles.previewThumb} contentFit="cover" />
+              <Image key={`${brand.id}-${i}`} source={{ uri: src }} style={styles.previewThumb} contentFit="cover" contentPosition="top" />
             ))}
           </View>
         ) : null}
 
-        <View style={[styles.brandFooter, { borderTopColor: line }]}>
+        <View style={styles.brandFooter}>
           <ThemedText type="code" themeColor="tint">
             Open store →
           </ThemedText>
@@ -137,7 +142,7 @@ function BrandCard({
             </Pressable>
           ) : null}
         </View>
-      </ThemedView>
+      </View>
     </Pressable>
   );
 }
@@ -156,9 +161,8 @@ function MarketScreen() {
   const refreshBlocked = useCallback(() => { void getBlockedBrands().then((s) => setBlocked(new Set(s))); }, []);
   useEffect(() => { refreshBlocked(); }, [refreshBlocked]);
 
-  // A subtle fill/border that reads on either mode (no hardcoded greys).
-  const fallback = theme.backgroundSelected;
-  const line = theme.backgroundSelected;
+  // Placeholder fill for missing art — matches the platinum-hairline surfaces above.
+  const fallback = 'rgba(205,209,217,0.08)';
 
   // Debounced fetch: refetch as the brand search query changes.
   useEffect(() => {
@@ -230,7 +234,7 @@ function MarketScreen() {
             >
               {!searching && trending.length ? (
                 <View style={styles.section}>
-                  <ThemedText type="code" themeColor="textSecondary" style={styles.sectionTitle}>
+                  <ThemedText type="code" themeColor="tint" style={styles.sectionTitle}>
                     Trending
                   </ThemedText>
                   <ScrollView
@@ -246,17 +250,19 @@ function MarketScreen() {
               ) : null}
 
               <View style={styles.section}>
-                <ThemedText type="code" themeColor="textSecondary" style={styles.sectionTitle}>
+                <ThemedText type="code" themeColor="tint" style={styles.sectionTitle}>
                   {searching ? 'Brands' : 'All brands'}
                 </ThemedText>
                 {brands.length ? (
                   brands.map((brand) => (
-                    <BrandCard key={brand.id} brand={brand} onOpen={setStoreSlug} fallback={fallback} line={line} />
+                    <BrandCard key={brand.id} brand={brand} onOpen={setStoreSlug} fallback={fallback} />
                   ))
                 ) : (
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {searching ? `No brands match "${query.trim()}".` : 'No live storefronts yet.'}
-                  </ThemedText>
+                  <View style={styles.emptyCard}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {searching ? `No brands match "${query.trim()}".` : 'No live storefronts yet.'}
+                    </ThemedText>
+                  </View>
                 )}
               </View>
             </ScrollView>
@@ -281,11 +287,26 @@ const styles = StyleSheet.create({
   section: { gap: Spacing.three },
   sectionTitle: { textTransform: 'uppercase', letterSpacing: 1.5 },
   trendRow: { gap: Spacing.three, paddingRight: Spacing.four },
-  trendCard: { width: 150, gap: Spacing.one },
-  trendImg: { width: 150, height: 150, borderRadius: Spacing.three },
+  trendCard: {
+    width: 166,
+    gap: Spacing.one,
+    padding: Spacing.two,
+    borderRadius: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HairLine,
+    backgroundColor: TrendBg,
+  },
+  trendImg: { width: 150, height: 150, borderRadius: 12 },
   trendName: { marginTop: Spacing.one },
   trendMeta: {},
-  brandCard: { borderRadius: Spacing.four, borderWidth: 1, padding: Spacing.three, gap: Spacing.three },
+  brandCard: {
+    borderRadius: Spacing.four,
+    borderWidth: 1,
+    borderColor: CardLine,
+    backgroundColor: CardBg,
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
   brandHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   logo: { width: 46, height: 46, borderRadius: 12 },
   brandMeta: { flex: 1, gap: 2 },
@@ -297,7 +318,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
+    borderTopColor: HairLine,
     paddingTop: Spacing.three,
   },
-  visitPill: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
+  visitPill: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CardLine,
+  },
+  emptyCard: {
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+    borderColor: CardLine,
+    backgroundColor: CardBg,
+    padding: Spacing.three,
+    alignItems: 'center',
+  },
 });

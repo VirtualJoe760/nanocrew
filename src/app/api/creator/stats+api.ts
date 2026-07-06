@@ -51,7 +51,7 @@ export async function GET(req: Request) {
 
     // A few product shots per store so the dashboard can show a carousel thumbnail.
     const productImgs = await db
-      .select({ storeId: schema.products.storeId, imageUrl: schema.products.imageUrl })
+      .select({ storeId: schema.products.storeId, imageUrl: schema.products.imageUrl, modelShots: schema.products.modelShots })
       .from(schema.products)
       .where(and(inArray(schema.products.storeId, ids), eq(schema.products.isPublished, true), isNotNull(schema.products.imageUrl)))
       .orderBy(desc(schema.products.createdAt));
@@ -75,9 +75,11 @@ export async function GET(req: Request) {
           orders: orderAgg.find((o) => o.storeId === s.id)?.orders ?? 0,
           revenueCents: orderAgg.find((o) => o.storeId === s.id)?.revenueCents ?? 0,
           views30d: viewAgg.find((v) => v.storeId === s.id)?.views ?? 0,
+          // Prefer an on-model shot per product; fall back to the flat mockup.
           productImages: productImgs
-            .filter((p) => p.storeId === s.id && p.imageUrl)
-            .map((p) => p.imageUrl as string)
+            .filter((p) => p.storeId === s.id)
+            .map((p) => p.modelShots?.[0] ?? p.imageUrl)
+            .filter((u): u is string => !!u)
             .slice(0, 6),
           // Setup bounties — true means "done". Drives the Studio "finish your site" checklist.
           bounties: {

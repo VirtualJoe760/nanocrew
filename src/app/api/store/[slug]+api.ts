@@ -31,6 +31,7 @@ export async function GET(_req: Request, { slug }: Record<string, string>) {
         slug: schema.products.slug,
         name: schema.products.name,
         imageUrl: schema.products.imageUrl,
+        modelShots: schema.products.modelShots,
         videoUrl: schema.products.videoUrl,
         catalogueId: schema.products.catalogueId,
         priceCents: min(schema.variants.retailPriceCents),
@@ -60,7 +61,8 @@ export async function GET(_req: Request, { slug }: Record<string, string>) {
       id: p.id,
       slug: p.slug,
       name: p.name,
-      imageUrl: p.imageUrl,
+      // Prefer an on-model shot over the flat Printful mockup (same field name for clients).
+      imageUrl: p.modelShots?.[0] ?? p.imageUrl,
       videoUrl: p.videoUrl,
       priceCents: p.priceCents ?? null,
     });

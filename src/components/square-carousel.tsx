@@ -26,7 +26,7 @@ export function SquareCarousel({
     return <View style={{ width: size, height: size, borderRadius: radius, backgroundColor: `${accent}14` }} />;
   }
   if (images.length === 1) {
-    return <Image source={{ uri: images[0] }} style={{ width: size, height: size, borderRadius: radius }} contentFit="cover" />;
+    return <Image source={{ uri: images[0] }} style={{ width: size, height: size, borderRadius: radius }} contentFit="cover" contentPosition="top" />;
   }
 
   const onEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -43,7 +43,8 @@ export function SquareCarousel({
         onMomentumScrollEnd={onEnd}
       >
         {images.map((u, i) => (
-          <Image key={`${u}-${i}`} source={{ uri: u }} style={{ width: size, height: size }} contentFit="cover" />
+          // Top-anchored: pages are often portrait model shots — a centered square crop beheads them.
+          <Image key={`${u}-${i}`} source={{ uri: u }} style={{ width: size, height: size }} contentFit="cover" contentPosition="top" />
         ))}
       </ScrollView>
       <View style={styles.dots} pointerEvents="none">
