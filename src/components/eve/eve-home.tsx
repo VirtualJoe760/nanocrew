@@ -27,8 +27,9 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
-import { EveOrbRing } from '@/components/eve/eve-orbs';
+import { EveOrbField } from '@/components/eve/eve-orb-field';
 import { setVenusOrbShape } from '@/components/backgrounds/venus-orb-bus';
+import { setEveOrbCount } from '@/components/backgrounds/venus-orb-positions-bus';
 import { eveChildren, eveRootNodes, type EveNode } from '@/lib/eve-capabilities';
 import { buildDigest, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
@@ -617,11 +618,17 @@ export function EveHome({
   const stage: VenusStage = view === 'interview' ? stageFor(state, intro) : 'silence';
 
   const bottomPad = insets.bottom + 44; // clear the overlay's dismiss handle
-  // The energy orbs to bloom right now: a branch's children if we're inside one, else the root ring.
+  // The capability nodes to show right now: a branch's children if we're inside one, else the root.
   const orbNodes = useMemo(
     () => (orbBranch ? eveChildren(orbBranch, { hasStore, stores }) : eveRootNodes({ hasStore, stores })),
     [orbBranch, hasStore, stores],
   );
+  // Tell the 3D scene how many capability orbs to light up — the guide's visible nodes, else none.
+  useEffect(() => {
+    const active = view === 'guide' && !brand && ready;
+    setEveOrbCount(active ? orbNodes.length : 0);
+    return () => setEveOrbCount(0);
+  }, [view, brand, ready, orbNodes.length]);
 
   return (
     <View style={styles.fill}>
@@ -733,14 +740,16 @@ export function EveHome({
                 {line || guidance?.greeting || '…'}
               </ThemedText>
             </View>
+            {/* The capability orbs are 3D nodes IN her net now (venus-orb-scene) — their taps are the
+                EveOrbField overlay at the root. This dock just holds the back rung / a quiet hint. */}
             <View style={styles.orbDock}>
-              {/* key re-blooms the whole ring on every branch change (root ⇄ children) */}
-              <EveOrbRing
-                key={orbBranch?.id ?? 'root'}
-                nodes={orbNodes}
-                onSelect={onOrbSelect}
-                onBack={orbBranch ? () => setOrbBranch(null) : undefined}
-              />
+              {orbBranch ? (
+                <Pressable onPress={() => setOrbBranch(null)} hitSlop={12} style={styles.backLink}>
+                  <ThemedText type="code" style={{ color: p.dim, fontSize: 13, letterSpacing: 0.5 }}>‹ back</ThemedText>
+                </Pressable>
+              ) : (
+                <ThemedText type="code" style={[styles.orbHint, { color: p.faint }]}>reach into the network · or just talk</ThemedText>
+              )}
             </View>
           </View>
         ) : keyboardMode ? null : (
@@ -813,6 +822,12 @@ export function EveHome({
         />
       ) : null}
 
+      {/* The 3D capability orbs' touch layer — invisible targets that track each orb the scene projects
+          to screen. Full-window at the root so its coords match the projection (not the padded content). */}
+      {session && view === 'guide' && !brand && ready ? (
+        <EveOrbField nodes={orbNodes} onSelect={onOrbSelect} />
+      ) : null}
+
       {/* THE DIGEST — Eve's proactive status report, over the home state. */}
       {showDigest ? (
         <Pressable style={styles.digestBackdrop} onPress={() => setShowDigest(false)}>
@@ -857,10 +872,12 @@ const styles = StyleSheet.create({
   guideBody: { textAlign: 'center', maxWidth: 320, lineHeight: 22, marginTop: Spacing.two },
   ctaPrimary: { borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.four },
 
-  // The guide: subtitles pinned at the TOP, the energy-orb dock at the BOTTOM, orb full-bleed between.
+  // The guide: subtitles pinned at the TOP; the 3D orbs live in her net between; a quiet dock at the BOTTOM.
   guideView: { flex: 1, justifyContent: 'space-between' },
   subsTop: { alignItems: 'center', gap: Spacing.two, minHeight: 72 },
-  orbDock: { alignItems: 'center', paddingBottom: Spacing.two },
+  orbDock: { alignItems: 'center', paddingBottom: Spacing.two, minHeight: 28 },
+  backLink: { paddingVertical: 4, paddingHorizontal: 14 },
+  orbHint: { fontSize: 11, letterSpacing: 0.6 },
 
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.four },
   hint: { letterSpacing: 1 },
