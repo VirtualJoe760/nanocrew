@@ -20,10 +20,11 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
-import { NCMark, type Palette, usePalette } from '@/components/nc-screen';
+import { usePalette } from '@/components/nc-screen';
 import { withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';
 
+import { EveGlyph } from '@/components/eve/eve-glyph';
 import { StudioComposer } from '@/components/studio-composer';
 import { StudioDashboard } from '@/components/studio-dashboard';
 import { Paywall } from '@/components/paywall';
@@ -57,63 +58,6 @@ const SERIF = 'Jost-Light'; // display title face (was Georgia serif; unified on
 // Palette + the silk FabricBackground + the NC mark now live in @/components/nc-screen so Studio,
 // Design, Market, and Account all share one look (imported above).
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
-// ---------- The circular nucleus (the Venus orb) ----------
-
-/** The circular logo as the entity's nucleus: a thin gold ring around the NC monogram, on
- *  a soft glow. Optionally breathes with the live audio level (one cheap animated node). */
-function NCNucleus({
-  size,
-  p,
-  level,
-  state,
-  onPress,
-  onPressIn,
-  onPressOut,
-}: {
-  size: number;
-  p: Palette;
-  level?: SharedValue<number>;
-  state?: EntityState;
-  onPress?: () => void;
-  onPressIn?: () => void;
-  onPressOut?: () => void;
-}) {
-  const ring = state ? STATE_COLORS[STATE_INDEX[state]] : p.accent;
-  const glow = useAnimatedStyle(() => {
-    const v = level ? level.value : 0;
-    return { opacity: 0.4 + v * 0.45, transform: [{ scale: 1 + v * 0.05 }] };
-  });
-  const r = size / 2;
-  const body = (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View style={[StyleSheet.absoluteFill, glow]} pointerEvents="none">
-        <Svg width={size} height={size}>
-          <Defs>
-            <RadialGradient id="nuc-glow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor={p.coreInner} stopOpacity={p.dark ? 0.5 : 0.35} />
-              <Stop offset="55%" stopColor={p.accent} stopOpacity={0.18} />
-              <Stop offset="100%" stopColor={p.accent} stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          <Circle cx={r} cy={r} r={r * 0.7} fill="url(#nuc-glow)" />
-        </Svg>
-      </Animated.View>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={r} cy={r} r={r - 2} fill="none" stroke={ring} strokeWidth={1} strokeOpacity={0.7} />
-        <Circle cx={r} cy={r} r={r - 8} fill="none" stroke={ring} strokeWidth={0.5} strokeOpacity={0.25} />
-      </Svg>
-      <NCMark size={size * 0.58} color={p.ink} metallic={p.dark} />
-    </View>
-  );
-  return onPress || onPressIn ? (
-    <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut} hitSlop={24}>
-      {body}
-    </Pressable>
-  ) : (
-    body
-  );
-}
 
 // ---------- Network mesh ----------
 
@@ -699,7 +643,7 @@ function StudioScreen() {
           <ActivityIndicator style={styles.center} color="#cdd1d9" />
         ) : !session ? (
           <View style={styles.introWrap}>
-            <NCNucleus size={132} p={p} />
+            <EveGlyph size={132} />
             <ThemedText type="code" style={[styles.introTag, { color: p.dim }]}>
               FROM IDEA TO BRAND IN SECONDS
             </ThemedText>
@@ -740,7 +684,7 @@ function StudioScreen() {
         ) : (
           // No store yet — the first brand is built WITH Eve (slide down from the top, or tap).
           <View style={styles.introWrap}>
-            <NCNucleus size={132} p={p} />
+            <EveGlyph size={132} />
             <ThemedText type="code" style={[styles.introTag, { color: p.dim }]}>
               YOUR FIRST BRAND
             </ThemedText>

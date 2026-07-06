@@ -2,17 +2,24 @@ import { TabList, TabSlot, TabTrigger, type TabTriggerSlotProps, Tabs } from 'ex
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import { TabBarBlur } from '@/components/tab-bar-blur';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { summonEve } from '@/lib/eve-bus';
 
 // Nano Crew tab bar — a JS (expo-router/ui) bar drawn to MIMIC the native iOS UITabBar: opaque,
 // mode-aware background; thin outline glyphs; platinum-silver selected tint with the rest dimmed.
 // It's built from RN Views (not expo-router/unstable-native-tabs) to drop a dependency on an unstable
 // API. ONE file serves both platforms (the blur is platform-split in tab-bar-blur — native expo-blur,
 // web CSS backdrop-filter).
+//
+// MIGRATION toward Eve-driven nav (docs/studio/EVE_CONTROL.md): the tabs are the browsable "noun"
+// layer; EVE, front-and-center, is the "verb" layer — the thumb-reachable way to act/navigate by
+// voice or her orb tree (the top-edge pull-down is barely reachable on a phone). As her nav matures
+// the flanking tabs thin down; for now both coexist.
 
 type TabDef = {
   name: string;
@@ -22,9 +29,12 @@ type TabDef = {
 };
 
 // The social feed (route /feed) is HIDDEN for v1 — it returns as a tab in v2. Studio leads (the home).
-const TABS: TabDef[] = [
+// Split into left/right of the centred Eve summon.
+const LEFT_TABS: TabDef[] = [
   { name: 'studio', label: 'Studio', icon: 'sparkles-outline', href: '/studio' },
   { name: 'design', label: 'Design', icon: 'brush-outline', href: '/design' },
+];
+const RIGHT_TABS: TabDef[] = [
   { name: 'market', label: 'Market', icon: 'bag-outline', href: '/market' },
   { name: 'account', label: 'Account', icon: 'person-circle-outline', href: '/account' },
 ];
@@ -47,7 +57,13 @@ export default function AppTabs() {
           ])}>
           {/* Frosted-glass blur behind the bar — the native translucent iOS bar look (web uses backdrop-filter). */}
           <TabBarBlur dark={dark} />
-          {TABS.map((t) => (
+          {LEFT_TABS.map((t) => (
+            <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+              <TabButton tab={t} tint={c.tint} />
+            </TabTrigger>
+          ))}
+          <EveSummon />
+          {RIGHT_TABS.map((t) => (
             <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
               <TabButton tab={t} tint={c.tint} />
             </TabTrigger>
@@ -55,6 +71,43 @@ export default function AppTabs() {
         </View>
       </TabList>
     </Tabs>
+  );
+}
+
+// EVE — the centred summon. Not a route (it opens the overlay), so it's a plain Pressable, not a
+// TabTrigger. A glowing teal orb (her constellation colour) lifted slightly above the tab row.
+function EveSummon() {
+  return (
+    <Pressable
+      onPress={() => summonEve({ state: 'home' })}
+      accessibilityRole="button"
+      accessibilityLabel="Eve"
+      hitSlop={8}
+      style={styles.eveTab}>
+      <View style={styles.eveOrb}>
+        <Svg width={46} height={46} viewBox="0 0 46 46">
+          <Defs>
+            <RadialGradient id="eve-tab-glow" cx="50%" cy="45%" r="55%">
+              <Stop offset="0%" stopColor="#7fd7e6" stopOpacity={0.7} />
+              <Stop offset="60%" stopColor="#7fd7e6" stopOpacity={0.18} />
+              <Stop offset="100%" stopColor="#7fd7e6" stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Circle cx={23} cy={23} r={22} fill="url(#eve-tab-glow)" />
+          <Circle cx={23} cy={23} r={15} fill="rgba(7,11,17,0.6)" stroke="#7fd7e6" strokeOpacity={0.6} strokeWidth={1} />
+          <Path
+            d="M23 13.5 L24.4 20.6 L31.5 22 L24.4 23.4 L23 30.5 L21.6 23.4 L14.5 22 L21.6 20.6 Z"
+            fill="none"
+            stroke="#e6f7fb"
+            strokeWidth={1.4}
+            strokeLinejoin="round"
+          />
+        </Svg>
+      </View>
+      <ThemedText type="small" style={[styles.label, { color: '#9fdfe9' }]}>
+        Eve
+      </ThemedText>
+    </Pressable>
   );
 }
 
@@ -88,4 +141,6 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabInner: { alignItems: 'center', justifyContent: 'center', gap: 2 },
   label: { fontSize: 11, lineHeight: 13 },
+  eveTab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  eveOrb: { marginTop: -10, width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
 });
