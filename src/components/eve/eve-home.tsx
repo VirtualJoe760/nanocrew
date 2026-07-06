@@ -28,6 +28,7 @@ import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
 import { EveOrbRing } from '@/components/eve/eve-orbs';
+import { setVenusOrbShape } from '@/components/backgrounds/venus-orb-bus';
 import { eveChildren, eveRootNodes, type EveNode } from '@/lib/eve-capabilities';
 import { buildDigest, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
@@ -572,11 +573,23 @@ export function EveHome({
         setOrbBranch(node);
         return;
       }
+      // A leaf with its own shape flashes the net into that form as she launches into it — the
+      // "morphing into the workflow" beat (C2). Transitions that stay in home settle back via the
+      // orbBranch effect below; those that leave carry the shape as a parting flourish.
+      if (node.shape) setVenusOrbShape(node.shape);
       setOrbBranch(null);
       runNode(node);
     },
     [runNode],
   );
+
+  // THE NET RESHAPES as you navigate her tree (C2): entering a branch morphs the constellation to
+  // that branch's shape; the root ring restores the sphere. Reset on unmount so a lingering shape
+  // never carries into the next summon.
+  useEffect(() => {
+    setVenusOrbShape(orbBranch?.shape ?? 'orb');
+  }, [orbBranch]);
+  useEffect(() => () => setVenusOrbShape('orb'), []);
 
   // Play her materialize (`morphing`) for ~4.2s each time the interview view (re)appears.
   const inVoiceInterview = view === 'interview' && !brand && !keyboardMode;

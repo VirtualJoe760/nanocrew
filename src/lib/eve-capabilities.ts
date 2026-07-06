@@ -13,6 +13,8 @@
 // Node kinds (the grammar): branch (blooms its children into more orbs) · pick (opens a real
 // selection screen and returns a value) · prompt (Eve asks free input) · act (fires a capability).
 
+import type { VenusOrbShape } from '@/components/backgrounds/venus-orb-bus';
+
 export type EveNodeKind = 'branch' | 'pick' | 'prompt' | 'act';
 export type EveIcon = 'brand' | 'edit' | 'design' | 'meme' | 'post' | 'store' | 'digest' | 'nav';
 
@@ -48,6 +50,9 @@ export type EveNode = {
   children?: string[];
   /** Leaf action (act/prompt/pick). Absent on branches. */
   action?: (ctx: EveCtx) => EveAction;
+  /** The net's shape while this node is the focus — Eve reshapes to reflect what you're doing
+   *  (docs/studio/EVE_CONTROL.md, C2). Applied on branch entry today; per-state morphs extend it. */
+  shape?: VenusOrbShape;
 };
 
 const NODES: Record<string, EveNode> = {
@@ -70,6 +75,7 @@ const NODES: Record<string, EveNode> = {
     voiceIntent: 'edit-site',
     when: (c) => c.hasStore,
     action: () => ({ type: 'edit-site' }),
+    shape: 'bolt',
   },
   'manage-brand': {
     id: 'manage-brand',
@@ -89,6 +95,7 @@ const NODES: Record<string, EveNode> = {
     voiceIntent: 'new-design',
     when: () => true,
     action: () => ({ type: 'new-design' }),
+    shape: 'tee',
   },
   'make-meme': {
     id: 'make-meme',
@@ -98,6 +105,7 @@ const NODES: Record<string, EveNode> = {
     icon: 'meme',
     when: () => true,
     action: () => ({ type: 'new-design', meme: true }),
+    shape: 'heart',
   },
   'write-post': {
     id: 'write-post',
@@ -128,6 +136,7 @@ const NODES: Record<string, EveNode> = {
     icon: 'brand',
     when: (c) => c.hasStore,
     children: ['edit-site', 'build-brand', 'manage-brand'],
+    shape: 'bolt',
   },
 };
 
