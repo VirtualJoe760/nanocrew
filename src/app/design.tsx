@@ -206,7 +206,7 @@ async function pickImage(): Promise<string | null> {
 let designCounter = 0;
 let nodeCounter = 0;
 
-export default withScreenFade(DesignScreen, { background: true });
+export default withScreenFade(DesignScreen, { eveThrough: true });
 
 function DesignScreen() {
   const theme = useTheme();

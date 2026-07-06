@@ -142,7 +142,7 @@ function BrandCard({
   );
 }
 
-export default withScreenFade(MarketScreen, { background: true });
+export default withScreenFade(MarketScreen, { eveThrough: true });
 
 function MarketScreen() {
   const theme = useTheme();

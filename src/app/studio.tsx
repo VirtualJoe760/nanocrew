@@ -442,7 +442,7 @@ function Nucleus({
 
 // ---------- Screen ----------
 
-export default withScreenFade(StudioScreen, { background: true });
+export default withScreenFade(StudioScreen, { eveThrough: true });
 
 function StudioScreen() {
   const insets = useSafeAreaInsets();

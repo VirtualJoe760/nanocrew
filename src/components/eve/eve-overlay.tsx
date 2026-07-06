@@ -20,6 +20,7 @@ import {
   type EveState,
   type EveSummon,
 } from '@/lib/eve-bus';
+import { setEveCovered } from '@/lib/eve-background-bus';
 
 // THE EVE OVERLAY — Eve's full-screen stage, mounted ONCE in _layout above the tab navigator
 // (docs/studio/VENUS_CENTRAL.md, revised architecture). The interaction contract, per Joe:
@@ -70,6 +71,13 @@ export default function EveOverlay() {
     });
     emitEveEvent({ kind: 'dismissed' });
   }, [ty, winH]);
+
+  // Tell the persistent root Eve (eve-background) to yield while this full-screen surface is up, so
+  // only ONE GL context is ever alive (docs/studio/EVE_CONTROL.md). Gated on `mounted` (set before the
+  // slide) — the root avatar is gone before EveHome mounts its own, so the two never overlap.
+  useEffect(() => {
+    setEveCovered(mounted);
+  }, [mounted]);
 
   useEffect(() => {
     const off = registerEveSummonListener(open);

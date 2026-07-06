@@ -110,7 +110,7 @@ function Row({
   );
 }
 
-export default withScreenFade(AccountScreen, { background: true });
+export default withScreenFade(AccountScreen, { eveThrough: true });
 
 function AccountScreen() {
   const theme = useTheme();

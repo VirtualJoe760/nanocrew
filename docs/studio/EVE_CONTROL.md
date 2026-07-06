@@ -143,3 +143,33 @@ digest, the design + site-edit flows, the voice session — all re-home from "ov
 + merge Studio into the Eve page; (3) the camera-facet system (a facet bus: RN sets the target
 facet → the scene dolly-zooms + palette-morphs); (4) per-page overlaid components; (5) push-to-talk;
 (6) idle throttle; (7) retire the pull-down overlay. Camera-facet spike FIRST (de-risks the flight).
+
+### Shipped
+
+- **4-tab bar** (step 2, partial): `app-tabs` is Eve · Design · Market · Account; the center summon
+  button and the capability orbs are gone (the orb-tree front-end is dropped — voice + the tabs are
+  the two front-ends now). The `/studio` route IS the Eve tab (header reads EVE).
+- **Persistent Eve background** (step 1): `eve-background.tsx` mounts the ONE avatar at the app root
+  (`_layout`, behind everything). `withScreenFade(..., { eveThrough: true })` swaps each tab page's
+  opaque dot-field for a translucent scrim (`rgba(6,8,12,0.62)`) so she shows through, dimmed for text.
+  studio/design/market/account are all `eveThrough`. Verified on web: one GL context, persists across
+  tab navigation with no remount, visible behind the gate / Market / Account.
+
+  Two things future-me will trip on:
+  - **One-context invariant preserved via a gate, not a merge.** The pull-down overlay (`eve-overlay`)
+    still mounts its OWN avatar for the home/interview, and it slides OVER the tabs (so it can't reveal
+    the root Eve behind them). Rather than solve that now, the root avatar YIELDS while the overlay is
+    up: `eve-background-bus` carries one bool (`covered`); the overlay sets it from `mounted`; the root
+    unmounts its avatar when covered. Gated on `mounted` (pre-slide), NOT `ready` (post-slide), so the
+    root avatar is gone BEFORE EveHome mounts its own — the two never coexist (no 2-context frame).
+    Step 7 (retire the overlay) deletes this gate; step 2's real Studio→Eve merge moves the home
+    content onto the Eve tab where it sits over the root Eve with no overlay conflict.
+  - **R3F Canvas at the app root needs an explicit size + a deferred mount.** `<Canvas style=flex:1>`
+    measures its container ONCE on mount; at the root it mounts before layout settles, measures 0, and
+    sticks at the 300×150 default forever. Fix in `eve-background`: explicit `useWindowDimensions()`
+    width/height on the wrapper + defer the avatar one `requestAnimationFrame` (`ready`) so it mounts
+    into a settled full-screen container. The overlay never hit this because it mounts its avatar after
+    the 340ms slide, when layout is already done.
+
+**Still ambient-only:** the root Eve sits at a fixed `stage="silence"` — she doesn't yet react to
+voice or drive per-page palettes. Wiring her lifecycle/voice + the camera facets is next (step 3).

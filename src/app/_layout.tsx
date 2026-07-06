@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
+import EveBackground from '@/components/eve/eve-background';
 import EveOverlay from '@/components/eve/eve-overlay';
 import { attachReviewDeepLink } from '@/lib/push';
 
@@ -43,10 +44,10 @@ export default function TabLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#08080a' }}>
-      {/* The dot-field background is rendered INSIDE each tab screen (studio/market/account),
-          not here — each screen owns its own background (see withScreenFade). */}
-      {/* The dot-field background is rendered INSIDE each tab screen (studio/market/account), not
-          here — each screen owns its own background (see withScreenFade). */}
+      {/* THE PIVOT (docs/studio/EVE_CONTROL.md): Eve is the living background of the whole app. Her
+          ONE GL avatar mounts here, behind everything, for the app's lifetime. The tab screens sit on
+          translucent scrims (withScreenFade `eveThrough`) so she shows through. */}
+      <EveBackground />
       <AnimatedSplashOverlay />
       <AppTabs />
       {/* VENUS'S STEADY STATE — slide down from the top edge to activate her, up to pause
