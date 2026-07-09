@@ -3,7 +3,6 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 import { createVenusLipsync, type VenusLipsync, type VisemeWeights } from '@/lib/venus-lipsync';
-import { speechActiveAt } from '@/lib/venus-speech-level';
 import { LATTICE_VERT, LATTICE_FRAG, motionSelect } from './venus-points';
 import { STREAM_VERT, STREAM_FRAG } from './venus-shaders';
 import { makeAuraTexture, makeDotTexture } from './venus-textures';
@@ -650,22 +649,26 @@ function Orb({ stage = 'talking', lowPower = false, onReveal }: { stage?: VenusS
   const invalidate = useThree((s) => s.invalidate);
   const [root, setRoot] = useState<THREE.Object3D | null>(null);
 
-  // FRAME-RATE CAP. frameloop is ALWAYS 'demand' (see the Canvas), so this ticker is the only thing
-  // that drives renders — which lets us CAP the rate. Uncapped 'always' follows the display, i.e.
-  // 120Hz on a ProMotion iPhone, and this additive-overdraw scene at native DPR pegs the GPU there
-  // (the whole phone thermally throttles). ~30fps on the Eve page (she's the star), a ~6fps trickle
-  // as an ambient background elsewhere, 30fps whenever her voice is audible. Keeping frameloop fixed
-  // at 'demand' also means the Canvas never reconfigures on navigation (the prop never changes) —
-  // the native reconfigure churn is a crash vector we avoid entirely.
+  // FRAME DRIVER. frameloop is ALWAYS 'demand' (see the Canvas), so this ticker is the only thing
+  // that renders — which lets us both CAP the rate (uncapped 'always' follows the display, i.e. 120Hz
+  // on a ProMotion iPhone, and this full-screen additive scene at native DPR pegs the GPU → the whole
+  // phone thermally throttles) AND stop entirely off her tab. Keeping frameloop fixed at 'demand' also
+  // means the Canvas never reconfigures on navigation (a crash vector we avoid).
+  //   • Eve tab (lowPower false): ~30fps — she's the star, she performs.
+  //   • Everywhere else (lowPower true): a short settle burst so she assembles even on a cold start
+  //     straight onto another tab, then FREEZE — zero ongoing GPU. She holds her last frame as a
+  //     static backdrop. (Her voice is gated to the Eve tab, so there is nothing to stay live for.)
   useEffect(() => {
-    const restMs = lowPower ? 165 : 33; // ~6fps ambient vs ~30fps on the Eve page
-    let acc = restMs; // render on the first tick after mount / prop change
-    const id = setInterval(() => {
-      acc += 33;
-      if (speechActiveAt() || acc >= restMs) {
-        acc = 0;
+    if (lowPower) {
+      let n = 0;
+      const id = setInterval(() => {
         invalidate();
-      }
+        if (++n >= 24) clearInterval(id); // ~2s of settling at ~12fps, then frozen
+      }, 80);
+      return () => clearInterval(id);
+    }
+    const id = setInterval(() => {
+      invalidate();
     }, 33);
     return () => clearInterval(id);
   }, [lowPower, invalidate]);
