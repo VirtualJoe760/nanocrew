@@ -1,137 +1,180 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
-  Modal,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
+  RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   View,
   useWindowDimensions,
-  type ViewToken,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { openBrowserAsync } from 'expo-web-browser';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { BrandStore } from '@/components/brand-store';
 import { getBlockedBrands } from '@/lib/blocklist';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { withScreenFade } from '@/components/screen-fade';
-import { useAuth } from '@/hooks/use-auth';
-import { apiFetch, apiUrl } from '@/lib/api';
+import { GlowInput } from '@/components/glow-input';
+import { apiUrl } from '@/lib/api';
 
-// THE MARKET — an immersive, Instagram/TikTok-Shop-style vertical feed: one product per screen,
-// full-bleed. Autoplays the product's Veo video where one exists, an on-model shot otherwise; brand,
-// price and Shop float over the media, with like / share / try-on down the side. Tapping through
-// opens the brand's in-app store sheet. Opaque + full-bleed, so the persistent Eve stays hidden
-// (and frozen) behind it — no GPU cost on this tab.
+// THE MARKET — a tabbed browser: one nav, several ways to shop. DISCOVER is the editorial home
+// (a featured hero + fresh drops + a curated grid); SHOP is a filterable product grid; BRANDS is
+// the storefront directory. A search finds a specific brand from any tab. All cards open the
+// BrandStore sheet. Opaque + card-based, so the persistent Eve stays hidden and frozen behind it.
 
-type FeedItem = {
+type Product = {
   id: string;
   name: string;
-  slug: string;
   imageUrl: string | null;
   videoUrl: string | null;
-  descriptionMd: string | null;
+  category: string | null;
   storeName: string;
   storeSlug: string;
-  siteUrl: string | null;
+  storeTagline: string | null;
   priceCents: number | null;
-  likeCount: number;
-  shareCount: number;
-  likedByMe: boolean;
 };
+type Brand = { id: string; name: string; slug: string; tagline: string | null; logoUrl: string | null; productCount: number; previews: string[] };
+type Collection = { slug: string; name: string; season: string | null; coverImageUrl: string | null; storeSlug: string; storeName: string };
+type MarketData = { featured: Product[]; trending: Product[]; collections: Collection[]; brands: Brand[]; more: Product[] };
 
-/** The product's page on the brand's real storefront, or null when there's no live website yet. */
-function productUrl(item: FeedItem): string | null {
-  return item.siteUrl ? `${item.siteUrl}/product/${item.slug}` : null;
-}
+type Tab = 'discover' | 'shop' | 'brands';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'discover', label: 'Discover' },
+  { key: 'shop', label: 'Shop' },
+  { key: 'brands', label: 'Brands' },
+];
 
-function fmtCount(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`;
-}
+const CardBg = 'rgba(24,25,30,0.92)';
+const HairLine = 'rgba(205,209,217,0.14)';
+const FALLBACK = 'rgba(205,209,217,0.08)';
+const price = (c: number | null) => (c != null ? `$${(c / 100).toFixed(2)}` : '');
 
-// Only the active card's video is mounted (see FeedCard), so a player exists for one item at a time.
-function VideoCard({ url, active }: { url: string; active: boolean }) {
-  const player = useVideoPlayer(url, (p) => {
-    p.loop = true;
-    p.muted = true;
-  });
-  useEffect(() => {
-    if (active) player.play();
-    else player.pause();
-  }, [active, player]);
-  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />;
-}
-
-function FeedCard({
-  item,
-  height,
-  active,
-  onTryOn,
-  onLike,
-  onShare,
-  onTitle,
-  onShop,
-}: {
-  item: FeedItem;
-  height: number;
-  active: boolean;
-  onTryOn: (item: FeedItem) => void;
-  onLike: (item: FeedItem) => void;
-  onShare: (item: FeedItem) => void;
-  onTitle: (item: FeedItem) => void;
-  onShop: (item: FeedItem) => void;
-}) {
+// ── Discover: a full-bleed, paged marketing hero. ──────────────────────────────────────────────
+function Hero({ items, width, onOpen }: { items: Product[]; width: number; onOpen: (slug: string) => void }) {
+  const [page, setPage] = useState(0);
+  const h = Math.min(Math.round(width * 1.02), 460);
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => setPage(Math.round(e.nativeEvent.contentOffset.x / width));
   return (
-    <Pressable style={[styles.card, { height }]} onPress={() => onShop(item)}>
-      {item.videoUrl && active ? (
-        <VideoCard url={item.videoUrl} active={active} />
-      ) : item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, styles.fallback]} />
-      )}
-
-      {/* Bottom scrim + product info */}
-      <View style={styles.scrim} pointerEvents="none" />
-      <View style={styles.info}>
-        <ThemedText type="smallBold" style={styles.handle}>@{item.storeSlug}</ThemedText>
-        <Pressable onPress={() => onTitle(item)} hitSlop={6}>
-          <ThemedText type="subtitle" style={styles.title} numberOfLines={2}>{item.name}</ThemedText>
-        </Pressable>
-        <View style={styles.metaRow}>
-          <ThemedText type="small" style={styles.sub} numberOfLines={1}>
-            {item.storeName}
-            {item.priceCents != null ? ` · $${(item.priceCents / 100).toFixed(2)}` : ''}
-          </ThemedText>
-          <Pressable onPress={() => onShop(item)} hitSlop={6} style={styles.buyTag}>
-            <ThemedText type="smallBold" style={styles.buyTagText}>Shop</ThemedText>
+    <View>
+      <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
+        {items.map((item) => (
+          <Pressable key={item.id} onPress={() => onOpen(item.storeSlug)} style={{ width, height: h }}>
+            {item.imageUrl ? (
+              <Image source={{ uri: item.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: FALLBACK }]} />
+            )}
+            <View pointerEvents="none" style={[styles.heroScrimA, { height: h * 0.6 }]} />
+            <View pointerEvents="none" style={[styles.heroScrimB, { height: h * 0.32 }]} />
+            <View style={styles.heroText}>
+              <ThemedText type="code" themeColor="tint" style={styles.heroKicker}>{item.storeName.toUpperCase()}</ThemedText>
+              <ThemedText type="title" numberOfLines={2} style={styles.heroTitle}>{item.name}</ThemedText>
+              <View style={styles.heroFoot}>
+                {item.priceCents != null ? <ThemedText type="smallBold" style={styles.heroPrice}>{price(item.priceCents)}</ThemedText> : <View />}
+                <View style={styles.shopPill}><ThemedText type="smallBold" style={styles.shopPillText}>Shop →</ThemedText></View>
+              </View>
+            </View>
           </Pressable>
+        ))}
+      </ScrollView>
+      {items.length > 1 ? (
+        <View style={styles.heroDots} pointerEvents="none">
+          {items.map((it, i) => <View key={it.id} style={[styles.dot, i === page && styles.dotOn]} />)}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function Rail({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.rail}>
+      <ThemedText type="subtitle" style={styles.railTitle}>{title}</ThemedText>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railRow}>{children}</ScrollView>
+    </View>
+  );
+}
+
+function CollectionCard({ col, onOpen }: { col: Collection; onOpen: (slug: string) => void }) {
+  return (
+    <Pressable style={styles.colCard} onPress={() => onOpen(col.storeSlug)}>
+      {col.coverImageUrl ? (
+        <Image source={{ uri: col.coverImageUrl }} style={styles.colImg} contentFit="cover" contentPosition="top" />
+      ) : (
+        <View style={[styles.colImg, { backgroundColor: FALLBACK }]} />
+      )}
+      {col.season ? <View style={styles.seasonBadge}><ThemedText type="code" style={styles.seasonText}>{col.season.toUpperCase()}</ThemedText></View> : null}
+      <ThemedText type="smallBold" numberOfLines={1} style={styles.pad}>{col.name}</ThemedText>
+      <ThemedText type="code" themeColor="textSecondary" numberOfLines={1} style={styles.padTight}>{col.storeName}</ThemedText>
+    </Pressable>
+  );
+}
+
+// A flexible-width product card for the 2-up grids (Shop + Discover's curated section).
+function ProductCard({ item, w, onOpen }: { item: Product; w: number; onOpen: (slug: string) => void }) {
+  return (
+    <Pressable style={[styles.pCard, { width: w }]} onPress={() => onOpen(item.storeSlug)}>
+      {item.imageUrl ? (
+        <Image source={{ uri: item.imageUrl }} style={{ width: w, height: Math.round(w * 1.25) }} contentFit="cover" contentPosition="top" />
+      ) : (
+        <View style={{ width: w, height: Math.round(w * 1.25), backgroundColor: FALLBACK }} />
+      )}
+      <ThemedText type="smallBold" numberOfLines={1} style={styles.pad}>{item.name}</ThemedText>
+      <ThemedText type="code" themeColor="textSecondary" numberOfLines={1} style={styles.padTight}>
+        {item.storeName}{item.priceCents != null ? ` · ${price(item.priceCents)}` : ''}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
+// A brand tile for the directory grid — preview shot + logo + count.
+function BrandTile({ brand, w, onOpen }: { brand: Brand; w: number; onOpen: (slug: string) => void }) {
+  return (
+    <Pressable style={[styles.brandTile, { width: w }]} onPress={() => onOpen(brand.slug)}>
+      {brand.previews[0] ? (
+        <Image source={{ uri: brand.previews[0] }} style={{ width: w, height: Math.round(w * 0.66) }} contentFit="cover" contentPosition="top" />
+      ) : (
+        <View style={{ width: w, height: Math.round(w * 0.66), backgroundColor: FALLBACK }} />
+      )}
+      <View style={styles.brandTileFoot}>
+        {brand.logoUrl ? (
+          <Image source={{ uri: brand.logoUrl }} style={styles.brandTileLogo} contentFit="cover" />
+        ) : (
+          <View style={[styles.brandTileLogo, { backgroundColor: FALLBACK }]} />
+        )}
+        <View style={styles.flex1}>
+          <ThemedText type="smallBold" numberOfLines={1}>{brand.name}</ThemedText>
+          <ThemedText type="code" themeColor="textSecondary" numberOfLines={1}>
+            {brand.productCount} {brand.productCount === 1 ? 'piece' : 'pieces'}
+          </ThemedText>
         </View>
       </View>
+    </Pressable>
+  );
+}
 
-      {/* Right-side actions */}
-      <View style={styles.actions}>
-        <Pressable onPress={() => onLike(item)} style={styles.actionBtn} hitSlop={6}>
-          <ThemedText style={[styles.actionGlyph, item.likedByMe && styles.liked]}>{item.likedByMe ? '♥' : '♡'}</ThemedText>
-          <ThemedText type="small" style={styles.actionLabel}>{item.likeCount > 0 ? fmtCount(item.likeCount) : 'Like'}</ThemedText>
-        </Pressable>
-        <Pressable onPress={() => onShare(item)} style={styles.actionBtn} hitSlop={6}>
-          <ThemedText style={styles.actionGlyph}>↗</ThemedText>
-          <ThemedText type="small" style={styles.actionLabel}>{item.shareCount > 0 ? fmtCount(item.shareCount) : 'Share'}</ThemedText>
-        </Pressable>
-        <Pressable onPress={() => onTryOn(item)} style={styles.actionBtn} hitSlop={6}>
-          <ThemedText style={styles.actionGlyph}>🤳</ThemedText>
-          <ThemedText type="small" style={styles.actionLabel}>Try on</ThemedText>
-        </Pressable>
+// A compact brand row — the search-results layout.
+function BrandRow({ brand, onOpen }: { brand: Brand; onOpen: (slug: string) => void }) {
+  return (
+    <Pressable style={styles.brandRow} onPress={() => onOpen(brand.slug)}>
+      {brand.logoUrl ? (
+        <Image source={{ uri: brand.logoUrl }} style={styles.rowLogo} contentFit="cover" />
+      ) : (
+        <View style={[styles.rowLogo, { backgroundColor: FALLBACK }]} />
+      )}
+      <View style={styles.flex1}>
+        <ThemedText type="smallBold" numberOfLines={1}>{brand.name}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+          {brand.tagline ?? `${brand.productCount} ${brand.productCount === 1 ? 'drop' : 'drops'}`}
+        </ThemedText>
       </View>
+      <ThemedText type="code" themeColor="tint">→</ThemedText>
     </Pressable>
   );
 }
@@ -139,230 +182,194 @@ function FeedCard({
 export default withScreenFade(MarketScreen);
 
 function MarketScreen() {
-  const { session } = useAuth();
-  const { height: winH } = useWindowDimensions();
-  const [items, setItems] = useState<FeedItem[]>([]);
+  const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const [tab, setTab] = useState<Tab>('discover');
+  const [query, setQuery] = useState('');
+  const [cat, setCat] = useState('All');
+  const [data, setData] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeIndex, setActiveIndex] = useState(0);
-  // The exact content height comes from onLayout; fall back to the window height so the feed always
-  // renders immediately (onLayout can be slow — or, on web, not fire at all — leaving it at 0).
-  const [measured, setMeasured] = useState(0);
-  const [tryOn, setTryOn] = useState<{ item: FeedItem; busy: boolean; result?: string; error?: string } | null>(null);
-  const [detail, setDetail] = useState<FeedItem | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [storeSlug, setStoreSlug] = useState<string | null>(null);
 
-  // Blocked brands (Apple Guideline 1.2) — reloaded when the brand sheet closes so a block takes
-  // effect immediately on return to the feed.
   const [blocked, setBlocked] = useState<Set<string>>(new Set());
   const refreshBlocked = useCallback(() => { void getBlockedBrands().then((s) => setBlocked(new Set(s))); }, []);
   useEffect(() => { refreshBlocked(); }, [refreshBlocked]);
 
-  // Shop / tap-through → open the brand's in-app store sheet.
-  const onShop = useCallback((item: FeedItem) => { setDetail(null); setStoreSlug(item.storeSlug); }, []);
-
   useEffect(() => {
-    fetch(apiUrl('/api/feed'), session ? { headers: { Authorization: `Bearer ${session.access_token}` } } : undefined)
-      .then((r) => r.json())
-      .then((d: { items?: FeedItem[] }) => setItems(d.items ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [session]);
+    const handle = setTimeout(() => {
+      const q = query.trim();
+      fetch(apiUrl(`/api/market${q ? `?q=${encodeURIComponent(q)}` : ''}`))
+        .then((r) => r.json())
+        .then((d: Partial<MarketData>) => setData({ featured: d.featured ?? [], trending: d.trending ?? [], collections: d.collections ?? [], brands: d.brands ?? [], more: d.more ?? [] }))
+        .catch(() => {})
+        .finally(() => { setLoading(false); setRefreshing(false); });
+    }, query ? 300 : 0);
+    return () => clearTimeout(handle);
+  }, [query, refreshing]);
 
-  // Deep-link from the feed's Buy tag elsewhere: /market?store=<slug> opens that brand's store.
   const { store } = useLocalSearchParams<{ store?: string }>();
   useEffect(() => { if (store) setStoreSlug(store); }, [store]);
 
-  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const first = viewableItems.find((v) => v.isViewable);
-    if (first?.index != null) setActiveIndex(first.index);
-  }).current;
+  const searching = query.trim().length > 0;
+  const col = Math.floor((width - Spacing.four * 2 - Spacing.three) / 2);
+  const noBlock = <T extends { storeSlug: string }>(a: T[]) => a.filter((x) => !blocked.has(x.storeSlug));
+  const featured = noBlock(data?.featured ?? []);
+  const trending = noBlock(data?.trending ?? []);
+  const more = noBlock(data?.more ?? []);
+  const collections = noBlock(data?.collections ?? []);
+  const brands = (data?.brands ?? []).filter((b) => !blocked.has(b.slug) && b.productCount > 0);
 
-  const onLike = useCallback(async (item: FeedItem) => {
-    if (!session) return;
-    const liked = !item.likedByMe;
-    setItems((prev) => prev.map((p) => (p.id === item.id ? { ...p, likedByMe: liked, likeCount: p.likeCount + (liked ? 1 : -1) } : p)));
-    try {
-      const r = await fetch(apiUrl(`/api/feed/${item.id}/like`), { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` } });
-      const d = (await r.json()) as { liked?: boolean; likeCount?: number };
-      if (typeof d.likeCount === 'number') {
-        setItems((prev) => prev.map((p) => (p.id === item.id ? { ...p, likedByMe: !!d.liked, likeCount: d.likeCount! } : p)));
-      }
-    } catch {
-      /* leave optimistic state */
-    }
-  }, [session]);
-
-  const onShare = useCallback(async (item: FeedItem) => {
-    const url = productUrl(item);
-    try {
-      const res = await Share.share(url ? { message: `${item.name} by ${item.storeName} — ${url}`, url } : { message: `${item.name} by ${item.storeName}` });
-      if (res.action === Share.sharedAction) {
-        setItems((prev) => prev.map((p) => (p.id === item.id ? { ...p, shareCount: p.shareCount + 1 } : p)));
-        fetch(apiUrl(`/api/feed/${item.id}/share`), { method: 'POST' }).catch(() => {});
-      }
-    } catch {
-      /* share cancelled */
-    }
-  }, []);
-
-  const startTryOn = useCallback(async (item: FeedItem) => {
-    if (!session) { setTryOn({ item, busy: false, error: 'Sign in to try things on.' }); return; }
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== 'granted') return;
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.85 });
-    const a = res.assets?.[0];
-    if (res.canceled || !a?.base64) return;
-    const selfie = `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`;
-    setTryOn({ item, busy: true });
-    try {
-      const r = await apiFetch('/api/tryon', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ selfie, productId: item.id }) });
-      const d = (await r.json()) as { image?: string; error?: string };
-      if (!d.image) throw new Error(d.error || 'Try-on failed');
-      setTryOn({ item, busy: false, result: d.image });
-    } catch (e) {
-      setTryOn({ item, busy: false, error: e instanceof Error ? e.message : 'Try-on failed' });
-    }
-  }, [session]);
-
-  const feed = items.filter((i) => !blocked.has(i.storeSlug));
-  const pageHeight = measured || winH;
+  // Shop: category chips derived from the products in the pool.
+  const cats = ['All', ...Array.from(new Set(more.map((p) => p.category).filter((c): c is string => !!c)))];
+  const shopItems = cat === 'All' ? more : more.filter((p) => p.category === cat);
 
   return (
-    <ThemedView style={styles.container}>
-      <View style={styles.fill} onLayout={(e) => setMeasured(e.nativeEvent.layout.height)}>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.headerPad}>
+          <ThemedText type="code" themeColor="tint" style={styles.eyebrow}>MARKET</ThemedText>
+          <ThemedText type="title">Discover</ThemedText>
+          <GlowInput value={query} onChangeText={setQuery} placeholder="Search brands" autoCapitalize="none" autoCorrect={false} returnKeyType="search" containerStyle={styles.search} />
+        </View>
+
+        {/* Nav tabs — how you want to browse. Hidden while searching (results take over). */}
+        {!searching ? (
+          <View style={styles.tabNav}>
+            {TABS.map((t) => (
+              <Pressable key={t.key} onPress={() => setTab(t.key)} style={styles.tabItem}>
+                <ThemedText type="smallBold" style={{ color: tab === t.key ? theme.text : theme.textSecondary, opacity: tab === t.key ? 1 : 0.6 }}>{t.label}</ThemedText>
+                <View style={[styles.tabUnderline, { backgroundColor: tab === t.key ? theme.tint : 'transparent' }]} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
         {loading ? (
-          <ActivityIndicator style={styles.center} />
-        ) : !feed.length ? (
-          <View style={styles.center}>
-            <ThemedText themeColor="textSecondary">No drops yet.</ThemedText>
-          </View>
+          <ActivityIndicator style={styles.center} color={theme.tint} />
         ) : (
-          <FlatList
-            data={feed}
-            keyExtractor={(i) => i.id}
-            renderItem={({ item, index }) => (
-              <FeedCard
-                item={item}
-                height={pageHeight}
-                active={index === activeIndex}
-                onTryOn={startTryOn}
-                onLike={onLike}
-                onShare={onShare}
-                onTitle={setDetail}
-                onShop={onShop}
-              />
-            )}
-            pagingEnabled
+          <ScrollView
             showsVerticalScrollIndicator={false}
-            snapToInterval={pageHeight}
-            decelerationRate="fast"
-            onViewableItemsChanged={onViewable}
-            viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
-            getItemLayout={(_d, index) => ({ length: pageHeight, offset: pageHeight * index, index })}
-          />
-        )}
-      </View>
-
-      {/* Product quick-look — title tap. */}
-      {detail ? (
-        <Modal visible transparent animationType="slide" onRequestClose={() => setDetail(null)}>
-          <View style={styles.detailBackdrop}>
-            <ThemedView type="background" style={styles.detailCard}>
-              <View style={styles.detailHeader}>
-                <View style={{ flex: 1 }}>
-                  <ThemedText type="smallBold" themeColor="textSecondary">@{detail.storeSlug}</ThemedText>
-                  <ThemedText type="subtitle">{detail.name}</ThemedText>
-                </View>
-                <Pressable onPress={() => setDetail(null)} hitSlop={10}>
-                  <ThemedText type="small" themeColor="textSecondary">Close</ThemedText>
-                </Pressable>
+            contentContainerStyle={styles.feed}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(true)} tintColor={theme.textSecondary} />}
+          >
+            {searching ? (
+              <View style={styles.padWrap}>
+                {brands.length ? (
+                  brands.map((b) => <BrandRow key={b.id} brand={b} onOpen={setStoreSlug} />)
+                ) : (
+                  <View style={styles.emptyCard}><ThemedText type="small" themeColor="textSecondary">No brands match “{query.trim()}”.</ThemedText></View>
+                )}
               </View>
-              <ThemedText type="small" themeColor="textSecondary">
-                {detail.storeName}
-                {detail.priceCents != null ? ` · $${(detail.priceCents / 100).toFixed(2)}` : ''}
-              </ThemedText>
-              {detail.descriptionMd ? (
-                <ScrollView style={styles.detailBody}>
-                  <ThemedText type="small">{detail.descriptionMd}</ThemedText>
-                </ScrollView>
-              ) : (
-                <ThemedText type="small" themeColor="textSecondary">No description yet.</ThemedText>
-              )}
-              <View style={styles.detailActions}>
-                <Pressable onPress={() => onShop(detail)} style={styles.detailPrimary}>
-                  <ThemedText type="smallBold" style={{ color: '#08080a' }}>Shop @{detail.storeSlug}</ThemedText>
-                </Pressable>
-                {productUrl(detail) ? (
-                  <Pressable onPress={() => openBrowserAsync(productUrl(detail)!)} hitSlop={8}>
-                    <ThemedText type="small" themeColor="tint">View product ↗</ThemedText>
-                  </Pressable>
+            ) : tab === 'discover' ? (
+              <>
+                {featured.length ? <Hero items={featured} width={width} onOpen={setStoreSlug} /> : null}
+                {collections.length ? (
+                  <Rail title="Fresh drops">
+                    {collections.map((c) => <CollectionCard key={`${c.storeSlug}-${c.slug}`} col={c} onOpen={setStoreSlug} />)}
+                  </Rail>
                 ) : null}
-              </View>
-            </ThemedView>
-          </View>
-        </Modal>
-      ) : null}
-
-      {/* Try-on result */}
-      {tryOn ? (
-        <Modal visible transparent animationType="fade" onRequestClose={() => setTryOn(null)}>
-          <View style={styles.tryOnBackdrop}>
-            <ThemedView type="background" style={styles.tryOnCard}>
-              <View style={styles.tryOnHeader}>
-                <ThemedText type="smallBold">Try on · {tryOn.item.name}</ThemedText>
-                <Pressable onPress={() => setTryOn(null)} hitSlop={10}>
-                  <ThemedText type="small" themeColor="textSecondary">Close</ThemedText>
-                </Pressable>
-              </View>
-              {tryOn.busy ? (
-                <View style={styles.tryOnBody}>
-                  <ActivityIndicator />
-                  <ThemedText type="small" themeColor="textSecondary">Fitting it on you…</ThemedText>
+                {trending.length ? (
+                  <View style={styles.section}>
+                    <ThemedText type="subtitle" style={styles.railTitle}>New this week</ThemedText>
+                    <View style={styles.grid}>
+                      {trending.map((item) => <ProductCard key={item.id} item={item} w={col} onOpen={setStoreSlug} />)}
+                    </View>
+                  </View>
+                ) : null}
+                {!featured.length && !trending.length ? (
+                  <View style={[styles.emptyCard, styles.padWrap]}><ThemedText type="small" themeColor="textSecondary">No live storefronts yet.</ThemedText></View>
+                ) : null}
+              </>
+            ) : tab === 'shop' ? (
+              <>
+                {cats.length > 1 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                    {cats.map((c) => (
+                      <Pressable key={c} onPress={() => setCat(c)} style={[styles.chip, cat === c && { backgroundColor: theme.tint, borderColor: theme.tint }]}>
+                        <ThemedText type="code" style={{ color: cat === c ? '#08080a' : theme.textSecondary }}>{c}</ThemedText>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                ) : null}
+                <View style={[styles.grid, styles.padWrap]}>
+                  {shopItems.length ? (
+                    shopItems.map((item) => <ProductCard key={item.id} item={item} w={col} onOpen={setStoreSlug} />)
+                  ) : (
+                    <ThemedText type="small" themeColor="textSecondary">Nothing here yet.</ThemedText>
+                  )}
                 </View>
-              ) : tryOn.result ? (
-                <Image source={{ uri: tryOn.result }} style={styles.tryOnImg} contentFit="cover" />
-              ) : (
-                <ThemedText type="small" style={{ color: '#e24b4a' }}>{tryOn.error}</ThemedText>
-              )}
-            </ThemedView>
-          </View>
-        </Modal>
-      ) : null}
-
+              </>
+            ) : (
+              <View style={[styles.grid, styles.padWrap]}>
+                {brands.length ? (
+                  brands.map((b) => <BrandTile key={b.id} brand={b} w={col} onOpen={setStoreSlug} />)
+                ) : (
+                  <View style={styles.emptyCard}><ThemedText type="small" themeColor="textSecondary">No live storefronts yet.</ThemedText></View>
+                )}
+              </View>
+            )}
+          </ScrollView>
+        )}
+      </SafeAreaView>
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => { setStoreSlug(null); refreshBlocked(); }} />
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  fill: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  card: { width: '100%', overflow: 'hidden', backgroundColor: '#000' },
-  fallback: { backgroundColor: '#1a1a1a' },
-  scrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 300, backgroundColor: 'rgba(0,0,0,0.5)' },
-  info: { position: 'absolute', left: Spacing.four, right: 90, bottom: 40, gap: Spacing.one },
-  // Text sits over arbitrary product media (light or dark), so every overlay label carries a soft shadow.
-  handle: { color: '#fff', opacity: 0.92, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
-  title: { color: '#fff', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.one },
-  sub: { color: '#fff', opacity: 0.92, flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
-  buyTag: { backgroundColor: '#f4f4f6', borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  buyTagText: { color: '#08080a' },
-  actions: { position: 'absolute', right: Spacing.four, bottom: 70, alignItems: 'center', gap: Spacing.four },
-  actionBtn: { alignItems: 'center', gap: 3, paddingVertical: Spacing.one, width: 52 },
-  actionGlyph: { fontSize: 28, lineHeight: 36, color: '#fff', textAlign: 'center', includeFontPadding: false, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5 },
-  liked: { color: '#e8eaee' },
-  actionLabel: { color: '#fff', opacity: 0.95, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
-  tryOnBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
-  detailBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  detailCard: { borderTopLeftRadius: Spacing.five, borderTopRightRadius: Spacing.five, padding: Spacing.four, gap: Spacing.three, maxHeight: '70%' },
-  detailHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
-  detailBody: { maxHeight: 200 },
-  detailActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginTop: Spacing.one },
-  detailPrimary: { backgroundColor: '#cdd1d9', borderRadius: 10, paddingVertical: Spacing.three, paddingHorizontal: Spacing.five, alignItems: 'center' },
-  tryOnCard: { width: '100%', maxWidth: 420, borderRadius: Spacing.four, padding: Spacing.four, gap: Spacing.three },
-  tryOnHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tryOnBody: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.six },
-  tryOnImg: { width: '100%', aspectRatio: 1, borderRadius: Spacing.three },
+  safeArea: { flex: 1 },
+  headerPad: { paddingHorizontal: Spacing.four, gap: Spacing.one, paddingTop: Spacing.three },
+  eyebrow: { textTransform: 'uppercase', letterSpacing: 2 },
+  search: { marginTop: Spacing.three },
+  center: { marginTop: Spacing.six },
+  feed: { paddingBottom: BottomTabInset + Spacing.six, gap: Spacing.six, paddingTop: Spacing.four },
+  padWrap: { paddingHorizontal: Spacing.four, gap: Spacing.two },
+  section: { gap: Spacing.three },
+
+  tabNav: { flexDirection: 'row', gap: Spacing.five, paddingHorizontal: Spacing.four, marginTop: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: HairLine },
+  tabItem: { paddingBottom: Spacing.two, alignItems: 'center', gap: Spacing.two },
+  tabUnderline: { height: 2, width: '100%', borderRadius: 2 },
+
+  chipRow: { gap: Spacing.two, paddingHorizontal: Spacing.four, paddingBottom: Spacing.one },
+  chip: { borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: HairLine, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one + 2 },
+
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
+
+  heroScrimA: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(6,8,12,0.45)' },
+  heroScrimB: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(6,8,12,0.6)' },
+  heroText: { position: 'absolute', left: Spacing.four, right: Spacing.four, bottom: Spacing.five, gap: Spacing.two },
+  heroKicker: { letterSpacing: 2 },
+  heroTitle: { fontSize: 28, lineHeight: 32 },
+  heroFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.two },
+  heroPrice: { fontSize: 16 },
+  shopPill: { backgroundColor: '#f4f4f6', borderRadius: 999, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
+  shopPillText: { color: '#08080a' },
+  heroDots: { position: 'absolute', bottom: Spacing.three, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
+  dotOn: { backgroundColor: '#fff', width: 7, height: 7, borderRadius: 4 },
+
+  rail: { gap: Spacing.three },
+  railTitle: { paddingHorizontal: Spacing.four },
+  railRow: { gap: Spacing.three, paddingHorizontal: Spacing.four },
+
+  pCard: { gap: 2, paddingBottom: Spacing.two, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: HairLine, backgroundColor: CardBg, overflow: 'hidden' },
+  pad: { paddingHorizontal: Spacing.two, marginTop: Spacing.two },
+  padTight: { paddingHorizontal: Spacing.two },
+
+  colCard: { width: 236, gap: 2, paddingBottom: Spacing.two, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: HairLine, backgroundColor: CardBg, overflow: 'hidden' },
+  colImg: { width: 236, height: 164 },
+  seasonBadge: { position: 'absolute', top: Spacing.two, left: Spacing.two, backgroundColor: 'rgba(6,8,12,0.7)', borderRadius: 999, paddingHorizontal: Spacing.two, paddingVertical: 3 },
+  seasonText: { color: '#cdd1d9', letterSpacing: 1.5, fontSize: 9 },
+
+  brandTile: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: HairLine, backgroundColor: CardBg, overflow: 'hidden' },
+  brandTileFoot: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.three },
+  brandTileLogo: { width: 34, height: 34, borderRadius: 10 },
+
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: HairLine, backgroundColor: CardBg, padding: Spacing.three },
+  rowLogo: { width: 46, height: 46, borderRadius: 12 },
+
+  flex1: { flex: 1 },
+  emptyCard: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: HairLine, backgroundColor: CardBg, padding: Spacing.four, alignItems: 'center' },
 });

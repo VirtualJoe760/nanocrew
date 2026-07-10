@@ -49,6 +49,7 @@ export async function GET(req: Request) {
       name: p.name,
       imageUrl: shot(p),
       videoUrl: p.videoUrl,
+      category: p.category,
       storeName: p.storeName,
       storeSlug: p.storeSlug,
       storeTagline: p.storeTagline,
