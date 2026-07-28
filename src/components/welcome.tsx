@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Constants from 'expo-constants';
+import { Image } from 'expo-image';
 
 import { NCMark, type Palette, usePalette } from '@/components/nc-screen';
 import { AppBackground } from '@/components/backgrounds/app-background';
@@ -18,8 +19,18 @@ export type OnboardChoice = 'subscribe' | 'shop' | 'login';
 type ScreenKind = 'venus' | 'studio' | 'design' | 'market';
 type Slide = { key: string; eyebrow: string; title: string; body: string; screen: ScreenKind };
 
-// TODO(screenshots): drop real logged-in captures into assets/onboarding/<key>.png and render them
-// in the phone frame below (Market can use the public Discover screen; Studio/Design need a brand).
+// Real in-app captures, keyed by SLIDE KEY → assets/onboarding/<key>.png. A slide with a capture
+// shows it inside the phone frame; slides without one fall back to the placeholder frame, so this
+// map can be filled in a slide at a time. Metro needs a literal path per `require`, so no globbing.
+// Captures are downscaled to 828px wide (@3x for the frame) — the raw device PNGs are ~2.5MB each
+// and would bloat the bundle for no visible gain.
+// Still needed: studio1, studio2, design2.
+const SHOTS: Record<string, ReturnType<typeof require> | undefined> = {
+  welcome: require('../../assets/onboarding/welcome.png'), // Eve — the neural-constellation orb
+  design1: require('../../assets/onboarding/design1.png'), // Design canvas — STAY GOLD cap
+  market: require('../../assets/onboarding/market.png'),   // Market ▸ Discover — SWAMI'S TOTE
+};
+
 const SLIDES: Slide[] = [
   {
     key: 'welcome',
@@ -184,7 +195,7 @@ export function Welcome({
         style={s.pager}>
         {SLIDES.map((slide, i) => (
           <View key={slide.key} style={[s.slide, { width }]}>
-            <PhoneFrame kind={slide.screen} p={p} active={i === page} />
+            <PhoneFrame kind={slide.screen} slideKey={slide.key} p={p} active={i === page} />
             <View style={s.copy}>
               <ThemedText type="code" style={[s.eyebrow, { color: p.accent }, textGlow(p.accent, 7)]}>{slide.eyebrow}</ThemedText>
               <ThemedText type="title" style={[s.title, { color: p.ink }, textGlow('rgba(205,209,217,0.55)', 16)]}>{slide.title}</ThemedText>
@@ -282,10 +293,24 @@ export function Welcome({
  * static iPhone frame until the expo-gl/native R3F swap lands. Real per-slide app captures replace
  * the 3D screen texture once we have the screenshots (see the TODO above SLIDES).
  */
-function PhoneFrame({ kind, p, active }: { kind: ScreenKind; p: Palette; active: boolean }) {
+function PhoneFrame({ kind, slideKey, p, active }: { kind: ScreenKind; slideKey: string; p: Palette; active: boolean }) {
   const s = makeStyles(p);
   const h = Math.min(Dimensions.get('window').height * 0.5, 540);
   const w = h * 0.46;
+
+  // A real capture beats both the 3D scene and the placeholder, so it wins on every platform.
+  // No notch overlay here — the device screenshot already includes the status bar / dynamic island.
+  const shot = SHOTS[slideKey];
+  if (shot) {
+    return (
+      <View style={s.previewWrap}>
+        <View style={[s.phone, { width: w, height: h, borderColor: p.faint, backgroundColor: '#000' }]}>
+          <Image source={shot} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+        </View>
+      </View>
+    );
+  }
+
   if (Platform.OS === 'web' && active) {
     return (
       <View style={s.previewWrap}>
