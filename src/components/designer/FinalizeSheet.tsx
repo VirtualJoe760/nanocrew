@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -192,11 +193,15 @@ export function FinalizeSheet({
       .finally(() => setShotsBusy(false));
   };
 
+  // The sheet caps at 88% height; reserve the top inset so its header/Close never sits under the
+  // Dynamic Island (same fix as PlacementEditor and the design.tsx sheets).
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.backdrop}>
+        style={[styles.backdrop, { paddingTop: insets.top }]}>
         <ThemedView type="background" style={styles.sheet}>
           <View style={styles.header}>
             <ThemedText type="smallBold">Review & finalize</ThemedText>

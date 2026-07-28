@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import type { DimensionValue } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { withScreenFade } from '@/components/screen-fade';
 import Animated, {
   cancelAnimation,
@@ -210,6 +210,7 @@ export default withScreenFade(DesignScreen, { eveThrough: true });
 
 function DesignScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets(); // sheet backdrops reserve this so headers clear the Dynamic Island
   const { session } = useAuth();
   const { width, height } = useWindowDimensions();
 
@@ -2159,7 +2160,7 @@ function DesignScreen() {
       {/* Combine sheet — design clicked onto a product; choose the print placement */}
       {combineTarget ? (
         <Modal visible transparent animationType="slide" onRequestClose={clearCombine}>
-          <View style={styles.modalBackdrop}>
+          <View style={[styles.modalBackdrop, { paddingTop: insets.top }]}>
             <ThemedView type="background" style={styles.sheet}>
               <View style={styles.sheetHeader}>
                 <ThemedText type="smallBold">
@@ -2629,6 +2630,7 @@ function GenerateModal({
   initialMeme?: boolean;
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets(); // sheets cap at 94% — reserve the top inset or they slide under the island
   const modality: Modality = webMode ? 'graphics' : 'design';
   const [prompt, setPrompt] = useState('');
   const [background, setBackground] = useState<'transparent' | 'filled'>('transparent');
@@ -2778,7 +2780,7 @@ function GenerateModal({
     <Modal visible={open} animationType="slide" transparent onRequestClose={close}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalBackdrop}>
+        style={[styles.modalBackdrop, { paddingTop: insets.top }]}>
         <ThemedView type="background" style={styles.sheet}>
           {/* Preview appears ONLY while generating / reviewing — no dead placeholder eating space
               before there's anything to show, so the form gets the room and never needs scrolling. */}
@@ -3016,13 +3018,14 @@ function MergeModal({
   onMerge: (prompt: string) => void;
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets(); // see GenerateModal — keeps the sheet header clear of the island
   const [collision, setCollision] = useState('');
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalBackdrop}>
+        style={[styles.modalBackdrop, { paddingTop: insets.top }]}>
         <ThemedView type="background" style={styles.sheet}>
           <View style={styles.sheetHeader}>
             <ThemedText type="code" themeColor="textSecondary">

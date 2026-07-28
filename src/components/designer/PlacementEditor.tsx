@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Image as RNImage,
@@ -703,9 +704,12 @@ export function PlacementEditor({
   onClose: () => void;
   onPreview: (previewUrl: string) => void;
 }) {
+  // The sheet caps at 90% height, which on a Dynamic Island phone leaves too little room at the
+  // top — the header (and its Done button) ended up under the island. Reserve the inset here.
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { paddingTop: insets.top }]}>
         <ThemedView type="background" style={styles.sheet}>
           <View style={styles.header}>
             <ThemedText type="smallBold">Size & placement</ThemedText>
