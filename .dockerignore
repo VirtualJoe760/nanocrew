@@ -1,0 +1,27 @@
+# Keep SECRETS and bulk out of the build context/image.
+# .env.local holds all 53 keys — it must NEVER be copied into the image (runtime env vars
+# are injected by the host instead).
+.env
+.env.*
+!.env.example
+
+node_modules
+.git
+.gitignore
+
+# Native projects — not needed to build/serve the web + API bundle (and they're huge).
+ios
+android
+
+# Build output + caches (the image runs its own `expo export`).
+dist
+.expo
+.expo-shared
+web-build
+*.log
+.DS_Store
+
+# Local tooling / docs that don't affect the server build.
+.vscode
+.idea
+coverage

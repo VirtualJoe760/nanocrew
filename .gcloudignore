@@ -1,0 +1,26 @@
+# What NOT to upload to Cloud Build.
+# NOTE: creating this file disables gcloud's default "use .gitignore" behaviour, so secrets must
+# be listed explicitly here — .env.local holds all 53 keys and must never leave the machine.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+node_modules
+
+# Native projects — not needed to build the web + API bundle, and they're large.
+ios
+android
+
+# Build output / caches (the image runs its own `expo export`).
+dist
+.expo
+.expo-shared
+web-build
+*.log
+.DS_Store
+
+.vscode
+.idea
+coverage
