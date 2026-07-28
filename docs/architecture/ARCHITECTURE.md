@@ -22,7 +22,7 @@ Companion docs: [DATABASE_PLAN.md](DATABASE_PLAN.md) · [API.md](API.md) ·
 
 | Unit | What | Where it runs |
 |---|---|---|
-| **Mobile app** | The product — Expo / React Native (this repo). Its `src/app/api/**+api.ts` server routes hold the authenticated **creator** logic (design, publish, billing, site edits). | **Railway** — `backend-production-d7eb.up.railway.app`, a persistent Node server (`expo serve`). The iOS build's `EXPO_PUBLIC_API_URL` points here. Push to `main` → Railway auto-deploys. **Not EAS Hosting** (see below). |
+| **Mobile app** | The product — Expo / React Native (this repo). Its `src/app/api/**+api.ts` server routes hold the authenticated **creator** logic (design, publish, billing, site edits). | **Google Cloud Run** — `api.nanocrew.app` (direct URL `backend-927523030808.us-west1.run.app`), a persistent Node server (`expo serve`). The iOS build's `EXPO_PUBLIC_API_URL` points here. Deploy with `./scripts/deploy-cloudrun.sh nanocrew-api us-west1 backend`. **Not EAS Hosting** (see below). |
 | **platform-api** | The **public** Next.js API the storefront websites consume + all webhooks. Holds the central commerce + secrets. | Vercel — `nanocrew-api.vercel.app` (rootDirectory `platform-api/`). |
 | **nanocrew-templates** | Sibling repo of **5** self-contained Next.js storefront templates — `minimal · bold · elegant · extravagant · street`. One `brand.json` token file turns a template into a brand. | GitHub source; each provisioned brand → its own Vercel project. |
 | **forge** | DigitalOcean droplet running headless Claude. A systemd **`nanocrew-forge-worker`** drains the revision queue and provisions/revises brand websites **locally** on the box. | VPS (`ssh nanocrew-forge`). |
@@ -32,13 +32,19 @@ All four share **one Supabase Postgres** (Drizzle ORM). **`platform-api/db/schem
 `./nanocrew-site` Next.js app (the `nanocrew.app` marketing site + the company store + the free
 `nanocrew.app/b/<slug>` web storefronts) lives in this repo and also reads platform-api.
 
-### Why the app backend is on Railway, not EAS Hosting
+### Why the app backend is a PERSISTENT NODE SERVER, not EAS Hosting
 
 EAS Hosting runs on Cloudflare Workers. Opening a postgres-js **TCP** socket there is unreliable
 across requests — and worse, opening one *after* an outbound `fetch()` in the same request reliably
-fails, which broke every authed DB route. The backend runs on Railway as a persistent Node process
+fails, which broke every authed DB route. The backend therefore runs as a persistent Node process
 (`expo serve`), where a normal pool survives between requests (`src/lib/db.ts`, Supabase transaction
-pooler, `prepare: false`). **Do not move it back.**
+pooler, `prepare: false`). **Do not move it to an edge/Workers runtime.**
+
+**Host history:** originally Railway; migrated to **Google Cloud Run** (Jul 2026) when Railway's
+trial ended and its edge started returning `404 Application not found`, which took the native app
+offline. The container (`Dockerfile`) just runs `expo export -p web` → `expo serve`, so the deploy is
+host-portable — any Node container platform can run it. Cloud Run specifics: free tier, `min-instances=0`
+(so expect a cold start after idle), 53 runtime env vars injected from `.env.local` by the deploy script.
 
 Two more workarounds stem from `expo serve`'s per-request isolation:
 - **Cloudinary** uploads go through the **signed REST API** (`src/lib/cloudinary.ts`), not the SDK —
@@ -52,7 +58,7 @@ Two more workarounds stem from `expo serve`'s per-request isolation:
 per-request network call. It checks the **ES256** signature against the project JWKS (read from the
 `SUPABASE_JWKS` env so there's zero I/O in the hot path; falls back to fetching + caching the JWKS if
 unset), pins `alg=ES256`, requires `aud=authenticated`, checks `exp` and issuer. Local verify
-matters because authed routes must make **no `fetch` before their DB query** (the Railway/Workers note
+matters because authed routes must make **no `fetch` before their DB query** (the persistent-Node/Workers note
 above). There's also a **server-to-server bypass**: a request with a valid `x-internal-key`
 (constant-time compared to `INTERNAL_API_KEY`) plus `x-internal-creator` authenticates AS that
 creator — used by `AUTO_FIRST_DROP` generation, which calls the now-authed designer routes.
@@ -139,7 +145,7 @@ Studio interview (Venus — voice/typed, push-to-talk)
        → if Pro+ (website): provisionStorefront()  ── enqueues a job, NO SSH ──┐
        └→ (AUTO_FIRST_DROP=1) generateFirstDrop() → products                   │
                                                                                ▼
-   provisionStorefront() (src/lib/provision.ts, on Railway):            store_revisions queue
+   provisionStorefront() (src/lib/provision.ts, on Cloud Run):            store_revisions queue
      • creates the per-brand GitHub repo  store-<slug>                  (branch '__provision__')
      • Venus AUTHORS briefs/01-BRAND.md (authorBrandBrief, gemini-2.5-pro;          │
        deterministic mail-merge fallback) + writes brand.json + 02-TEST.md          │
@@ -171,7 +177,7 @@ Commerce: storefront → platform-api /public/checkout → Stripe → stripe-web
 ### Provisioning & revisions are queue-based (no SSH)
 
 The app server **never SSHes the forge** (it can't from a managed host). `provisionStorefront()` does
-the cheap GitHub-API + brief-authoring work on Railway, then **enqueues** a job into the
+the cheap GitHub-API + brief-authoring work on the app backend, then **enqueues** a job into the
 `store_revisions` table — provisioning uses the reserved branch `'__provision__'`, revisions use
 `revision/<id>`. The single `nanocrew-forge-worker` (one job at a time, global `~/stores/.forge.lock`,
 45-min provision / 30-min revision timeouts) polls that table and runs the heavy
@@ -286,8 +292,8 @@ migration must `ENABLE ROW LEVEL SECURITY` on its new table.
    don't re-architect the build/refine/publish lifecycle.
 8. **Never edit a brand's `main` directly** — site edits ride a `revision/<id>` branch → preview →
    approve → merge.
-9. **Authed routes make no `fetch` before their DB query** (the Railway/Workers constraint), and the
-   app backend stays on Railway (not EAS Hosting).
+9. **Authed routes make no `fetch` before their DB query** (the persistent-Node/Workers constraint), and the
+   app backend stays on a persistent Node host — Cloud Run (not EAS Hosting).
 10. **The app palette lives in three files** (`src/constants/theme.ts`, `src/lib/studio-palette.ts`,
     `src/components/nc-screen.tsx`) — change all three together.
 11. **Reuse before you build. Audit first** — most things already exist; confirm a table/route/

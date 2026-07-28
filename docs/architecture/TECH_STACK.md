@@ -14,7 +14,7 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 
 | Unit | Where it lives | Framework | Runtime / host | Talks to |
 |---|---|---|---|---|
-| **Mobile app** (this repo) | `/` (Expo) | Expo SDK 54 · React Native 0.81 · React 19 | iOS/Android (Hermes) + web; **server routes (`**+api.ts`) on Railway** (persistent Node via `expo serve`) | Postgres, Gemini, fal, Stripe, Printful, Cloudinary, Apple |
+| **Mobile app** (this repo) | `/` (Expo) | Expo SDK 54 · React Native 0.81 · React 19 | iOS/Android (Hermes) + web; **server routes (`**+api.ts`) on Google Cloud Run** (persistent Node via `expo serve`) | Postgres, Gemini, fal, Stripe, Printful, Cloudinary, Apple |
 | **platform-api** | `platform-api/` | **Next.js 16** | Vercel (`nanocrew-api.vercel.app`) | Postgres, **Stripe**, Printful webhooks |
 | **nanocrew-site** | `nanocrew-site/` | **Next.js 15** | Vercel | Postgres (read), shared POS |
 | **forge-worker** | `forge-worker/` | Node ESM + **systemd** | **DigitalOcean droplet** (`ssh nanocrew-forge`) | Postgres queue, **headless `claude` CLI** |
@@ -30,7 +30,7 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 
 | | Version | Notes |
 |---|---|---|
-| **Node** | **22** (`.nvmrc`) | App backend (Railway) + platform-api (Vercel) + forge-worker. Node 22 provides global `WebSocket` (needed by the Gemini Live web build). |
+| **Node** | **22** (`.nvmrc`) | App backend (Cloud Run) + platform-api (Vercel) + forge-worker. Node 22 provides global `WebSocket` (needed by the Gemini Live web build). |
 | **TypeScript** | **~6.0.3** (app) · ^5 (platform-api/site) | `strict: true`; path aliases `@/*` → `src/*`, `@/assets/*`. Extends `expo/tsconfig.base`. |
 | **React** | **19.1.0** (app) · 19.2.4 (platform-api) · 19.0.0 (site) | |
 | **Package manager** | **npm** (not pnpm) | |
@@ -107,7 +107,7 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 | **Supabase Postgres** | — | Single multi-tenant database (the `creators` identity = Supabase uid). **RLS deny-all** on every public table; servers use the service key. |
 | `drizzle-orm` | ^0.45.2 | Typed query builder + schema (`src/db/schema.ts`) |
 | `drizzle-kit` | ^0.31.10 | Migrations (`db:generate` / `db:migrate`) + `db:studio`. **25 migrations** to date. |
-| `postgres` (postgres-js) | ^3.4.9 | Driver. **Constraint:** authed routes must not `fetch()` before the first DB query (Railway/postgres-js). Migrations use the **session pooler** (`DATABASE_URL_SESSION`), runtime the transaction pooler. |
+| `postgres` (postgres-js) | ^3.4.9 | Driver. **Constraint:** authed routes must not `fetch()` before the first DB query (persistent Node/postgres-js). Migrations use the **session pooler** (`DATABASE_URL_SESSION`), runtime the transaction pooler. |
 
 **Auth model:** Supabase Auth issues JWTs; the app verifies locally and platform-api verifies remotely
 (`SUPABASE_JWKS`). Store ownership + `store_collaborators` enforced in code via `src/lib/tenant.ts`.
@@ -186,7 +186,7 @@ Pricing is single-sourced (`pricing.ts`, cost+floor) and enforced at `/api/publi
 
 | Platform | Used as | Notes |
 |---|---|---|
-| **Railway** | App backend host (`backend-production-d7eb.up.railway.app`) | Persistent Node via `expo serve` — **NOT** EAS Hosting (Cloudflare Workers broke postgres-js for authed routes). GitHub auto-deploy on push to `main`. |
+| **Google Cloud Run** | App backend host (`api.nanocrew.app`, direct `backend-927523030808.us-west1.run.app`) | Persistent Node via `expo serve` — **NOT** EAS Hosting (Cloudflare Workers broke postgres-js for authed routes). Deploy: `./scripts/deploy-cloudrun.sh nanocrew-api us-west1 backend`. Free tier, `min-instances=0` (cold starts). Migrated off Railway Jul 2026. |
 | **Vercel** | platform-api + nanocrew-site + every brand storefront | `api.vercel.com` also used to provision custom domains (`domains.ts`). |
 | **DigitalOcean** | forge droplet | Headless Claude + `nanocrew-forge-worker` systemd service draining the `store_revisions` queue. **Hand-kept mirror** — re-scp `worker.mjs` after edits. |
 | **Supabase** | Postgres + Auth | The shared DB + identity provider. |
@@ -242,7 +242,7 @@ loop" in [`../context/CODE_STANDARDS.md`](../context/CODE_STANDARDS.md).)
 
 1. **Metro `@google/genai` web-build override** — don't remove it; the node build's `ws` dependency hangs the Gemini Live session in RN.
 2. **Babel `class-static-block` plugin** — required for three.js to parse on native.
-3. **postgres-js on Railway** — no `fetch()` before the first DB query in an authed route.
+3. **postgres-js on the persistent Node host** — no `fetch()` before the first DB query in an authed route.
 4. **Schema is duplicated** — `platform-api/db/schema.ts` mirrors `src/db/schema.ts`.
 5. **forge-worker is a hand-kept mirror** — re-scp `worker.mjs` after editing; pushing the repo doesn't ship it.
 6. **Skia/three are web/native-split** — `*.web.tsx` variants; Skia web needs the CanvasKit WASM `locateFile`.

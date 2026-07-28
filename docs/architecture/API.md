@@ -2,8 +2,8 @@
 
 Two HTTP surfaces, one shared Supabase Postgres:
 
-- **App backend** (`src/app/api/**+api.ts`) — Expo Router server routes, deployed on **Railway**
-  (`backend-production-d7eb.up.railway.app`, persistent Node via `expo serve`). Creator/designer
+- **App backend** (`src/app/api/**+api.ts`) — Expo Router server routes, deployed on **Google Cloud Run**
+  (`api.nanocrew.app`, persistent Node via `expo serve`). Creator/designer
   endpoints are **authed**: the client uses `apiFetch()` (`src/lib/api.ts`) to attach the Supabase
   bearer token, and the server verifies it locally with `getUserFromRequest` (`@/lib/auth`, local JWT
   verify) and scopes to the creator's stores (`src/lib/tenant.ts`). Several AI routes are
@@ -135,7 +135,7 @@ unambiguous). DIRECT APIs (plain DB reads / a thin proxy), not the forge. See
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/internal/release-payouts` | `x-internal-key` (constant-time) | The deferred-payout **release job** (Railway, persistent). Scans `orders WHERE payoutStatus='held' AND payoutReleaseAt < now() AND status NOT IN (return_requested, returned, refunded, cancelled, failed)` and transfers each brand its `brandNetCents` (`source_transaction = stripeChargeId`), setting `payoutStatus='released'`. Idempotent (per-order Stripe idempotency key). Returns `{scanned, released, failed, errors}`. **Owner config:** a Railway/Vercel cron must hit it on an interval; alert on a non-zero `failed`. See [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md). |
+| POST | `/api/internal/release-payouts` | `x-internal-key` (constant-time) | The deferred-payout **release job** (Cloud Run, persistent). Scans `orders WHERE payoutStatus='held' AND payoutReleaseAt < now() AND status NOT IN (return_requested, returned, refunded, cancelled, failed)` and transfers each brand its `brandNetCents` (`source_transaction = stripeChargeId`), setting `payoutStatus='released'`. Idempotent (per-order Stripe idempotency key). Returns `{scanned, released, failed, errors}`. **Owner config:** a Cloud Scheduler/Vercel cron must hit it on an interval; alert on a non-zero `failed`. See [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md). |
 
 ---
 
@@ -160,7 +160,7 @@ unambiguous). DIRECT APIs (plain DB reads / a thin proxy), not the forge. See
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/internal/notify` | `x-internal-key` (constant-time) | Central send dispatch so **app-side** creator actions (the Railway approve/decline routes) can fire a branded shopper email **without** pulling Resend into the app — Resend lives ONLY in platform-api. Payload `{ action: 'approved'｜'declined', returnId, reason? }`; the route resolves the claim → store → buyer from `returnId` and dispatches `sendReturnApproved`/`sendReturnDeclined`. Best-effort: a configured-and-authed call always **202**s (a failed send never fails the creator action); **401** when the key is unset/mismatched. See [EMAIL_PIPELINE.md](../accounts/EMAIL_PIPELINE.md). |
+| POST | `/api/internal/notify` | `x-internal-key` (constant-time) | Central send dispatch so **app-side** creator actions (the app-backend approve/decline routes) can fire a branded shopper email **without** pulling Resend into the app — Resend lives ONLY in platform-api. Payload `{ action: 'approved'｜'declined', returnId, reason? }`; the route resolves the claim → store → buyer from `returnId` and dispatches `sendReturnApproved`/`sendReturnDeclined`. Best-effort: a configured-and-authed call always **202**s (a failed send never fails the creator action); **401** when the key is unset/mismatched. See [EMAIL_PIPELINE.md](../accounts/EMAIL_PIPELINE.md). |
 
 ### Billing return pages
 
