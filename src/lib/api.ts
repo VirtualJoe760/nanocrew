@@ -18,6 +18,19 @@ export function apiUrl(path: string): string {
   return host ? `http://${host}${path}` : path;
 }
 
+// The backend runs on Cloud Run with min-instances=0 (free tier), so after an idle period the
+// first request can hit a COLD START and come back 502/503/504 from the load balancer before any
+// instance is up. Retrying transparently is the difference between "Eve can't connect" and a
+// half-second delay.
+//
+// SAFETY: only **GET** is retried. A 5xx on a POST/PATCH/DELETE can mean the server DID process
+// the write and failed afterwards — replaying that could double-charge Stripe or duplicate an
+// order. Reads are idempotent, and the connect path (which is what cold starts break) is all GETs.
+const RETRY_STATUS = new Set([502, 503, 504]);
+const RETRY_DELAYS_MS = [400, 1200];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // Authenticated fetch — attaches the current Supabase bearer token so server routes can
 // scope to the signed-in creator. Use this for any /api/* call that touches creator data.
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -25,7 +38,26 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const token = data.session?.access_token;
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(apiUrl(path), { ...init, headers });
+
+  const url = apiUrl(path);
+  const method = (init.method ?? 'GET').toUpperCase();
+  const retryable = method === 'GET';
+
+  let lastErr: unknown;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, { ...init, headers });
+      if (!retryable || !RETRY_STATUS.has(res.status) || attempt >= RETRY_DELAYS_MS.length) return res;
+      await sleep(RETRY_DELAYS_MS[attempt]); // cold start — give the instance a moment to boot
+    } catch (e) {
+      // Network-level failure (socket dropped mid-cold-start). Same rule: GETs only.
+      lastErr = e;
+      if (!retryable || attempt >= RETRY_DELAYS_MS.length) throw e;
+      await sleep(RETRY_DELAYS_MS[attempt]);
+    }
+  }
+  // unreachable — the loop either returns or throws
+  throw lastErr;
 }
 
 // Thrown by readJson() on any non-2xx response. `message` carries the server's `error`
