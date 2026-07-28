@@ -9,8 +9,9 @@ import PhoneScene from '@/components/phone-scene';
 import { ThemedText } from '@/components/themed-text';
 import { glow, textGlow } from '@/constants/glow';
 
-// First-launch welcome carousel (presented as a full-screen Modal by studio.tsx). Advertises the app
-// (Studio · Design · Market), then a plan picker with the sign-up offer, or "shop & browse for free".
+// First-launch welcome carousel (presented as a full-screen Modal by studio.tsx). Three slides —
+// Eve · Design · Market, one real device capture each — then a plan picker with the sign-up offer,
+// or "shop & browse for free". Kept deliberately short: every slide earns its place with a screenshot.
 // Pure presentation — the parent persists the chosen intent + handles auth/routing. Slide copy
 // doubles as the App Store screenshot captions.
 
@@ -24,7 +25,6 @@ type Slide = { key: string; eyebrow: string; title: string; body: string; screen
 // map can be filled in a slide at a time. Metro needs a literal path per `require`, so no globbing.
 // Captures are downscaled to 828px wide (@3x for the frame) — the raw device PNGs are ~2.5MB each
 // and would bloat the bundle for no visible gain.
-// Still needed: studio1, studio2, design2.
 const SHOTS: Record<string, ReturnType<typeof require> | undefined> = {
   welcome: require('../../assets/onboarding/welcome.png'), // Eve — the neural-constellation orb
   design1: require('../../assets/onboarding/design1.png'), // Design canvas — STAY GOLD cap
@@ -35,48 +35,27 @@ const SLIDES: Slide[] = [
   {
     key: 'welcome',
     eyebrow: 'FROM IDEA TO BRAND IN SECONDS',
-    title: 'Welcome to Nano Crew',
-    body: 'Start a real clothing brand from a conversation. Meet Venus, your AI brand consultant — tell her your vision and she builds it with you.',
+    title: 'Meet Eve',
+    body: 'Describe your vibe in plain words. Eve names your brand, designs its identity, and builds your store and website — no design skills, no code.',
     screen: 'venus',
-  },
-  {
-    key: 'studio1',
-    eyebrow: 'STUDIO',
-    title: 'Say it. Venus builds it.',
-    body: 'Describe your vibe in plain words. Venus names your brand, designs its identity, and spins up a store — in minutes, no design skills, no code.',
-    screen: 'studio',
-  },
-  {
-    key: 'studio2',
-    eyebrow: 'STUDIO',
-    title: 'Your whole brand, one screen.',
-    body: 'Studio is your command center — brand identity, products, and a full storefront website you edit just by chatting.',
-    screen: 'studio',
   },
   {
     key: 'design1',
     eyebrow: 'DESIGN',
-    title: 'Designs that drop in seconds.',
-    body: 'Generate AI artwork or bring your own, then place it on real apparel — print-ready, on-model, ready to sell.',
-    screen: 'design',
-  },
-  {
-    key: 'design2',
-    eyebrow: 'DESIGN',
-    title: 'Publish a product instantly.',
-    body: 'One tap puts it on sale. We print, pack, and ship every order — you never touch inventory.',
+    title: 'Design it. Publish it.',
+    body: 'Generate AI artwork or bring your own, drop it onto real apparel, and put it on sale in a tap. We print, pack, and ship every order.',
     screen: 'design',
   },
   {
     key: 'market',
     eyebrow: 'MARKET',
     title: 'Open for business, day one.',
-    body: 'Sell in the Nano Crew Market and on your own website. Checkout, fulfillment, and payouts are handled — you just keep creating.',
+    body: 'Sell in the Nano Crew Market and on your own site. Checkout, fulfillment, and payouts are handled — you just keep creating.',
     screen: 'market',
   },
 ];
 
-const SCREEN_LABEL: Record<ScreenKind, string> = { venus: 'Meet Venus', studio: 'Studio', design: 'Design', market: 'Market' };
+const SCREEN_LABEL: Record<ScreenKind, string> = { venus: 'Meet Eve', studio: 'Studio', design: 'Design', market: 'Market' };
 
 // ── Sign-up offer + pricing (tune here) ─────────────────────────────────────────────────────────
 // 15% off — first MONTH on a monthly plan, the whole YEAR on an annual plan. Platform-aware pricing:
