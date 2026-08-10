@@ -207,3 +207,91 @@ with a fingerprint check (guards R3F v9's native gl.render patch being lost to c
 single present in every world, no double), and `@react-three/drei` uninstalled (unused; its
 stats-gl dep bundled a second three copy — the "Multiple instances of Three.js" warning). Whether
 build 40's background was black on Joe's PHONE is unconfirmed — check TestFlight 41 first thing.
+
+---
+
+# PHASE — EVE AS A CONVERSATIONALIST (build plan, 2026-08)
+
+Joe: *"I want her far more conversational. Right now she really knows one purpose — help create the
+brand. I'd also like store digests on how things are doing, talk over ideas, and have her create
+designs, show them, and apply them to products of our choice. For that she needs the full product
+catalogue and the ability to send and receive designs to Gemini."*
+
+**Audited against the code on 2026-08-01, not against this doc** (the doc was stale). Most of the
+machinery already exists — this phase is four ADDITIVE changes, no new tables, no rebuilds.
+
+## What already exists (verified in code — reuse, do not rebuild)
+
+| Piece | Where | State |
+|---|---|---|
+| Intent router | `src/app/api/eve/route+api.ts` | live; intents `create-brand · edit-site · new-design · write-post · digest · done` |
+| Digest | `src/lib/eve-digest.ts` + `/api/creator/stats` | **works end-to-end** — renders + she narrates the headline |
+| Design in her own surface | `src/components/eve/eve-design.tsx` | generate `/api/generate`, show large, iterate `/api/edit` |
+| Context injection | `live.sendContext()` (`live-voice.ts`) | the primitive for feeding her facts mid-turn |
+| Catalogue | `/api/blanks`, `/api/blank/[id]/variants` | live |
+| Design → product render | `/api/composite` | live |
+| Per-creator access | `src/lib/tenant.ts` | use for every new read |
+
+**Hard architectural constraint (still true):** native-audio Gemini Live **cannot do reliable
+tool-calling** — that is why the router exists. New capabilities go through **the router +
+`sendContext`**, never function declarations. (`SAVE_BRAND` is the one exception and stays gated.)
+
+## The four gaps
+
+1. **She is an interviewer, not a conversationalist.** `eveCentralInstruction` is ~80% brand-interview
+   text; open-ended chat is one line telling her to be brief and "always nudge toward making something".
+2. **The digest is conversationally dead.** It renders and she reads a headline, but **no numbers enter
+   her context** — she cannot answer "how was last week?" or compare brands.
+3. **She cannot see what she made.** Only `audio` is sent to the session. SDK `@google/genai` 2.8.0's
+   `sendRealtimeInput` accepts `media`/`video`, so vision is available and unused.
+4. **No product awareness.** No catalogue in her context and no path from a design to "put it on a hoodie".
+
+## Phases
+
+### P1 — Conversational core (prompt only; no endpoints, no schema)
+Rebalance `eveCentralInstruction` (`src/lib/live-voice.ts`): conversation and ideation first, brand
+interview demoted to a module she *enters*. Tell her plainly what she can do, including the digest
+(today her prompt never mentions it).
+- **⚠ Fragile coupling:** the interview module must keep the literal *"ready to build your brand"*
+  phrasing — `eve-home.tsx`'s `buildReady` regex listens for it. Change the wording and the Build
+  button silently never unlocks. Carry that sentence verbatim.
+- Risk: low. Reversible in one commit. Verify by talking to her, not by tsc.
+
+### P2 — A digest she can actually discuss
+Feed the real numbers into her context instead of a "say the headline" nudge: extend the `digest`
+case in `eve-home.tsx` to `sendContext` the tiles/values so follow-up questions work.
+- Then add **`GET /api/creator/sales-series`** for trends — *already named as a needed route in the
+  capability tree above*, so this is on-plan, not new scope. Units live in `order_items.quantity`.
+- **Rules:** per-creator reads via `tenant.ts` (§1 IDOR class). Authed route ⇒ **DB query before any
+  outbound `fetch()`** (§1, the persistent-Node/postgres-js constraint).
+
+### P3 — She sees the design
+Send the generated image into the live session (`sendRealtimeInput({ media: … })`) from
+`eve-design.tsx`, so she reacts to what is actually on screen instead of narrating blind.
+- Gate to the design surface; send once per settled design (not per frame) — this is a live audio
+  session and images are not free.
+- Unknown to measure first: latency/token cost of an image mid-session. Prototype before committing.
+
+### P4 — Designs onto products
+Add an **`apply-to-product`** intent to the router → resolve a blank → `/api/composite` → show it.
+- Reuse the **`pick` handshake** already prioritised above: `ProductPicker` is listed as "closest to
+  done" — add `mode`/`onResolve` rather than writing a new picker.
+- Give her catalogue awareness via `sendContext` (categories + the creator's own products), not by
+  stuffing the whole catalogue into her system prompt.
+
+## Compliance audit (`docs/context/NEVER_VIOLATE.md`)
+
+| Rule | Impact |
+|---|---|
+| 🔴 Schema duplicated — sync both halves | **N/A** — no new tables |
+| 🔴 New migration ⇒ RLS | **N/A** — no migration |
+| 🟡 Per-creator data via `tenant.ts` | **Applies** — P2 stats + P4 products |
+| 🟡 No `fetch()` before first DB query | **Applies** — P2/P4 routes must query first |
+| 🔴 Pre-push gate: `tsc` + `expo export` + lint | Applies to every phase |
+| 🟡 Don't remove the Metro `@google/genai` web-build override | **Applies** — P3 touches the Live session |
+| 🟡 Copy is data | N/A — no site copy |
+| 🟡 Reuse before you build | Satisfied — every phase extends existing machinery |
+
+## Sequence
+P1 → P2 → P3 → P4. P1+P2 change how she *feels* immediately and carry the least risk; P3 is the
+unknown (measure first); P4 is the largest surface and depends on the picker handshake.
