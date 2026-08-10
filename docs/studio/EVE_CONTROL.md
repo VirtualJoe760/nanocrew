@@ -276,14 +276,18 @@ case in `eve-home.tsx` to `sendContext` the tiles/values so follow-up questions 
 - **Rules:** per-creator reads via `tenant.ts` (§1 IDOR class). Authed route ⇒ **DB query before any
   outbound `fetch()`** (§1, the persistent-Node/postgres-js constraint).
 
-### P3 — She sees the design
+### ~~P3 — She sees the design~~ · ### ~~P4 — Designs onto products~~
+
+**SUPERSEDED 2026-08-01 by P3′ below** (Joe redirected the design). Kept for the reasoning only.
+
+#### (old) P3 — She sees the design
 Send the generated image into the live session (`sendRealtimeInput({ media: … })`) from
 `eve-design.tsx`, so she reacts to what is actually on screen instead of narrating blind.
 - Gate to the design surface; send once per settled design (not per frame) — this is a live audio
   session and images are not free.
 - Unknown to measure first: latency/token cost of an image mid-session. Prototype before committing.
 
-### P4 — Designs onto products
+#### (old) P4 — Designs onto products
 Add an **`apply-to-product`** intent to the router → resolve a blank → `/api/composite` → show it.
 - Reuse the **`pick` handshake** already prioritised above: `ProductPicker` is listed as "closest to
   done" — add `mode`/`onResolve` rather than writing a new picker.
@@ -306,3 +310,38 @@ Add an **`apply-to-product`** intent to the router → resolve a blank → `/api
 ## Sequence
 P1 → P2 → P3 → P4. P1+P2 change how she *feels* immediately and carry the least risk; P3 is the
 unknown (measure first); P4 is the largest surface and depends on the picker handshake.
+
+
+---
+
+## P3′ — THE VOICE DESIGN LOOP (supersedes old P3 + P4)
+
+Joe: *"we don't want the design screen to open — she should present it in an almost transparent modal
+on the Eve screen, then the user could describe the product they want to put the design on, and she
+can give options, and do it herself… similar to the design flow, but just done through voice."*
+
+**Why this is better than the old plan.** Old P3 assumed we'd send an image into her live session on
+the design surface — but **she has no session there**: `studio.tsx` renders `EveDesign` and `EveHome`
+in a ternary, so entering `state:'design'` UNMOUNTS EveHome and `useLiveVoice`'s cleanup stops the
+mic. The "Eve" beside the design is a scripted `line` string, not speech. Joe's version dissolves that
+entirely: **she never leaves her screen, so the session never tears down.** No session-lifting needed.
+
+### The loop
+1. "make me a stay gold graphic" → `new-design` intent → open a TRANSLUCENT modal over the Eve screen
+   (do NOT `onGo({state:'design'})` — that's what kills her mic).
+2. Generate in place — `POST /api/generate` (exists).
+3. She SEES it — `live.sendImage()` (shipped, `7ac7afa`).
+4. "put it on a hoodie" → she offers options from `GET /api/blanks` (exists, cached server-side).
+5. She applies it — `POST /api/composite` ("Nano Banana renders the design ON the garment photo",
+   review-only, returns a Cloudinary URL). Mockup replaces the design in the same modal.
+6. **Hand off to finalize** — `sendDesignCommand({ kind: 'ingest-design', url, prompt })` + route to
+   `/design`. The bus already queues while that screen is unmounted and flushes on mount, and
+   `ingest-design` is literally documented as Eve's hand-off path.
+
+### Scope boundary (Joe's call)
+Voice does the CREATIVE work; the Design center does the COMMITTING. Nothing is published to the
+store by voice — no Printful, no pricing, no listing. Worst case of a mishearing is a throwaway mockup.
+
+### Everything reused
+`/api/generate` · `/api/blanks` · `/api/composite` · the design bus · `live.sendImage` · the Modal
+pattern already in eve-home. New code = the in-place modal + the voice loop that drives it.
