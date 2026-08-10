@@ -248,14 +248,19 @@ tool-calling** — that is why the router exists. New capabilities go through **
 
 ## Phases
 
-### P1 — Conversational core (prompt only; no endpoints, no schema)
+### P1 — Conversational core (prompt only) — ✅ SHIPPED 2026-08-01
 Rebalance `eveCentralInstruction` (`src/lib/live-voice.ts`): conversation and ideation first, brand
 interview demoted to a module she *enters*. Tell her plainly what she can do, including the digest
 (today her prompt never mentions it).
 - **⚠ Fragile coupling:** the interview module must keep the literal *"ready to build your brand"*
   phrasing — `eve-home.tsx`'s `buildReady` regex listens for it. Change the wording and the Build
   button silently never unlocks. Carry that sentence verbatim.
-- Risk: low. Reversible in one commit. Verify by talking to her, not by tsc.
+- **Shipped:** `eveCentralInstruction` reordered — a new HOW YOU TALK section makes conversation the
+  job ("a conversation that produces no task is a fine conversation"), the old
+  "always nudging toward making something" steer is gone, the brand interview is a module she ENTERS,
+  and she is finally told the **digest** exists (with an explicit "don't invent numbers" guard).
+- **Verified:** the buildReady cue still matches, the DELIVERY voice paragraph is untouched, tsc clean.
+  Conversational QUALITY is unverifiable from code — it needs a real spoken session.
 
 ### P2 — A digest she can actually discuss
 Feed the real numbers into her context instead of a "say the headline" nudge: extend the `digest`
