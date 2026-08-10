@@ -21,7 +21,7 @@ export type BrandResult = {
   designStyle: 'minimalist' | 'bold' | 'elegant' | 'extravagant' | 'street';
   products: string[];
   /** Website look/layout wishes in the creator's own words ("slideshow at the top",
-   *  "mobile bottom bar") — Venus translates these to concrete blocks (via the template's
+   *  "mobile bottom bar") — Eve translates these to concrete blocks (via the template's
    *  VOCABULARY.md) when she authors the build brief; see authorBrandBrief in lib/provision.ts. */
   siteNotes?: string[];
   designSystem: {
@@ -39,7 +39,7 @@ export type InterviewTurn = {
   brand?: BrandResult;
 };
 
-export function interviewSystem(userName?: string, aiName = 'Venus'): string {
+export function interviewSystem(userName?: string, aiName = 'Eve'): string {
   const first = userName?.trim().split(/\s+/)[0];
   return `You are ${aiName.toUpperCase()} — Nano Crew's AI studio brand consultant: a warm,
 motivating creative intelligence helping a creator define their clothing brand and its

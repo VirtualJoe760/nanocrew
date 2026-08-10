@@ -15,7 +15,7 @@ import { apiUrl, readJson } from '@/lib/api';
 import { summonEve } from '@/lib/eve-bus';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
-// Venus's management surface for a returning creator: request site changes in plain
+// Eve's management surface for a returning creator: request site changes in plain
 // words (→ forge revision) and write journal posts. Calls the same creator endpoints
 // the brand-site /admin uses. Opens from the Studio header. Theme-aware.
 
@@ -500,12 +500,12 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
         setSiteAction('idle');
         setNote(
           d?.error === 'no_design_system'
-            ? 'This brand has no design system yet, so there’s nothing to build a site from. Finish its setup with Venus first.'
+            ? 'This brand has no design system yet, so there’s nothing to build a site from. Finish its setup with Eve first.'
             : 'Could not start building your site.',
         );
         return;
       }
-      setNote('Building your site — Venus will have it ready shortly. Check back in a few minutes.');
+      setNote('Building your site — Eve will have it ready shortly. Check back in a few minutes.');
       await loadStores(); // pick up status:'building' right away so the progress view shows with no gap
     } catch {
       setNote('Could not start building your site.');
@@ -708,13 +708,13 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                 </>
               ) : null}
 
-              {/* Edit the site by chatting with Venus — a brand can also sell on the shop with no site */}
+              {/* Edit the site by chatting with Eve — a brand can also sell on the shop with no site */}
               {!siteUrl ? (
                 <View style={styles.noSite}>
                   {building ? (
                     <>
                       <ThemedText type="code" style={styles.sectionLabel}>BUILDING YOUR SITE</ThemedText>
-                      <ThemedText type="small" style={styles.dim}>Venus is designing and deploying your storefront. It’ll appear here on its own when it’s ready — usually 3–5 minutes.</ThemedText>
+                      <ThemedText type="small" style={styles.dim}>Eve is designing and deploying your storefront. It’ll appear here on its own when it’s ready — usually 3–5 minutes.</ThemedText>
                       <View style={styles.progressTrack}>
                         <View style={[styles.progressFill, { width: `${Math.round(buildFill * 100)}%` }]} />
                       </View>
@@ -762,7 +762,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                       </Pressable>
                       <View style={styles.reviewRow}>
                         <ActivityIndicator size="small" color={pal.accent} />
-                        <ThemedText type="small" style={[styles.white, { flex: 1 }]}>Venus is building a preview…</ThemedText>
+                        <ThemedText type="small" style={[styles.white, { flex: 1 }]}>Eve is building a preview…</ThemedText>
                       </View>
                       <View style={styles.progressTrack}>
                         <View style={[styles.progressFill, { width: `${Math.round(buildFill * 100)}%` }]} />
@@ -776,14 +776,14 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                       <Pressable onPress={() => decline(pendingRev)} hitSlop={10} style={styles.reviewClose}>
                         <ThemedText type="code" style={styles.reviewCloseX}>✕</ThemedText>
                       </Pressable>
-                      <ThemedText type="small" style={styles.dim}>That change didn’t take — tap ✕ to dismiss, or talk to Venus to try again.</ThemedText>
+                      <ThemedText type="small" style={styles.dim}>That change didn’t take — tap ✕ to dismiss, or talk to Eve to try again.</ThemedText>
                     </View>
                   ) : null}
 
                   <Pressable onPress={() => setEditor(true)} style={styles.primaryBtn}>
                     <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Site Options</ThemedText>
                   </Pressable>
-                  <ThemedText type="code" style={styles.dim}>Exact edits, applied instantly. For a bigger redesign, tap your site above and talk to Venus.</ThemedText>
+                  <ThemedText type="code" style={styles.dim}>Exact edits, applied instantly. For a bigger redesign, tap your site above and talk to Eve.</ThemedText>
                 </>
               )}
                 </>
@@ -801,7 +801,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                       </Pressable>
                     ) : null}
                   </View>
-                  <ThemedText type="small" style={styles.dim}>Venus turns a product into a feed video ad ({voiceoverCost}), on-model shots (20), or an on-model film for your website ({veoCost}).</ThemedText>
+                  <ThemedText type="small" style={styles.dim}>Eve turns a product into a feed video ad ({voiceoverCost}), on-model shots (20), or an on-model film for your website ({veoCost}).</ThemedText>
                   {/* Scene shorts are PAUSED for now — greyed + non-interactive until the video pipeline
                       + its content-safety guard ship. Re-enable by restoring the Pressable. */}
                   <View style={[styles.primaryBtn, { opacity: 0.4 }]} pointerEvents="none">

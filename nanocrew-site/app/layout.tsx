@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     'Nano Crew turns a conversation into a real clothing brand: a shop, a custom storefront website, and the content to sell it — generated for you, run from your phone.',
   openGraph: {
     title: 'Nano Crew',
-    description: 'AI-native creator commerce. Talk to Venus; get a brand, a shop, and a website.',
+    description: 'AI-native creator commerce. Talk to Eve; get a brand, a shop, and a website.',
     type: 'website',
   },
   icons: { icon: '/nc-icon.png' },

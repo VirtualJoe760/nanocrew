@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const merged = await mergeRevisionBranch(rev.slug, rev.branch);
-    if (!merged) return corsJson({ error: 'merge conflict — ask Venus to redo this change' }, { status: 409 });
+    if (!merged) return corsJson({ error: 'merge conflict — ask Eve to redo this change' }, { status: 409 });
     await db.update(schema.storeRevisions).set({ status: 'approved' }).where(eq(schema.storeRevisions.id, rev.id));
     return corsJson({ status: 'approved' });
   } catch (e) {

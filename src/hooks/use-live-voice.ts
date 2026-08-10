@@ -6,7 +6,7 @@ import { apiUrl } from '@/lib/api';
 
 export interface UseLiveVoice {
   state: LiveState;
-  /** Running transcript of what Venus is saying (for captions). */
+  /** Running transcript of what Eve is saying (for captions). */
   venusText: string;
   /** Running transcript of what the user just said. */
   userText: string;
@@ -32,14 +32,14 @@ export interface UseLiveVoice {
 }
 
 /**
- * React wrapper around LiveVoiceSession. Gemini Live is open-mic + VAD: once started, Venus
+ * React wrapper around LiveVoiceSession. Gemini Live is open-mic + VAD: once started, Eve
  * listens continuously, replies, and the user can interrupt by talking — a flowing conversation,
  * no push-to-talk. Caller controls start/stop (e.g. on interview focus / pause).
  */
 export function useLiveVoice(opts: {
   accessToken: string | undefined;
   userName?: string;
-  /** No stores yet → Venus introduces herself on her first line. */
+  /** No stores yet → Eve introduces herself on her first line. */
   firstTime?: boolean;
   voiceName?: string;
   /** Override the persona/greeting + drop the brand tool — for non-build flows (e.g. editing a site). */
@@ -122,7 +122,7 @@ export function useLiveVoice(opts: {
     const s = sessionRef.current;
     if (!s || finalizing || !opts.accessToken) return;
     const messages = s.getTranscript();
-    if (!messages.length) { setError('Talk to Venus a bit first, then build your brand.'); return; }
+    if (!messages.length) { setError('Talk to Eve a bit first, then build your brand.'); return; }
     setFinalizing(true);
     setError(null);
     try {

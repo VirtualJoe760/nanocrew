@@ -1,8 +1,8 @@
 // THE site component vocabulary — Nano Crew's plain-English names for the parts of a brand
-// storefront, what each part IS, and concrete ways a creator can adjust it. Venus uses this in the
+// storefront, what each part IS, and concrete ways a creator can adjust it. Eve uses this in the
 // live-site critique view (lib/live-voice.ts `critiqueInstruction`) to TEACH: a creator circles
 // something, asks "what's this / I don't know what it's called / help me with this section", and
-// Venus names it in OUR vocabulary, explains it in a sentence, and offers a few adjustment ideas.
+// Eve names it in OUR vocabulary, explains it in a sentence, and offers a few adjustment ideas.
 //
 // This is the user-facing explanation layer (app-side). It complements — and will eventually align
 // with — the declarative `components.json` block manifest in docs/storefront/COMPONENT_SYSTEM.md
@@ -16,7 +16,7 @@ export type VocabEntry = {
   name: string;
   /** One plain sentence: what this part of the site is, in a creator's words. */
   what: string;
-  /** Concrete, do-able adjustments — what Venus offers as ideas. */
+  /** Concrete, do-able adjustments — what Eve offers as ideas. */
   adjust: string[];
 };
 
@@ -60,7 +60,7 @@ export const SITE_VOCABULARY: VocabEntry[] = [
     key: 'story',
     name: 'the Story / About section',
     what: 'the block that tells your brand story — usually a kicker, a paragraph or two, and sometimes a photo.',
-    adjust: ['rewrite the story (or let Venus draft it)', 'change the heading/kicker', 'add or swap the photo', 'move it higher or lower on the page'],
+    adjust: ['rewrite the story (or let Eve draft it)', 'change the heading/kicker', 'add or swap the photo', 'move it higher or lower on the page'],
   },
   {
     key: 'products',
@@ -142,7 +142,7 @@ export function vocabForHit(h: VocabHit): VocabEntry | null {
   return null;
 }
 
-/** A one-line context note the app pushes to Venus's live session the moment a circle closes, so she
+/** A one-line context note the app pushes to Eve's live session the moment a circle closes, so she
  *  knows WHAT was pointed at before the creator finishes asking. Falls back to the raw label. */
 export function venusContextForHit(h: VocabHit, fallbackLabel?: string | null): string {
   const v = vocabForHit(h);
@@ -151,7 +151,7 @@ export function venusContextForHit(h: VocabHit, fallbackLabel?: string | null): 
   return '(The creator just circled a spot on the page. If they ask what it is, ask them to describe it, then explain it and how they could change it.)';
 }
 
-/** Compact, prompt-embeddable rundown of the whole vocabulary — folded into Venus's critique
+/** Compact, prompt-embeddable rundown of the whole vocabulary — folded into Eve's critique
  *  instruction so she teaches consistent names + real adjustments without us re-listing them inline. */
 export const VOCABULARY_BRIEF: string = SITE_VOCABULARY.map(
   (v) => `• ${v.name} — ${v.what} Ways to adjust: ${v.adjust.join('; ')}.`,

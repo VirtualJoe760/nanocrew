@@ -549,11 +549,11 @@ export const storeRevisions = pgTable(
       .notNull()
       .references(() => stores.id, { onDelete: 'cascade' }),
     requestMd: text('request_md').notNull(), // the change request as markdown (distilled)
-    transcript: jsonb('transcript'), // raw Venus↔creator turns that produced this request — for troubleshooting "said vs captured"
+    transcript: jsonb('transcript'), // raw Eve↔creator turns that produced this request — for troubleshooting "said vs captured"
     // Structured outcome of the WHOLE submit so each request is durable + debuggable:
     // { images: [{ slot, prompt, generated, placed, error? }], edits: string[], counts: { images, edits } }
     editPlan: jsonb('edit_plan'),
-    screenshots: jsonb('screenshots'), // annotated screenshot URLs the creator/Venus marked up
+    screenshots: jsonb('screenshots'), // annotated screenshot URLs the creator/Eve marked up
     status: revisionStatus('status').notNull().default('building'),
     branch: text('branch').notNull(),
     previewUrl: text('preview_url'),

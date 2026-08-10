@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const transcript = messages.map((m) => `${m.role === 'user' ? 'Creator' : 'Venus'}: ${m.text}`).join('\n');
+    const transcript = messages.map((m) => `${m.role === 'user' ? 'Creator' : 'Eve'}: ${m.text}`).join('\n');
     const res = await generate(ai, {
       model: MODELS[0],
       contents: [{ role: 'user', parts: [{ text: `Conversation:\n${transcript}\n\nReturn the JSON plan.` }] }],

@@ -176,7 +176,7 @@ export function SceneShortComposer({
             <View style={styles.center}>
               <ActivityIndicator color={pal.accent} />
               <ThemedText type="subtitle" style={styles.white}>Filming your short…</ThemedText>
-              <ThemedText type="small" style={styles.dim}>Venus is rendering an on-model scene and animating it with {model?.label}. This takes a few minutes — keep this open.</ThemedText>
+              <ThemedText type="small" style={styles.dim}>Eve is rendering an on-model scene and animating it with {model?.label}. This takes a few minutes — keep this open.</ThemedText>
             </View>
           ) : phase === 'done' && result ? (
             <ScrollView contentContainerStyle={styles.scroll}>

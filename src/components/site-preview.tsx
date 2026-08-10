@@ -41,7 +41,7 @@ function getCaptureRef(): CaptureRef | null {
 }
 
 // A live, navigable view of the creator's storefront — the in-app "iframe". In critique mode
-// it becomes a turn-based editor driven by Venus: tap the orb to talk, tap the pen to circle a
+// it becomes a turn-based editor driven by Eve: tap the orb to talk, tap the pen to circle a
 // spot (one circle per tap, marks stay anchored to the page as you scroll), describe the change,
 // tap the orb to finish. Each turn becomes one itemised edit; Submit ships the batch (markdown +
 // circled regions) to Claude on the VPS, who applies it on a branch (preview → approve → main).
@@ -93,7 +93,7 @@ function P(){window.ReactNativeWebView.postMessage(JSON.stringify({__nanoScroll:
 var t=false;window.addEventListener('scroll',function(){if(t)return;t=true;requestAnimationFrame(function(){t=false;P();});},{passive:true});P();})();true;`;
 
 /** A WebView hit-test: resolve a circled point to what it lands on — the most SPECIFIC thing first
- *  (a button/link + its label), then the block/section, nearest heading, or nearby text — so Venus
+ *  (a button/link + its label), then the block/section, nearest heading, or nearby text — so Eve
  *  can tell Claude WHAT was circled ("the 'Shop the drop' button"), not just where. */
 function hitScript(i: number, x: number, y: number): string {
   return `(function(){function P(o){o.__nanoHit=true;o.i=${i};window.ReactNativeWebView.postMessage(JSON.stringify(o));}
@@ -143,7 +143,7 @@ function describeHit(d: Hit): string | null {
 }
 
 // Review mode: a read-only preview of a pending change with two choices — keep editing (which loads
-// the Venus editor) or approve. NO Venus until the creator opts in via "Continue editing".
+// the Eve editor) or approve. NO Eve until the creator opts in via "Continue editing".
 type Review = { onContinueEditing: () => void; onApprove: () => void; approving?: boolean };
 
 export function SitePreview({
@@ -196,9 +196,9 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
   const cur = useRef<Pt[]>([]);
   const [, tick] = useState(0);
 
-  // Talk + Venus's voice — continuous Gemini Live (no more record→transcribe→TTS). The session
+  // Talk + Eve's voice — continuous Gemini Live (no more record→transcribe→TTS). The session
   // listens the whole time this view is open; whatever the creator says becomes an edit (below),
-  // and Venus converses in real time. Tap the orb to pause/resume listening.
+  // and Eve converses in real time. Tap the orb to pause/resume listening.
   const [paused, setPaused] = useState(false);
   const venus = useLiveVoice({
     accessToken: critique?.token,
@@ -307,7 +307,7 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
       if (d?.__nanoHit === true && typeof d.i === 'number') {
         const label = describeHit(d);
         setDraftHits((h) => ({ ...h, [d.i as number]: label }));
-        // Tell Venus (live) WHAT was just circled, silently, so "what's this?" / "help me with this
+        // Tell Eve (live) WHAT was just circled, silently, so "what's this?" / "help me with this
         // part" is answered with the section in hand. No-ops on web (no live session there).
         if (!IS_WEB) venus.sendContext(venusContextForHit(d, label));
       }
@@ -339,7 +339,7 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftStrokes.length]);
 
-  // Surface Venus's connection errors as the on-screen note.
+  // Surface Eve's connection errors as the on-screen note.
   useEffect(() => { if (venus.error) setNote(venus.error); }, [venus.error]);
   // Mic held by another app (an active phone/FaceTime call) — tell them plainly to end the call.
   useEffect(() => {
@@ -607,7 +607,7 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
           ) : null}
         </View>
 
-        {/* Review mode — read-only preview + two choices. NO Venus here; she only wakes on "Continue
+        {/* Review mode — read-only preview + two choices. NO Eve here; she only wakes on "Continue
             editing", which swaps this for the critique panel below. */}
         {review && !critique ? (
           <View style={[styles.panel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
@@ -623,7 +623,7 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
           </View>
         ) : null}
 
-        {/* Venus panel — the orb is the focus; subtitles below; a faint control hint */}
+        {/* Eve panel — the orb is the focus; subtitles below; a faint control hint */}
         {critique ? (
           <View style={[styles.panel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             {edits.length ? (
@@ -697,7 +697,7 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setReviewing(false)} />
           <View style={[styles.reviewCard, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.reviewHead}>
-              <ThemedText type="subtitle" style={styles.white}>Send to Venus</ThemedText>
+              <ThemedText type="subtitle" style={styles.white}>Send to Eve</ThemedText>
               <Pressable onPress={() => setReviewing(false)} hitSlop={12}>
                 <ThemedText type="code" style={styles.dim}>close ✕</ThemedText>
               </Pressable>

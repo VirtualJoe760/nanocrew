@@ -424,7 +424,7 @@ export async function sendBrandLive(opts: {
     cta: { label: 'Visit your store', url: opts.url },
     body:
       p(`${esc(opts.brandName)} is now live and open for orders.`, { html: true }) +
-      p(`Share your link, post your products, and start selling. You can keep editing your site and adding products anytime — just talk to Venus.`, { muted: true }),
+      p(`Share your link, post your products, and start selling. You can keep editing your site and adding products anytime — just talk to Eve.`, { muted: true }),
   });
 }
 

@@ -253,7 +253,7 @@ function briefAuthorInput(input: ProvisionInput, template: string, templateMd: s
   const { brand } = input;
   const convo = input.transcript
     .slice(-30)
-    .map((m) => `${m.role === 'user' ? 'creator' : 'Venus'}: ${m.text}`)
+    .map((m) => `${m.role === 'user' ? 'creator' : 'Eve'}: ${m.text}`)
     .join('\n');
   return `Template chosen (from designStyle "${brand.designStyle}"): ${template}
 
@@ -337,7 +337,7 @@ export async function authorBrandBrief(input: ProvisionInput, template: string):
 /**
  * Render every text artifact that steers one build, for LOCAL REVIEW (the `--dry` path of
  * scripts/studio-flow.ts). Returns the author's system prompt + input (with the template docs
- * Venus reads), the authored 01-BRAND.md, 02-TEST.md, and brand.json — exactly what the forge
+ * Eve reads), the authored 01-BRAND.md, 02-TEST.md, and brand.json — exactly what the forge
  * would receive. No repo, no forge, no deploy; one Gemini call (for the brief).
  */
 export async function renderProvisionArtifacts(input: ProvisionInput): Promise<{

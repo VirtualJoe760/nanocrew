@@ -39,7 +39,7 @@ import { supabase } from '@/lib/supabase';
 type StoreRow = { id: string; name: string; slug: string; status: string };
 
 const DANGER = '#e24b4a';
-// Internal test tool: the Venus Lab (avatar appearance sandbox) is surfaced as a row on the Account
+// Internal test tool: the Eve Lab (avatar appearance sandbox) is surfaced as a row on the Account
 // screen, visible ONLY to this tester account. Not a real feature — a private dev surface.
 const VENUS_LAB_EMAIL = 'josephsardella@gmail.com';
 const WORDMARK = 'Jost-Thin'; // the "Nano Crew" brand title — Thin 100
@@ -417,8 +417,8 @@ function AccountScreen() {
                     <Card>
                       <Row
                         first
-                        title="Venus Lab (test)"
-                        subtitle="Preview & iterate on Venus’s avatar"
+                        title="Eve Lab (test)"
+                        subtitle="Preview & iterate on Eve’s avatar"
                         trailing="›"
                         tint
                         onPress={() => setShowVenusLab(true)}
@@ -454,7 +454,7 @@ function AccountScreen() {
                   <ThemedText glow style={[styles.joinWordmark, { color: theme.text }]}>Nano Crew</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary" style={styles.joinSub}>
                     {isSignup
-                      ? 'Talk to Venus, launch an AI-designed clothing brand, and sell it anywhere — all from your phone.'
+                      ? 'Talk to Eve, launch an AI-designed clothing brand, and sell it anywhere — all from your phone.'
                       : 'Sign in to sync your designs, stores and sales.'}
                   </ThemedText>
                 </View>
@@ -591,7 +591,7 @@ function AccountScreen() {
       {session ? <Purchases visible={showPurchases} onClose={() => setShowPurchases(false)} /> : null}
       {session ? <Paywall visible={showPaywall} onClose={() => setShowPaywall(false)} token={session.access_token} reason="manage" /> : null}
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
-      {/* Gated internal test tool — full-screen Venus avatar Lab. "‹ back" returns here to Account. */}
+      {/* Gated internal test tool — full-screen Eve avatar Lab. "‹ back" returns here to Account. */}
       {isVenusTester ? (
         <Modal
           visible={showVenusLab}

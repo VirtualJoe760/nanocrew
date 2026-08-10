@@ -11,7 +11,7 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // The mini-CMS: change a brand site's words, colors, and fonts directly — instant, no forge run and
 // no rebuild. Writes to /api/creator/site-config; the storefront reads it live. This is the DIRECT
-// path (precise, deterministic). Open-ended redesigns still go through the Venus chat in the console.
+// path (precise, deterministic). Open-ended redesigns still go through the Eve chat in the console.
 
 type SiteConfig = {
   copy?: Record<string, string>;
@@ -188,7 +188,7 @@ export function SiteEditor({
       if (!res.ok) throw new Error();
       setNote(
         renamed
-          ? 'Saved. Renamed to ' + trimmed + ' everywhere. Your old logo was removed (it showed the old name) — remake it in the Design tab or ask Venus. Your site is rebuilding now.'
+          ? 'Saved. Renamed to ' + trimmed + ' everywhere. Your old logo was removed (it showed the old name) — remake it in the Design tab or ask Eve. Your site is rebuilding now.'
           : 'Saved — live on your site now. Reload the site to see it.',
       );
       onSaved?.(renamed ? trimmed : undefined);
@@ -222,7 +222,7 @@ export function SiteEditor({
               automaticallyAdjustKeyboardInsets>
               <ThemedText type="small" style={styles.dim}>
                 Your site&apos;s current text, colors &amp; fonts — edit any of them. Changes apply
-                instantly, no rebuild. For a bigger redesign, chat with Venus in the console.
+                instantly, no rebuild. For a bigger redesign, chat with Eve in the console.
               </ThemedText>
 
               {/* TEXT */}

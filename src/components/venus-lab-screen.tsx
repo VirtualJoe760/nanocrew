@@ -7,8 +7,8 @@ import { setVenusOrbShape, type VenusOrbShape } from '@/components/backgrounds/v
 import { apiFetch, readJson } from '@/lib/api';
 import { pushSpeechChunk } from '@/lib/venus-speech-level';
 
-// THE VENUS LAB — the live venus scenes full-screen, for iterating on Venus's appearance in
-// isolation. Surfaced as a TEST tool from the Account screen (gated to the Venus-Lab tester
+// THE VENUS LAB — the live venus scenes full-screen, for iterating on Eve's appearance in
+// isolation. Surfaced as a TEST tool from the Account screen (gated to the Eve-Lab tester
 // email); `onBack` returns to the Account page. The avatar comes from <VenusAvatar>, a COMPONENT
 // split: venus-avatar.web.tsx renders the real R3F scene on web, venus-avatar.tsx on native
 // (expo-gl). Full guide: docs/studio/VENUS_AVATAR.md.
@@ -29,7 +29,7 @@ type Panel = 'stage' | 'shape' | 'voice';
 
 // Quick lines to audition (so you can sample voices without typing each time).
 const AUDITION_LINES = [
-  "Hi, I'm Venus — how do I sound?",
+  "Hi, I'm Eve — how do I sound?",
   "Let's build your brand — what are we making today?",
   'Your store is live. Go check it out!',
 ];
@@ -93,7 +93,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
   const [shape, setShape] = useState<VenusOrbShape>('orb');
   const [panel, setPanel] = useState<Panel>('stage');
   const [collapsed, setCollapsed] = useState(false);
-  const [line, setLine] = useState("Hi, I'm Venus — how do I sound?");
+  const [line, setLine] = useState("Hi, I'm Eve — how do I sound?");
   const [voice, setVoice] = useState('Kore');
   const [tone, setTone] = useState('british robot');
   const [speaking, setSpeaking] = useState(false);
@@ -225,7 +225,7 @@ export default function VenusLabScreen({ onBack }: { onBack: () => void }) {
                 <TextInput
                   value={line}
                   onChangeText={setLine}
-                  placeholder="Type a line for Venus…"
+                  placeholder="Type a line for Eve…"
                   placeholderTextColor="rgba(207,232,243,0.4)"
                   style={styles.speakInput}
                   returnKeyType="send"

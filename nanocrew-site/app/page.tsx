@@ -4,8 +4,8 @@ import { WaitlistForm } from './waitlist-form';
 const FEATURES = [
   {
     n: '01',
-    title: 'Talk to Venus',
-    body: 'Describe your brand out loud — or type it. Venus interviews you and designs the whole identity: name, voice, logo, palette.',
+    title: 'Talk to Eve',
+    body: 'Describe your brand out loud — or type it. Eve interviews you and designs the whole identity: name, voice, logo, palette.',
   },
   {
     n: '02',
