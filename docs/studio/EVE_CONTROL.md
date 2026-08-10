@@ -262,11 +262,17 @@ interview demoted to a module she *enters*. Tell her plainly what she can do, in
 - **Verified:** the buildReady cue still matches, the DELIVERY voice paragraph is untouched, tsc clean.
   Conversational QUALITY is unverifiable from code — it needs a real spoken session.
 
-### P2 — A digest she can actually discuss
+### P2 — A digest she can actually discuss — ✅ briefing SHIPPED 2026-08-01 (sales-series still open)
 Feed the real numbers into her context instead of a "say the headline" nudge: extend the `digest`
 case in `eve-home.tsx` to `sendContext` the tiles/values so follow-up questions work.
 - Then add **`GET /api/creator/sales-series`** for trends — *already named as a needed route in the
   capability tree above*, so this is on-plan, not new scope. Units live in `order_items.quantity`.
+- **Shipped:** `digestBriefing()` (`src/lib/eve-digest.ts`) turns the same rows into a spoken briefing —
+  totals + per-brand figures + an explicit LIMITS clause so she declines what she can't know instead of
+  estimating revenue. `openDigest()` now RESOLVES with the rows; both the voice intent and the
+  "View your digest" button brief her identically. Verified by running the pure function.
+- **Still open:** `GET /api/creator/sales-series` for trends ("how was last week?"). `/api/creator/stats`
+  is already IDOR-safe via `accessibleStoreIds` — the new route must do the same.
 - **Rules:** per-creator reads via `tenant.ts` (§1 IDOR class). Authed route ⇒ **DB query before any
   outbound `fetch()`** (§1, the persistent-Node/postgres-js constraint).
 

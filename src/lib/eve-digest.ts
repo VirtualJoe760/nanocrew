@@ -60,3 +60,31 @@ export function buildDigest(stores: DigestStore[]): Digest {
 
   return { headline, tiles, suggestion };
 }
+
+/** The same numbers, written for EVE'S EAR rather than the screen.
+ *
+ *  The digest used to render silently while she was told only "give them the headline" — she had no
+ *  figures, so any follow-up ("how's Urban doing?", "how much last month?") was a guess. This hands
+ *  her the real per-brand values to speak from, plus an explicit boundary: the digest is all-time
+ *  orders/revenue + a 30-day view count and NOTHING else, so anything time-sliced or per-product she
+ *  must decline rather than invent. Wrong revenue spoken confidently is the worst failure here.
+ *
+ *  Kept compact on purpose — this is injected into a LIVE audio session, not a report. */
+export function digestBriefing(stores: DigestStore[]): string {
+  if (!stores.length) {
+    return '(Their digest is on screen and they have no brands yet. Say so warmly in one sentence and offer to start one. Invent nothing.)';
+  }
+  const orders = stores.reduce((n, s) => n + (s.orders || 0), 0);
+  const revenue = stores.reduce((n, s) => n + (s.revenueCents || 0), 0);
+  const views = stores.reduce((n, s) => n + (s.views30d || 0), 0);
+  const per = stores
+    .map((s) => `"${s.name}" (${s.status}): ${s.orders || 0} orders, ${money(s.revenueCents || 0)}, ${(s.views30d || 0).toLocaleString()} views/30d`)
+    .join('; ');
+  return [
+    '(Their digest is now on screen. These are the REAL figures — speak from them and invent nothing:',
+    `TOTALS: ${stores.length} brand${stores.length === 1 ? '' : 's'}, ${orders} order${orders === 1 ? '' : 's'}, ${money(revenue)} revenue all-time, ${views.toLocaleString()} views in the last 30 days.`,
+    `BY BRAND: ${per}.`,
+    'Give them the headline in one short sentence, then your read on it — what it means and what you would do next.',
+    'LIMITS: orders and revenue are ALL-TIME, views are the last 30 days. You do not have per-day/per-week trends, per-product sales, or any earlier period. If they ask for something outside that, say plainly that you do not have it yet — never estimate.)',
+  ].join(' ');
+}

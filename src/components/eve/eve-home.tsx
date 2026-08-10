@@ -27,7 +27,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
-import { buildDigest, type Digest, type DigestStore } from '@/lib/eve-digest';
+import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
 import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
@@ -196,17 +196,26 @@ export function EveHome({
   // The digest — Eve's proactive status report. Fetched lazily the first time it's opened.
   const [digest, setDigest] = useState<Digest | 'loading' | null>(null);
   const [showDigest, setShowDigest] = useState(false);
-  const openDigest = useCallback(async () => {
+  // The raw rows behind the digest, kept so Eve can be BRIEFED with the real figures (and re-briefed
+  // on a repeat ask without refetching). Rendering alone left her guessing at follow-ups.
+  const digestStores = useRef<DigestStore[] | null>(null);
+  /** Opens the digest and RESOLVES with the rows, so the caller can hand Eve the actual numbers. */
+  const openDigest = useCallback(async (): Promise<DigestStore[]> => {
     setShowDigest(true);
     setDigest((cur) => (cur && cur !== 'loading' ? cur : 'loading'));
-    if (digest && digest !== 'loading') return; // already have it
-    if (!session?.access_token) { setDigest(buildDigest([])); return; }
+    if (digest && digest !== 'loading' && digestStores.current) return digestStores.current; // already have it
+    if (!session?.access_token) { setDigest(buildDigest([])); digestStores.current = []; return []; }
     try {
       const r = await fetch(apiUrl('/api/creator/stats'), { headers: { Authorization: `Bearer ${session.access_token}` } });
       const d = (await r.json().catch(() => ({}))) as { stores?: DigestStore[] };
-      setDigest(buildDigest(d.stores ?? []));
+      const rows = d.stores ?? [];
+      setDigest(buildDigest(rows));
+      digestStores.current = rows;
+      return rows;
     } catch {
       setDigest(buildDigest([]));
+      digestStores.current = [];
+      return [];
     }
   }, [digest, session]);
 
@@ -297,12 +306,14 @@ export function EveHome({
               '(Writing posts by voice lands soon — in one sentence, tell them they can write posts from the Studio composer for now.)',
             );
             return;
-          case 'digest':
-            void openDigest();
-            live.sendContext(
-              "(Their digest is now on screen. In one short sentence, give them the headline — how they're doing — and offer a next step.)",
-            );
+          case 'digest': {
+            // Brief her with the ACTUAL figures, not "say the headline" — otherwise every follow-up
+            // ("how's Urban doing?") is a guess. digestBriefing also states the data's limits so she
+            // declines what she can't know instead of estimating revenue.
+            const rows = await openDigest();
+            live.sendContext(digestBriefing(rows));
             return;
+          }
           case 'done':
             onRequestClose();
             return;
@@ -627,7 +638,11 @@ export function EveHome({
                   <ThemedText type="smallBold" style={{ color: p.accent }}>🎙  Build your brand</ThemedText>
                 </Pressable>
               ) : (
-                <Pressable onPress={() => void openDigest()} style={({ pressed }) => [styles.guideCta, { borderColor: `${p.dim}66` }, pressed && { opacity: 0.7 }]}>
+                // Tapping it briefs her too (no-op when she isn't connected) — otherwise she's blind
+                // to what the creator is looking at and can't answer a spoken follow-up about it.
+                <Pressable
+                  onPress={() => void openDigest().then((rows) => live.sendContext(digestBriefing(rows)))}
+                  style={({ pressed }) => [styles.guideCta, { borderColor: `${p.dim}66` }, pressed && { opacity: 0.7 }]}>
                   <ThemedText type="code" style={{ color: p.dim }}>View your digest</ThemedText>
                 </Pressable>
               )}
