@@ -6,7 +6,7 @@ Store Connect; the copy/answers below are ready to paste. Mirrors `PLAY_STORE.md
 
 ## 0. Status / prereqs
 - ✅ Binary in ASC (build 19, processing → TestFlight).
-- ✅ IAP configured (server verification live on Railway; StoreKit 2 in the binary; products
+- ✅ IAP configured (server verification live on Cloud Run; StoreKit 2 in the binary; products
   `READY_TO_SUBMIT`). **Attach the IAP products to this version** when submitting (first review
   covers app + IAP together).
 - ✅ Privacy Policy live: `https://nanocrew-api.vercel.app/privacy` · Terms: `/terms`.
@@ -23,13 +23,13 @@ Store Connect; the copy/answers below are ready to paste. Mirrors `PLAY_STORE.md
 ## 2. Version metadata
 **Promotional text (≤170):**
 ```
-Talk to Venus, our AI, and turn a conversation into a real clothing brand — design products, open a shop, and sell the same day. Made on demand, shipped for you.
+Talk to Eve, our AI, and turn a conversation into a real clothing brand — design products, open a shop, and sell the same day. Made on demand, shipped for you.
 ```
 **Description:**
 ```
 Nano Crew turns a conversation into a real clothing brand.
 
-Talk to Venus, our AI brand consultant, and she designs your brand — name, voice, palette, and
+Talk to Eve, our AI brand consultant, and she designs your brand — name, voice, palette, and
 look. Generate product graphics by prompt, drop them in your shop, and start selling the same day.
 Every order is printed on demand and shipped for you, so you never touch inventory.
 
@@ -54,8 +54,8 @@ A refreshed look with our new brand mark, smoother brand creation, and a new bol
 ## 3. Screenshots (you supply; [CLAUDE] can capture from the web build / simulator)
 Required: **6.7"** (1290×2796). Optional but recommended: **6.5"** (1242×2688). No iPad set unless
 you mark iPad support. Suggested shots from build 19:
-1. Studio — the "Meet Venus" welcome (new NC logo).
-2. Venus interview / "BRAND COMPILED" palette screen.
+1. Studio — the "Meet Eve" welcome (new NC logo).
+2. Eve interview / "BRAND COMPILED" palette screen.
 3. A live brand storefront (e.g. the street template hero).
 4. Market / in-app shop.
 5. Design tab — AI product canvas.
@@ -83,17 +83,17 @@ questions as "infrequent/mild" if prompted; expected rating **4+**.
 The app **requires sign-in**, so reviewers need a working account that can see the full flow without
 paying. **[YOU] before submitting:**
 1. Create a reviewer account (e.g. `appreview@nanocrew.dev`) by signing up in the app.
-2. Add that email to `COMP_EMAILS` on Railway → it gets top-tier entitlements (no paywall, no real
+2. Add that email to `COMP_EMAILS` on Cloud Run → it gets top-tier entitlements (no paywall, no real
    charges) so the reviewer can create a brand + see a website end-to-end. *(I can confirm it's comp
    once you add it.)*
 3. Put the credentials in **App Review Information → Sign-In required → username/password**.
 
 **Review notes (paste):**
 ```
-Nano Crew lets a creator build a clothing brand with an AI assistant (Venus), then sell via
+Nano Crew lets a creator build a clothing brand with an AI assistant (Eve), then sell via
 print-on-demand. Demo account is comped (no charge) so you can explore the full flow.
 
-To try it: open Studio → "Build a new brand" → tap the keyboard icon to type answers to Venus →
+To try it: open Studio → "Build a new brand" → tap the keyboard icon to type answers to Eve →
 after the brand compiles, tap "Create my store".
 
 In-App Purchases: subscription plans (Starter/Pro/Advanced) and credit packs are digital goods sold

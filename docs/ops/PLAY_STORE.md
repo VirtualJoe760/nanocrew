@@ -72,7 +72,7 @@ shared with third parties for ads," purpose = App functionality / Account manage
 ```
 Nano Crew turns a conversation into a real clothing brand.
 
-Talk to Venus, our AI, and she designs your brand — name, voice, and look. Generate products by
+Talk to Eve, our AI, and she designs your brand — name, voice, and look. Generate products by
 prompt, drop them in your shop, and start selling the same day. Every order is printed on demand
 and shipped for you, so you never touch inventory.
 

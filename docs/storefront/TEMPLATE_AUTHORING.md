@@ -44,7 +44,7 @@ brand's data flows in:
 2. **Keep the contract** above intact (data layer, live SEO, favicon, pages, TEMPLATE.md/VOCABULARY.md).
 3. **Register it** so the system can pick it (single source of truth = `src/lib/provision.ts`):
    - **New design style?** add the style to the `designStyle` union in `src/lib/interview.ts`, the
-     Venus tool schema in `src/lib/live-voice.ts`, the `TEMPLATE_BY_STYLE` map in
+     Eve tool schema in `src/lib/live-voice.ts`, the `TEMPLATE_BY_STYLE` map in
      `src/lib/provision.ts`, **and** the branding picker in `src/components/brand-review.tsx` (add a
      wireframe + tag so it shows live during branding — that's how templates surface to the creator).
    - **Alternate for an existing style?** map it in `TEMPLATE_BY_STYLE` (a future multi-template-per-

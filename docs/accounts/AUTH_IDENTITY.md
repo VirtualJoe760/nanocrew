@@ -71,7 +71,7 @@ manufacturer-hold-harmless / generation-records clause) is at `/terms`.
 Both deployable units accept the **same** Supabase access token in `Authorization: Bearer …`
 and return the same `AuthedUser { id, email, name? }`, but they verify it differently:
 
-### App backend (Railway) — verifies LOCALLY · `src/lib/auth.ts`
+### App backend (Cloud Run) — verifies LOCALLY · `src/lib/auth.ts`
 
 `getUserFromRequest(req)` verifies the JWT's **ES256 signature against the project JWKS** using
 Web Crypto, with **zero network I/O in the hot path** (keys come from `SUPABASE_JWKS`, cached;
@@ -81,7 +81,7 @@ and `iss === <SUPABASE_URL>/auth/v1`, and pins `alg === 'ES256'` (no `none`/HS c
 Why local: the old approach called `/auth/v1/user` on every request, but on EAS Hosting
 (Cloudflare Workers) opening a postgres socket *after* an outbound `fetch()` in the same request
 reliably failed — breaking every authed DB route. Verifying locally means authed routes make no
-fetch before their DB query. (The backend has since moved to Railway, but local verify stays —
+fetch before their DB query. (The backend has since moved to Cloud Run, but local verify stays —
 it's strictly better.)
 
 `getUserFromRequest` also honors a **trusted server-to-server path**: a valid `x-internal-key`

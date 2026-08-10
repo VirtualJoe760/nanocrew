@@ -1,4 +1,4 @@
-# Build Flow — talk to Venus, get a brand, refine it, publish
+# Build Flow — talk to Eve, get a brand, refine it, publish
 
 The creator's end-to-end arc. This doc is the **narrative spine**: what the creator experiences and
 which system handles each step. It deliberately does **not** re-explain the pipeline mechanics —
@@ -16,7 +16,7 @@ revise) and [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](../storefront/STOREF
 ## The arc at a glance
 
 ```
-1. INTERVIEW   creator talks to Venus (Studio tab)        → BrandResult + transcript
+1. INTERVIEW   creator talks to Eve (Studio tab)        → BrandResult + transcript
 2. BUILD       brief authored → forge robot builds a       → presentable site w/ TEMPORARY imagery
                presentable site (templates + tokens)         (store + fulfilment already wired)
 3. REFINE      creator makes real products / model shots   → real assets PROGRESSIVELY REPLACE
@@ -25,24 +25,24 @@ revise) and [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](../storefront/STOREF
                                                               active, mirrored in the Nano Crew app
 ```
 
-## 1 · Interview — the creator talks to Venus
+## 1 · Interview — the creator talks to Eve
 
 Entry point is the **Studio tab** (`src/app/studio.tsx`). It's gated, not auto-launched, and never
-starts Venus talking before the creator is ready. Flow: pick a voice (`mode: 'cta'`) → a **primer**
-(`mode: 'primer'`) that previews what Venus will ask and offers two ways in — **"Talk with Venus"**
+starts Eve talking before the creator is ready. Flow: pick a voice (`mode: 'cta'`) → a **primer**
+(`mode: 'primer'`) that previews what Eve will ask and offers two ways in — **"Talk with Eve"**
 (recommended; requests the mic *here*, the only place we prompt) or **"I'd rather type"** (starts in
-keyboard mode, no mic) — → the interview (`mode: 'interview'`), where Venus greets. Returning creators
+keyboard mode, no mic) — → the interview (`mode: 'interview'`), where Eve greets. Returning creators
 with a store land on the dashboard.
 
 **Voice is push-to-talk (hold-to-talk):** the creator **holds the orb to record and releases to
-send** (`beginHold`/`endHold`); holding while Venus is speaking interrupts her and starts recording.
+send** (`beginHold`/`endHold`); holding while Eve is speaking interrupts her and starts recording.
 This is deliberate — the old auto-listen/silence-detection turn-taking raced the audio session (she'd
 return text but not speak, or not respond at all), so it was removed for deterministic turns. After she
 finishes a reply the orb just goes **idle** and waits for the next hold. The conversation also
 **auto-pauses when the Studio tab loses focus** (a `playSpeech` focus/pause guard), and there's a
 prominent **Pause/Resume pill** beneath the orb (plus the header control); holding the orb resumes.
 
-**Venus** is the brand consultant. She runs as a realtime **Gemini Live** speech-to-speech session
+**Eve** is the brand consultant. She runs as a realtime **Gemini Live** speech-to-speech session
 (`src/lib/live-voice.ts` + `hooks/use-live-voice.ts`; persona prompt in `live-voice.ts`), open-mic with
 a typed fallback into the same session. When she's gathered enough she calls/extracts the brand via
 `/api/extract-brand` (which reuses `interview.ts` `interviewSystem`/`parseTurn`). She's a warm,
@@ -59,7 +59,7 @@ consumes (`src/lib/interview.ts`):
 - `designSystem`: `palette` (exactly 5 roled hexes), `typography`, `texture`, `motion`
 - `products` and `logo.direction`
 - **`siteNotes`** — the creator's site wishes kept **verbatim** ("a slideshow up top", "a video
-  behind the logo"). These are the only freeform layout intent that survives into the build. **Venus
+  behind the logo"). These are the only freeform layout intent that survives into the build. **Eve
   translates them to concrete blocks** via the template's `VOCABULARY.md` when she authors the build
   brief (`authorBrandBrief`) — the forge receives named blocks, not the creator's loose words.
 
@@ -127,7 +127,7 @@ Postgres — the single source of truth — and fire-and-forgets a `revalidateSt
 so the live site self-heals to show the real catalogue. The creator never edits the brand repo to do
 this; the catalogue flows through the platform API.
 
-Site **look** edits (not catalogue) ride a different rail: the creator tells Venus "make the hero
+Site **look** edits (not catalogue) ride a different rail: the creator tells Eve "make the hero
 bigger", which enqueues a branch-based **revision** (Vercel preview → approve → merge). That's the
 storefront engine's revision path, not the design generator.
 
@@ -159,7 +159,7 @@ The fuller step turns a refined site into a launched brand with its own domain:
 
 | Step | Shape today | Quality today | Target |
 |---|---|---|---|
-| Interview | ✅ works (voice + text) | ✅ good — Venus captures intent incl. verbatim `siteNotes` | richer capture feeds a masterful build prompt |
-| Build | ✅ works (templates + forge) | ⚠️ weak — mail-merge brief, unconditioned robot, no self-check | Venus-authored prompt + conditioned robot + eyes ([FORGE_AI.md](FORGE_AI.md)) |
+| Interview | ✅ works (voice + text) | ✅ good — Eve captures intent incl. verbatim `siteNotes` | richer capture feeds a masterful build prompt |
+| Build | ✅ works (templates + forge) | ⚠️ weak — mail-merge brief, unconditioned robot, no self-check | Eve-authored prompt + conditioned robot + eyes ([FORGE_AI.md](FORGE_AI.md)) |
 | Refine | ✅ works | ✅ assets are strong; placeholder→real swap works | same, just less to fix because build starts stronger |
 | Publish | ✅ works | ✅ store/fulfilment/mirror solid | domain + go-live with a build that was great from step 2 |

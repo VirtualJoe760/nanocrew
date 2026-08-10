@@ -13,7 +13,7 @@ the AI agent (Claude) you'll be pairing with. Read it once; it'll save you a lot
 ## What this system is, and why
 
 **Nano Crew is AI-native creator commerce** (Expo / React Native, iOS + Android): a creator talks to
-**Venus** — a voice or typed AI brand consultant — and Nano Crew auto-generates a Printful-backed shop
+**Eve** — a voice or typed AI brand consultant — and Nano Crew auto-generates a Printful-backed shop
 *and* a per-brand storefront website, which they then design, sell, and edit by chatting. Its whole
 job is **generating brand websites from templates**, so the architecture *is* the product. If that
 architecture only lives in people's heads, brand sites drift, features ship inconsistently, and every
@@ -81,7 +81,7 @@ things if ignored:
   (`src/lib/tenant.ts`). Validating a *container* but trusting a client-supplied child id is the
   cross-tenant (IDOR) bug class; it leaks one brand's data to another.
 - **In an authed server route, never `fetch()` before the first database query.** On the persistent
-  Railway host this kills the DB connection — a footgun unique to our hosting.
+  Cloud Run host this kills the DB connection — a footgun unique to our hosting.
 - **Storefront templates hold no secrets and no payment code** — checkout proxies to the central API.
 - **Brand identity flows through one function** (`buildBrandPatch`). Copy is data — never hardcode a
   headline. Don't hand-edit one surface.

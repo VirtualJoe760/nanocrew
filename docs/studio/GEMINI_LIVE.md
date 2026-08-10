@@ -1,12 +1,12 @@
-# Venus on Gemini Live — realtime voice
+# Eve on Gemini Live — realtime voice
 
-**Status: SHIPPED — migration complete; the legacy turn-based system is fully removed.** Venus runs on
+**Status: SHIPPED — migration complete; the legacy turn-based system is fully removed.** Eve runs on
 **Gemini Live** realtime speech-to-speech (`lib/live-voice.ts` + `hooks/use-live-voice.ts`,
 ephemeral token from `/api/voice-live-token`). The old turn-based pipeline (`/api/voice` → Gemini
 multimodal → ElevenLabs TTS) and its text fallback (`/api/interview`) have been **deleted**, along with
 all the client push-to-talk machinery in `studio.tsx` (`turn`/`beginHold`/`endHold`/`sendRecording`,
 the expo-audio recorder + metering, the word-timed karaoke, the `voiceId` picker, the `USE_LIVE` flag).
-The only post-interview voice line — the "your store is online" launch fanfare — is now Venus's same
+The only post-interview voice line — the "your store is online" launch fanfare — is now Eve's same
 Gemini voice via `/api/say` (see below), so ElevenLabs is gone from the interview path entirely. The
 brand brain (`lib/interview.ts` `interviewSystem`/`parseTurn`) survives, reused by `/api/extract-brand`
 to turn the spoken transcript into a `BrandResult`. The migration plan below is kept as history.
@@ -31,11 +31,11 @@ tighter rate limits; uses **Gemini's voices** (not ElevenLabs).
 ## Architecture — client-direct via ephemeral token
 
 ```
-app ──(authed)──► /api/voice-live-token (Railway)  ── mints ephemeral token (locked) ──►
+app ──(authed)──► /api/voice-live-token (Cloud Run)  ── mints ephemeral token (locked) ──►
 app ──(WebSocket, token as apiKey, v1alpha)──► Gemini Live  ◄── 16k PCM mic up / 24k PCM down ──►
 ```
 
-**Client-direct, NOT server-proxy.** Railway runs `expo serve` with **per-request isolation** (no
+**Client-direct, NOT server-proxy.** Cloud Run runs `expo serve` with **per-request isolation** (no
 persistent process — see the `production-shipping` memory), so it can't hold a relay WebSocket. The
 app connects straight to Gemini Live; the real key never leaves the server (only a short-lived token
 does). This is Google's recommended client-to-server pattern.
@@ -56,7 +56,7 @@ does). This is Google's recommended client-to-server pattern.
 - **Model:** `gemini-2.5-flash-native-audio-preview-12-2025` (native audio). Alt: `gemini-3.1-flash-live-preview`.
 - **Audio:** input raw **16kHz** LE PCM16 mono (`audio/pcm;rate=16000`); output **24kHz** PCM16.
 - **VAD:** automatic (open-mic). Tune `realtimeInputConfig.automaticActivityDetection.silenceDurationMs`
-  ≈ 600–800ms so Venus doesn't cut the creator off mid-thought.
+  ≈ 600–800ms so Eve doesn't cut the creator off mid-thought.
 - **Interruption:** on `serverContent.interrupted` → `queue.clearBuffers()` + flip to listening.
 - **Transcription:** `inputAudioTranscription:{}` + `outputAudioTranscription:{}` → drive captions.
 - **Voice:** `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` — **`Aoede`** (the known-good
@@ -69,7 +69,7 @@ does). This is Google's recommended client-to-server pattern.
   `liveSystemInstruction`, not these fields. To change her actual voice, pick from the native-audio-
   supported set via the in-app voice sampler (which tests against the live model), not blindly.
 - **System instruction:** our `interviewSystem()` — but it must drop the JSON-output contract (Live is
-  speech), and instruct Venus to **call the `save_brand` tool** when done.
+  speech), and instruct Eve to **call the `save_brand` tool** when done.
 - **Tools:** one `save_brand` function declaration → maps to `BrandResult` (`toBrandResult`).
 - **Session longevity (TODO):** `contextWindowCompression:{ slidingWindow:{} }` (15-min audio cap →
   unlimited) + `sessionResumption:{}` (capture `SessionResumptionUpdate.handle`; on `GoAway`/close,
@@ -78,7 +78,7 @@ does). This is Google's recommended client-to-server pattern.
 ## Security (TODO on the token endpoint)
 
 Mint with `liveConnectConstraints` locking **model + config** (responseModalities, speechConfig,
-systemInstruction, tools) and `lockAdditionalFields`, so a leaked token can't change Venus's brain or
+systemInstruction, tools) and `lockAdditionalFields`, so a leaked token can't change Eve's brain or
 model. Keep `uses: 1` + short `expireTime` (~30 min) + `newSessionExpireTime` (~1 min); rely on
 **session resumption** (not extra `uses`) for reconnects within the window.
 
@@ -100,7 +100,7 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
 4. Finalize → `setBrand(...)` → the existing compiled-brand → **Create my store** screen (unchanged).
 5. **Keyboard mode = a full-screen chat window** (`ChatInterview`), rendered as an overlay OVER the
    studio (outside the screen's KeyboardAvoidingView — nesting one dropped the composer under the tab
-   bar). Message bubbles for Venus + the creator, a streaming reply bubble, a composer that manages
+   bar). Message bubbles for Eve + the creator, a streaming reply bubble, a composer that manages
    its own inset off the live keyboard height (above the keyboard when open, above the native tab bar
    when closed). It routes typed turns into the SAME Live session (`live.sendText`) and renders
    `live.messages` (the committed transcript, emitted via `onTranscript`). It's a **text-only**
@@ -114,32 +114,32 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
 7. **Rollout:** gate behind a flag; if Live (preview) misbehaves we flip back to turn-based. Remove
    turn-based once Live is proven in the wild.
 
-**Greeting.** On `setupComplete` the session nudges Venus to open. Her first line is a casual
+**Greeting.** On `setupComplete` the session nudges Eve to open. Her first line is a casual
 *"Hi {first name}, how's your day going? Want to talk branding your store?"* (no name → just "Hi").
 The studio passes `userName` (from `user_metadata.name`/`full_name`) and `firstTime` (`!hasStore`) into
 `useLiveVoice` → `liveSystemInstruction`. When `firstTime`, she first introduces herself in one sentence
-(who she is + that she'll build their brand and store). There is **no AI/voice picker** — Venus on
+(who she is + that she'll build their brand and store). There is **no AI/voice picker** — Eve on
 Gemini is the only consultant, so a new creator lands straight on the interview primer.
 
 **She's only vocal in her view.** One declarative rule drives the session lifecycle: it runs *iff*
 `mode === 'interview' && !brand && !paused && focused && appActive`. `focused` comes from
 `useFocusEffect` (nav focus — leaving the Studio tab stops her) and `appActive` from an `AppState`
 listener (backgrounding via home button / app switcher stops her, even though nav focus hasn't
-changed). Keyboard mode keeps the session but mutes it. So Venus never speaks on another tab, in the
+changed). Keyboard mode keeps the session but mutes it. So Eve never speaks on another tab, in the
 background, on the dashboard, or once a brand is compiled.
 
 ## Finalize: extract from the transcript, NOT the `save_brand` tool call
 
 **The native-audio Live model does not reliably emit function calls.** The `scripts/live-flow-test.mjs`
 harness drove the full scripted interview against the real model + `save_brand` tool and proved it:
-Venus says *"I'm creating the brand now"* but **never invokes the tool** — no `toolCall` ever
+Eve says *"I'm creating the brand now"* but **never invokes the tool** — no `toolCall` ever
 arrives. Forcing it in the system prompt ("you MUST call save_brand") didn't fix it; native-audio
 models are simply unreliable at tool use.
 
 So we finalize **deterministically** instead of waiting on the tool:
 - `LiveVoiceSession` accumulates the spoken conversation (`transcript[]`, `getTranscript()`) from the
   input/output transcription events.
-- **Build is gated — Venus leads first.** The button is hidden until she's gathered the essentials
+- **Build is gated — Eve leads first.** The button is hidden until she's gathered the essentials
   (name + products + design style). The prompt tells her not to wrap early and to say "ready to build
   your brand" only once she has them; the studio latches `buildReady` when that cue lands (regex on her
   committed turns, floored at 3 creator answers, with a 6-answer safety net so it always eventually
@@ -166,7 +166,7 @@ So we finalize **deterministically** instead of waiting on the tool:
 
 ## Test plan
 
-1. **Spike (`/live-test`):** Start → mic permission → talk → hear Venus → transcripts update →
+1. **Spike (`/live-test`):** Start → mic permission → talk → hear Eve → transcripts update →
    tap **Build my brand** → `/api/extract-brand` returns a populated `BrandResult`. Watch Metro logs
    for the WS lifecycle. **This validates the audio bridge before touching Studio.**
 2. **Studio:** full interview → brand compiles → Create my store → live storefront. Interruption,
@@ -226,7 +226,7 @@ now — either repoint preview to a Gemini sample or drop it (follow-up; not blo
 ### Launch announcement (post-build) — `/api/say`
 After the brand is built, `createStore` plays a one-line "your store is online" fanfare. The Live
 session is already torn down by `finalize()` (`s.stop()` before hand-off), so this is a **one-shot**
-synthesized in Venus's **same Gemini voice** via [`/api/say`](../../src/app/api/say+api.ts) (model
+synthesized in Eve's **same Gemini voice** via [`/api/say`](../../src/app/api/say+api.ts) (model
 `gemini-2.5-flash-preview-tts`, voice **`Aoede`** — matching `LiveVoiceSession`), NOT the legacy
 ElevenLabs `/api/voice` `say` path (that switch was a jarring voice regression). Gemini TTS returns
 raw PCM16/24k mono; `/api/say` WAV-wraps it server-side and `playSpeech(audio, 'wav')` plays it. The
@@ -250,7 +250,7 @@ supplementary context for provisioning.
 The same Live session powers the Console's **Edit site** composer (`studio-composer.tsx`). The session
 is parameterized — `useLiveVoice({ instruction, greeting, enableBrandTool })` — so it can drop the
 `save_brand` tool and swap in `editSiteInstruction(brandName)` + `EDIT_SITE_GREETING` (live-voice.ts).
-Venus becomes a concise edit assistant: the creator taps the mic, says the change ("full-screen hero",
+Eve becomes a concise edit assistant: the creator taps the mic, says the change ("full-screen hero",
 "headline to …"), she reflects it back and asks "anything else?", and her captured request fills the
 composer. Tapping **send** hits the existing `POST /api/creator/revise` (forge revision) — no API
 change. The session runs only while the mic is on AND the Edit tab is open; it stops on send / tab

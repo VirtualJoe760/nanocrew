@@ -91,7 +91,7 @@ released →  refund after release              →  reversed  (reverse_transfer
 
 ### The release job (the missing scheduler)
 
-platform-api is **Vercel serverless** — no persistent worker. Two options; **prefer the Railway
+platform-api is **Vercel serverless** — no persistent worker. Two options; **prefer the Cloud Run
 backend** (already a persistent Node process) OR a Vercel Cron hitting an internal route:
 
 - Scan `orders WHERE payoutStatus = 'held' AND payoutReleaseAt < now() AND status NOT IN
@@ -206,6 +206,6 @@ MoR + the Terms wording with counsel. Add the POD no-buyer's-remorse constraint 
 ## Owner config (outside the repo — gates go-live, not code)
 
 - `STRIPE_CONNECT_ENABLED=1` + per-creator `charges_enabled` (the hold only matters once Connect is live).
-- The release job scheduler (Railway cron or Vercel Cron) + `INTERNAL_API_KEY` + failure alerting.
+- The release job scheduler (Cloud Run cron or Vercel Cron) + `INTERNAL_API_KEY` + failure alerting.
 - `RETURN_WINDOW_DAYS` (default 7), `RETURNS_PHOTO_*` upload config.
 - Counsel sign-off on MoR + return policy wording.

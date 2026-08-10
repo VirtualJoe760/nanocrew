@@ -76,7 +76,7 @@ raw-`fetch` core (no SDK dependency required). The per-email bodies + the layout
 
 ### App-triggered sends · `POST /api/internal/notify` (INTERNAL_API_KEY-gated)
 
-App-side actions run on the **Railway backend**, where Resend must NOT live (secrets + sender stay
+App-side actions run on the **Cloud Run backend**, where Resend must NOT live (secrets + sender stay
 central in platform-api). So the app posts to `platform-api/app/api/internal/notify` (`x-internal-key`
 header, constant-time compared against `INTERNAL_API_KEY`; rejects when the env is unset) with a
 minimal payload, and the **route resolves** the full context from the id (it has DB access; the app
@@ -156,8 +156,8 @@ webhook code path — flag it, don't try to intercept Supabase's send in code.
    Supabase → Auth → Redirect URLs or the reset link won't return into the app.
 3. **Env — the remaining blocker (everything in the catalogue is built but inert until set):**
    `RESEND_API_KEY` + `MAIL_DOMAIN=send.nanocrew.app` on the **Vercel `nanocrew-api`** project (the
-   webhooks + `/internal/notify`); `INTERNAL_API_KEY` (same value) on **both** Vercel and **Railway**,
-   plus `PLATFORM_API_BASE` on Railway so `notifyPlatform` can reach platform-api. Until set, every send
+   webhooks + `/internal/notify`); `INTERNAL_API_KEY` (same value) on **both** Vercel and **Cloud Run**,
+   plus `PLATFORM_API_BASE` on Cloud Run so `notifyPlatform` can reach platform-api. Until set, every send
    logs-and-no-ops, safely.
 4. Turn off the redundant Stripe receipt once #2 (order confirmation) is live, if desired (and decide
    whether Stripe's native receipts replace #11/#13 or our branded ones do).

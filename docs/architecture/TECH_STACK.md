@@ -54,7 +54,7 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 ### UI, animation, rendering
 | Package | Version | Role |
 |---|---|---|
-| `@shopify/react-native-skia` | 2.2.12 | GPU canvas — Venus avatar, dot-field backgrounds, native garment-mockup blend modes (web split: `*.web.tsx` uses CSS). Web needs CanvasKit WASM. |
+| `@shopify/react-native-skia` | 2.2.12 | GPU canvas — Eve avatar, dot-field backgrounds, native garment-mockup blend modes (web split: `*.web.tsx` uses CSS). Web needs CanvasKit WASM. |
 | `react-native-reanimated` | ~4.1.1 | Animations (gestures, canvas) |
 | `react-native-worklets` | 0.5.1 | Worklet runtime (auto-added by babel-preset-expo) |
 | `react-native-gesture-handler` | ~2.28.0 | Pan/pinch on the Design canvas |
@@ -63,11 +63,11 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 | `react-native-svg` | 15.12.1 | Vector UI (NC mark, fabric background) |
 | `expo-image` | ~3.0.11 | Images (`contentFit`) |
 | `expo-video` | ~3.0.16 | Feed / ad playback |
-| `expo-audio` | ~1.1.1 | Venus TTS playback, tour narration |
-| `react-native-audio-api` | ^0.12.2 | Low-level audio (Venus speech-level analysis / lip-sync) — registered as an Expo plugin |
+| `expo-audio` | ~1.1.1 | Eve TTS playback, tour narration |
+| `react-native-audio-api` | ^0.12.2 | Low-level audio (Eve speech-level analysis / lip-sync) — registered as an Expo plugin |
 | `expo-haptics`, `expo-symbols`, `expo-status-bar`, `expo-system-ui`, `expo-splash-screen` | — | Chrome/feedback |
 
-### 3D avatar (Venus)
+### 3D avatar (Eve)
 | Package | Version | Role |
 |---|---|---|
 | `three` | ^0.184.0 | 3D scene |
@@ -77,7 +77,7 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 | `react-native-nitro-modules` | ^0.35.9 | Native module bridge (Skia/audio deps) |
 | `@types/three` | ^0.184.1 | — |
 
-> Avatar work is web/native-split; three only loads in the Venus Lab. See [studio/VENUS_AVATAR.md](../studio/VENUS_AVATAR.md).
+> Avatar work is web/native-split; three only loads in the Eve Lab. See [studio/VENUS_AVATAR.md](../studio/VENUS_AVATAR.md).
 
 ### Native capabilities (require a dev/standalone build — Expo Go retired)
 | Package | Version | Role | Env gate |
@@ -117,7 +117,7 @@ See [accounts/AUTH_IDENTITY.md](../accounts/AUTH_IDENTITY.md).
 
 ## AI & ML services
 
-The core of the product. Two AI roles: **Venus** (conversation + asset generation) and the **forge
+The core of the product. Two AI roles: **Eve** (conversation + asset generation) and the **forge
 robot** (site building).
 
 ### Google Gemini — via `@google/genai` ^2.8.0
@@ -126,8 +126,8 @@ robot** (site building).
 | `gemini-2.5-flash-image` (**"Nano Banana"**) | Design generation + image edits (can't emit alpha → magenta chroma-key, `transparency.ts`) | `model-shots.ts`, `first-drop.ts`, `provision.ts`, generate routes |
 | `gemini-2.5-flash` | Interview, ✦ Enhance copy, plans, content safety | `interview.ts`, `content-safety.ts`, `adapt.ts` |
 | `gemini-2.5-pro` | **Authoring the forge build brief** (`authorBrandBrief`) | `provision.ts` |
-| `gemini-2.5-flash-preview-tts` | Venus TTS (`/api/say`) | `src/app/api/say+api.ts` (`TTS_MODEL`) |
-| `gemini-2.5-flash-native-audio-preview-12-2025` | **Gemini Live** real-time voice (push-to-talk Venus) | `src/app/api/voice-live-token+api.ts` (`LIVE_MODEL`) + `live-voice.ts` |
+| `gemini-2.5-flash-preview-tts` | Eve TTS (`/api/say`) | `src/app/api/say+api.ts` (`TTS_MODEL`) |
+| `gemini-2.5-flash-native-audio-preview-12-2025` | **Gemini Live** real-time voice (push-to-talk Eve) | `src/app/api/voice-live-token+api.ts` (`LIVE_MODEL`) + `live-voice.ts` |
 | `gemini-2.0-flash` | Misc lightweight text | — |
 
 > The Gemini **Live** session forces the `@google/genai` **web build** (global `WebSocket`) on both
@@ -144,7 +144,7 @@ Creator-pickable tiers in a `VIDEO_MODELS` registry (variable credit cost):
 
 Direct Veo (`veo.ts`) also references `veo-3.0-fast-generate-001`.
 
-### ElevenLabs — `eleven_turbo_v2_5` TTS (alternate Venus voice path, `api.elevenlabs.io`).
+### ElevenLabs — `eleven_turbo_v2_5` TTS (alternate Eve voice path, `api.elevenlabs.io`).
 
 ### Anthropic Claude — the **forge robot**
 Headless `claude` CLI on the DigitalOcean droplet builds/revises brand sites on working branches.

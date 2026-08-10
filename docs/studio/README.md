@@ -1,13 +1,13 @@
 # Studio
 
-The creator-facing half of Nano Crew: a creator **talks to Venus** → a brand + Printful shop +
+The creator-facing half of Nano Crew: a creator **talks to Eve** → a brand + Printful shop +
 storefront website get **generated** → the creator **refines** the site with real products, model
 shots, and scene video in the design generator → **publishes** (domain, go-live, store + fulfilment
 active, mirrored in the app).
 
 This division owns the *creator's* journey. The companion **`docs/storefront/`** division owns the
 *machinery* underneath it (templates, the forge, provisioning, the data contract). Where the two
-meet — "Venus talks to the forge robot" and "design-generator assets reach the live site" — this
+meet — "Eve talks to the forge robot" and "design-generator assets reach the live site" — this
 division references the storefront docs rather than duplicating them.
 
 ## The docs
@@ -28,6 +28,6 @@ division references the storefront docs rather than duplicating them.
 
 The whole arc is code-complete and live, **but build quality is the open problem.** Today the
 forge ships a barely-configured template (blank hero, stock placeholders) because the brief is a
-mail-merge and the robot is unconditioned. The refine + publish steps work. The fix — Venus authors
+mail-merge and the robot is unconditioned. The refine + publish steps work. The fix — Eve authors
 a masterful prompt, a Master `CLAUDE.md` conditions the robot, the robot gets eyes — is captured in
 [FORGE_AI.md](FORGE_AI.md) and [`docs/storefront/BUILD_QUALITY.md`](../storefront/BUILD_QUALITY.md).

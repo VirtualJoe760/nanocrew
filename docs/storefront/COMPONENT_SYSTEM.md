@@ -7,7 +7,7 @@
 
 ## Vision
 Nano Crew should be a **jigsaw puzzle**: a creator assembles reusable pieces (blocks/components) into
-their site, and in the background Venus + the forge turn that selection into **sophisticated,
+their site, and in the background Eve + the forge turn that selection into **sophisticated,
 deterministic install instructions** and build it. To get there, the storefront templates must move
 from *hand-edited clones* to a system of **shared, declarative, typed pieces**.
 
@@ -65,7 +65,7 @@ replacing eyeballing `VOCABULARY.md`.
 
 ## End-to-end (the payoff)
 User taps blocks in the app (pick a hero style, add a testimonial block) → that produces a **manifest
-selection** (JSON) → Venus authors a precise brief from it, **validated against the vocabulary + slots**
+selection** (JSON) → Eve authors a precise brief from it, **validated against the vocabulary + slots**
 → the forge applies it by composing `_shared` blocks into the per-brand repo → build-gate → deploy.
 No guessing; each component is defined once in `_shared`, not 5×.
 

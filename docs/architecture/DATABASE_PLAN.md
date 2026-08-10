@@ -247,7 +247,7 @@ deploys as a preview. The creator reviews, then approves — only then does the 
 `main` and go to production. This table is also the queue the forge worker drains.
 - `id`, `storeId` → `stores` (cascade).
 - `requestMd` (text, not null) — the change request as markdown.
-- `screenshots` (jsonb) — annotated screenshot URLs the creator/Venus marked up.
+- `screenshots` (jsonb) — annotated screenshot URLs the creator/Eve marked up.
 - `status` (`revision_status`, default `building`).
 - `branch` (text, not null), `previewUrl`, `errorMsg`, `createdAt`, `updatedAt`.
 - Index on `(storeId, status)`.

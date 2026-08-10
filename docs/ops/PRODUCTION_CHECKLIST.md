@@ -27,7 +27,7 @@ Owner is you (Joe) unless marked **[code]** (an implementation task).
   creates them RLS-off by default).
 
 ### Payments (Stripe — LIVE keys already set)
-Stripe is on `sk_live` and the 3 `STRIPE_PRICE_*` ids are set (app/Railway). **Credit pricing is
+Stripe is on `sk_live` and the 3 `STRIPE_PRICE_*` ids are set (app/Cloud Run). **Credit pricing is
 finalized**: 1 credit = $0.01 flat (no pack discount), every generation charge ≥2× our API cost at
 that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaining is dashboard config:
 - [x] **Commerce webhook** ✅ (2026-06-18) → `…/api/public/stripe-webhook` → live `STRIPE_WEBHOOK_SECRET`
@@ -40,7 +40,7 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
 - [x] 🟢 **platform-api commerce is LIVE** ✅ (2026-06-18) — `STRIPE_SECRET_KEY` switched to `sk_live`
   on Vercel; checkout produces `cs_live` sessions (confirmed). Real product purchases charge.
 - [ ] Turn on Stripe receipts/emails.
-- [x] **Stripe Connect — ENABLED** ✅ (2026-06-18). `STRIPE_CONNECT_ENABLED=1` on Railway; Express
+- [x] **Stripe Connect — ENABLED** ✅ (2026-06-18). `STRIPE_CONNECT_ENABLED=1` on Cloud Run; Express
   onboarding + destination-charge split live (`src/lib/connect.ts`, checkout split in platform-api).
   Runbook: `docs/ops/PAYOUTS_SETUP.md`. Creators onboard via Account → Set up payouts.
 
@@ -51,8 +51,8 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
 - [ ] Verify the `printful-webhook` is registered and tracking flows back to orders.
 
 ### Auth / config
-- [x] **Supabase Site URL + redirects** ✅ (2026-06-15) Site URL → the Railway production URL;
-  redirect allow-list includes `nanocrew://auth`, `nanocrew://**`, the Railway URL, `exp://**`.
+- [x] **Supabase Site URL + redirects** ✅ (2026-06-15) Site URL → the Cloud Run production URL;
+  redirect allow-list includes `nanocrew://auth`, `nanocrew://**`, the Cloud Run URL, `exp://**`.
 - [x] **Facebook hidden for v1** ✅ (2026-06-15) — button removed + Supabase Facebook provider disabled
   (credentials retained). Re-enable later only with a Live, reviewed Meta app.
 - [x] **Apple Sign In** ✅ (2026-06-15) — switched to NATIVE (`expo-apple-authentication` →
@@ -70,7 +70,7 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
   wired (`iap.ios.ts`, paywall prefers IAP on iOS, web Stripe fallback). **Your remaining config:**
   create the App Store Connect products (`com.nanocrew.credits.{500,1500,5000}` consumables +
   `com.nanocrew.plan.{starter,pro,advanced}` subscriptions, ~43% over web price) + an In-App Purchase
-  API key; set `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY / BUNDLE_ID` on Railway. IAP stays dormant
+  API key; set `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY / BUNDLE_ID` on Cloud Run. IAP stays dormant
   (app uses web Stripe) until those exist, so the current build is safe.
 - [x] App icon, splash, App Store screenshots/metadata, privacy nutrition labels, age rating ✅
   (2026-06-18; submitted with build 23). Screenshots at 1284×2778 (`~/Desktop/nanocrew-appstore/`).

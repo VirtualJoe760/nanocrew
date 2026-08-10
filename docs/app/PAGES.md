@@ -84,17 +84,17 @@ The brand builder + creator home. Static silk background (`FabricBackground`), t
 nucleus** / dense JARVIS-style orb, platinum-silver accent. Header: NC mark + "STUDIO" eyebrow +
 context icons (manage pencil / brands hamburger / keyboard toggle). Routes by `mode`:
 
-- **Signed-out (intro):** NC nucleus, "INTELLIGENCE IS THE NEW FABRIC", **"Meet Venus"** title +
+- **Signed-out (intro):** NC nucleus, "INTELLIGENCE IS THE NEW FABRIC", **"Meet Eve"** title +
   blurb, **Create an account** / **log in** CTAs (→ Account tab). "Free to explore. You only need a
   plan to launch a store."
-- **New creator — primer + CTA:** first-time creators see a primer (no voice picker — Venus has one
-  Gemini voice) → **Talk with Venus** (asks for mic) or **I'd rather type** wakes the interview.
-- **Interview:** a realtime **Gemini Live** session — open-mic, Venus listens + replies continuously
+- **New creator — primer + CTA:** first-time creators see a primer (no voice picker — Eve has one
+  Gemini voice) → **Talk with Eve** (asks for mic) or **I'd rather type** wakes the interview.
+- **Interview:** a realtime **Gemini Live** session — open-mic, Eve listens + replies continuously
   (idle → listening → thinking → speaking on the orb); tap the orb to pause/resume, or toggle the
   **keyboard** to type into the same session. The streaming transcript drives the captions. When she's
   gathered enough, **✓ Build my brand** extracts the `BrandResult` (`/api/extract-brand`) → a **brand
   summary** → **Create my store** → `POST /api/store`. A `402` opens the **Paywall**
-  (`subscription_required` or `brand_limit`); on success Venus announces the launch in her Gemini voice
+  (`subscription_required` or `brand_limit`); on success Eve announces the launch in her Gemini voice
   (`/api/say`) and points you to Design.
 - **Dashboard (returning creator, `src/components/studio-dashboard.tsx`):** a card per brand with
   revenue/orders; **Build a new brand** relaunches the interview; **credits/plan** opens the Paywall
@@ -107,7 +107,7 @@ when you have several. Four tabs:
 
 - **Edit site** — if a site exists: OG-image preview (tap → in-app browser with critique), a **go-live /
   custom-domain** row (`GoLiveComposer`), **✦ Site Options** — the mini-CMS (`SiteEditor`), and **chat with
-  Venus**. Two distinct paths: the **mini-CMS is direct + instant** (edit site copy / colors / fonts →
+  Eve**. Two distinct paths: the **mini-CMS is direct + instant** (edit site copy / colors / fonts →
   `POST /api/creator/site-config` → `stores.site_config`, read live by the template, **no rebuild**;
   each text box has a **✦ Enhance** button — AI rewrites it in the brand voice via
   `/api/creator/enhance-copy`, free + rate-limited like `/api/enhance`).
@@ -125,7 +125,7 @@ when you have several. Four tabs:
     app tells the creator to remake them. `brand_profile.transcript` keeps the old name (it's a record).
   - Any identity change revalidates the storefront; story/tagline edits now cascade too (previously only
     a name change did, which left stale "Alpha Master" SEO descriptions — fixed).
-  the **Venus chat is the forge** (open-ended redesigns → preview → approve). If no site: **Build site**
+  the **Eve chat is the forge** (open-ended redesigns → preview → approve). If no site: **Build site**
   (`/api/creator/build-site`; a `402` prompts the Pro upgrade). → `/api/creator/{site-config,enhance-copy,
   revise,revisions[/:id/approve]}`.
 - **Posts** — write/edit/publish/hide/delete journal posts with an optional cover image

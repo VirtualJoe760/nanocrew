@@ -37,7 +37,7 @@ site against a fresh forge-generated one.
    in `|| true`, and only checks "does it compile" — never "does it look good." A bad build ships and
    the store flips to `ready` anyway.
 7. ~~**Edit-fidelity gap — a correct copy edit silently doesn't render**~~ → **✅ FIXED**
-   (2026-06-17). Venus edited `content/copy.json` `hero.cta` → "Shop the drop", the build was green,
+   (2026-06-17). Eve edited `content/copy.json` `hero.cta` → "Shop the drop", the build was green,
    the branch + preview deployed — but the hero kept showing "Discover". Root cause: at provision the
    robot composes the richer `<HeroVideo />` **propless**, and the block's label default was a
    hardcoded `label = 'Discover'`, so the precedence `o.heroCta || label || copy.hero.cta` resolved to
@@ -52,7 +52,7 @@ site against a fresh forge-generated one.
 
 ## The target — a build→refine→publish arc
 
-1. **Build (instant + presentable):** Venus authors a masterful prompt → the conditioned forge robot
+1. **Build (instant + presentable):** Eve authors a masterful prompt → the conditioned forge robot
    adapts the template, writes real CTAs/copy, and drops in **intentional, on-brand temporary
    imagery** so the site looks finished on day one — already wired to DB + store + fulfilment.
 2. **Refine (creator's editorial control):** in the **design generator** the creator makes the real

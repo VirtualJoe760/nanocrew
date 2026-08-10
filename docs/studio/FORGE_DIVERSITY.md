@@ -21,7 +21,7 @@
    gradient tints: the "bare template" look.
 3. **Brand personality is captured, then dropped.** `vibeKeywords`, `texture`, `motion`,
    `voice` reach the forge as **inert context** — no rule translates them into design decisions.
-   The forge is (correctly) an executor; all creative direction lives in Venus's authored brief,
+   The forge is (correctly) an executor; all creative direction lives in Eve's authored brief,
    and the brief isn't *required* to make typography/layout choices. The quality loop can't
    catch sameness: gate = "does it compile", revisions deploy even on BUILD_FAILED, and the
    sighted robot (FORGE_AI.md fix 3) is unshipped.
@@ -50,7 +50,7 @@ Every new brand now gets its own typography at provision, before the first deplo
 `src/lib/font-pairings.ts` / the site-editor picker. Add the font to the templates first.
 
 ⚠ **Deploy:** the templates-repo change reaches production only when `nanocrew-templates` is
-pushed (new provisions clone it); the app change rides the normal Railway deploy. Existing
+pushed (new provisions clone it); the app change rides the normal Cloud Run deploy. Existing
 brands are untouched (their `site_config.fonts` is empty → template default, or their own pick).
 
 ## Track 2 — Heroes & layout *(hero decision + hero image SHIPPED 2026-07-04; layout knobs open)*
@@ -65,7 +65,7 @@ brands are untouched (their `site_config.fonts` is empty → template default, o
 - ✅ **Hero decision required in the brief** (`briefAuthorSystem`): the brief must NAME the hero
   block (hero / hero-video / hero-carousel per TEMPLATE.md) with a one-line vibe justification —
   "do NOT silently accept the template default". The quality bar + IMAGES/VIDEO rules now state
-  the pre-generated live hero so Venus art-directs copy OVER a real photograph.
+  the pre-generated live hero so Eve art-directs copy OVER a real photograph.
 - ⬜ **Variant props on existing blocks** (hero alignment/height/scrim/split; grid density) read
   from a `brand.json.layout` object — multiplies combinations with zero new components.
 - ⬜ **Structural unlock**: replace the hardcoded `page.tsx` skeleton with an ordered
@@ -207,7 +207,7 @@ Currently NO font UI (only name/tagline/story at L79-102/L154-162, palette HSL a
 
 - **Replace the hardcoded 32-key `FONTS` array (L41-74) and label pills (L311-330)** with the same `FontLibrarySheet` — collapses one of the four hand-synced font lists. Keep two slots (display/body), keep blank = template default (L121 semantics), keep a "Suggested pairings" row from `FONT_PAIRINGS[store.designStyle]`. Pills render in their own typeface (same expo-font lazy load).
 - **Live preview before save:** reuse the existing `SitePreview` WebView (`src/components/site-preview.tsx`) or embed a small preview WebView in SiteEditor, injecting `document.documentElement.style.setProperty('--brand-font-display', ...)` plus a css2 `<link>` via `injectedJavaScript` on selection — instant WYSIWYG; the real change lands on save via POST `/api/creator/site-config` (already instant-ish: live-read + revalidate).
-- **New LAYOUT section** (phase 3): hero-variant pills + section toggles/reorder list, options from components.json (fetched via a small extension to GET `/api/creator/site-config` or a new `/api/creator/site-manifest` route), saved as the `layout` section. Copy in studio-composer.tsx (:772 "Exact edits, applied instantly…") already frames this two-speed split; also add a `layout` bucket to plan-site-edits' taxonomy (`src/app/api/creator/plan-site-edits+api.ts` SYSTEM prompt :20-32) so Venus voice edits can route "make the hero a video" to the instant channel instead of the forge.
+- **New LAYOUT section** (phase 3): hero-variant pills + section toggles/reorder list, options from components.json (fetched via a small extension to GET `/api/creator/site-config` or a new `/api/creator/site-manifest` route), saved as the `layout` section. Copy in studio-composer.tsx (:772 "Exact edits, applied instantly…") already frames this two-speed split; also add a `layout` bucket to plan-site-edits' taxonomy (`src/app/api/creator/plan-site-edits+api.ts` SYSTEM prompt :20-32) so Eve voice edits can route "make the hero a video" to the instant channel instead of the forge.
 
 ---
 

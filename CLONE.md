@@ -23,7 +23,7 @@ source of truth is `CLAUDE.md` → `docs/context/` (read-order in `docs/context/
 re-derive what's already documented there.
 
 **Four deployable units (one shared Supabase Postgres):**
-1. **Mobile app** (this repo root) — Expo; server routes (`src/app/**+api.ts`) run on **Railway**.
+1. **Mobile app** (this repo root) — Expo; server routes (`src/app/**+api.ts`) run on **Google Cloud Run**.
 2. **platform-api/** — Next.js on **Vercel** (public storefront API + webhooks + Stripe).
 3. **nanocrew-templates** (separate repo) — 5 Next.js storefront templates.
 4. **forge** — a **DigitalOcean droplet** (`ssh nanocrew-forge`) running headless Claude; the worker
@@ -47,7 +47,7 @@ None of these are in git. AirDrop / securely copy them from the **old Mac** to t
 
 **Nothing else from `.env.local` needs reproducing** — there's no `.env.example`; that file *is* the
 canonical list. The sub-projects (`platform-api/`, `nanocrew-site/`) read their secrets from Vercel/
-Railway in prod and don't need a local `.env.local` for normal dev.
+Cloud Run in prod and don't need a local `.env.local` for normal dev.
 
 ---
 
@@ -58,7 +58,7 @@ Target versions (match the old Mac): **Node 22** (`.nvmrc`), npm 11, Xcode 26.3,
 # Homebrew (if missing)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 brew install nvm watchman gh git
-# Node 22 via nvm  (the repo pins 22 in .nvmrc; Railway runs 22)
+# Node 22 via nvm  (the repo pins 22 in .nvmrc; Cloud Run runs 22)
 mkdir -p ~/.nvm && nvm install 22 && nvm alias default 22
 # CocoaPods (for local native iOS builds) — Ruby gem
 sudo gem install cocoapods   # or: brew install cocoapods
@@ -74,7 +74,7 @@ sudo gem install cocoapods   # or: brew install cocoapods
 - **GitHub:** `gh auth login` (or just rely on the copied SSH key). Verify: `ssh -T git@github.com`.
 - **Expo/EAS:** the `EXPO_TOKEN` in `.env.local` auto-auths CLI commands; or `npx eas-cli@latest login`
   (account **averagexjoe** / josephsardella@gmail.com). Verify: `EXPO_TOKEN=… npx eas-cli@latest whoami`.
-- **(optional) Vercel/Railway CLIs** — only if you want CLI deploys; the API tokens in `.env.local`
+- **(optional) Vercel/gcloud CLIs** — only if you want CLI deploys; the API tokens in `.env.local`
   (`VERCEL_TOKEN`, `RAILWAY_API_TOKEN`) cover scripted deploys without a login.
 
 ---
@@ -171,10 +171,10 @@ All values live in the copied `.env.local`. Accounts to retain access to:
 ---
 
 ## 10. Deploy targets (reference — confirm with the human before any deploy)
-- **App backend (Railway):** auto-deploys on push to `main`. To deploy a specific commit WITHOUT
-  merging (e.g. a feature branch), use the Railway GraphQL API (`RAILWAY_API_TOKEN`):
-  `serviceInstanceDeployV2(serviceId, environmentId, commitSha)` on the `backend` service — note this
-  is **temporary** (the next redeploy reverts to `main`). Set env vars via `variableUpsert`.
+- **App backend (Google Cloud Run):** deploy with `./scripts/deploy-cloudrun.sh nanocrew-api us-west1 backend`
+  — it builds via Cloud Build (`cloudbuild.yaml` passes the 3 `EXPO_PUBLIC_*` values as `--build-arg`,
+  since they're inlined into the client bundle) and uploads every other key from `.env.local` as a
+  runtime env var. Serves at `https://api.nanocrew.app`. There is no git auto-deploy — run the script.
 - **platform-api / nanocrew-site (Vercel):** deploy via Vercel (`VERCEL_TOKEN`) / git integration.
 - **iOS build → TestFlight (EAS):** `EXPO_TOKEN=… npx eas-cli@latest build -p ios --profile production
   --auto-submit` (autoIncrement buildNumber; submits via the ASC `.p8`).
@@ -197,7 +197,7 @@ The persistent **memory** you copied in §1 will auto-load each session (it's ke
 - [ ] `~/code/nanocrew/.env.local` present (52 vars); `ssh -T git@github.com` works; `ssh nanocrew-forge` works.
 - [ ] `npx tsc --noEmit` clean; `npm run web` serves on :19010; Venus Lab opens (tester email).
 - [ ] `EXPO_TOKEN=… npx eas-cli@latest whoami` → averagexjoe.
-- [ ] Railway token reaches `nanocrew-api` (a read-only `project{name}` GraphQL query).
+- [ ] `gcloud run services describe backend --project=nanocrew-api --region=us-west1` returns the service URL.
 - [ ] Memory dir copied (`~/.claude/projects/-Users-macdaddyjoe-code-nanocrew/memory/`, 29+ files).
 - [ ] `nanocrew-templates` cloned + installed.
 

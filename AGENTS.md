@@ -5,7 +5,7 @@ orchestration (read-order, skills) is in [`CLAUDE.md`](CLAUDE.md); the hard rule
 [`docs/context/NEVER_VIOLATE.md`](docs/context/NEVER_VIOLATE.md).
 
 ## What this is
-AI-native creator commerce (Expo / React Native, iOS + Android). A creator talks to **Venus** (voice
+AI-native creator commerce (Expo / React Native, iOS + Android). A creator talks to **Eve** (voice
 or typed AI) to define a clothing brand; Nano Crew auto-generates a Printful-backed shop **and** a
 per-brand storefront website, then lets them design products, sell, and edit their site by chatting.
 Built on the proven `stephen-lawyer` create → design → Printful loop. Full overview:
@@ -22,7 +22,7 @@ fast-moving API (RN, AI model IDs) against current docs rather than memory
   `creators` table; orders-by-email; the design generator; go-live phases; the UI primitives). Search
   the code **and** the relevant `docs/` division before adding a table, model, endpoint, "system," or
   component. Joe's strongest, most-repeated correction — **stop rebuilding what exists.**
-- **The build flow is settled — make both ends brilliant, don't re-architect it.** Venus (AI #1)
+- **The build flow is settled — make both ends brilliant, don't re-architect it.** Eve (AI #1)
   authors a build brief → a conditioned forge robot (AI #2) builds/edits the site. Lifecycle:
   **build** (instant + presentable) → **refine** (the design generator swaps in real assets) →
   **publish** (list in-app + on the web; a domain is a separate Pro upgrade). See `docs/studio/`.
@@ -33,7 +33,7 @@ fast-moving API (RN, AI model IDs) against current docs rather than memory
 
 ## The four deployable units (one shared Supabase Postgres)
 1. **Mobile app** — this repo. `src/app/**+api.ts` server routes hold authed creator logic; **the
-   backend runs on Railway** (persistent Node via `expo serve`) — NOT EAS Hosting.
+   backend runs on Cloud Run** (persistent Node via `expo serve`) — NOT EAS Hosting.
 2. **platform-api** — `platform-api/` (Next.js, Vercel). Public storefront API + webhooks.
    `platform-api/db/schema.ts` is a **copy** of `src/db/schema.ts` — re-sync every migration.
 3. **nanocrew-templates** (sibling repo) — 5 Next.js storefront templates; `brand.json` token contract.

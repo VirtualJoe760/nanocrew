@@ -1,32 +1,39 @@
-# Venus — the talking 3D avatar (live build)
+# Eve — the talking 3D avatar (live build)
 
-> **Status: POC, in progress.** Branch `feature/welcome-onboarding`. Verified on the web
-> preview AND on a native iOS dev build (expo-gl). Surfaced in-app as a gated test tool on the
-> Account screen, AND now live (behind `VENUS_IN_INTERVIEW`) as the full-bleed avatar in the Studio
-> build-a-brand voice interview, replacing the SVG orb. This doc is the source of truth for the
-> Venus-avatar work — read it before continuing.
+> **⚠ STATUS (2026-08-01, verified against code): the head-scene documented below is RETIRED.**
+> The live avatar is the **orb** — `src/components/backgrounds/venus-orb-scene.tsx` (v2 "JARVIS
+> brain" → v3 "neural constellation"; the sphere/head is gone). `venus-head-scene.tsx` **no longer
+> exists**, so every path in this document that names it is historical.
+>
+> This file is kept because the *techniques* below were carried forward and are still load-bearing:
+> the formant lip-sync pipeline (`venus-formants.ts` / `venus-viseme-map.ts` / `venus-lipsync.ts`),
+> the expo-gl/ES2 shader constraints, and the native gotchas. Treat the shader/lip-sync sections as
+> current and the head-scene geometry/Simli sections as archive. **Simli was removed** — no
+> `simli-*` files remain.
+>
+> Editing her look? Open the **Eve Lab** (Account → Developer) and work in `venus-orb-scene.tsx`.
 
 ## 🛠 THE VENUS LAB — where we work on her appearance (read this first)
-**When the user says we're going to edit / work on Venus's appearance, come HERE — this is our
+**When the user says we're going to edit / work on Eve's appearance, come HERE — this is our
 dedicated, permanent tool for it.**
 - **What it is:** a full-screen render of the live avatar (`src/components/backgrounds/
   venus-head-scene.tsx`) with a 4-stage toggle row, so we iterate on her in isolation (no app
   chrome). The screen is `src/components/venus-lab-screen.tsx`; the avatar comes from `<VenusLab>`
   (`src/components/venus-lab.tsx` native / `.web.tsx` web — a component split that keeps three/R3F
   out of the native bundle until the Lab is opened).
-- **How to enter it (in the app):** Account screen → **Developer → "Venus Lab (test)"** opens it as
+- **How to enter it (in the app):** Account screen → **Developer → "Eve Lab (test)"** opens it as
   a full-screen Modal; the **"‹ back"** button returns to Account. The row is gated to the tester
   account (`VENUS_LAB_EMAIL = josephsardella@gmail.com` in `src/app/account.tsx`) — invisible to
   everyone else. It works on a native dev build AND in production builds for that one email.
 - **How to view it live on web (fast iteration loop):** the avatar renders in the `web-preview`
   server. Edit `venus-head-scene.tsx` (the scene/orchestration) and/or the extracted builder modules
   (`venus-shaders/textures/geometry/hair/eyes.ts`, see the File map) → `npx tsc --noEmit` → reload the
-  preview → screenshot to verify. Venus's look now lives across that ONE scene file + those 5 sibling
+  preview → screenshot to verify. Eve's look now lives across that ONE scene file + those 5 sibling
   builder modules (shaders, textures, geometry/lattice, the procedural bob, the eyes).
 - **Commit cadence:** commit at each visual milestone; this doc gets updated in the same change.
 
 ## The vision
-Venus is the AI a creator talks to in **Studio**. Today she's a monochrome orb/nucleus.
+Eve is the AI a creator talks to in **Studio**. Today she's a monochrome orb/nucleus.
 We're turning her into a **glowing wireframe / "plexus mesh" face** that:
 1. **materializes out of the app's dot-field background** (the same dots swarm together to
    form her face, then disperse),
@@ -35,12 +42,12 @@ We're turning her into a **glowing wireframe / "plexus mesh" face** that:
 
 Two visual references the user gave (see this session's transcript):
 - **Look** = a glowing white **wireframe/particle head** on dark (the "plexus" aesthetic).
-- **Character** = an ethereal **silver-haired, blue-eyed woman** ("Venus"). We generated a
+- **Character** = an ethereal **silver-haired, blue-eyed woman** ("Eve"). We generated a
   clean portrait of her (Higgsfield `soul_2`); kept as the character north-star. As a
   *wireframe* the exact likeness is abstracted away — topology + glow is what reads.
 
 ## How we got here (decisions — don't re-litigate)
-1. **Skia photo point-cloud** (sample the Venus portrait into dots) → **rejected**: a soft
+1. **Skia photo point-cloud** (sample the Eve portrait into dots) → **rejected**: a soft
    portrait carries no structure, so the cloud only vaguely read as a face.
 2. **Skia canonical face-mesh wireframe** (MediaPipe `canonical_face_model.obj`, 468 verts +
    1365 edges, rendered as glowing wireframe + dense surface dots that morph in) → looked
@@ -120,7 +127,7 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   - **Ears removed two ways** so they don't poke out from under the bob: the bright ear geometry is
     dropped from the face shell (`dropEars`, `EAR_DROP_FRAC`), AND the dim substrate is clipped at the
     ear line (two world-space `THREE.Plane`s on the substrate materials, `gl.localClippingEnabled`).
-    **Note:** the procedural bob is the demo workaround — the user's own RPM Venus with a real bob asset
+    **Note:** the procedural bob is the demo workaround — the user's own RPM Eve with a real bob asset
     (URL swap) is the production answer; RPM was unreachable when built.
   - **Eyes — a SCLERA + readable IRIS that LOOK AT the user:** a **sclera** (eye-white) sprite — a
     soft almond *ring* (`makeScleraTexture`, hole in the centre so the iris/pupil show through), color
@@ -195,14 +202,14 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
     (aversion magnitude `avx/avy`, intervals `nextAvert/nextSacc/nextBlink`, `browSpeak` scale).
   - **Verified on web** (two-frame capture): a clean, clearly-female glowing plexus face; the
     thought-pulse visibly travels (crown→jaw between frames); eyes/lips luminous.
-- Reached via the gated **Account → Developer → "Venus Lab (test)"** tool (`venus-lab-screen.tsx`
+- Reached via the gated **Account → Developer → "Eve Lab (test)"** tool (`venus-lab-screen.tsx`
   renders `venus-head-scene`).
 
 ### The avatar
 - **Demo (POC only):** `https://raw.githubusercontent.com/met4citizen/TalkingHead/main/avatars/brunette.glb`
   — verified female RPM avatar, 72 morph targets, **full ARKit + Oculus visemes**.
   ⚠️ **CC BY-NC 4.0 (non-commercial)** — placeholder only, must NOT ship.
-- **Production:** the user's **own Ready Player Me Venus** (they own/license it). Create at
+- **Production:** the user's **own Ready Player Me Eve** (they own/license it). Create at
   [readyplayer.me](https://readyplayer.me) → GLB at `https://models.readyplayer.me/<id>.glb`,
   append `?morphTargets=ARKit,Oculus Visemes`. **Swap `AVATAR_URL`** — that's the only change.
   (RPM was unreachable from this machine *and* the user's network during the build — likely a
@@ -255,11 +262,11 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
    separate bridge (render the avatar in a WebView, or compute visemes from PCM frames with a tiny
    FFT — `sample()`'s math ports; `connect(HTMLMediaElement)` does not).
 3. ✅ **DONE (v2) — the UNIFIED LATTICE: one field that IS the background AND becomes her.** Per Joe:
-   "Venus and the background are part of one singular superintelligence… our background needs to morph
+   "Eve and the background are part of one singular superintelligence… our background needs to morph
    with it into her." The old design was two *renderers* (a Skia background that just faded + a separate
    R3F grid that merely *matched* it). Now there is **one R3F points buffer** (`bakeUnifiedLattice` +
    `LATTICE_VERT/FRAG` in **`venus-points.ts`**) that is the ambient dot-field at rest and reorganises
-   into Venus on morph — the dots that become her are **literally background dots that peel up**.
+   into Eve on morph — the dots that become her are **literally background dots that peel up**.
    - **One lattice, `aIsFace` branches the two behaviours.** A screen-filling grid (`LAT_COLS×LAT_ROWS
      = 84×56 = 4704` dots) lives in its OWN **scene-root group** in world space (the camera is FIXED at
      `(0,eyeY,0.99)` looking down −Z, so the group is a screen-facing plane — no per-frame billboard).
@@ -279,7 +286,7 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      glow so the formed look hands off to the (byte-for-byte unchanged) swaying edges/occluder/bob.
    - **The residual STREAM shell (`bakeStreamField`, 700 dots, head-local)** is kept as the **3D depth-
      feed** — the lattice gives the in-plane pulse, the shell adds volumetric inflow. Together: "dots as
-     background still, pulsing towards Venus."
+     background still, pulsing towards Eve."
    - **One reveal clock** in `useFrame` drives `uMorph = seg(0.10,0.62)` (the peel/cyclone window) + the
      `uPulse` ramp (0.12 at rest → ~1.0 mid-morph → ~0.5 formed) + Skia's 12-s pattern crossfade
      (`motionSelect(t)` → `uSelA/uSelB/uFade`) + `uDrift`. Then the structure layers fade in on the
@@ -339,11 +346,11 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      copied verbatim, so the diff is mechanical).
    - **NOTE — judge the morph LIVE, not from stills:** the peel + cyclone is a *motion* effect (~1.3 s);
      a single screenshot is one frame. Use the Lab's **morphing** toggle to evaluate it.
-   - **Remaining polish:** make the *app-wide* background this same R3F field (today only the Lab/Venus
+   - **Remaining polish:** make the *app-wide* background this same R3F field (today only the Lab/Eve
      screens use the lattice; the rest of the app keeps the cheap Skia `<AppBackground>`). The landed
      face dots sit in the static group while the wireframe sways ±2° — fine because they fade at land,
      but head-parenting the landed subset (keeping them sparkling on the moving mesh) is a future option.
-4. **Swap in the user's own RPM Venus avatar** (URL swap; commercial license).
+4. **Swap in the user's own RPM Eve avatar** (URL swap; commercial license).
 5. **Integrate into Studio** — ✅ DONE (first pass). The voice **build-a-brand interview** now renders
    `<VenusAvatar>` full-bleed behind the controls instead of the SVG nucleus orb, gated by
    `VENUS_IN_INTERVIEW` in `studio.tsx`. Her `VenusStage` is derived from the interview's
@@ -357,18 +364,18 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
 
 ## Simli — REMOVED (2026-07-04)
 The photoreal-renderer POC is GONE per Joe ("we are not using simli — remove all code having to
-do anything with simli"): the neural-constellation orb won as Venus's embodiment. Deleted:
+do anything with simli"): the neural-constellation orb won as Eve's embodiment. Deleted:
 `simli-venus.tsx` / `simli-venus.web.tsx` / `simli-venus-html.ts`, the `/api/simli/tts` and
 `/api/venus/simli-session` routes, and the Lab's Simli mode. `SIMLI_API_KEY`/`SIMLI_FACE_ID` env
-vars are dead (safe to delete from `.env.local`/Railway). VOICE AUDITION moved to the Lab's ORB
+vars are dead (safe to delete from `.env.local`/Cloud Run). VOICE AUDITION moved to the Lab's ORB
 mode: voice chips + preset lines → `/api/say` (which now accepts an allowlisted `voice` from the
 full 30-voice Gemini catalog) → the WAV plays while its PCM is pushed into the venus-speech-level
 bus, so the orb's VOICE layer reacts — you audition voices on the actual product. If Simli is
 ever wanted again, resurrect from git history (this section's last full version: commit ba3aa64).
 
 ## Gotchas (read before editing)
-- **The Venus Lab is opened from the Account screen** (Developer → "Venus Lab (test)", gated to
-  `VENUS_LAB_EMAIL`) as a full-screen Modal rendering `venus-lab-screen.tsx` — see "The Venus Lab"
+- **The Eve Lab is opened from the Account screen** (Developer → "Eve Lab (test)", gated to
+  `VENUS_LAB_EMAIL`) as a full-screen Modal rendering `venus-lab-screen.tsx` — see "The Eve Lab"
   section above. It's a real (if gated) surface now, so `<VenusLab>` is a **component split**
   (`venus-lab.tsx` native / `.web.tsx` web): the native `require` of `venus-head-scene` (three/R3F)
   is paid for only when the Lab is mounted. No more `_layout` flag — the old `/playground` route is
@@ -396,7 +403,7 @@ ever wanted again, resurrect from git history (this section's last full version:
   Trust the **screenshot**, not a lingering console error, once `tsc` is clean.
 - **Lip-sync needs CORS**: `createMediaElementSource` on a cross-origin clip without
   `crossOrigin="anonymous"` + an `Access-Control-Allow-Origin` header reads a tainted (all-zero)
-  stream → the mouth never moves. Host Venus's real TTS same-origin to sidestep it.
+  stream → the mouth never moves. Host Eve's real TTS same-origin to sidestep it.
 - **`models.readyplayer.me` is network-blocked here** (and was for the user) — that's why we use
   GitHub-hosted sample GLBs. The browser preview *can* reach GitHub raw + CDNs.
 - **Expo dev server can die** mid-session (saw the preview drift to the nanocrew-site on :3000).
@@ -437,7 +444,7 @@ ever wanted again, resurrect from git history (this section's last full version:
 - `src/lib/venus-lipsync.ts` — the **driver**: `SpeechLevelDriver` (native, reads the formant
   envelope) / `AnalyserDriver` (web, same extractor+mapper) / wawa behind `USE_WAWA`. Returns target
   weights for `useFrame` to damp. `speaking()` tells the scene a real source is active.
-- `src/lib/venus-speech-level.ts` — zero-dep, time-synced **formant envelope** of Venus's spoken PCM:
+- `src/lib/venus-speech-level.ts` — zero-dep, time-synced **formant envelope** of Eve's spoken PCM:
   runs `analyzeWindow` per 40 ms window at push time, stores `AcousticFeatures` against the audible
   instant. `live-voice.ts` pushes each enqueued chunk; the driver reads `speechFrameAt()`.
   `setVenusSpeechLatency(ms)` aligns lips to the ear.
@@ -450,7 +457,7 @@ ever wanted again, resurrect from git history (this section's last full version:
 - `src/components/venus-avatar.tsx` / `.web.tsx` — the `<VenusAvatar>` component split (native
   expo-gl / web R3F) that renders `venus-head-scene`, keeping three out of the native bundle until
   mounted. Used by the Lab, the Studio interview, AND the editor bubble.
-- `src/components/venus-bubble.tsx` — `<VenusBubble>`: Venus's avatar as a circular, tappable bubble
+- `src/components/venus-bubble.tsx` — `<VenusBubble>`: Eve's avatar as a circular, tappable bubble
   with a reactive halo, for the site-critique editor (`site-preview.tsx`, replaced the NC `VenusOrb`).
   `speaking` → stage. **Native gotcha (two of them):** an expo-gl `GLView` BLANKS on iOS when clipped
   by `overflow:hidden` OR covered by an SVG mask whose `fillRule="evenodd"` iOS doesn't honor (it
@@ -465,7 +472,7 @@ ever wanted again, resurrect from git history (this section's last full version:
   the `skia-playground` memory).
 
 ## Git / how to verify
-- Branch `feature/welcome-onboarding`. Venus-arc commits: `1d68065` (canonical morph, superseded)
+- Branch `feature/welcome-onboarding`. Eve-arc commits: `1d68065` (canonical morph, superseded)
   → `eeaa481` (dense dots, superseded) → `5528225` (R3F+GLTF wireframe) → `9967677` (RPM head +
   viseme) → `3c263f2` (female head + liveliness). Background-system commits: `66b0535`, `672578a`,
   `84b087a`, `91d9002`.
@@ -476,7 +483,7 @@ ever wanted again, resurrect from git history (this section's last full version:
 
 ## 🧠 ORB v3 — "the NEURAL CONSTELLATION" (the DEFAULT embodiment, 2026-07-04)
 
-Venus's default look is the ORB scene (`venus-orb-scene.tsx` + `venus-plasma.ts`), not the face —
+Eve's default look is the ORB scene (`venus-orb-scene.tsx` + `venus-plasma.ts`), not the face —
 `<VenusAvatar variant>` defaults to `'orb'`; the Cortana face stays behind the Lab's Face toggle.
 Art direction (Joe, same day, two passes): first "translucent… not a planet", then "get away from
 it looking like an orb… keeping the nucleus… really we want a visual representation of a neural

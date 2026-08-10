@@ -26,11 +26,11 @@ what works, what crashes, and a prioritized fix list. **Video was out of scope**
 
 ### Edits made (live)
 - **mini-CMS / Site Options** (direct, instant): nav background → navy `#0a1a2f`, primary/buttons → flag-red `#B22234`, hero headline → "Stand Proud. Stand Free." → **reflected on the live site in ~20s, no rebuild.**
-- **Venus (keyboard/typed)**: opened the critique editor → ⌨ type → "Change the announcement bar to MADE IN THE USA" → **Add** → "2 changes captured · Submit". (Submit outcome: see Crash #2.)
+- **Eve (keyboard/typed)**: opened the critique editor → ⌨ type → "Change the announcement bar to MADE IN THE USA" → **Add** → "2 changes captured · Submit". (Submit outcome: see Crash #2.)
 
 ### Buttons / flows exercised
 - **Design:** brand picker, Site-assets mode, Generate modal (Design/Graphics/Video tabs, Transparent/Filled, ✨Enhance, 🎲Random, Generate, Review → Use this / Regenerate / Discard).
-- **Studio:** dashboard (brand cards, bounties), Alpha Patriot console → **Edit site** tab, **✦ Site Options**, "tap to explore your live site →" → Venus critique editor (〰 mark, orb pause, ⌨ type, Add, Submit).
+- **Studio:** dashboard (brand cards, bounties), Alpha Patriot console → **Edit site** tab, **✦ Site Options**, "tap to explore your live site →" → Eve critique editor (〰 mark, orb pause, ⌨ type, Add, Submit).
 - **Market:** Discover, search, Trending, brand cards. **Account:** brands list, Earnings/Subscription/Payouts, Platform admin, Sign out.
 - Cross-tab navigation (Studio · Design · Market · Account).
 
@@ -40,16 +40,16 @@ what works, what crashes, and a prioritized fix list. **Video was out of scope**
 - **Asset generation** across every setting (filled, transparent/chroma-key, design, graphics, enhance, random) → images on Cloudinary.
 - **Refusal handling** → clear 422 message (the fix).
 - **mini-CMS Site Options** text + color (incl. nav) → live with no rebuild.
-- **Venus brain** (`plan-site-edits`) → correctly splits a request into image-swaps vs forge edits.
-- **Venus typed capture** → "N changes captured · Submit".
+- **Eve brain** (`plan-site-edits`) → correctly splits a request into image-swaps vs forge edits.
+- **Eve typed capture** → "N changes captured · Submit".
 - **Market, Account, Studio console (Edit-site tab)** render cleanly. **Zero** client console errors during normal navigation.
 
 ---
 
 ## 3. Crashes / failures observed during the pass
 1. **`ReferenceError: liveOpen is not defined` in `<AccountScreen>`** — a **transient stale Fast-Refresh bundle** caused by editing `account.tsx` in 4 steps while the dev server hot-reloaded an intermediate (state removed, modal still referencing it). **Final source is clean (`tsc` clean); a full reload cleared it and Account renders correctly with the dev button gone.** Process lesson, not a shipped bug. *(Mitigation: when deleting a symbol used in multiple places in a hot-reloaded file, expect a transient red-box until a full reload.)*
-2. **Typed-Venus Submit did not fire `plan-site-edits`/`revise`** in this run (no network call; no `store_revisions` row created). It coincided with the stale-bundle disruption above, so it's **inconclusive** — needs a clean re-test (the underlying pipeline — plan classifier, revise enqueue, approve/merge — was each verified separately this session).
-3. **Local dev-server `502`s** on `/api/generate` + `/api/enhance` intermittently — `expo serve` (the *local* web dev server) choking under heavy image-gen load. **Local-only**; Railway (persistent Node) is unaffected.
+2. **Typed-Eve Submit did not fire `plan-site-edits`/`revise`** in this run (no network call; no `store_revisions` row created). It coincided with the stale-bundle disruption above, so it's **inconclusive** — needs a clean re-test (the underlying pipeline — plan classifier, revise enqueue, approve/merge — was each verified separately this session).
+3. **Local dev-server `502`s** on `/api/generate` + `/api/enhance` intermittently — `expo serve` (the *local* web dev server) choking under heavy image-gen load. **Local-only**; Cloud Run (persistent Node) is unaffected.
 
 ---
 
@@ -71,11 +71,11 @@ what works, what crashes, and a prioritized fix list. **Video was out of scope**
 ### P2 — features / follow-ups (from earlier QA)
 10. ✅ **DONE — Dedicated nav-bar colour.** Added a **Nav bar** field to the mini-CMS colour picker (`site-editor.tsx` `COLOR_FIELDS` + `site-config` GET defaults + the data contract). Wired at the **template level** across all 5 templates + the `_shared` seed: `getBrandColors()` returns `nav` (live override → falls back to `background`, so untouched sites are unchanged), `layout.tsx` injects `--brand-nav`, `globals.css` registers `--color-nav: var(--brand-nav, var(--brand-background))`, and the header/nav uses `bg-nav` instead of `bg-background`. Live-read, no rebuild. All 5 templates `next build` clean; app `tsc` + `expo export` clean. (Ships with the templates-repo push.)
 11. ✅ **DONE — Per-brand favicon = the brand logo.** Wired via Next `metadata.icons` across all 5 templates (live-read `getSiteLogo` on the 4 standard; baked `brand.logoUrl` on street) → no `next/og`, no font (the original CDN-font build break is gone). Removed the static `favicon.ico` (4 standard) + street's hardcoded "SL" monogram `icon.tsx`/`apple-icon.tsx` + unused `brand-mark.tsx`. Logo-less brands fall back to the browser default. All 5 `next build` clean; verified the `<link rel="icon">`/`apple-touch-icon` emit the logo. (Templates-repo `8b76a08`.)
-12. ✅ **DONE — Typed-Venus Submit verified end-to-end** (web preview, clean bundle, comp account, on **Aether Run** — NOT the Stephen Lawyer pilot). Opened the live-site critique editor → ⌨ type *"Add a thin top announcement bar…"* → **Add** → *"1 change captured"* → **Submit →** → **Send 1 change →**. Network confirmed the pipeline fired: `POST /api/creator/plan-site-edits → 200`, `POST /api/creator/revise → 200`, then the Console flipped to the durable **"Venus is building a preview…"** state (polling `revisions?storeSlug=aether-run`). Crash #2 was the stale Fast-Refresh bundle, not a real bug — on a clean bundle Submit fires correctly. Cleaned up: declined the test revision (`POST …/decline → 200`) so the working branch was discarded and **nothing merged to production**. (Confirms the branch-based safety: structural edits go to a `revision/<id>` branch → Vercel preview → merge only on approve; mini-CMS copy/colour + direct image swaps are the only edits that apply live with no branch.)
-13. **On-device verify** the Railway-deployed generate-422 + Enhance-filter fixes.
+12. ✅ **DONE — Typed-Eve Submit verified end-to-end** (web preview, clean bundle, comp account, on **Aether Run** — NOT the Stephen Lawyer pilot). Opened the live-site critique editor → ⌨ type *"Add a thin top announcement bar…"* → **Add** → *"1 change captured"* → **Submit →** → **Send 1 change →**. Network confirmed the pipeline fired: `POST /api/creator/plan-site-edits → 200`, `POST /api/creator/revise → 200`, then the Console flipped to the durable **"Eve is building a preview…"** state (polling `revisions?storeSlug=aether-run`). Crash #2 was the stale Fast-Refresh bundle, not a real bug — on a clean bundle Submit fires correctly. Cleaned up: declined the test revision (`POST …/decline → 200`) so the working branch was discarded and **nothing merged to production**. (Confirms the branch-based safety: structural edits go to a `revision/<id>` branch → Vercel preview → merge only on approve; mini-CMS copy/colour + direct image swaps are the only edits that apply live with no branch.)
+13. **On-device verify** the Cloud Run-deployed generate-422 + Enhance-filter fixes.
 
 ---
 
 ## 5. Notes / preview limitations (not bugs)
-- **Venus voice** (Gemini Live audio) and **"Set as logo/hero" assignment** (native `Alert` + drag) can't be driven in the web preview — native-only; tested via API / on-device earlier.
+- **Eve voice** (Gemini Live audio) and **"Set as logo/hero" assignment** (native `Alert` + drag) can't be driven in the web preview — native-only; tested via API / on-device earlier.
 - The Alpha Patriot test changes (navy nav + red + "Stand Proud. Stand Free.") are **left live** on the test brand; revertable on request.

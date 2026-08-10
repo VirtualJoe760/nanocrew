@@ -7,7 +7,7 @@ doc is *how to write code that fits*.
 ## Language & types
 - **TypeScript, `strict: true`.** No `any` to dodge a type — model the type. `tsc --noEmit` must be clean.
 - **Path aliases:** `@/*` → `src/*`, `@/assets/*` → `assets/*`. Use them; don't write deep `../../..` chains.
-- **Server vs client split:** authed creator logic lives in `src/app/**+api.ts` (server, Railway).
+- **Server vs client split:** authed creator logic lives in `src/app/**+api.ts` (server, Cloud Run).
   Client code calls it via **`apiFetch()`** (`src/lib/api.ts`) — it attaches the Supabase token.
   Never import a `src/lib/*` server module (printful, stripe, db) into client code.
 

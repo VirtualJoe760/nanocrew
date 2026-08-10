@@ -2,7 +2,7 @@
 
 # Nano Crew — context map
 
-AI-native creator commerce (Expo / React Native, iOS + Android): a creator talks to **Venus** →
+AI-native creator commerce (Expo / React Native, iOS + Android): a creator talks to **Eve** →
 Nano Crew auto-generates a Printful-backed shop **and** a per-brand storefront, then they design,
 sell, and edit the site by chatting. This file is the **orchestrator** — it tells you what to read,
 in what order, and which doc owns each task. The durable core (units, conventions, doc-discipline)
@@ -27,8 +27,8 @@ is in [`AGENTS.md`](AGENTS.md); the working rules live in [`docs/context/`](docs
 | The rules / how to work | [`docs/context/`](docs/context/README.md) |
 | A brand website · catalogue · public API | [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](docs/storefront/STOREFRONT_DATA_CONTRACT.md) |
 | App UI — buttons, inputs, tokens, a new screen | [`docs/context/UI_RULES.md`](docs/context/UI_RULES.md) (+ UI_TOKENS, UI_REGISTRY) |
-| Venus build → forge → publish | [`docs/studio/BUILD_FLOW.md`](docs/studio/BUILD_FLOW.md) · [`FORGE_AI.md`](docs/studio/FORGE_AI.md) |
-| Venus's avatar look | [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md) + the Venus Lab (below) |
+| Eve build → forge → publish | [`docs/studio/BUILD_FLOW.md`](docs/studio/BUILD_FLOW.md) · [`FORGE_AI.md`](docs/studio/FORGE_AI.md) |
+| Eve's avatar look | [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md) + the Eve Lab (below) |
 | Identity · orders · money · credits | [`docs/accounts/`](docs/accounts/README.md) |
 | Creating a template | [`docs/storefront/TEMPLATE_AUTHORING.md`](docs/storefront/TEMPLATE_AUTHORING.md) |
 | Schema · endpoints | [`docs/architecture/DATABASE_PLAN.md`](docs/architecture/DATABASE_PLAN.md) · [`API.md`](docs/architecture/API.md) |
@@ -49,15 +49,15 @@ Memory and review are **behaviors, not commands** — see [`docs/context/CODE_ST
 - **/instructions** — regenerate the human onboarding guide ([`CONTEXT_GUIDE.md`](docs/context/CONTEXT_GUIDE.md)).
 
 ## Per-unit rules
-- **App backend** (`src/app/**+api.ts`, Railway): no `fetch()` before the first DB query.
+- **App backend** (`src/app/**+api.ts`, Cloud Run): no `fetch()` before the first DB query.
 - **platform-api/** — its own [`CLAUDE.md`](platform-api/CLAUDE.md) (Next + Stripe; schema-copy sync).
 - **forge-worker/** — its own [`CLAUDE.md`](forge-worker/CLAUDE.md) (re-scp the worker). NB:
   `forge-worker/forge-CLAUDE.md` conditions the storefront-building **robot**, not the dev agent.
 
-## Editing Venus's APPEARANCE? → the Venus Lab
-Source of truth: [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md). Open the Venus Lab from
-**Account → Developer → "Venus Lab (test)"** (gated to josephsardella@gmail.com) to render the live
-avatar (`src/components/backgrounds/venus-head-scene.tsx`); nearly all of her look lives in that one
+## Editing Eve's APPEARANCE? → the Eve Lab
+Source of truth: [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md). Open the Eve Lab from
+**Account → Developer → "Eve Lab (test)"** (gated to josephsardella@gmail.com) to render the live
+avatar (`src/components/backgrounds/venus-orb-scene.tsx`); nearly all of her look lives in that one
 scene file. The `DEV_LIPSYNC_TEST` flag in that scene must be `false` before any build/PR.
 
 ## Status & scope

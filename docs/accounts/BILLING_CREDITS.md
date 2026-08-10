@@ -121,7 +121,7 @@ transactionId. Subscriptions re-verify on launch (new period → new transaction
 **installed** and the client (`src/lib/iap.ios.ts`) + paywall prefer IAP on iOS with a web-Stripe
 fallback; plan products (`com.nanocrew.plan.{starter,pro,advanced}`) are defined in
 `src/lib/iap-products.ts`. **Inert until `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY` +
-`APPLE_BUNDLE_ID` are set on Railway and the App Store Connect products exist** (see `CLAUDE.md`).
+`APPLE_BUNDLE_ID` are set on Cloud Run and the App Store Connect products exist** (see `CLAUDE.md`).
 
 **Grants land via the webhook** — `topup` (credit packs) and `subscription_grant` (monthly
 invoices) are credited in `billing-webhook`, **idempotent on the Stripe id** via
@@ -168,7 +168,7 @@ the funds it holds, and only **transfers the brand's net after the return window
 + RETURN_WINDOW_DAYS`, default 7) with no open claim. Each order carries its own payout state on the
 new `orders.payoutStatus` (`none · held · released · reversed · skipped`) +
 `brandNetCents` / `connectedAccountId` / `payoutReleaseAt` / `payoutTransferId` columns, so a
-half-migrated mix is unambiguous. The release job (`POST /api/internal/release-payouts`, Railway cron,
+half-migrated mix is unambiguous. The release job (`POST /api/internal/release-payouts`, Cloud Run cron,
 `INTERNAL_API_KEY`-gated) scans `payoutStatus='held' AND payoutReleaseAt < now()` and calls
 `releasePayout(order)`. A refund inside the window is just "don't send the transfer" (`skipped`) — no
 risky claw-back; a refund after release falls back to `reverse_transfer` (`reversed`).

@@ -1,6 +1,6 @@
 # Nano Crew Documentation
 
-AI-native creator commerce: a creator talks to **Venus** to define a clothing brand → Nano Crew
+AI-native creator commerce: a creator talks to **Eve** to define a clothing brand → Nano Crew
 auto-generates a Printful-backed shop **and** a per-brand storefront website, then keeps the website
 in sync with the app's catalogue.
 
@@ -33,7 +33,7 @@ of `docs/` is the **domain layer** — how the product works). Start at
 | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) | The four deployable units (app · platform-api · templates · forge) + end-to-end flow |
 | [architecture/TECH_STACK.md](architecture/TECH_STACK.md) | **The full technology inventory** — every framework, dependency, AI model, service, host, and version, by unit. Keep in sync on dependency/model/deploy changes. |
 | [architecture/DATABASE_PLAN.md](architecture/DATABASE_PLAN.md) | The shared multi-tenant schema (creators, stores, catalogues, products, variants, orders, credits, billing) |
-| [architecture/API.md](architecture/API.md) | Endpoint reference — app routes (Railway) + platform-api (Vercel) |
+| [architecture/API.md](architecture/API.md) | Endpoint reference — app routes (Cloud Run) + platform-api (Vercel) |
 
 ## 🏪 Storefront engine (`storefront/`) — how brand sites are made & served
 
@@ -52,11 +52,11 @@ of `docs/` is the **domain layer** — how the product works). Start at
 | Doc | Covers |
 |---|---|
 | [studio/README.md](studio/README.md) | Index of the studio division |
-| [studio/BUILD_FLOW.md](studio/BUILD_FLOW.md) | Talk to Venus → forge builds a presentable site → refine with real assets → publish. **Honest about CURRENT vs TARGET.** |
-| [studio/FORGE_AI.md](studio/FORGE_AI.md) | How our AI talks to the forge robot — Venus now authors the brief + a Master `CLAUDE.md` conditions the robot (both shipped); the remaining gap is eyes + a real quality gate. |
+| [studio/BUILD_FLOW.md](studio/BUILD_FLOW.md) | Talk to Eve → forge builds a presentable site → refine with real assets → publish. **Honest about CURRENT vs TARGET.** |
+| [studio/FORGE_AI.md](studio/FORGE_AI.md) | How our AI talks to the forge robot — Eve now authors the brief + a Master `CLAUDE.md` conditions the robot (both shipped); the remaining gap is eyes + a real quality gate. |
 | [studio/DESIGN_GENERATOR.md](studio/DESIGN_GENERATOR.md) | The Design tab: products (Printful publish), model shots, scene video — the asset pipeline that replaces the forge's temporary placeholders |
 | [studio/EDIT_PIPELINE.md](studio/EDIT_PIPELINE.md) | The live-site edit flow (voice → plan → generate → place → forge), its 5 checkpoints, and how to trace a failed edit in logs + DB. |
-| [studio/VENUS_AVATAR.md](studio/VENUS_AVATAR.md) | **In progress (POC).** Turning Venus from an orb into a glowing wireframe face that materializes from the dot field + lip-syncs to her voice. R3F + Ready Player Me viseme rig; current state, the liveliness recipe, and what's next. |
+| [studio/VENUS_AVATAR.md](studio/VENUS_AVATAR.md) | **In progress (POC).** Turning Eve from an orb into a glowing wireframe face that materializes from the dot field + lip-syncs to her voice. R3F + Ready Player Me viseme rig; current state, the liveliness recipe, and what's next. |
 
 ## 👤 Accounts (`accounts/`) — identity, orders, money
 

@@ -23,14 +23,14 @@ When the forge invokes `claude`, its behavior is steered by exactly these, and n
 | `briefs/01-BRAND.md` | **`authorBrandBrief()`** in `provision.ts` (AI-authored; `buildBrandBriefFallback()` mail-merge if the model key is missing/the call fails) | the dynamic task — a masterful, art-directed build prompt composed by `gemini-2.5-pro` from the `BrandResult` + `siteNotes` + transcript. |
 | `briefs/02-TEST.md` | `buildTestBrief()` in `provision.ts` | the acceptance gate (build clean, no new deps/routes, rails untouched, no placeholder text). |
 | `TEMPLATE.md` | the chosen template repo | the spec: blocks that exist, their props, hard rules, the page skeleton. The forge composes from this. |
-| `VOCABULARY.md` | the chosen template repo | the creator-words → block dictionary. **Read by Venus when she authors the brief, NOT by the forge** — interpretation happens on Venus's side; the forge executes a concrete plan. |
+| `VOCABULARY.md` | the chosen template repo | the creator-words → block dictionary. **Read by Eve when she authors the brief, NOT by the forge** — interpretation happens on Eve's side; the forge executes a concrete plan. |
 | `CLAUDE.md` | the template repo | **an 11-byte file: `@AGENTS.md`.** A pointer, nothing else. |
 | `AGENTS.md` | the template repo | **5 lines, generic**: a boilerplate "this Next.js has breaking changes, read the docs" notice. No brand/quality guidance. |
 | `~/.claude/CLAUDE.md` (global) | the droplet (source: `forge-worker/forge-CLAUDE.md`) | **The Master `CLAUDE.md`** — the standing rulebook the robot holds on **every** build + revision: data-is-law, the off-limits rails, the anti-kitsch quality bar, the temporary-imagery rule, faithfulness to the creator, and "always build + self-check before finishing." |
 
 So the **persistent, workflow-level conditioning** now lives in the Master `CLAUDE.md`, and the
 **per-brand art direction** lives in `briefs/01-BRAND.md` (AI-authored) + `02-TEST.md`, alongside the
-static `TEMPLATE.md`. **`VOCABULARY.md` is no longer a forge input** — Venus reads it when she
+static `TEMPLATE.md`. **`VOCABULARY.md` is no longer a forge input** — Eve reads it when she
 authors the brief (she does the interpreting), so the forge receives a concrete, block-by-block plan
 and never decodes the creator's words itself.
 
@@ -38,8 +38,8 @@ and never decodes the creator's words itself.
 
 `authorBrandBrief(input, template)` in `src/lib/provision.ts` calls `gemini-2.5-pro` (reusing the
 `@google/genai` client that powers the interview) to **compose** `briefs/01-BRAND.md` as a real,
-art-directed, **block-by-block** build prompt. This is **Venus doing the interpreting**: the system
-prompt (`briefAuthorSystem()`) casts the model as Venus (creative director + senior Next.js engineer)
+art-directed, **block-by-block** build prompt. This is **Eve doing the interpreting**: the system
+prompt (`briefAuthorSystem()`) casts the model as Eve (creative director + senior Next.js engineer)
 and tells her to resolve the creator's loose words into concrete blocks; the user content
 (`briefAuthorInput()`) is the structured `BrandResult` + verbatim `siteNotes` + transcript **plus the
 chosen template's `TEMPLATE.md` and `VOCABULARY.md`**, fetched from the templates repo via
@@ -66,7 +66,7 @@ template carries *data* but no *art direction* and no *taste* — no instruction
 with real atmosphere, to replace the template's stock placeholder products with on-brand temporary
 imagery, to make the primary CTA styled/working, and no anti-kitsch bar. The creator's intent is
 flattened into fields. **Fix #4** in [`docs/storefront/BUILD_QUALITY.md`](../storefront/BUILD_QUALITY.md)
-(*make Venus author the brief*) is now **shipped** via `authorBrandBrief()`; the mail-merge survives
+(*make Eve author the brief*) is now **shipped** via `authorBrandBrief()`; the mail-merge survives
 only as the never-break fallback.
 
 `buildTestBrief()` is similarly mechanical: it gates on **compilation + "no literal placeholder
@@ -125,7 +125,7 @@ gap is entirely in *how we talk to the robot and how we judge its work*.
 
 Three coordinated fixes, mapped to the build-quality epic:
 
-1. **✅ SHIPPED — Venus authors a masterful prompt (replaces the mail-merge).** `authorBrandBrief()`
+1. **✅ SHIPPED — Eve authors a masterful prompt (replaces the mail-merge).** `authorBrandBrief()`
    in `src/lib/provision.ts` calls `gemini-2.5-pro` to compose `briefs/01-BRAND.md` as a real
    art-directed brief — establishing hero atmosphere, on-brand temporary imagery to stand in for
    missing products, styled working CTAs, and copy grounded in the creator's actual words. The
@@ -157,7 +157,7 @@ Three coordinated fixes, mapped to the build-quality epic:
 
 - **Fast build-quality loop (no spend):** `npx tsx --env-file=.env.local scripts/studio-flow.ts
   scripts/studio-flow/build.example.json --dry` — renders **every prompt** to
-  `scripts/studio-flow/out/<slug>/` for review (Venus's author system prompt + her full input incl.
+  `scripts/studio-flow/out/<slug>/` for review (Eve's author system prompt + her full input incl.
   the template docs, the authored `01-BRAND.md`, `02-TEST.md`, `brand.json`, the Master `CLAUDE.md`,
   and the forge command). No repo, no forge, no Vercel; one Gemini call. Iterate on
   `briefAuthorSystem()` here.

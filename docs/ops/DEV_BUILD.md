@@ -55,7 +55,7 @@ manages the key during `eas build`.
   `com.nanocrew.plan.{starter,pro,advanced}`.
 - **Config:** create those products in App Store Connect (IAP prices ~43% over web — or 15% on the
   Small Business Program — to absorb Apple's cut) + an In-App Purchase API key, then set
-  `APPLE_IAP_KEY_ID / APPLE_IAP_ISSUER_ID / APPLE_IAP_PRIVATE_KEY / APPLE_BUNDLE_ID` on Railway. IAP
+  `APPLE_IAP_KEY_ID / APPLE_IAP_ISSUER_ID / APPLE_IAP_PRIVATE_KEY / APPLE_BUNDLE_ID` on Cloud Run. IAP
   stays dormant (web Stripe) until those exist.
 
 ## 4. Critique screenshots — WIRED (needs a build with the native module)

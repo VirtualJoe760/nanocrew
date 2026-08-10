@@ -38,7 +38,7 @@ an explicit go.
   collection); finished web-slot groups (hero/cover/logo) auto-clear off the canvas. (PAGES §4.)
 - 🟢 **Feed hidden for v1** — the social feed is removed from the tab bar (code preserved at `/feed`,
   returns in v2). The app now lands on **Studio**; tabs are **Studio · Design · Market · Account**.
-- 🟢 **Build-quality (partial)** — Venus authors the build brief (`authorBrandBrief`) + Master
+- 🟢 **Build-quality (partial)** — Eve authors the build brief (`authorBrandBrief`) + Master
   `CLAUDE.md` conditions the forge robot, both shipped. Remaining: sighted robot + real quality gate
   (see §7).
 
@@ -51,11 +51,11 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   (`src/lib/iap.ios.ts`) + paywall prefer IAP on iOS with web-Stripe fallback. Remaining is Joe's
   config: create the App Store Connect products (`com.nanocrew.credits.{500,1500,5000}` +
   `com.nanocrew.plan.{starter,pro,advanced}`) + an IAP API key, then set
-  `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY / APPLE_BUNDLE_ID` on Railway. (Task #39)
+  `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY / APPLE_BUNDLE_ID` on Cloud Run. (Task #39)
 - 🔒 **Push notifications** — `device_tokens` table, registration endpoint, and `notify.ts` delivery
   are live (revision "ready to review" fires once a token exists). Needs: `expo-notifications` + dev
   build + mint the token (`src/lib/push.ts`, `PUSH_ENABLED`). (Task #35)
-- 🟢 **Critique screenshots** — done, then upgraded (2026-06-20). The live-site editor is Venus-driven:
+- 🟢 **Critique screenshots** — done, then upgraded (2026-06-20). The live-site editor is Eve-driven:
   talk via Gemini Live, tap the squiggle to mark a spot (circle/arrow/any shape; marks anchor to the
   page in document coords), type via the keyboard icon, then Submit. **The primary proof fed to Claude
   is now a REAL on-device annotated screenshot** (page + the mark), captured with `captureRef`
@@ -122,7 +122,7 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   run with live keys; a real critique → revision → approve → merge run from a device.
 
 ## 7. Build quality — remaining (the sighted forge)
-The first two of three fixes shipped (Venus authors the brief; Master `CLAUDE.md` conditions the
+The first two of three fixes shipped (Eve authors the brief; Master `CLAUDE.md` conditions the
 robot — see [../studio/FORGE_AI.md](../studio/FORGE_AI.md) and
 [../storefront/BUILD_QUALITY.md](../storefront/BUILD_QUALITY.md)). Still open:
 - ⚪ **Give the forge robot eyes + a self-critique loop on the provision path** — screenshot the

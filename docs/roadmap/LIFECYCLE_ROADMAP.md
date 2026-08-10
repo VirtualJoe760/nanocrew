@@ -9,11 +9,11 @@ end-to-end flow, an audit of where the code is today, and the sequenced work. Wr
 > **[REMAINING_FEATURES.md](REMAINING_FEATURES.md)** (canonical).
 
 ## Target flow
-1. **Create brand** — Venus interviews the creator → brand identity.
+1. **Create brand** — Eve interviews the creator → brand identity.
 2. **Build site** — Claude provisions a per-brand repo + storefront on the forge, deploys to a
    working/preview URL. The site is **born wired to Stripe (the brand's) + Printful**, so products
    the creator adds appear and are purchasable automatically.
-3. **Edit** — creator marks up the live preview; Venus notates each change.
+3. **Edit** — creator marks up the live preview; Eve notates each change.
 4. **Apply** — Claude applies the batch on a branch → preview → creator approves → merge.
 5. **Finalize + domain** — creator submits final and **buys or transfers a custom domain**.
 6. **Go live** — the site is published on that domain (production); status → `live`.

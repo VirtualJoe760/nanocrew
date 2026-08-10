@@ -2,7 +2,7 @@
 
 How to turn on the **already-built** creator-payout system so sales money flows to the creators who
 make them. **The code is complete and dormant** — this is pure configuration. ~10–15 minutes, all in
-your Stripe Dashboard + one Railway env var.
+your Stripe Dashboard + one Cloud Run env var.
 
 ## What it does (so you know what you're enabling)
 
@@ -45,9 +45,9 @@ screen (`/api/creator/connect`). Accounts are **Stripe Connect Express**.
   their Express dashboard.
 - Confirm **`account_onboarding`** links are allowed (they are by default; `connect.ts` uses them).
 
-## Step 3 — Flip the switch on Railway
+## Step 3 — Flip the switch on Cloud Run
 
-Set on the **app backend** (Railway — `backend-production-d7eb.up.railway.app`):
+Set on the **app backend** (Cloud Run — `backend-production-d7eb.up.railway.app`):
 
 ```
 STRIPE_CONNECT_ENABLED=1

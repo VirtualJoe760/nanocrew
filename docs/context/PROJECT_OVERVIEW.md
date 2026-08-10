@@ -2,7 +2,7 @@
 
 ## What it is
 **Nano Crew** is AI-native creator commerce (Expo / React Native, iOS + Android). A creator talks to
-**Venus** — a voice or typed AI brand consultant — to define a clothing brand. Nano Crew then
+**Eve** — a voice or typed AI brand consultant — to define a clothing brand. Nano Crew then
 auto-generates a Printful-backed shop **and** a per-brand storefront website, and lets the creator
 design products, post, sell, and edit their site by chatting. It's built on the proven
 `stephen-lawyer` create → design → Printful loop.
@@ -13,7 +13,7 @@ build. The wedge is **all-in-one**: an AI voice product-generator + an instant s
 one Supabase identity.
 
 ## The core user flow
-1. **Talk to Venus** (Studio tab) → she interviews the creator and authors a build brief.
+1. **Talk to Eve** (Studio tab) → she interviews the creator and authors a build brief.
 2. **Build** → a conditioned forge robot turns a template into a presentable brand site (instant).
 3. **Design** (Design tab) → the AI designer generates products/logos/model-shots → publish to Printful.
 4. **Refine** → the design generator swaps the forge's placeholders for real assets; edit the site by chatting.

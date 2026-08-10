@@ -129,7 +129,7 @@ now self-canonical (were inheriting `canonical:'/'`).
 Template wiring (`lib/site-config.ts`, all 4 templates): `getBrandColors()` feeds `layout.tsx`'s CSS
 vars, `getSiteCopy()` drives the hero + Our Story copy, `getFontVars()` resolves the font presets to
 CSS stacks + a Google Fonts `<link>`. The write path is **direct** (`POST /api/creator/site-config`,
-access-checked), distinct from the Venus→forge revision flow used for open-ended redesigns.
+access-checked), distinct from the Eve→forge revision flow used for open-ended redesigns.
 
 The Customize editor (`src/components/site-editor.tsx`) picks colors with a **true hex picker** —
 continuous Hue/Saturation/Brightness gradient sliders (react-native-svg) that yield any hex, not a
@@ -186,7 +186,7 @@ all baked into `brand.json` at provision and committed to the repo, so a new bra
 platform with no per-site env setup. Crucially, **no brand repo ever holds a Stripe or Printful
 secret** — checkout proxies to the central POS (`/api/public/checkout`). The values in `brand.json`
 are populated from the **app server's** env (`PLATFORM_API_BASE`, `EXPO_PUBLIC_SUPABASE_*`,
-`PROCESSING_FEE_*`) at provision time — so if those are missing on Railway, new brands ship with an
+`PROCESSING_FEE_*`) at provision time — so if those are missing on Cloud Run, new brands ship with an
 empty `apiBase` and fall back to placeholder products. (Bespoke cutover sites like
 `stephenlawyer.clothing` are the exception: they read `process.env.NANOCREW_API` and so *do* need
 that one var set on their own Vercel project — see "Cutover" below.) The provisioning + config
@@ -207,7 +207,7 @@ matched:
 2. **On-demand rebuild** — `src/lib/storefront-revalidate.ts` `revalidateStorefront(slug)` triggers a
    fresh Vercel build of the brand's project (tries project names `<slug>` and `store-<slug>`). It's
    wired fire-and-forget into the product **DELETE** and **publish** endpoints, so deleting/publishing
-   a product rebuilds that brand's site. Requires `VERCEL_TOKEN` on the app host (set on Railway).
+   a product rebuilds that brand's site. Requires `VERCEL_TOKEN` on the app host (set on Cloud Run).
 
 If a site shows stale products after a change: it either (a) hasn't rebuilt yet (force via
 `revalidateStorefront`), or (b) isn't reading platform-api at all (a custom/un-cutover site).

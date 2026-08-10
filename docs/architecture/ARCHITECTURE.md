@@ -5,7 +5,7 @@
 > it disagrees with the code, that's a bug in one of them — surface it.
 
 Nano Crew is AI-native creator commerce (Expo / React Native, iOS + Android). A creator talks to
-**Venus** (voice or typed AI) to define a clothing brand; Nano Crew auto-generates a Printful-backed
+**Eve** (voice or typed AI) to define a clothing brand; Nano Crew auto-generates a Printful-backed
 shop **and** — for Pro+ — a per-brand storefront website, then lets them design products, post, sell,
 and edit their site by chatting. The lifecycle is **build (instant + presentable) → refine (Design
 generator swaps in real assets) → publish (list in-app / web, optionally link a custom domain)**.
@@ -15,7 +15,7 @@ Companion docs: [DATABASE_PLAN.md](DATABASE_PLAN.md) · [API.md](API.md) ·
 [STOREFRONT_DATA_CONTRACT.md](../storefront/STOREFRONT_DATA_CONTRACT.md) (the live data flow) ·
 [TEMPLATE_AUTHORING.md](../storefront/TEMPLATE_AUTHORING.md) +
 [COMPONENT_SYSTEM.md](../storefront/COMPONENT_SYSTEM.md) (authoring templates) ·
-[BUILD_FLOW.md](../studio/BUILD_FLOW.md) + [FORGE_AI.md](../studio/FORGE_AI.md) (the Venus→forge arc) ·
+[BUILD_FLOW.md](../studio/BUILD_FLOW.md) + [FORGE_AI.md](../studio/FORGE_AI.md) (the Eve→forge arc) ·
 [PAGES.md](../app/PAGES.md) · [PRODUCTION_CHECKLIST.md](../ops/PRODUCTION_CHECKLIST.md).
 
 ## The four deployable units (one shared Supabase Postgres)
@@ -136,7 +136,7 @@ storefronts keep their OWN colors. The app palette lives in **three** files that
 ## End-to-end flow
 
 ```
-Studio interview (Venus — voice/typed, push-to-talk)
+Studio interview (Eve — voice/typed, push-to-talk)
    → BrandResult (name, tagline, palette, voice, story, designStyle, products, verbatim siteNotes)
    → creator reviews/edits on the BRAND COMPILED screen (incl. live template picker)
    → POST /api/store  (canLaunchStore gate: paid plan + brand cap)
@@ -147,7 +147,7 @@ Studio interview (Venus — voice/typed, push-to-talk)
                                                                                ▼
    provisionStorefront() (src/lib/provision.ts, on Cloud Run):            store_revisions queue
      • creates the per-brand GitHub repo  store-<slug>                  (branch '__provision__')
-     • Venus AUTHORS briefs/01-BRAND.md (authorBrandBrief, gemini-2.5-pro;          │
+     • Eve AUTHORS briefs/01-BRAND.md (authorBrandBrief, gemini-2.5-pro;          │
        deterministic mail-merge fallback) + writes brand.json + 02-TEST.md          │
      • INSERTs a store_revisions row (branch '__provision__', status 'building')    │
    forge-worker (systemd, on the droplet) drains it ◄───────────────────────────────┘
@@ -199,9 +199,9 @@ within ~5 min *if the page is requested*. For immediacy, `src/lib/storefront-rev
 `store-<slug>` names); it's wired into `/api/publish` and product delete. Mini-CMS overrides
 (`site-config` / `site-assets`, incl. the logo) are read **live** and need no rebuild at all.
 
-## The Venus → forge build, and template authoring
+## The Eve → forge build, and template authoring
 
-**Venus (AI #1) authors the build brief; a conditioned forge Claude (AI #2) builds the site.** Venus
+**Eve (AI #1) authors the build brief; a conditioned forge Claude (AI #2) builds the site.** Eve
 is the interpreter: she reads the chosen template's `TEMPLATE.md` (block spec + rules) and
 `VOCABULARY.md` (creator-phrase → concrete block/file map) and writes `briefs/01-BRAND.md` as a
 concrete, block-by-block plan, so the forge executes named blocks rather than decoding the creator's
@@ -288,7 +288,7 @@ migration must `ENABLE ROW LEVEL SECURITY` on its new table.
    (Rule #2 of the data contract) — so every generated site ships them.
 6. **Identity edits go through `buildBrandPatch()`**; mini-CMS/site-assets are read live (no rebuild),
    but anything baked into `brand.json` needs the cascade's `brand.json` push + a revalidate.
-7. **The brand-build flow is settled** — make both ends (Venus's brief, the forge robot) brilliant;
+7. **The brand-build flow is settled** — make both ends (Eve's brief, the forge robot) brilliant;
    don't re-architect the build/refine/publish lifecycle.
 8. **Never edit a brand's `main` directly** — site edits ride a `revision/<id>` branch → preview →
    approve → merge.

@@ -29,7 +29,7 @@ Sourced verbatim from the codebase's existing warnings (root `CLAUDE.md`, `TECH_
 - **🟡 Thin-client storefronts carry NO secrets and NO commerce backend.** Checkout proxies to
   platform-api's central POS. POD providers live ONLY in `src/lib/pod-policy.ts` (`POD_PROVIDERS`).
   Adding a provider or our own API is a **platform-api change, zero template edits**.
-- **🟡 Authed routes: no `fetch()` before the first DB query.** The Railway/postgres-js constraint —
+- **🟡 Authed routes: no `fetch()` before the first DB query.** The Cloud Run/postgres-js constraint —
   an outbound fetch before the first query kills the connection on the persistent Node host.
   (Auto-review scans changed `*+api.ts` for this, but can't fully prove ordering — a heuristic, not a hard block.)
 

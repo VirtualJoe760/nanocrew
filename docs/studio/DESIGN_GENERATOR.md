@@ -196,5 +196,5 @@ with real assets; the contract carries them to the live site.
   all three video paths.
 - **Prices below cost+margin are rejected at publish** — fix the price, not the template, if a
   storefront shows `$0.00` (that means the variant's `retailPriceCents` is unset in the DB).
-- **`revalidateStorefront` needs `VERCEL_TOKEN` on the app host (Railway)** — without it, the live
+- **`revalidateStorefront` needs `VERCEL_TOKEN` on the app host (Cloud Run)** — without it, the live
   site only self-heals via ISR (~5 min), not on-demand.

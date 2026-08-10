@@ -4,9 +4,10 @@ _Last updated: 2026-06-15. Mostly your account/billing actions now — the code 
 
 ## 🚨 Do now (P0)
 
-- [ ] **Railway billing** — the project is on a trial ("30 days or $4.99 left"). When it lapses the
-      backend (`backend-production-d7eb.up.railway.app`) goes offline and the whole app dies.
-      → Railway → Settings → add a payment method / pick a plan.
+- [x] ~~**Railway billing**~~ — **RESOLVED by migrating off Railway (Jul 2026).** The trial did
+      lapse exactly as predicted here and took the backend down (`404 Application not found`).
+      The backend now runs on **Google Cloud Run free tier** at `https://api.nanocrew.app`
+      (project `nanocrew-api`), with a $5 budget alert and a keep-warm ping. No billing action needed.
 - [ ] **Verify build #12 on device** (TestFlight, once it finishes) — test **native "Continue with
       Apple"** and **push notifications** on-device. Confirms #9 + #13 too.
 - [ ] **Create one test brand in Studio** — your account is now Pro, so provisioning is unlocked and
@@ -42,7 +43,7 @@ _Last updated: 2026-06-15. Mostly your account/billing actions now — the code 
 
 - [x] Supabase production auth — Site URL, redirects, **native Sign in with Apple** (no secret)
 - [x] Apple App ID — all 3 capabilities (IAP, Push, Apple); old profile invalidated → clean regen
-- [x] **Railway GitHub auto-deploy** — reconnected + enabled (push → deploy)
+- [x] ~~**Railway GitHub auto-deploy**~~ — superseded: deploys are now `./scripts/deploy-cloudrun.sh nanocrew-api us-west1 backend`
 - [x] **Privacy + Terms** live (`/privacy`, `/terms`) + linked in-app
 - [x] **Facebook** hidden for v1
 - [x] **General Sans** font bundled + wired (ships build #13+)
