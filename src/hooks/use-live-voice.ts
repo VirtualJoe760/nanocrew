@@ -25,6 +25,8 @@ export interface UseLiveVoice {
   sendText: (text: string) => void;
   /** Push silent context into the session (no reply) — e.g. which site section was just circled. */
   sendContext: (text: string) => void;
+  /** Let her SEE something — a settled design, a product shot. Base64 + mime, optional note. */
+  sendImage: (base64: string, mimeType: string, note?: string) => void;
   /** Text-only (keyboard chat) mode: mute the mic AND her voice playback. */
   mute: (m: boolean) => void;
   /** End the interview: extract the BrandResult from the transcript via /api/extract-brand. */
@@ -111,6 +113,10 @@ export function useLiveVoice(opts: {
     sessionRef.current?.sendContext(text);
   }, []);
 
+  const sendImage = useCallback((base64: string, mimeType: string, note?: string) => {
+    sessionRef.current?.sendImage(base64, mimeType, note);
+  }, []);
+
   const mute = useCallback((m: boolean) => {
     sessionRef.current?.setMuted(m);
   }, []);
@@ -149,5 +155,5 @@ export function useLiveVoice(opts: {
   // Always tear down on unmount.
   useEffect(() => () => { sessionRef.current?.stop(); sessionRef.current = null; }, []);
 
-  return { state, venusText, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, sendText, sendContext, mute, finalize };
+  return { state, venusText, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, sendText, sendContext, sendImage, mute, finalize };
 }

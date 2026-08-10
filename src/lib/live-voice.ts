@@ -572,6 +572,28 @@ export class LiveVoiceSession {
     }
   }
 
+  /** Show her an IMAGE mid-conversation (a design she just made, a product shot).
+   *
+   *  Deliberately `sendClientContent` and not `sendRealtimeInput`: realtime input is the streaming
+   *  path for the mic, whereas this is a one-shot turn part — the same mechanism sendContext already
+   *  proves works on this session. `turnComplete:false` so it joins her context without forcing a
+   *  reply; the caller decides whether to prompt her.
+   *
+   *  Cost: an image is ~1.3k input tokens (~$0.004 at $3/1M). Send a SETTLED image once — never per
+   *  frame, and never on every edit keystroke. */
+  sendImage(base64: string, mimeType: string, note?: string) {
+    if (!base64) return;
+    try {
+      const parts: { text?: string; inlineData?: { data: string; mimeType: string } }[] = [
+        { inlineData: { data: base64, mimeType } },
+      ];
+      if (note?.trim()) parts.push({ text: note.trim() });
+      this.session?.sendClientContent({ turns: [{ role: 'user', parts }], turnComplete: false });
+    } catch {
+      /* socket closing — best-effort, same as sendContext */
+    }
+  }
+
   private fail(msg: string) {
     this.clearWatchdog();
     this.cb.onError?.(msg);
