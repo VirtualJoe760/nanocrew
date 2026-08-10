@@ -72,7 +72,10 @@ function StudioScreen() {
   // Eve only listens when her tab is actually the active one (not just mounted-but-hidden by the
   // tab navigator) AND the brand deck isn't pulled down over her.
   const focused = usePathname().startsWith('/studio');
-  const deep = eve?.state === 'developing' || eve?.state === 'design';
+  // `design` is deliberately NOT deep: it renders as a translucent overlay ON TOP of EveHome so she
+  // KEEPS LISTENING while you talk about the design. Swapping it in (the old behaviour) unmounted
+  // EveHome, and useLiveVoice's cleanup killed the mic — she was mute on her own "voice" surface.
+  const deep = eve?.state === 'developing';
   // Top-edge pull-down (or tap the handle) opens the deck.
   const summonPan = Gesture.Pan()
     .activeOffsetY(12)
@@ -260,15 +263,6 @@ function StudioScreen() {
             setShowComposer(true);
           }}
         />
-      ) : session && eve?.state === 'design' ? (
-        <EveDesign
-          idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
-          onExit={() => setEve(null)}
-          onHandoff={() => {
-            setEve(null);
-            router.push('/design');
-          }}
-        />
       ) : !deep ? (
         !session ? (
           // Signed-out gate — dim Eve with the scrim so the copy reads.
@@ -344,6 +338,24 @@ function StudioScreen() {
           </>
         )
       ) : null}
+
+      {/* DESIGN — the translucent popup Eve SPAWNS over her own screen. EveHome stays mounted
+          underneath (see `deep` above), so her mic keeps listening and you just talk about what she
+          made: "put it on a hoodie". The scrim is see-through on purpose — her orb glows behind it,
+          so it reads as her holding the design up rather than a screen you navigated to. */}
+      {session && eve?.state === 'design' ? (
+        <View style={StyleSheet.absoluteFill}>
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.designScrim]} />
+          <EveDesign
+            idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
+            onExit={() => setEve(null)}
+            onHandoff={() => {
+              setEve(null);
+              router.push('/design');
+            }}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -360,6 +372,10 @@ const styles = StyleSheet.create({
   ctaSecondary: { paddingVertical: Spacing.two },
   ctaSecondaryText: { color: '#9396a0' },
   introFoot: { color: '#9396a0', fontSize: 12, marginTop: Spacing.three, textAlign: 'center' },
+
+  // Translucent bed for the design popup — dark enough that the artwork and Eve's line read, sheer
+  // enough that her orb still shows through underneath (she's holding it up, not replacing herself).
+  designScrim: { backgroundColor: 'rgba(6,8,15,0.78)' },
 
   // The always-armed top-edge zone that reveals the brand deck (pull down or tap the pill).
   summonZone: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 40, alignItems: 'center' },
