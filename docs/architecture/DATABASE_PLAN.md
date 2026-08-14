@@ -74,6 +74,10 @@ One per creator website/store (the thing the app generates).
 - `brandProfile` (jsonb) — Studio interview output: identity + character data (movie lines, etc.).
 - `designSystem` (jsonb) — generated palette / typography / texture / motion language.
 - `logoUrl`, `faviconUrl`, `ogImageUrl`, `tagline`, `descriptionMd`.
+- `logoKit` (jsonb, migration 0025) — the full identity asset set (`lib/logo-kit.ts` `LogoKit`):
+  two generated transparent masters (`wordmark`, `mark`) plus derived Cloudinary-transform URLs
+  (mono variants / `appTile` / `touchIcon` / `favicon`). `logoUrl` remains the primary/legacy
+  single asset; the kit is the curated superset (Eve's asset-review stage populates it).
 - `siteAssets` (jsonb) — creator-generated website graphics (hero media, section images) that override
   the template's `content/placeholders.json`. See STOREFRONT_DATA_CONTRACT `/site-assets`.
 - `siteConfig` (jsonb) — mini-CMS overrides (copy / colors / fonts) edited in Studio, read LIVE by the

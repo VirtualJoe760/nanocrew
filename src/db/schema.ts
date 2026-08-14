@@ -119,6 +119,10 @@ export const stores = pgTable(
     // Generated design system: palette / typography / texture / motion language.
     designSystem: jsonb('design_system'),
     logoUrl: text('logo_url'),
+    // The full identity asset set (lib/logo-kit.ts LogoKit): 2 generated masters (wordmark + icon
+    // mark, transparent) + derived Cloudinary-transform URLs (mono variants, app tile, touch icon,
+    // favicon). logoUrl stays the primary/legacy single asset; the kit is the curated superset.
+    logoKit: jsonb('logo_kit'),
     faviconUrl: text('favicon_url'),
     ogImageUrl: text('og_image_url'),
     // Creator-generated WEBSITE graphics (Design tab → Graphics), served to the storefront and

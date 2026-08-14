@@ -38,6 +38,7 @@ export type LogoBrief = {
 export async function generateLogo(
   brand: LogoBrief,
   folder = 'nanocrew/logos',
+  styleOverride?: LogoStyle,
 ): Promise<{ url: string; style: LogoStyle } | null> {
   try {
     const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
@@ -46,18 +47,29 @@ export async function generateLogo(
     const palette = brand.designSystem.palette.map((p) => `${p.role}: ${p.hex}`).join(', ');
     // Wordmarks are WIDE artifacts (navbar lockups) — a square canvas shrinks the name to a strip.
     // imageConfig.aspectRatio is what the model honors (prompt text is ignored for AR).
-    const style = classifyLogoStyle(brand.logo.direction);
+    // The KIT generates BOTH masters (styleOverride) — when the asked-for style disagrees with the
+    // interview direction, the direction is adapted so a wordmark brief can still yield an icon
+    // mark (and vice versa) without Eve re-interviewing.
+    const style = styleOverride ?? classifyLogoStyle(brand.logo.direction);
     const aspectRatio = style === 'wordmark' ? '16:9' : '1:1';
+    const naturalStyle = classifyLogoStyle(brand.logo.direction);
+    const direction =
+      style === naturalStyle
+        ? brand.logo.direction
+        : style === 'mark'
+          ? `A pure ICON mark with NO text — a single simple symbol distilled from this identity: ${brand.logo.direction}`
+          : `A clean WORDMARK — the brand name set in type fitting this identity: ${brand.logo.direction}`;
     const prompt =
-      `Logo for the clothing brand "${brand.name}". ${brand.logo.direction}. ` +
+      `Logo for the clothing brand "${brand.name}". ${direction}. ` +
       `${brand.designStyle} design style. THE MARK ITSELF uses ONLY these brand colors: ${palette} — ` +
       'and must contain NO magenta or pink hues. ' +
       'THE BACKGROUND is separate from the mark and is NOT one of the brand colors: fill it edge to edge ' +
       'with SOLID, UNIFORM, PURE MAGENTA (#FF00FF) — even if the brand palette is dark, the backdrop is ' +
       'ALWAYS magenta (it is keyed out to a transparent PNG). Never render a checkerboard pattern. ' +
       'If the direction calls for text, render the brand name EXACTLY ONCE, spelled precisely, ' +
-      'and no other text. The mark must be clearly legible against the brand background color. ' +
-      'No border or frame around the canvas. No watermark.';
+      'and no other text. The mark floats DIRECTLY on the magenta — never draw a card, panel, ' +
+      'plaque, box, or frame behind or around it, and no stray marks anywhere else on the canvas. ' +
+      'No watermark.';
     const generate = async (text: string): Promise<Buffer | null> => {
       const res = (await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
