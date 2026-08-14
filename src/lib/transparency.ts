@@ -16,11 +16,8 @@ function decode(input: Buffer): { data: Buffer; width: number; height: number } 
   return { data: Buffer.from(img.data), width: img.width, height: img.height };
 }
 
-export async function keyOutMagenta(input: Buffer): Promise<Buffer> {
-  const { data, width, height } = decode(input);
-
-  // The model's "pure magenta" is never exactly #FF00FF — sample the border to learn the
-  // ACTUAL background color, then key on distance to it.
+/** Median border color of an image — the sampler keyOutMagenta keys against. */
+function borderMedian(data: Buffer, width: number, height: number): [number, number, number] {
   const samples: number[][] = [];
   const ring = 3;
   for (let x = 0; x < width; x += 7) {
@@ -39,9 +36,28 @@ export async function keyOutMagenta(input: Buffer): Promise<Buffer> {
     const vals = samples.map((s) => s[idx]).sort((a, b) => a - b);
     return vals[Math.floor(vals.length / 2)];
   };
-  const bgR = median(0);
-  const bgG = median(1);
-  const bgB = median(2);
+  return [median(0), median(1), median(2)];
+}
+
+/** Did the model actually obey the magenta-backdrop instruction? Callers use this to RETRY a
+ *  generation before shipping an opaque tile as a brand's logo (recurring bug B5 — dark-palette
+ *  brands got black backdrops and the key no-oped). Same test keyOutMagenta applies internally. */
+export function borderLooksMagenta(input: Buffer): boolean {
+  try {
+    const { data, width, height } = decode(input);
+    const [r, g, b] = borderMedian(data, width, height);
+    return Math.min(r, b) - g > 40;
+  } catch {
+    return false;
+  }
+}
+
+export async function keyOutMagenta(input: Buffer): Promise<Buffer> {
+  const { data, width, height } = decode(input);
+
+  // The model's "pure magenta" is never exactly #FF00FF — sample the border to learn the
+  // ACTUAL background color, then key on distance to it.
+  const [bgR, bgG, bgB] = borderMedian(data, width, height);
 
   // Only key if the border really is magenta-ish — otherwise this is a filled image and
   // we must not punch holes in it.

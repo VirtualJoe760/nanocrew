@@ -60,3 +60,10 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 
 ### Cosmetic
 - Product picker breadcrumb renders a trailing "›" after the last crumb.
+
+### B9 · High · Storefront CTAs are invisible for dark-palette brands
+- **Evidence:** night-circuit's hero "Shop the collection": computed `background: rgb(0,0,0)`, `color: rgb(18,18,18)` — ~1.02:1 contrast. Mechanism: the template button is `bg-primary text-background`, which assumes background contrasts with primary; every dark brand breaks it.
+- **Fix (shipped, both repos):** brand.json now carries derived WCAG-AA `palette.onPrimary`/`onAccent` ([provision.ts](../../src/lib/provision.ts) + new [contrast.ts](../../src/lib/contrast.ts); STOREFRONT_ENGINE.md updated); all 5 templates consume them (`text-on-primary`) with a local luminance fallback for existing sites. Live sites pick colors up via the mini-CMS live-read once templates redeploy; night-circuit needs the template redeploy + revision.
+
+### B5 addendum — recurrence evidence (4 most-recent brands before the fix)
+- splift + quiet-grace: magenta INSIDE the mark (the key color — keying roulette); retro-dynasty: residual grey disc backdrop shipped; night-circuit: doubled name + black tile. Confirms single-shot generation with an unenforced contract. Shipped: backdrop validation gate + one retry in generateLogo ([store+api.ts](../../src/app/api/store+api.ts), `borderLooksMagenta` exported from [transparency.ts](../../src/lib/transparency.ts)). Recommended (report): compose wordmark logos deterministically with real fonts; add a cheap vision check (name-once) before shipping.

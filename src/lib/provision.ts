@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { eq } from 'drizzle-orm';
 
+import { bestOn } from '@/lib/contrast';
 import { db, schema } from '@/lib/db';
 import { pickFontPairing } from '@/lib/font-pairings';
 import { generateHeroImage } from '@/lib/hero-image';
@@ -76,12 +77,20 @@ function buildBrandJson(input: ProvisionInput, cfg: NonNullable<ReturnType<typeo
   const byRole = (want: string[]) =>
     brand.designSystem.palette.find((p) => want.some((w) => p.role.toLowerCase().includes(w)))?.hex;
   const primary = byRole(['primary', 'main', 'brand']) ?? brand.designSystem.palette[0]?.hex ?? '#111111';
+  const background = byRole(['background', 'base', 'canvas']) ?? '#ffffff';
+  const text = byRole(['text', 'ink', 'foreground']) ?? primary;
+  const accent = byRole(['accent', 'highlight']) ?? primary;
   const palette = {
     primary,
     secondary: byRole(['secondary', 'support']) ?? brand.designSystem.palette[1]?.hex ?? '#6b7280',
-    accent: byRole(['accent', 'highlight']) ?? primary,
-    background: byRole(['background', 'base', 'canvas']) ?? '#ffffff',
-    text: byRole(['text', 'ink', 'foreground']) ?? primary,
+    accent,
+    background,
+    text,
+    // DERIVED, contrast-safe "on" colors (WCAG AA against their base) — the chosen palette above is
+    // written verbatim as ever; these exist so template pairings like a primary-filled CTA never go
+    // black-on-black for dark brands (B9). Templates read them with a fallback for older sites.
+    onPrimary: bestOn(primary, [background, text]),
+    onAccent: bestOn(accent, [background, text]),
   };
   return {
     storeId: input.storeId,

@@ -115,7 +115,8 @@ the creator chose are hard constraints). Shape (from the live code):
   "name": "Alpha Master",
   "tagline": "…",
   "logoUrl": "https://res.cloudinary.com/…",
-  "palette": { "primary": "#…", "secondary": "#…", "accent": "#…", "background": "#…", "text": "#…" },
+  "palette": { "primary": "#…", "secondary": "#…", "accent": "#…", "background": "#…", "text": "#…",
+               "onPrimary": "#…", "onAccent": "#…" },
   "typography": { "display": "…", "body": "…" },
   "designStyle": "bold",
   "voice": "…",  "story": "…",  "vibeKeywords": ["…"],  "products": ["…"],
@@ -127,7 +128,12 @@ the creator chose are hard constraints). Shape (from the live code):
 ```
 
 `palette` is derived by matching `brand.designSystem.palette[].role` against keyword sets
-(primary/secondary/accent/background/text) with sensible fallbacks. `apiBase`,
+(primary/secondary/accent/background/text) with sensible fallbacks. `onPrimary`/`onAccent` are
+**derived, contrast-safe text colors** for primary/accent-filled surfaces (WCAG AA via
+`lib/contrast.ts` — prefers `background`/`text` when they clear 4.5:1, else white/near-black).
+The chosen palette is still written verbatim; templates read the `on` tokens with a local
+luminance fallback so pre-`onPrimary` sites keep working (added 2026-08-14, bug B9 — dark
+brands shipped invisible black-on-black CTAs). `apiBase`,
 `platform.*`, and `commerce.*` come from env (`PLATFORM_API_BASE`,
 `EXPO_PUBLIC_SUPABASE_*`, `PROCESSING_FEE_*`). Copy lives in `content/` — written by Claude
 in the brand's voice, editable during revisions.

@@ -40,18 +40,33 @@ async function generateLogo(brand: BrandResult): Promise<string | null> {
       'ALWAYS magenta (it is keyed out to a transparent PNG). Never render a checkerboard pattern. ' +
       'Square 1:1. If the direction calls for text, render the brand name EXACTLY ONCE, spelled precisely, ' +
       'and no other text. No border or frame around the canvas. No watermark.';
-    const res = (await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: { responseModalities: [Modality.IMAGE] },
-    })) as GenResponse;
-    const part = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-    if (!part?.inlineData?.data) return null;
-    let buffer: Buffer = Buffer.from(part.inlineData.data, 'base64');
+    const generate = async (text: string): Promise<Buffer | null> => {
+      const res = (await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: [{ role: 'user', parts: [{ text }] }],
+        config: { responseModalities: [Modality.IMAGE] },
+      })) as GenResponse;
+      const part = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+      return part?.inlineData?.data ? Buffer.from(part.inlineData.data, 'base64') : null;
+    };
+    let buffer = await generate(prompt);
+    if (!buffer) return null;
     try {
+      const { borderLooksMagenta, keyOutMagenta } = await import('@/lib/transparency');
+      // VALIDATION GATE (recurring bug B5): dark-palette brands kept getting non-magenta backdrops,
+      // the key no-oped, and an opaque tile shipped as the brand's face. One retry with the magenta
+      // demand escalated; if the model still refuses, ship the filled mark as before (never fail
+      // store creation over a logo).
+      if (!borderLooksMagenta(buffer)) {
+        console.warn('[store:logo] backdrop not magenta — retrying once with escalated directive');
+        const retry = await generate(
+          `${prompt} CRITICAL, HIGHEST PRIORITY: every border pixel of the image MUST be pure magenta ` +
+            '#FF00FF. A non-magenta background is a FAILED generation.',
+        );
+        if (retry && borderLooksMagenta(retry)) buffer = retry;
+      }
       // Key the magenta backdrop out to real alpha. keyOutMagenta is a no-op if the border isn't
       // actually magenta (model ignored the instruction) → we ship the filled mark rather than fail.
-      const { keyOutMagenta } = await import('@/lib/transparency');
       buffer = (await keyOutMagenta(buffer)) as Buffer;
     } catch {
       // Keying failure shouldn't kill brand creation — ship the raw image.
