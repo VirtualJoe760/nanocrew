@@ -67,3 +67,6 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 
 ### B5 addendum — recurrence evidence (4 most-recent brands before the fix)
 - splift + quiet-grace: magenta INSIDE the mark (the key color — keying roulette); retro-dynasty: residual grey disc backdrop shipped; night-circuit: doubled name + black tile. Confirms single-shot generation with an unenforced contract. Shipped: backdrop validation gate + one retry in generateLogo ([store+api.ts](../../src/app/api/store+api.ts), `borderLooksMagenta` exported from [transparency.ts](../../src/lib/transparency.ts)). Recommended (report): compose wordmark logos deterministically with real fonts; add a cheap vision check (name-once) before shipping.
+
+### B10 · Med · FIXED · Product search fails natural queries
+- "oversized tee" → 0 results; "oversized" → 10. Cause: whole-phrase `name.includes(query)` — no tokenization, no synonyms ([ProductPicker.tsx](../../src/components/designer/ProductPicker.tsx)). Fixed with tokenized AND-matching + a small synonym map (tee→t-shirt, hoody→hoodie, …). Verified: "oversized tee" now returns 5. (Nit left as-is: "1 RESULTS" pluralization.)

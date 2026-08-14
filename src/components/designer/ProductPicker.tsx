@@ -120,8 +120,20 @@ export function ProductPicker({
 
   const matches = useMemo(() => {
     if (!searching) return [];
-    const q = query.trim().toLowerCase();
-    return blanks.filter((b) => b.name.toLowerCase().includes(q)).slice(0, 60);
+    // Tokenized AND-match, not whole-phrase substring — "oversized tee" must find "Oversized
+    // Faded T-Shirt" (B10: the phrase match returned 0 for any natural word order/synonym).
+    const NORMALIZE: Record<string, string> = {
+      tee: 't-shirt', tees: 't-shirt', tshirt: 't-shirt', tshirts: 't-shirt',
+      hoody: 'hoodie', hoodies: 'hoodie', sweatshirts: 'sweatshirt',
+      hats: 'hat', caps: 'cap', beanies: 'beanie', totes: 'tote',
+    };
+    const tokens = query.trim().toLowerCase().split(/\s+/).map((t) => NORMALIZE[t] ?? t);
+    return blanks
+      .filter((b) => {
+        const n = b.name.toLowerCase();
+        return tokens.every((t) => n.includes(t));
+      })
+      .slice(0, 60);
   }, [blanks, query, searching]);
 
   // "Popular": a quick-pick rail of common items in the current scope, shown in front of the
