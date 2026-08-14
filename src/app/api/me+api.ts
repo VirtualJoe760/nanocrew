@@ -80,7 +80,9 @@ export async function DELETE(req: Request) {
     await db.delete(schema.creators).where(eq(schema.creators.id, user.id));
 
     const url = process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // SUPABASE_SECRET_KEY is the deployed name (new-style sb_secret key); the old service-role
+    // name is kept as a fallback. Reading only the old name silently skipped this delete (K1).
+    const serviceKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (url && serviceKey) {
       await fetch(`${url}/auth/v1/admin/users/${user.id}`, {
         method: 'DELETE',

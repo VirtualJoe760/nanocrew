@@ -28,11 +28,11 @@ Intents:
 - "create-brand": they clearly want to start/build a NEW brand ("let's build another brand", "I want to start a new label").
 - "new-design": they clearly ask to create a design, graphic, or meme ("make me a meme about mondays", "new tee design with a chrome skull"). Put their concept in idea, short.
 - "write-post": they clearly ask to write/draft a blog post. topic = short topic.
-- "digest": they ask how their store/brand is doing, for stats, sales, orders, views, revenue, or a status update ("how am I doing", "yes" to a digest offer, "show my numbers", "any sales?").
+- "digest": they ASK how their store/brand is doing, for stats, sales, orders, views, revenue, or a status update ("how am I doing", "yes" to a digest offer, "show my numbers", "any sales?"). Statements ABOUT sales or news that don't ask for numbers ("we sold out at the market last weekend") are conversation → "none".
 - "done": they are clearly finished with Eve ("that's all for now", "we're done", "goodbye Eve").
 - "none": EVERYTHING else — answers to Eve's questions, brand-interview content (names, products, colors, style talk), chit-chat, thinking aloud, vague wishes. PRECISION over recall: when in doubt, return "none".
 
-If interviewActive is true they are mid brand-interview: near-everything is interview content — return "none" unless the utterance is an explicit redirect AWAY from it ("actually forget this, I want to edit my site instead").`;
+If interviewActive is true they are mid brand-interview: near-everything is interview content — return "none" unless the utterance is an explicit redirect AWAY from it ("actually forget this, I want to edit my site instead"). Even a clear-sounding task ("make me a design of a skull") is interview content mid-interview — they are describing their brand's products/graphics, not leaving the interview → "none".`;
 
 async function generate(ai: GoogleGenAI, params: Parameters<GoogleGenAI['models']['generateContent']>[0], attempts = 2) {
   let lastErr: unknown;
