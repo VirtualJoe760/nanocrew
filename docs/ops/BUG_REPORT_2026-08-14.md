@@ -40,3 +40,19 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 - Eve (web, post-B4-fix): connect → greeting → 3-turn typed interview → ✓ Build latch → extraction (on-brief palette/story) → template picker → store created `night-circuit` → forge site READY in ~3 min → storefront live at store-night-circuit.vercel.app (on-brand hero/logo/OG).
 - Digest: real numbers (0 orders / $0 / 1 view — the view being my own storefront visit); status-aware suggestion; guide greeting is store-aware ("isn't live yet — shall we finalize?").
 - API: auth battery 9/9; eve-route intent battery 17/17 post-fix; rate limiter 429s at 60/min; /api/idea, /api/say, /api/generate (design persisted for night-circuit); tenant scoping (non-member 404 vs owner 400-past-gate); K1 deletion e2e (auth identity 404 after DELETE /api/me).
+
+### B5 · Med · Generated brand logo renders the name TWICE (+ transparency not applied)
+- **Evidence:** night-circuit's logo (stores.logoUrl) reads "NIGHT" stacked over "Night Circuit" on a solid black tile with a stray white frame — this is the brand's face in the site header, OG card, and app.
+- **Cause:** the logo prompt injects `brand.name` AND `brand.logo.direction` (which usually restates the name) — the model draws both. The magenta→transparent chroma-key path also didn't take (solid black bg came back).
+- **Fix (shipped, prompt-side):** [store+api.ts](../../src/app/api/store+api.ts) now instructs "render the brand name EXACTLY ONCE (the direction may repeat it; never draw it twice)". Transparency-keying reliability + regenerating night-circuit's logo → follow-up.
+
+### B6 · Med · FIXED · Product picker collapses to a single column on 375pt screens
+- **Evidence:** category + search grids rendered one card per row with a dead right half (web mobile viewport; would reproduce natively on iPhone SE/mini-class).
+- **Cause:** `CARD = Math.round((width−2·16−16)/2)` → at width=375: round(163.5)=164 → row 344px > 343px available → every 2nd card wraps. 390pt+ devices don't hit it.
+- **Fix (shipped, verified live):** `Math.floor` in [ProductPicker.tsx](../../src/components/designer/ProductPicker.tsx) — two columns confirmed in the browser at 375pt.
+
+### B7 · Low · Notice toasts anchor over primary CTAs and swallow taps
+- The "No microphone access" toast rendered on top of BrandReview's "Create my store" button; the CTA was untappable until the toast was dismissed. Anchor toasts above the CTA zone (or make them non-blocking / auto-dismiss).
+
+### Cosmetic
+- Product picker breadcrumb renders a trailing "›" after the last crumb.

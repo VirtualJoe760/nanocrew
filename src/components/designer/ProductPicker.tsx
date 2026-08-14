@@ -60,7 +60,9 @@ export function ProductPicker({
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const COLS = 2;
-  const CARD = Math.round((width - Spacing.three * 2 - Spacing.three * (COLS - 1)) / COLS);
+  // floor, not round: rounding .5 up makes the two-card row 1px wider than the container on 375pt
+  // screens (SE/mini class) and every second card wraps — the picker collapsed to a single column.
+  const CARD = Math.floor((width - Spacing.three * 2 - Spacing.three * (COLS - 1)) / COLS);
 
   // Drill state. supplier is fixed to the single supplier today; type/gender/category drive the levels.
   const [type, setType] = useState<ProductType | null>(null);

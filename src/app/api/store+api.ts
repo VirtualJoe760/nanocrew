@@ -37,7 +37,8 @@ async function generateLogo(brand: BrandResult): Promise<string | null> {
       'A clean, iconic mark centered on a SOLID, UNIFORM, PURE MAGENTA (#FF00FF) background ' +
       'filling the entire frame edge to edge — the mark itself must contain NO magenta or pink ' +
       'hues (the magenta is keyed out to a transparent PNG). Never render a checkerboard pattern. ' +
-      'Square 1:1. No text other than the brand name, and only if the description asks for it. No watermark.';
+      'Square 1:1. No text other than the brand name, and only if the description asks for it — if it appears, ' +
+      'render the brand name EXACTLY ONCE (the direction may repeat it; never draw it twice). No watermark.';
     const res = (await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
