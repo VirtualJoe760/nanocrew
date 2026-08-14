@@ -62,7 +62,8 @@ export async function POST(req: Request) {
         .slice(0, 40) || 'store';
 
     const { designSystem, ...profile } = brand;
-    const logoUrl = await generateLogo(brand);
+    const logo = await generateLogo(brand);
+    const logoUrl = logo?.url ?? null;
     // The brand's OG / share card AND its avatar in-app — logo + tagline on the brand bg.
     // Built whether or not a website ever ships, so a shop-only brand still has a clean visual.
     const ogImageUrl = buildOgImageUrl({
@@ -86,7 +87,8 @@ export async function POST(req: Request) {
             descriptionMd: brand.story,
             // The raw interview is brand data too — the template engine and future
             // revisions mine what the creator actually said.
-            brandProfile: { ...profile, transcript },
+            // logoStyle rides the profile: templates suppress the text name next to a wordmark logo.
+            brandProfile: { ...profile, transcript, ...(logo ? { logoStyle: logo.style } : {}) },
             designSystem,
             logoUrl,
             ogImageUrl,
@@ -111,6 +113,7 @@ export async function POST(req: Request) {
             slug: store.slug,
             brand,
             logoUrl,
+            logoStyle: logo?.style,
             transcript,
           });
         }

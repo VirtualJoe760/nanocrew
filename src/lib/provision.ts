@@ -29,6 +29,7 @@ export type ProvisionInput = {
   slug: string;
   brand: BrandResult;
   logoUrl: string | null;
+  logoStyle?: 'wordmark' | 'mark';
   transcript: ChatMessage[];
 };
 
@@ -98,6 +99,9 @@ function buildBrandJson(input: ProvisionInput, cfg: NonNullable<ReturnType<typeo
     name: brand.name,
     tagline: brand.tagline,
     logoUrl: input.logoUrl ?? '',
+    // 'wordmark' logos already carry the brand name — templates render the text name ONLY for
+    // 'mark' (icon) logos or when there is no logo at all (never name-next-to-wordmark).
+    logoStyle: input.logoStyle ?? 'mark',
     palette,
     typography: brand.designSystem.typography,
     // The CONCRETE font presets picked for this brand (curated per-style pairing scored against

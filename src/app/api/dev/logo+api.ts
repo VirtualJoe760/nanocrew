@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   }
 
   const t0 = Date.now();
-  const url = await generateLogo(brief, 'nanocrew/logo-lab');
-  if (!url) return Response.json({ error: 'generation failed (model returned no image)' }, { status: 502 });
-  return Response.json({ url, ms: Date.now() - t0 });
+  const r = await generateLogo(brief, 'nanocrew/logo-lab');
+  if (!r) return Response.json({ error: 'generation failed (model returned no image)' }, { status: 502 });
+  return Response.json({ url: r.url, style: r.style, ms: Date.now() - t0 });
 }
