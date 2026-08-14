@@ -1,8 +1,6 @@
-import { GoogleGenAI, Modality } from '@google/genai';
-
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
-import { uploadImage } from '@/lib/cloudinary';
+import { generateLogo } from '@/lib/logo';
 import { provisionStorefront } from '@/lib/provision';
 import { buildOgImageUrl } from '@/lib/og-image';
 import { canLaunchStore } from '@/lib/billing';
@@ -13,69 +11,6 @@ import type { BrandResult, ChatMessage } from '@/lib/interview';
 // POST /api/store — persist a finished Studio interview as the creator's store:
 // brand identity → stores.brand_profile, design language → stores.design_system, and a
 // generated logo (from the interview's logo direction + palette) → stores.logo_url.
-
-interface InlinePart {
-  inlineData?: { data?: string; mimeType?: string };
-}
-interface GenResponse {
-  candidates?: { content?: { parts?: InlinePart[] } }[];
-}
-
-/** Generate a logo mark from the interview's direction, honoring the stated palette. Logos default
- *  to a TRANSPARENT background — a mark gets composited onto the site header, OG card, app chrome,
- *  etc., so a solid box would look wrong. Nano Banana can't emit alpha, so (like /api/generate's
- *  transparent path) we prompt for a pure-magenta backdrop and chroma-key it out (lib/transparency). */
-async function generateLogo(brand: BrandResult): Promise<string | null> {
-  try {
-    const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
-    if (!apiKey) return null;
-    const ai = new GoogleGenAI({ apiKey });
-    const palette = brand.designSystem.palette.map((p) => `${p.role}: ${p.hex}`).join(', ');
-    const prompt =
-      `Logo for the clothing brand "${brand.name}". ${brand.logo.direction}. ` +
-      `${brand.designStyle} design style. THE MARK ITSELF uses ONLY these brand colors: ${palette} — ` +
-      'and must contain NO magenta or pink hues. ' +
-      'THE BACKGROUND is separate from the mark and is NOT one of the brand colors: fill it edge to edge ' +
-      'with SOLID, UNIFORM, PURE MAGENTA (#FF00FF) — even if the brand palette is dark, the backdrop is ' +
-      'ALWAYS magenta (it is keyed out to a transparent PNG). Never render a checkerboard pattern. ' +
-      'Square 1:1. If the direction calls for text, render the brand name EXACTLY ONCE, spelled precisely, ' +
-      'and no other text. No border or frame around the canvas. No watermark.';
-    const generate = async (text: string): Promise<Buffer | null> => {
-      const res = (await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: [{ role: 'user', parts: [{ text }] }],
-        config: { responseModalities: [Modality.IMAGE] },
-      })) as GenResponse;
-      const part = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-      return part?.inlineData?.data ? Buffer.from(part.inlineData.data, 'base64') : null;
-    };
-    let buffer = await generate(prompt);
-    if (!buffer) return null;
-    try {
-      const { borderLooksMagenta, keyOutMagenta } = await import('@/lib/transparency');
-      // VALIDATION GATE (recurring bug B5): dark-palette brands kept getting non-magenta backdrops,
-      // the key no-oped, and an opaque tile shipped as the brand's face. One retry with the magenta
-      // demand escalated; if the model still refuses, ship the filled mark as before (never fail
-      // store creation over a logo).
-      if (!borderLooksMagenta(buffer)) {
-        console.warn('[store:logo] backdrop not magenta — retrying once with escalated directive');
-        const retry = await generate(
-          `${prompt} CRITICAL, HIGHEST PRIORITY: every border pixel of the image MUST be pure magenta ` +
-            '#FF00FF. A non-magenta background is a FAILED generation.',
-        );
-        if (retry && borderLooksMagenta(retry)) buffer = retry;
-      }
-      // Key the magenta backdrop out to real alpha. keyOutMagenta is a no-op if the border isn't
-      // actually magenta (model ignored the instruction) → we ship the filled mark rather than fail.
-      buffer = (await keyOutMagenta(buffer)) as Buffer;
-    } catch {
-      // Keying failure shouldn't kill brand creation — ship the raw image.
-    }
-    return await uploadImage(buffer, { folder: 'nanocrew/logos' });
-  } catch {
-    return null; // a store without a logo beats a failed creation
-  }
-}
 
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
