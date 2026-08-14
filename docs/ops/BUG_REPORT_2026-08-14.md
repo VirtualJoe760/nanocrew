@@ -7,7 +7,7 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 |---|---|---|---|---|
 | K1 | High | Account deletion | open | `DELETE /api/me` reads `SUPABASE_SERVICE_ROLE_KEY` (unset; env has `SUPABASE_SECRET_KEY`) → Supabase auth identity survives deletion; re-signup with the same email lands half-broken; data-deletion compliance incomplete. Fix: read `SUPABASE_SECRET_KEY` (or set both). |
 | K2 | Med | Env/ops | open | Dev env runs LIVE Stripe keys; no test-mode environment exists. One dev-machine mistake = a real charge. Recommend a parallel Stripe test-mode env + test price ids. |
-| K3 | Low | Tooling | open | `expo run:ios` mis-parses this Xcode's `devicectl` JSON → simulator targets misroute into the physical-device signing path ("No code signing certificates"). Workaround: `xcodebuild -destination 'platform=iOS Simulator,id=…'` + `simctl install`. |
+| K3 | Low | Tooling | open | `expo run:ios` mis-parses this Xcode's `devicectl` JSON → simulator targets misroute into the physical-device signing path ("No code signing certificates"). Workaround: `xcodebuild -destination 'platform=iOS Simulator,id=…'` + `simctl install` — do NOT pass `CODE_SIGNING_ALLOWED=NO` (it strips the keychain entitlement → `[expo-notifications] Keychain access failed` red toast at boot + broken session persistence; sim builds self-sign fine). |
 
 ## Details
 
