@@ -11,6 +11,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiUrl } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
+import { showEve } from '@/lib/eve-vision-bus';
 
 // EVE'S DESIGN STATE — her hands-free create surface (docs/studio/EVE_CONTROL.md, Phase C3).
 // The first deep, non-nav flow the tree drives end-to-end: resolve a collection, generate from an
@@ -103,6 +104,12 @@ export function EveDesign({
         setCurrent(design);
         setPhase('ready');
         setLine('Here you go. Tell me a tweak, or open it up to edit yourself.');
+        // Let her actually LOOK at it — she's live underneath this overlay. Only on a SETTLED
+        // design (never mid-generation), so it costs one image (~$0.004), not a stream.
+        showEve({
+          url: design.url,
+          note: `(This is the design you just made for them, from: "${prompt}". You can SEE it — react in one short sentence: what works, and one thing you'd change. Then ask if they want it on a product.)`,
+        });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Generation failed');
         setPhase(current ? 'ready' : 'error');
@@ -132,6 +139,10 @@ export function EveDesign({
         setCurrent(design);
         setPhase('ready');
         setLine('Done. Another tweak, or keep it?');
+        showEve({
+          url: design.url,
+          note: `(They asked for: "${instruction}". This is the RESULT — you can see it. Say in one short sentence whether that landed, then invite the next tweak or offer to put it on a product.)`,
+        });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Edit failed');
         setPhase('ready');

@@ -28,6 +28,7 @@ import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
 import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/lib/eve-digest';
+import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
 import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
@@ -174,6 +175,20 @@ export function EveHome({
     };
     setState(m[live.state] ?? 'idle');
   }, [live.state]);
+  // EVE'S EYES. The design overlay renders ABOVE this component but the live session lives HERE, so
+  // it publishes what it just put on screen and we do the looking. Fire-and-forget on purpose: a
+  // failed fetch or a closing socket must never interrupt the conversation.
+  useEffect(
+    () =>
+      registerEveVisionListener((sight) => {
+        void (async () => {
+          const img = await imageForEve(sight.url);
+          if (img) live.sendImage(img.base64, img.mimeType, sight.note);
+        })();
+      }),
+    [live.sendImage],
+  );
+
   useEffect(() => { setLine(live.venusText); }, [live.venusText]);
   useEffect(() => { setHeard(live.userText); }, [live.userText]);
   useEffect(() => { if (live.error) setError(live.error); }, [live.error]);

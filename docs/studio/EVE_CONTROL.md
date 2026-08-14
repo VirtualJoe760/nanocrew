@@ -3,8 +3,8 @@
 > Companion to `VENUS_CENTRAL.md`. This is the plan for the *greater vision*: Eve as the app's
 > central, morphing control surface, grounded against a full codebase inventory (2026-07-05).
 > Current state: **Phase A + B shipped** — the full-screen overlay, home (interview moved in), the
-> `developing` site-edit state, and the intent router (`/api/eve/route`). `design` is typed but
-> renders `home`.
+> `developing` site-edit state, and the intent router (`/api/eve/route`). `design` is a translucent
+> popup over EveHome (P3′ steps 1–3 + 6 shipped; 4–5 open — see the loop below).
 
 ## The model (settled with Joe)
 
@@ -321,22 +321,28 @@ on the Eve screen, then the user could describe the product they want to put the
 can give options, and do it herself… similar to the design flow, but just done through voice."*
 
 **Why this is better than the old plan.** Old P3 assumed we'd send an image into her live session on
-the design surface — but **she has no session there**: `studio.tsx` renders `EveDesign` and `EveHome`
-in a ternary, so entering `state:'design'` UNMOUNTS EveHome and `useLiveVoice`'s cleanup stops the
-mic. The "Eve" beside the design is a scripted `line` string, not speech. Joe's version dissolves that
-entirely: **she never leaves her screen, so the session never tears down.** No session-lifting needed.
+the design surface — but at the time **she had no session there**: `studio.tsx` rendered `EveDesign`
+and `EveHome` in a ternary, so entering `state:'design'` unmounted EveHome and stopped the mic.
+`110c11a` dissolved that: `design` is no longer a `deep` state — `onGo({state:'design'})` now renders
+the popup OVER a still-mounted EveHome, so **she never leaves her screen and the session never tears
+down.** No session-lifting needed.
 
 ### The loop
-1. "make me a stay gold graphic" → `new-design` intent → open a TRANSLUCENT modal over the Eve screen
-   (do NOT `onGo({state:'design'})` — that's what kills her mic).
-2. Generate in place — `POST /api/generate` (exists).
-3. She SEES it — `live.sendImage()` (shipped, `7ac7afa`).
-4. "put it on a hoodie" → she offers options from `GET /api/blanks` (exists, cached server-side).
+1. "make me a stay gold graphic" → `new-design` intent → `onGo({state:'design'})` opens the
+   TRANSLUCENT popup over EveHome (**shipped**, `110c11a` — `design` is excluded from `deep`, so her
+   session survives).
+2. Generate in place — `POST /api/generate`; iterate by typed instruction via `POST /api/edit`
+   (**shipped**; spoken-turn iteration is C3b, open).
+3. She SEES it — `eve-vision-bus` (`showEve` in EveDesign → `imageForEve` → `live.sendImage` in
+   EveHome) fires on every settled generation/edit, and she reacts to the actual image (**shipped**).
+4. "put it on a hoodie" → she offers options from `GET /api/blanks` (**open** — endpoint exists,
+   cached server-side; the voice loop that drives it is unbuilt).
 5. She applies it — `POST /api/composite` ("Nano Banana renders the design ON the garment photo",
-   review-only, returns a Cloudinary URL). Mockup replaces the design in the same modal.
-6. **Hand off to finalize** — `sendDesignCommand({ kind: 'ingest-design', url, prompt })` + route to
-   `/design`. The bus already queues while that screen is unmounted and flushes on mount, and
-   `ingest-design` is literally documented as Eve's hand-off path.
+   review-only, returns a Cloudinary URL). Mockup replaces the design in the same modal (**open**).
+6. **Hand off to finalize** (**shipped**) — the popup's designs already exist server-side with ids,
+   so the hand-off is `sendDesignCommand({ kind: 'open-editor' | 'show-design', designId })` + route
+   to `/design` (not `ingest-design`, which is for external URLs). The bus queues while that screen
+   is unmounted and flushes on mount.
 
 ### Scope boundary (Joe's call)
 Voice does the CREATIVE work; the Design center does the COMMITTING. Nothing is published to the
