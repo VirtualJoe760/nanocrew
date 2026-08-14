@@ -365,12 +365,21 @@ export class LiveVoiceSession {
       new Promise<void>((res) => setTimeout(res, 2500)),
     ]);
     console.warn('[live] B: createBufferQueueSource');
-    this.queue = this.outCtx.createBufferQueueSource();
-    console.warn('[live] C: connect to destination');
-    this.queue.connect(this.outCtx.destination);
-    console.warn('[live] D: queue.start(0, 0)');
-    this.queue.start(0, 0); // both when AND offset must be finite numbers, not undefined
-    console.warn('[live] E: audio graph ready → connecting…');
+    // react-native-audio-api's WEB build has no buffer-queue source (native-only extension). Without
+    // this guard the throw killed start() before the socket ever opened, so Eve was dead in browsers
+    // even for typed chat. Degrade instead: no audio-out → her replies land as captions/chat only
+    // (every downstream this.queue use is already null-guarded).
+    try {
+      this.queue = this.outCtx.createBufferQueueSource();
+      console.warn('[live] C: connect to destination');
+      this.queue.connect(this.outCtx.destination);
+      console.warn('[live] D: queue.start(0, 0)');
+      this.queue.start(0, 0); // both when AND offset must be finite numbers, not undefined
+      console.warn('[live] E: audio graph ready → connecting…');
+    } catch (e) {
+      this.queue = null;
+      console.warn('[live] no audio-out on this platform — captions only:', e instanceof Error ? e.message : e);
+    }
 
     // 3. connect to Gemini Live with the ephemeral token (client → Gemini directly)
     const ai = new GoogleGenAI({ apiKey: this.token, httpOptions: { apiVersion: 'v1alpha' } });
@@ -415,6 +424,17 @@ export class LiveVoiceSession {
 
   private startMic() {
     this.cb.onState?.('listening');
+    // Mic capture can be unavailable (web permission denied / no recorder impl). The session must
+    // survive without it — keyboard mode still types into the same socket.
+    try {
+      this.startRecorder();
+    } catch (e) {
+      this.recorder = null;
+      console.warn('[live] mic unavailable — typed turns only:', e instanceof Error ? e.message : e);
+    }
+  }
+
+  private startRecorder() {
     this.recorder = new AudioRecorder();
     this.recorder.onAudioReady({ sampleRate: IN_RATE, bufferLength: 1600, channelCount: 1 }, (ev) => {
       if (!this.session) return;

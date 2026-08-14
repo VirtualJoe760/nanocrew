@@ -23,3 +23,12 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 - **Repro (deterministic, 3/3):** `POST /api/eve/route` `{turn:"make me a design of a skull", interviewActive:true, recent:[Eve: "What products do you want to sell?"]}` → `{"intent":"new-design"}`.
 - **Expected:** `none` — the prompt mandates that mid-interview, near-everything is interview content unless the utterance is an explicit redirect AWAY ("actually forget this…"). A design-shaped answer to "what products do you want to sell?" currently hijacks the interview into the design popup.
 - **Suggest:** strengthen the interviewActive clause with this exact counter-example.
+
+### B3 · Low · Web accessibility — interactive elements have no roles
+- The welcome carousel's Next button, pager dots, plan cards, and Eve's send button render as bare `<div tabindex="0">` on web — no `role="button"`, no accessible names (`read_page` shows only `generic` nodes). Screen readers cannot operate the app on web. Fix: `accessibilityRole="button"` (+ labels) on Pressables — RN-web then emits proper roles.
+
+### B4 · High (web) · FIXED · Eve could never connect in a browser — typed chat included
+- **Symptom:** "Eve couldn't connect — tap to try again"; log stops at `B: createBufferQueueSource`; watchdog fails the session at 15s. Token minted fine.
+- **Root cause:** `react-native-audio-api`'s web build has NO `createBufferQueueSource`/`AudioBufferQueueSourceNode` (native-only extension; zero references in `lib/module/web-core/` or `api.web.js`). `live.start()` threw before `ai.live.connect()` ever ran, so the socket never opened — web Eve was dead for voice AND keyboard mode.
+- **Fix (shipped):** [live-voice.ts](../../src/lib/live-voice.ts) wraps the audio-out graph in try/catch → no queue = captions-only replies (all downstream uses were already null-guarded); `startMic` similarly armored so a missing/denied recorder can't kill the session. Verified in-browser: session connects, greeting streams, typed turns get streamed replies.
+- **Residual (deferred to device testing):** her VOICE on web still needs a real playback path (web impl of the queue or a standard WebAudio fallback); current behavior on web is intentionally captions-only.
