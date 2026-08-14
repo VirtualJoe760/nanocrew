@@ -57,8 +57,10 @@ Memory and review are **behaviors, not commands** — see [`docs/context/CODE_ST
 ## Editing Eve's APPEARANCE? → the Eve Lab
 Source of truth: [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md). Open the Eve Lab from
 **Account → Developer → "Eve Lab (test)"** (gated to josephsardella@gmail.com) to render the live
-avatar (`src/components/backgrounds/venus-orb-scene.tsx`); nearly all of her look lives in that one
-scene file. The `DEV_LIPSYNC_TEST` flag in that scene must be `false` before any build/PR.
+avatar (`src/components/backgrounds/venus-orb-scene.tsx` plus its sibling `venus-*` modules —
+plasma, geometry, shaders, points, textures); the same one avatar mounts persistently at the app
+root via `src/components/eve/eve-background.tsx`. The Lab's test hooks are `__DEV__`-gated inside
+the scene, so nothing needs resetting before a build/PR.
 
 ## Status & scope
 - Current status + open work (the progress-tracker): [`docs/roadmap/REMAINING_FEATURES.md`](docs/roadmap/REMAINING_FEATURES.md).

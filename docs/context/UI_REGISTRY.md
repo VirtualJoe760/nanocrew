@@ -17,6 +17,7 @@ The **living catalogue** of reusable app components — what exists (reuse it) a
 | `GlowInput` | `glow-input.tsx` | `…TextInputProps`, `containerStyle`, `style` | The standard text input — never use a bare TextInput |
 | `DesignTile` | `design-tile.tsx` | `color`, `label`, `style` | Square brand-tinted tile w/ label (design canvas) |
 | `GarmentMockup` | `designer/garment-mockup.tsx` (+ `.web`) | `garmentUri`, `designUri`, `rect`, `blend` | Supplier-agnostic "printed" mockup (Skia native / CSS-blend web) |
+| `EveGlyph` | `eve/eve-glyph.tsx` | `size` | Eve's static neural-constellation mark (SVG, no GL) — use wherever the old NC monogram orb appeared |
 
 ## Chrome — Studio surface helpers (`nc-screen.tsx`)
 | Component / hook | Props | Notes |

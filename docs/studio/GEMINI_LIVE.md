@@ -31,7 +31,7 @@ tighter rate limits; uses **Gemini's voices** (not ElevenLabs).
 ## Architecture — client-direct via ephemeral token
 
 ```
-app ──(authed)──► /api/voice-live-token (Cloud Run)  ── mints ephemeral token (locked) ──►
+app ──(authed)──► /api/voice-live-token (Cloud Run)  ── mints ephemeral token (unlocked — locking is the open TODO) ──►
 app ──(WebSocket, token as apiKey, v1alpha)──► Gemini Live  ◄── 16k PCM mic up / 24k PCM down ──►
 ```
 
@@ -59,9 +59,11 @@ does). This is Google's recommended client-to-server pattern.
   ≈ 600–800ms so Eve doesn't cut the creator off mid-thought.
 - **Interruption:** on `serverContent.interrupted` → `queue.clearBuffers()` + flip to listening.
 - **Transcription:** `inputAudioTranscription:{}` + `outputAudioTranscription:{}` → drive captions.
-- **Voice:** `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` — **`Aoede`** (the known-good
-  native-audio voice). Set in THREE places that MUST match: `LIVE_VOICE` in `src/app/studio.tsx`,
-  `VENUS_VOICE` in `src/app/api/say+api.ts`, and the `LiveVoiceSession` default in `live-voice.ts`.
+- **Voice:** `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` — **`Kore`** (picked in the
+  Lab audition 2026-07-05: Kore × the "british robot" delivery). Set in TWO places that MUST match:
+  `LIVE_VOICE` in `src/components/eve/eve-home.tsx` and `VENUS_VOICE` in `src/app/api/say+api.ts`
+  (the `LiveVoiceSession` constructor default `'Aoede'` is a fallback only — every production caller
+  passes the voice).
   ⚠️ **TWO native-audio footguns (both broke the session → NO AUDIO, 2026-06-22):** (1) do **NOT** put
   `languageCode` in `speechConfig` — the native-audio model auto-detects language and rejects it;
   (2) not every prebuilt voice from the ~30-voice TTS roster is valid on the native-audio model — a
@@ -79,8 +81,9 @@ does). This is Google's recommended client-to-server pattern.
 
 Mint with `liveConnectConstraints` locking **model + config** (responseModalities, speechConfig,
 systemInstruction, tools) and `lockAdditionalFields`, so a leaked token can't change Eve's brain or
-model. Keep `uses: 1` + short `expireTime` (~30 min) + `newSessionExpireTime` (~1 min); rely on
-**session resumption** (not extra `uses`) for reconnects within the window.
+model. Shipped: `uses: 2` (initial connect + one reconnect), `expireTime` ~30 min,
+`newSessionExpireTime` ~2 min. Session resumption is still TODO — until it lands, the second `use`
+IS the reconnect path.
 
 ## Audio pipeline (`react-native-audio-api`)
 
@@ -88,8 +91,24 @@ model. Keep `uses: 1` + short `expireTime` (~30 min) + `newSessionExpireTime` (~
   Float32 → PCM16 base64 → `session.sendRealtimeInput({ audio })`.
 - **Speaker out:** one `AudioContext({ sampleRate:24000 })` + `AudioBufferQueueSourceNode`; each audio
   chunk → `createBuffer` → `enqueueBuffer` (gapless). Interruption → `clearBuffers`.
-- **Permissions:** mic permission already requested on the primer; `react-native-audio-api` plugin in
-  app.json handles the iOS audio session.
+- **Permissions:** mic permission is requested in EveHome — on summon for returning creators (the
+  guide voice) and in `startVoice()` when entering the interview, falling back to keyboard mode on
+  denial; `react-native-audio-api` plugin in app.json handles the iOS audio session.
+
+## Mid-conversation channels (the session surface)
+
+Beyond mic audio, the session (`live-voice.ts`, exposed on the `useLiveVoice` hook) has five channels:
+
+- **`sendText`** — a typed turn (forces a reply); powers keyboard mode.
+- **`sendContext`** — silent context injection (`turnComplete: false` — no reply, no transcript
+  churn); used for the circled-section notes in the critique view and to brief Eve with the digest's
+  real figures (`digestBriefing`) so she answers stats questions with actual numbers.
+- **`sendImage`** — lets her SEE an image mid-conversation (same `sendClientContent` mechanism,
+  `turnComplete: false`, ~1.3k tokens ≈ $0.004/image — settled images only); wired through
+  `eve-vision-bus` so the design overlay publishes what it rendered and EveHome fetches + forwards
+  it into the live session.
+- **`mute`** — text-only mode (mutes the mic AND her audio, flushing in-flight playback).
+- **`finalize`** — transcript → `POST /api/extract-brand`.
 
 ## Studio integration (the swap)
 
@@ -105,28 +124,34 @@ Live makes the UX **simpler** — open-mic + VAD means **no push-to-talk**:
    when closed). It routes typed turns into the SAME Live session (`live.sendText`) and renders
    `live.messages` (the committed transcript, emitted via `onTranscript`). It's a **text-only**
    experience: entering chat calls `live.mute(true)`, which mutes the mic AND her audio playback (and
-   flushes any in-flight audio). Header: **‹ Back** exits the interview (→ dashboard / primer), **🎙 Voice**
+   flushes any in-flight audio). Header: **‹ Back** exits the interview (→ the guide view), **🎙 Voice**
    switches to the orb, **✓ Build** appears once ready. **Pause is voice-only** — it does NOT gate text
    mode (the lifecycle rule runs the session when `keyboardMode || !paused`), and entering chat clears a
-   stale pause, so a pause set in voice can't leave the chat dead ("not completing"). (The
-   `/api/interview` text path remains only for the dormant non-Live fallback.)
+   stale pause, so a pause set in voice can't leave the chat dead ("not completing").
 6. Pause pill stays (stops the mic + her audio). The primer's "hold to talk" copy reverts to "just talk."
 7. **Rollout:** gate behind a flag; if Live (preview) misbehaves we flip back to turn-based. Remove
    turn-based once Live is proven in the wild.
 
-**Greeting.** On `setupComplete` the session nudges Eve to open. Her first line is a casual
-*"Hi {first name}, how's your day going? Want to talk branding your store?"* (no name → just "Hi").
-The studio passes `userName` (from `user_metadata.name`/`full_name`) and `firstTime` (`!hasStore`) into
-`useLiveVoice` → `liveSystemInstruction`. When `firstTime`, she first introduces herself in one sentence
-(who she is + that she'll build their brand and store). There is **no AI/voice picker** — Eve on
-Gemini is the only consultant, so a new creator lands straight on the interview primer.
+**Greeting.** On `setupComplete` the session nudges Eve to open. **First-brand creators** (no store)
+get `liveSystemInstruction`, and her first line is a casual *"Hi {first name}, how's your day going?
+Want to talk branding your store?"* (no name → just "Hi"); when `firstTime`, she first introduces
+herself in one sentence (who she is + that she'll build their brand and store). **Returning creators**
+get the CENTRAL persona instead — `eveCentralInstruction(userName, storeNames)` +
+`EVE_CENTRAL_GREETING` (see VENUS_CENTRAL.md) — whose open is "what do you feel like getting into?".
+EveHome passes `userName` (from `user_metadata.name`/`full_name`) and `firstTime` (`!hasStore`) into
+`useLiveVoice`. There is **no AI/voice picker** — Eve on Gemini is the only consultant, so a new
+creator lands in EveHome's interview view.
 
-**She's only vocal in her view.** One declarative rule drives the session lifecycle: it runs *iff*
-`mode === 'interview' && !brand && !paused && focused && appActive`. `focused` comes from
-`useFocusEffect` (nav focus — leaving the Studio tab stops her) and `appActive` from an `AppState`
-listener (backgrounding via home button / app switcher stops her, even though nav focus hasn't
-changed). Keyboard mode keeps the session but mutes it. So Eve never speaks on another tab, in the
-background, on the dashboard, or once a brand is compiled.
+**She's only vocal in her view.** The session lives in EveHome (`src/components/eve/eve-home.tsx`),
+and one declarative rule still drives its lifecycle. It runs in the **interview** view always, AND in
+the **guide** view for returning creators once the mic prompt is granted (`micOk`) — that guide voice
+feeds the per-turn intent router (see VENUS_CENTRAL.md). The gate: the surface is open (Eve tab
+focused via `usePathname` + the brand deck closed) `&& appActive && !brand && (keyboardMode ||
+!paused)`; only the guide view additionally waits on the persona resolving (`meResolved` from
+`/api/me`) — the interview deliberately never waits on it, so a stalled `/api/me` can't dead-end
+typed turns. `appActive` comes from an `AppState` listener (backgrounding via home button / app
+switcher stops her). Keyboard mode keeps the session but mutes it. So Eve never speaks on another
+tab, in the background, under the pulled-down brand deck, or once a brand is compiled.
 
 ## Finalize: extract from the transcript, NOT the `save_brand` tool call
 
@@ -155,13 +180,22 @@ So we finalize **deterministically** instead of waiting on the tool:
 - The `save_brand` tool declaration + `toBrandResult` are kept as a no-cost bonus path: if the model
   ever *does* call the tool, `onBrand` still fires. We just no longer depend on it.
 
-## Session lifecycle / failure modes
+## Audio arbitration & failure modes (shipped)
 
-- **Cap:** compression makes 15-min effectively unlimited; still cap the interview by question count.
-- **Reconnect:** on `GoAway`/`onclose`, if not user-stopped, re-mint isn't needed within the token
-  window — reconnect with the resumption handle; outside it, re-mint + resume.
-- **Overload:** native-audio preview has tighter rate limits — surface a calm retry, keep the
-  turn-based fallback for hard outages.
+(`contextWindowCompression` + `sessionResumption` remain the open TODO above — the shipped machinery
+in `live-voice.ts` is:)
+
+- **One live session, module-wide** — `activeLiveSession` + `isVenusLive()`; `start()` kills any
+  OTHER live session, and every `await` inside `start()` re-checks `this.closed` so an in-flight
+  start can't build a second audio graph.
+- **Half-duplex mic gating** — the mic doesn't stream while her queued audio is playing
+  (`playEndsAt` + a 250ms tail) — why she doesn't interrupt herself.
+- **`AudioSessionBusyError`** — iOS `InsufficientPriority` (561017449 — an active phone/FaceTime
+  call) is detected across the activation retry backoff (0/150/400/900ms) and surfaces a dedicated
+  `audioBusy` modal with a retry, distinct from the generic error.
+- **Connect watchdog** — 15s; fails to a tap-to-retry instead of hanging on "thinking".
+- **iOS audio session** — `playAndRecord` + `voiceChat` echo cancellation + `defaultToSpeaker`,
+  configured on start and released on `stop()`.
 - **Cleanup:** always `stop()` on unmount/blur (recorder + queue + context + session).
 
 ## Test plan
@@ -227,10 +261,12 @@ now — either repoint preview to a Gemini sample or drop it (follow-up; not blo
 After the brand is built, `createStore` plays a one-line "your store is online" fanfare. The Live
 session is already torn down by `finalize()` (`s.stop()` before hand-off), so this is a **one-shot**
 synthesized in Eve's **same Gemini voice** via [`/api/say`](../../src/app/api/say+api.ts) (model
-`gemini-2.5-flash-preview-tts`, voice **`Aoede`** — matching `LiveVoiceSession`), NOT the legacy
-ElevenLabs `/api/voice` `say` path (that switch was a jarring voice regression). Gemini TTS returns
-raw PCM16/24k mono; `/api/say` WAV-wraps it server-side and `playSpeech(audio, 'wav')` plays it. The
-fanfare stays best-effort (try/catch) — a TTS failure is silent, never blocks store creation.
+`gemini-2.5-flash-preview-tts`, voice **`Kore`** — matching `LIVE_VOICE` in `eve-home.tsx`), NOT the
+legacy ElevenLabs `/api/voice` `say` path (that switch was a jarring voice regression). Production
+calls get a `VENUS_TONE` in-character delivery direction prefixed to the text; requests may also name
+a `voice` (the Lab audition — validated against the 30-voice `VOICE_OPTIONS` catalog). Gemini TTS
+returns raw PCM16/24k mono; `/api/say` WAV-wraps it server-side and `playSpeech(audio, 'wav')` plays
+it. The fanfare stays best-effort (try/catch) — a TTS failure is silent, never blocks store creation.
 
 ### Transcript for `createStore`
 Live has no `messages.current`. Accumulate completed turns in the hook (push `userText`/`venusText`
@@ -245,14 +281,16 @@ supplementary context for provisioning.
 5. Voice mapping (AI_VOICES → Gemini). tsc + on-device verify a full interview → Build my brand → store.
 6. Once solid: remove the dead turn-based code + `/api/voice` client calls, drop the `USE_LIVE` flag.
 
-## Reused for "Edit site" (talk-to-edit)
+## Reused for live-site editing (the critique view)
 
-The same Live session powers the Console's **Edit site** composer (`studio-composer.tsx`). The session
-is parameterized — `useLiveVoice({ instruction, greeting, enableBrandTool })` — so it can drop the
-`save_brand` tool and swap in `editSiteInstruction(brandName)` + `EDIT_SITE_GREETING` (live-voice.ts).
-Eve becomes a concise edit assistant: the creator taps the mic, says the change ("full-screen hero",
-"headline to …"), she reflects it back and asks "anything else?", and her captured request fills the
-composer. Tapping **send** hits the existing `POST /api/creator/revise` (forge revision) — no API
-change. The session runs only while the mic is on AND the Edit tab is open; it stops on send / tab
-change / Console close. Round-trip verified by `scripts/edit-voice-test.mjs` (concise replies, no tool
-call).
+The same Live session powers live-site editing in `site-preview.tsx` (the critique view). The session
+is parameterized — `useLiveVoice({ instruction, greeting, enableBrandTool })` — so it drops the
+`save_brand` tool (`enableBrandTool: false`) and swaps in `critiqueInstruction(brandName)` +
+`CRITIQUE_GREETING` (live-voice.ts; the old `editSiteInstruction`/`EDIT_SITE_GREETING` pair was
+deleted). Eve is continuously open-mic while the live view is open (tap the orb to pause). The
+creator **circles** elements on the site — each hit is pushed silently via
+`venus.sendContext(venusContextForHit(...))` with the site-vocabulary brief, so Eve can name and
+explain the section — changes are logged as they go, and **Submit** builds the revision via the
+existing `POST /api/creator/revise` (forge revision) — no API change. The old record→transcribe
+pipeline is gone, which leaves `POST /api/transcribe` (`src/app/api/transcribe+api.ts`) with zero
+callers — retired dead code (its header comment still claims the critique flow uses it).

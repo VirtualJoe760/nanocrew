@@ -7,16 +7,19 @@ revise) and [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](../storefront/STOREF
 (how a live site reads data). Read those for the "how"; read this for the "what + when".
 
 > **⚠️ CURRENT vs TARGET runs through this whole doc.** The *shape* of the arc (build → refine →
-> publish) is real and shipping. The *quality* of the first build is not there yet: today the brief
-> the forge robot receives is a code mail-merge and the robot is unconditioned, so a first build
-> looks like a barely-configured template, not a brand. The root-cause + target are in
+> publish) is real and shipping, and the two biggest first-build fixes have landed: the brief is now
+> **AI-authored** (`authorBrandBrief()` in `src/lib/provision.ts` — `gemini-2.5-pro` translating the
+> creator's words through the template's `VOCABULARY.md`; the old mail-merge survives only as the
+> no-key/failure fallback) and the robot is **conditioned** by the Master `CLAUDE.md`
+> (`forge-worker/forge-CLAUDE.md`). What's still missing is the self-check: the robot never looks at
+> its own first-build output. The root-cause + target are in
 > [`docs/storefront/BUILD_QUALITY.md`](../storefront/BUILD_QUALITY.md); the AI-to-robot seam this
 > all hinges on is [FORGE_AI.md](FORGE_AI.md).
 
 ## The arc at a glance
 
 ```
-1. INTERVIEW   creator talks to Eve (Studio tab)        → BrandResult + transcript
+1. INTERVIEW   creator talks to Eve (Eve tab)           → BrandResult + transcript
 2. BUILD       brief authored → forge robot builds a       → presentable site w/ TEMPORARY imagery
                presentable site (templates + tokens)         (store + fulfilment already wired)
 3. REFINE      creator makes real products / model shots   → real assets PROGRESSIVELY REPLACE
@@ -27,32 +30,34 @@ revise) and [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](../storefront/STOREF
 
 ## 1 · Interview — the creator talks to Eve
 
-Entry point is the **Studio tab** (`src/app/studio.tsx`). It's gated, not auto-launched, and never
-starts Eve talking before the creator is ready. Flow: pick a voice (`mode: 'cta'`) → a **primer**
-(`mode: 'primer'`) that previews what Eve will ask and offers two ways in — **"Talk with Eve"**
-(recommended; requests the mic *here*, the only place we prompt) or **"I'd rather type"** (starts in
-keyboard mode, no mic) — → the interview (`mode: 'interview'`), where Eve greets. Returning creators
-with a store land on the dashboard.
+Entry point is the **Eve tab** (`src/app/studio.tsx`), whose default surface is **EveHome**
+(`src/components/eve/eve-home.tsx`) — Eve's voice surface over the persistent root avatar.
+First-brand creators see a **"🎙 Build your brand"** CTA — tapping it requests the mic (the only
+place we prompt; a typed fallback covers denial) and starts the **interview** view. Returning
+creators land in Eve's open-mic **guide** (greeting + digest + voice-intent routing via
+`/api/eve/route`); their brands live behind a swipe-down **BrandDeck**
+(`src/components/eve/brand-deck.tsx`), and "create another brand" routes into the same interview.
 
-**Voice is push-to-talk (hold-to-talk):** the creator **holds the orb to record and releases to
-send** (`beginHold`/`endHold`); holding while Eve is speaking interrupts her and starts recording.
-This is deliberate — the old auto-listen/silence-detection turn-taking raced the audio session (she'd
-return text but not speak, or not respond at all), so it was removed for deterministic turns. After she
-finishes a reply the orb just goes **idle** and waits for the next hold. The conversation also
-**auto-pauses when the Studio tab loses focus** (a `playSpeech` focus/pause guard), and there's a
-prominent **Pause/Resume pill** beneath the orb (plus the header control); holding the orb resumes.
+**Voice is open-mic + VAD:** once started, Eve listens continuously, replies, and the creator
+interrupts by simply talking (`use-live-voice.ts`; her queued audio is flushed on interruption) —
+there is no push-to-talk. The session runs only while Eve's surface is on screen and the app is
+foregrounded; the manual controls are a prominent **Pause/Resume pill** and a **keyboard mode**
+(which mutes the mic).
 
 **Eve** is the brand consultant. She runs as a realtime **Gemini Live** speech-to-speech session
 (`src/lib/live-voice.ts` + `hooks/use-live-voice.ts`; persona prompt in `live-voice.ts`), open-mic with
-a typed fallback into the same session. When she's gathered enough she calls/extracts the brand via
-`/api/extract-brand` (which reuses `interview.ts` `interviewSystem`/`parseTurn`). She's a warm,
-≤18-word-per-turn cheerleader who also collects data: name + core
+a typed fallback into the same session. She's a **conversation-first** consultant — no per-turn word
+cap; specific, one-at-a-time questions; she states her inferences instead of re-asking — who also
+collects: name + core
 idea, logo direction, palette, design temperament, **how the site should feel/manifest**, and the
 products they're excited to sell. A **hard rule** binds her — *never override an explicit choice*
 (if they say "black and white", the palette is exactly that; she fills only the gaps they leave).
 
-She ends by emitting a `BrandResult` (and a spoken closing). The shape that everything downstream
-consumes (`src/lib/interview.ts`):
+**Extraction is creator-triggered:** her "ready to build your brand" cue unlocks the **"✓ Build my
+brand"** pill (the `buildReady` gate — floored at 3 user turns, with a 6-turn safety net); tapping
+it calls `live.finalize` → `POST /api/extract-brand` (which reuses `interview.ts`
+`interviewSystem`/`parseTurn`) to distill the transcript into a `BrandResult`. The shape that
+everything downstream consumes (`src/lib/interview.ts`):
 
 - identity: `name`, `tagline`, `mission`, `audience`, `voice`, `story`, `vibeKeywords`
 - `designStyle`: `minimalist | bold | elegant | extravagant | street` → **picks the template**
@@ -96,13 +101,17 @@ What matters at *this* altitude is the **intent** of the build step and how far 
 - **Intent:** the site should look like a real brand on day one — a hero with atmosphere, a styled
   working CTA, copy in the brand's voice, and **intentional on-brand temporary imagery** standing in
   until real products exist — already wired to the DB + store + fulfilment.
-- **CURRENT reality:** the build ships a barely-configured template. Blank-white hero, the template's
-  stock placeholder products showing through (coffee beans labelled "Essential Tee"), a CTA that
-  looks broken. The A/B evidence is in
+- **CURRENT reality:** the brief is **AI-authored** — `authorBrandBrief()` (`gemini-2.5-pro`) writes
+  an art-directed, block-by-block brief, translating the creator's `siteNotes` through the template's
+  `VOCABULARY.md` (the mail-merge `buildBrandBriefFallback()` runs only when the AI author can't) —
+  the robot holds standing rules in the Master `CLAUDE.md` (`forge-worker/forge-CLAUDE.md`), and a
+  real on-brand **hero image** is pre-generated into `stores.site_assets` (`src/lib/hero-image.ts`)
+  so the hero is never blank. The A/B evidence that drove these fixes is in
   [`docs/storefront/BUILD_QUALITY.md`](../storefront/BUILD_QUALITY.md).
-- **Why:** the brief is a mail-merge, not a prompt; the robot is unconditioned; it never looks at its
-  own output. The full diagnosis + plan is [FORGE_AI.md](FORGE_AI.md) — the seam where our AI talks
-  to the forge robot is where this gets fixed.
+- **What's still open:** the robot never looks at its own output — the forge worker runs a single
+  headless `claude` pass + the `pnpm build` gate with no review of the finished first build. The
+  full diagnosis + plan is [FORGE_AI.md](FORGE_AI.md) — the seam where our AI talks to the forge
+  robot is where this gets fixed.
 
 The key promise the build step *does* keep today, even when it looks weak: the storefront is already
 a **headless client of the platform API** — store, catalogue, checkout, and Printful fulfilment are
@@ -128,8 +137,10 @@ so the live site self-heals to show the real catalogue. The creator never edits 
 this; the catalogue flows through the platform API.
 
 Site **look** edits (not catalogue) ride a different rail: the creator tells Eve "make the hero
-bigger", which enqueues a branch-based **revision** (Vercel preview → approve → merge). That's the
-storefront engine's revision path, not the design generator.
+bigger" — either by voice from her home surface (intent routing opens the live site view, where they
+circle spots and speak the change) or from the Studio console — which enqueues a branch-based
+**revision** (Vercel preview → approve → merge). That's the storefront engine's revision path, not
+the design generator.
 
 ## 4 · Publish — go live
 
@@ -160,6 +171,6 @@ The fuller step turns a refined site into a launched brand with its own domain:
 | Step | Shape today | Quality today | Target |
 |---|---|---|---|
 | Interview | ✅ works (voice + text) | ✅ good — Eve captures intent incl. verbatim `siteNotes` | richer capture feeds a masterful build prompt |
-| Build | ✅ works (templates + forge) | ⚠️ weak — mail-merge brief, unconditioned robot, no self-check | Eve-authored prompt + conditioned robot + eyes ([FORGE_AI.md](FORGE_AI.md)) |
+| Build | ✅ works (templates + forge) | ⚠️ better — AI-authored brief + conditioned robot + pre-generated hero shipped; still no self-check | eyes + a real quality gate ([FORGE_AI.md](FORGE_AI.md)) |
 | Refine | ✅ works | ✅ assets are strong; placeholder→real swap works | same, just less to fix because build starts stronger |
 | Publish | ✅ works | ✅ store/fulfilment/mirror solid | domain + go-live with a build that was great from step 2 |

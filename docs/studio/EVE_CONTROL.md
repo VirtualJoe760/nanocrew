@@ -2,9 +2,10 @@
 
 > Companion to `VENUS_CENTRAL.md`. This is the plan for the *greater vision*: Eve as the app's
 > central, morphing control surface, grounded against a full codebase inventory (2026-07-05).
-> Current state: **Phase A + B shipped** — the full-screen overlay, home (interview moved in), the
-> `developing` site-edit state, and the intent router (`/api/eve/route`). `design` is a translucent
-> popup over EveHome (P3′ steps 1–3 + 6 shipped; 4–5 open — see the loop below).
+> Current state: **Eve lives on her own tab** — `/studio` hosts EveHome as the default surface (the
+> pull-down overlay is retired, see "The overlay retirement"; brands are the swipe-down BrandDeck),
+> plus the `developing` site-edit state and the intent router (`/api/eve/route`). `design` is a
+> translucent popup over EveHome (P3′ steps 1–3 + 6 shipped; 4–5 open — see the loop below).
 
 ## The model (settled with Joe)
 
@@ -22,12 +23,18 @@
 - **Navigation:** Eve = the verb layer; the tabs stay as the browsable noun layer (both drive one
   state; neither is required).
 
-## The registry is the spine
+## ~~The registry is the spine~~
 
-Today the choice logic is **triplicated**: `venus-guide.ts` (chips), the `/api/eve/route` intent
-enum + prompt, and `eve-home`'s `routeTurn` switch. One hand-authored `src/lib/eve-capabilities.ts`
-collapses them into a single source that BOTH the orbs and voice dispatch read. Build it first — it
-de-duplicates before the rest multiplies.
+**BUILT, THEN RETIRED.** `eve-capabilities.ts` + the energy-orb ring shipped 2026-07-05 (`795fb61`;
+C1 `822bc54`, C2 `767815e`), then were deleted in the orb-front-end retirement (`83a6873`,
+2026-07-06) — voice + the tabs are the two front-ends now (see the pivot's Shipped note). The
+choice logic today lives in TWO places: the `/api/eve/route` intent enum + prompt and `eve-home`'s
+`routeTurn` switch (`venus-guide.ts` is greeting-only). Kept below for the reasoning only.
+
+The original read: the choice logic was **triplicated** — `venus-guide.ts` (chips), the
+`/api/eve/route` intent enum + prompt, and `eve-home`'s `routeTurn` switch — and one hand-authored
+`src/lib/eve-capabilities.ts` collapses them into a single source that BOTH the orbs and voice
+dispatch read. Build it first — it de-duplicates before the rest multiplies.
 
 Entry shape:
 ```ts
@@ -46,7 +53,8 @@ intent to the node; `pose` (later) is the per-node net reshape.
   is the only product write today. Build those when a tree node needs them.
 - New routes: `GET /api/creator/sales-series` (units live in `order_items.quantity`, untouched),
   `POST /api/venus/draft-post`, post `scheduledAt` + cron.
-- The `design` hands-free state (`venus-design.tsx`).
+- The `design` hands-free state — **SHIPPED** as `eve-design.tsx` (see P3′); spoken-turn iteration
+  (C3b) still open.
 
 ## Callable-component gaps (the `pick` handshake)
 
@@ -54,7 +62,9 @@ The proven pattern exists (`ProductPicker.onAdd(CatalogBlank[])`). Each picker n
 `onResolve` prop and decoupling from its hard-wired side-effect. Priority:
 1. **ProductPicker** — closest to done; add `max`/single-pick + resolver + internal `/api/blanks` fetch.
 2. **Product grid (Sell tab)** — add `onSelectProduct`; unlocks "take the hoodie off my store".
-3. **Brand picker (StudioDashboard)** — add `onSelect(slug,name)` + `mode`; unlocks "manage this brand".
+3. **Brand picker (BrandDeck, `src/components/eve/brand-deck.tsx` — replaced StudioDashboard)** —
+   already exposes `onEditBrand(slug,name)`/`onNewBrand`; a pick-mode resolver is what remains if a
+   tree node needs it. Unlocks "manage this brand".
 4. Collection picker (design.tsx inline) — heaviest (extract + decouple side-effects); defer.
 5–7. WebAssetsDock slot / ProductDetailSheet variant / BrandReview template — small wraps, opportunistic.
 
@@ -73,6 +83,10 @@ for headroom. Do not spike the pose tween — it's proven-idiom and cheap.
 
 ## Phase order
 
+> **Wedge / C1 / C2 SUPERSEDED — built, then retired.** The registry + orb ring landed 2026-07-05
+> (`795fb61`, `822bc54`, `767815e`) and were deleted with the orb front-end in `83a6873`
+> (2026-07-06); voice + the tabs are the two front-ends now. Kept for the reasoning only.
+
 **Dependency spine:** registry → orb UI → pose glue → design state → selection handshakes → new
 routes → money/stats. Cleanup interleaves.
 
@@ -84,18 +98,19 @@ routes → money/stats. Cleanup interleaves.
   `pick`/`prompt`/`act` wired; Account sub-sections get `?section=` params.
 - **C2 — Pose glue:** `poseRef` + `damp` in `useFrame`; per-node `pose` (shape/expand/grow/hotGang/
   colMix). Spike the overlay compositing first.
-- **C3 — Design state:** `venus-design.tsx` + `POST /api/venus/design-turn`; land handshakes #1/#2.
+- **C3 — Design state:** `eve-design.tsx` + `POST /api/venus/design-turn`; land handshakes #1/#2.
 - **D — Posts + scheduling:** `draft-post` + `scheduledAt` + cron; handshake #6.
 - **E — Store/product lifecycle + stats:** build the missing unpublish/price routes + `sales-series`;
   402 interceptor through the overlay; handshake #4.
 
 ## Deprecation (as Eve absorbs these flows)
 
-**Remove now:** the orphaned pre-Eve orb subtree in `studio.tsx` (`Nucleus`, `CoreLight`, `WaveBar`,
-`OrbLayer`, `OrbLayerSvg`, `buildOrbLayer`/`OrbSpec`/`arcPath`, `IntroGlyph`, `NetworkField`,
-`DustField`, `TONES`/`pick`, + their styles) — large, self-contained, VENUS_CENTRAL already flags it.
-Dead styles in `design.tsx` and `studio-composer.tsx`. The chip surface in `eve-home` + `venus-guide`
-suggestion machinery (fold into the wedge). The unread `design ?slot` param (decide with the registry).
+**Remove now — DONE (`83a6873`):** the orphaned pre-Eve orb subtree in `studio.tsx` (`Nucleus`,
+`CoreLight`, `WaveBar`, `OrbLayer`, `OrbLayerSvg`, `buildOrbLayer`/`OrbSpec`/`arcPath`, `IntroGlyph`,
+`NetworkField`, `DustField`, `TONES`/`pick`, + their styles), the dead styles in `design.tsx` and
+`studio-composer.tsx`, and the chip surface in `eve-home` + `venus-guide` suggestion machinery — all
+deleted. **Still open:** the unread `design ?slot` param (`studio.tsx` still pushes `&slot=`;
+`design.tsx`'s params never read it).
 
 **Do later:** the mechanical `venus→eve` identifier rename (one commit after C1 stabilizes; ~40 files;
 user-facing strings are already Eve). **Do NOT remove:** `/feed` (v2), `SceneShortComposer` (paused),
@@ -124,9 +139,10 @@ CAMERA moves to a new facet of her while that page's components overlay on top.
 - **Idle throttle** — she calms + slows (frameloop demand / lower rate) when you're heads-down in a
   page so the always-on scene stays kind to the battery.
 
-**Reused, not rebuilt:** the 3D capability orbs (already in her scene), the capability registry, the
-digest, the design + site-edit flows, the voice session — all re-home from "overlay states" into
-"camera facets + overlays" on the one persistent Eve.
+**Reused, not rebuilt:** the digest, the design + site-edit flows, the voice session — all re-home
+from "overlay states" into "camera facets + overlays" on the one persistent Eve. (Two pieces this
+list originally carried — the 3D capability orbs and the capability registry, `eve-capabilities.ts` —
+existed when this was written and were SINCE DELETED in the orb-front-end retirement, `83a6873`.)
 
 **Technical reads:**
 - A ZOOM (dolly along the view axis) is the SAFEST camera move — the scene's billboards (halos, the
@@ -150,10 +166,11 @@ facet → the scene dolly-zooms + palette-morphs); (4) per-page overlaid compone
   button and the capability orbs are gone (the orb-tree front-end is dropped — voice + the tabs are
   the two front-ends now). The `/studio` route IS the Eve tab (header reads EVE).
 - **Persistent Eve background** (step 1): `eve-background.tsx` mounts the ONE avatar at the app root
-  (`_layout`, behind everything). `withScreenFade(..., { eveThrough: true })` swaps each tab page's
+  (`_layout`, behind everything). `withScreenFade(..., { eveThrough: true })` swaps a tab page's
   opaque dot-field for a translucent scrim (`rgba(6,8,12,0.62)`) so she shows through, dimmed for text.
-  studio/design/market/account are all `eveThrough`. Verified on web: one GL context, persists across
-  tab navigation with no remount, visible behind the gate / Market / Account.
+  Today: studio is `eveThrough: 'clear'`, design/account are `eveThrough: true`, and Market went back
+  to an OPAQUE card page on purpose (Eve stays hidden + frozen behind it). Verified on web: one GL
+  context, persists across tab navigation with no remount.
 
   Two things future-me will trip on:
   - **One-context invariant preserved via a gate, not a merge.** The pull-down overlay (`eve-overlay`)
@@ -171,19 +188,24 @@ facet → the scene dolly-zooms + palette-morphs); (4) per-page overlaid compone
     into a settled full-screen container. The overlay never hit this because it mounts its avatar after
     the 340ms slide, when layout is already done.
 
-**Still ambient-only:** the root Eve sits at a fixed `stage="silence"` — she doesn't yet react to
-voice or drive per-page palettes. Wiring her lifecycle/voice + the camera facets is next (step 3).
+**~~Still ambient-only~~ — superseded by the overlay retirement below:** voice reactivity landed
+(EveHome drives the root avatar through `eve-stage-bus`, `'silence' | 'talking'`). Still unbuilt:
+the camera facets and per-page palettes (step 3).
 
 ### The overlay retirement (2026-07-06)
 
 Joe on build 40: "get rid of the pull over effect — she needs to just have her own button on the
-bottom bar." Steps 2/5/6/7 of the pivot landed together:
+bottom bar." Steps 2/6/7 of the pivot landed together (step 5 — push-to-talk on the non-Eve
+pages — remains open):
 
 - **The pull-down overlay is GONE** (`eve-overlay.tsx`, `eve-background-bus.ts` deleted). The Eve
   tab (`studio.tsx`) hosts the voice machine: `EveSummon | null` state renders EveHome / EveDeveloping /
   EveDesign IN PLACE of the dashboard (a swap, not a layered overlay — nothing bleeds through, no
   backdrop needed). `summonEve()` works app-wide via `registerEveSummonListener` in the tab; the
-  bus's queued-flush covers pre-mount summons (the composer's site tile).
+  bus's queued-flush covers pre-mount summons (the composer's site tile). *Since superseded
+  (`fa6c265`, `110c11a`):* EveHome is now the tab's DEFAULT (the dashboard became the swipe-down
+  BrandDeck); only `developing` still swaps full-screen ("deep"); `design` renders as a translucent
+  overlay OVER the still-mounted EveHome (see P3′).
 - **One GL context, no gate.** EveHome no longer mounts an avatar — it drives the ROOT one through
   `eve-stage-bus` ('silence' | 'talking' ONLY; 'morphing' is destructive on a formed background —
   it ping-pongs the reveal). Syllable-level reactivity rides the module-level speech envelope.

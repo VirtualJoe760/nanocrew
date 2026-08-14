@@ -37,10 +37,29 @@ an explicit go.
 - 🟢 **Design-tab brand→collection picker** — the tab opens with a setup popup (pick brand, then
   collection); finished web-slot groups (hero/cover/logo) auto-clear off the canvas. (PAGES §4.)
 - 🟢 **Feed hidden for v1** — the social feed is removed from the tab bar (code preserved at `/feed`,
-  returns in v2). The app now lands on **Studio**; tabs are **Studio · Design · Market · Account**.
+  returns in v2). The app now lands on **Eve** (the studio route became her page on 2026-07-05 —
+  Studio's dashboard is the swipe-down brand deck); tabs are **Eve · Design · Market · Account**.
 - 🟢 **Build-quality (partial)** — Eve authors the build brief (`authorBrandBrief`) + Master
   `CLAUDE.md` conditions the forge robot, both shipped. Remaining: sighted robot + real quality gate
   (see §7).
+
+## 0b. Shipped since (Eve, 2026-06-18 → 2026-08-14)
+- 🟢 **Typed chat mode** — the keyboard icon opens a full-screen chat window (`ChatInterview`,
+  `src/components/chat-interview.tsx`) over the studio: message bubbles + a streaming assistant
+  reply, her voice muted while typing, and Build appears once the interview has the essentials.
+- 🟢 **Design popup** — Eve spawns designs in a translucent overlay over her own screen (`EveDesign`,
+  `src/components/eve/eve-design.tsx`): generate from an idea, iterate by instruction
+  (non-destructive `/api/edit`), keep it or open it in the Design tab. Renders over EveHome — not a
+  screen swap — so her mic stays live throughout.
+- 🟢 **Eve's digest — real numbers** — her guide view greets with a status report from
+  `/api/creator/stats` (`src/lib/eve-digest.ts`); the live session is briefed with the real
+  per-brand figures (`digestBriefing`) + explicit limits (all-time orders/revenue, 30-day views,
+  nothing else), so she speaks from data and declines what she doesn't have. Still open:
+  `GET /api/creator/sales-series` for real per-day/week trends.
+- 🟢 **Eve sees what she makes** — `LiveVoiceSession.sendImage` + the one-way `eve-vision-bus`
+  (`src/lib/eve-vision-bus.ts`): the design popup publishes each settled generation/edit and her
+  live session receives a shrunk JPEG with a steering note, so she reacts to the actual image, not
+  the prompt. Unqueued by design — sights are dropped when she isn't live.
 
 ## 1. Blocked on a native dev build (can't run in Expo Go)
 These three all unlock with **one** EAS dev build. The server sides are already built.

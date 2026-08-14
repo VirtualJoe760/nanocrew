@@ -5,8 +5,8 @@ cool monochrome (paper / near-black) + platinum silver, no gold (see [ARCHITECTU
 The tab bar uses a platinum-silver tint with thin outline glyphs and an opaque (mode-aware) background.
 **Individual brand storefronts keep their OWN palette** — only the app chrome is monochrome.
 
-**Tab bar (v1, in order): `Studio` · `Design` · `Market` · `Account`** (`src/components/app-tabs.tsx`).
-**Studio is the app's home.** The **social feed is hidden for v1** — its code is preserved at the
+**Tab bar (v1, in order): `Eve` · `Design` · `Market` · `Account`** (`src/components/app-tabs.tsx`;
+the `studio` route is the Eve page — **the app's home**). The **social feed is hidden for v1** — its code is preserved at the
 `/feed` route (`src/app/feed.tsx`) with no tab, and it returns as the lead tab in v2. Section 1 below
 documents that feed as-built for when it comes back.
 
@@ -78,31 +78,53 @@ The in-app product page (full-screen `Modal`, brand-coloured, **← back**).
   isn't live yet" until payments are turned on.
 - **Calls:** `/api/store/:slug/products/:productSlug`, `/api/store/:slug/checkout`.
 
-## 3. Studio (`src/app/studio.tsx`)
+## 3. The Eve tab (`src/app/studio.tsx`)
 
-The brand builder + creator home. Static silk background (`FabricBackground`), the circular **NC
-nucleus** / dense JARVIS-style orb, platinum-silver accent. Header: NC mark + "STUDIO" eyebrow +
-context icons (manage pencil / brands hamburger / keyboard toggle). Routes by `mode`:
+The app's home — Eve's page (tab label **Eve**; the route is still `studio`). No screen chrome of
+its own: the container is transparent, so the **persistent root Eve avatar** (mounted app-wide via
+`src/components/eve/eve-background.tsx`) glows through. The default surface is **EveHome**
+(`src/components/eve/eve-home.tsx`) — talk to Eve. Her live mic is gated on the tab being focused
+AND the brand deck being closed; a top-edge swipe down (or a tap on the pill) pulls the
+**BrandDeck** down over her.
 
-- **Signed-out (intro):** NC nucleus, "INTELLIGENCE IS THE NEW FABRIC", **"Meet Eve"** title +
-  blurb, **Create an account** / **log in** CTAs (→ Account tab). "Free to explore. You only need a
+- **First-launch Welcome (`src/components/welcome.tsx`):** a full-screen modal carousel (Eve ·
+  Design · Market slides, real device captures) ending in three choices — **subscribe** (plan
+  picker; after sign-in the Paywall opens, and when it closes with a paid plan active,
+  `POST /api/creator/onboarding` claims the welcome-credit grant), **login**, or **shop & browse
+  for free** (→ Market). Seen-flag + chosen intent persist in AsyncStorage, so it shows once.
+- **Signed-out (intro):** EveGlyph, "FROM IDEA TO BRAND IN SECONDS", **"Meet Eve"** title + blurb,
+  **Create an account** / **log in** CTAs (→ Account tab). "Free to explore. You only need a
   plan to launch a store."
-- **New creator — primer + CTA:** first-time creators see a primer (no voice picker — Eve has one
-  Gemini voice) → **Talk with Eve** (asks for mic) or **I'd rather type** wakes the interview.
-- **Interview:** a realtime **Gemini Live** session — open-mic, Eve listens + replies continuously
-  (idle → listening → thinking → speaking on the orb); tap the orb to pause/resume, or toggle the
-  **keyboard** to type into the same session. The streaming transcript drives the captions. When she's
-  gathered enough, **✓ Build my brand** extracts the `BrandResult` (`/api/extract-brand`) → a **brand
-  summary** → **Create my store** → `POST /api/store`. A `402` opens the **Paywall**
-  (`subscription_required` or `brand_limit`); on success Eve announces the launch in her Gemini voice
+- **EveHome — guide view (default):** greeting + tools (build brand · edit site · designs · memes ·
+  posts) + the **digest** — Eve's status report over your real numbers (`buildDigest` /
+  `digestBriefing` in `src/lib/eve-digest.ts`, fed by `/api/creator/stats`). Each spoken turn is
+  distilled through the intent router (`/api/eve/route`), which routes her to her other surfaces;
+  mid-conversation she can also **see** images (`sendImage` via `src/lib/eve-vision-bus.ts`).
+- **EveHome — interview:** a realtime **Gemini Live** session — open-mic, Eve listens + replies
+  continuously (idle → listening → thinking → speaking on the orb); tap the orb to pause/resume, or
+  toggle the **keyboard** to type into the same session. The streaming transcript drives the
+  captions. When she's gathered enough, the `BrandResult` is extracted (`/api/extract-brand`) → the
+  **BrandReview** summary → **Create my store** → `POST /api/store`. A `402` opens the **Paywall**
+  (`subscription_required` or `brand_limit`); on success Eve announces the launch in her own voice
   (`/api/say`) and points you to Design.
-- **Dashboard (returning creator, `src/components/studio-dashboard.tsx`):** a card per brand with
-  revenue/orders; **Build a new brand** relaunches the interview; **credits/plan** opens the Paywall
-  in `manage` mode. Tapping a brand opens its **Console**.
-- **Calls:** `/api/me`, `/api/voice-live-token`, `/api/extract-brand`, `/api/say`, `/api/store`, `/api/creator/{stats,credits,subscription}`.
+- **BrandDeck (`src/components/eve/brand-deck.tsx`):** the swipe-down brand UI (replaces the old
+  dashboard — `studio-dashboard.tsx` is deleted). Full-screen, swipe between brand cards; **edit**
+  opens that brand's **Console**, **Build a new brand** closes the deck (EveHome underneath is
+  already listening), **billing** opens the Paywall in `manage` mode, and asset bounties jump to
+  Design. Only offered once the creator has a brand.
+- **EveDeveloping (`src/components/eve/eve-developing.tsx`):** the DEEP voice surface for site
+  edits (the `developing` state) — swaps in full-screen over everything; on submit it opens that
+  brand's Console on the Edit tab.
+- **EveDesign (`src/components/eve/eve-design.tsx`):** the design popup Eve **spawns over her own
+  screen** — a translucent overlay ON TOP of EveHome (deliberately NOT a screen swap: EveHome stays
+  mounted, so her mic keeps listening while you talk about the design); the hand-off jumps to the
+  Design tab.
+- **Calls:** `/api/me`, `/api/voice-live-token`, `/api/eve/route`, `/api/extract-brand`, `/api/say`,
+  `/api/store`, `/api/creator/{stats,credits,subscription,onboarding}`.
 
 ### Brand Console (`src/components/studio-composer.tsx`)
-Per-brand management sheet (opened from the dashboard or the header manage icon). Pills switch brands
+Per-brand management sheet (opened from the BrandDeck's edit action, or by a "changes ready" push
+deep-link). Pills switch brands
 when you have several. Four tabs:
 
 - **Edit site** — if a site exists: OG-image preview (tap → in-app browser with critique), a **go-live /

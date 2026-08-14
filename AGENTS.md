@@ -54,7 +54,9 @@ Details + versions: [`docs/architecture/TECH_STACK.md`](docs/architecture/TECH_S
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` trailer. (The "working loop" in CODE_STANDARDS.)
 
 ## Tabs (`src/components/app-tabs.tsx`)
-**Studio · Design · Market · Account** (the social feed is hidden for v1, preserved at `/feed`).
+**Eve · Design · Market · Account** — the `studio` route is the Eve page (Studio merged into it; see
+[`docs/studio/EVE_CONTROL.md`](docs/studio/EVE_CONTROL.md)). The social feed stays hidden for v1,
+preserved at `/feed`.
 Per-screen detail: [`docs/app/PAGES.md`](docs/app/PAGES.md).
 
 ## Documentation discipline (read before writing any code)

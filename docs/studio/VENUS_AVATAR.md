@@ -17,19 +17,21 @@
 **When the user says we're going to edit / work on Eve's appearance, come HERE — this is our
 dedicated, permanent tool for it.**
 - **What it is:** a full-screen render of the live avatar (`src/components/backgrounds/
-  venus-head-scene.tsx`) with a 4-stage toggle row, so we iterate on her in isolation (no app
-  chrome). The screen is `src/components/venus-lab-screen.tsx`; the avatar comes from `<VenusLab>`
-  (`src/components/venus-lab.tsx` native / `.web.tsx` web — a component split that keeps three/R3F
-  out of the native bundle until the Lab is opened).
+  venus-orb-scene.tsx`) with a single bottom control card (**stage · shape · voice** panels +
+  collapse), so we iterate on her in isolation (no app chrome). The screen is
+  `src/components/venus-lab-screen.tsx`; the avatar comes from `<VenusAvatar>`
+  (`src/components/venus-avatar.tsx` native / `.web.tsx` web — a component split that keeps three/R3F
+  out of the native bundle until mounted).
 - **How to enter it (in the app):** Account screen → **Developer → "Eve Lab (test)"** opens it as
   a full-screen Modal; the **"‹ back"** button returns to Account. The row is gated to the tester
   account (`VENUS_LAB_EMAIL = josephsardella@gmail.com` in `src/app/account.tsx`) — invisible to
   everyone else. It works on a native dev build AND in production builds for that one email.
 - **How to view it live on web (fast iteration loop):** the avatar renders in the `web-preview`
-  server. Edit `venus-head-scene.tsx` (the scene/orchestration) and/or the extracted builder modules
-  (`venus-shaders/textures/geometry/hair/eyes.ts`, see the File map) → `npx tsc --noEmit` → reload the
-  preview → screenshot to verify. Eve's look now lives across that ONE scene file + those 5 sibling
-  builder modules (shaders, textures, geometry/lattice, the procedural bob, the eyes).
+  server. Edit `venus-orb-scene.tsx` (the scene/orchestration) and/or the extracted builder modules
+  (`venus-plasma/points/geometry/shaders/textures.ts` + `venus-orb-bus.ts`, see the File map) →
+  `npx tsc --noEmit` → reload the
+  preview → screenshot to verify. Eve's look now lives across that ONE scene file + those sibling
+  builder modules (the orb GLSL, the lattice points, geometry, shaders, textures).
 - **Commit cadence:** commit at each visual milestone; this doc gets updated in the same change.
 
 ## The vision
@@ -181,8 +183,8 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
       render loop)** and time-syncs the features to playback; `SpeechLevelDriver` reads
       `speechFrameAt()` and maps it. `setVenusSpeechLatency(ms)` (default 120) aligns ear-to-lip.
     - **Web:** `AnalyserDriver` runs the SAME `analyzeWindow` + mapper on the AnalyserNode's
-      time-domain buffer, so the Lab is a faithful preview of native. `DEV_LIPSYNC_TEST` plays a clip
-      (and a synthetic flap only when no real source is `speaking()`). `wawa-lipsync` behind `USE_WAWA`.
+      time-domain buffer, so the Lab is a faithful preview of native. The web test path is the Lab's
+      voice audition (`/api/say` → play the WAV + `pushSpeechChunk`). `wawa-lipsync` behind `USE_WAWA`.
     - **Smoothing:** the driver emits instantaneous targets; the scene's `useFrame` damps with
       **asymmetric attack/decay** (fast open ~18/16, slow close ~12/10) so consonants stay crisp and
       vowels don't buzz. Lip-sync keeps running while buffered audio finishes after turn-complete.
@@ -346,21 +348,23 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
      copied verbatim, so the diff is mechanical).
    - **NOTE — judge the morph LIVE, not from stills:** the peel + cyclone is a *motion* effect (~1.3 s);
      a single screenshot is one frame. Use the Lab's **morphing** toggle to evaluate it.
-   - **Remaining polish:** make the *app-wide* background this same R3F field (today only the Lab/Eve
-     screens use the lattice; the rest of the app keeps the cheap Skia `<AppBackground>`). The landed
+   - **Remaining polish:** ✅ DONE — the app-wide background IS this R3F field now: `EveBackground`
+     (`src/components/eve/eve-background.tsx`) mounts the one GL avatar persistently at the app root
+     behind every tab (pages on translucent scrims over it, a lowPower invalidate ticker off the Eve
+     tab, frameloop `'demand'` with the ~30fps cap). The landed
      face dots sit in the static group while the wireframe sways ±2° — fine because they fade at land,
      but head-parenting the landed subset (keeping them sparkling on the moving mesh) is a future option.
 4. **Swap in the user's own RPM Eve avatar** (URL swap; commercial license).
-5. **Integrate into Studio** — ✅ DONE (first pass). The voice **build-a-brand interview** now renders
-   `<VenusAvatar>` full-bleed behind the controls instead of the SVG nucleus orb, gated by
-   `VENUS_IN_INTERVIEW` in `studio.tsx`. Her `VenusStage` is derived from the interview's
-   `EntityState` (`venusStageFor`): `speaking → talking`, everything else → `silence`, with a
-   one-shot `morphing` materialize when she enters the view. The dark `venusBackdrop` hides the
-   screen-level Skia field so only her lattice shows. **Native lip-sync is FORMANT-based** (F1→jaw,
+5. **Integrate into Studio** — ✅ DONE, then reshaped by the pivot: Eve is now the **persistent app
+   background** — ONE GL context (`EveBackground`, `src/components/eve/eve-background.tsx`) mounted
+   at the app root behind every tab. The interview surface (`EveHome`) mounts no avatar of its own —
+   it drives the shared root avatar through the **eve-stage-bus**
+   (`setEveStage('talking' | 'silence')`), and the avatar drops to a low-power tick off the Eve tab.
+   **Native lip-sync is FORMANT-based** (F1→jaw,
    F2→round/spread — see "Real lip-sync" above). **Lip-sync is GOOD ENOUGH for now** (verified on
    device: varied formant-driven mouth shapes, no "O" smear, jaw recalibrated to the female voice so
    it doesn't gape). Further fine-tuning is just the exported knobs (`jawGain`, the F1/F2 anchors,
-   `setVenusSpeechLatency`) if a future voice needs it. Open polish: a tap-to-pause hit-target on her face.
+   `setVenusSpeechLatency`) if a future voice needs it.
 
 ## Simli — REMOVED (2026-07-04)
 The photoreal-renderer POC is GONE per Joe ("we are not using simli — remove all code having to
@@ -376,9 +380,9 @@ ever wanted again, resurrect from git history (this section's last full version:
 ## Gotchas (read before editing)
 - **The Eve Lab is opened from the Account screen** (Developer → "Eve Lab (test)", gated to
   `VENUS_LAB_EMAIL`) as a full-screen Modal rendering `venus-lab-screen.tsx` — see "The Eve Lab"
-  section above. It's a real (if gated) surface now, so `<VenusLab>` is a **component split**
-  (`venus-lab.tsx` native / `.web.tsx` web): the native `require` of `venus-head-scene` (three/R3F)
-  is paid for only when the Lab is mounted. No more `_layout` flag — the old `/playground` route is
+  section above. It's a real (if gated) surface now, so `<VenusAvatar>` is a **component split**
+  (`venus-avatar.tsx` native / `.web.tsx` web): the native `require` of `venus-orb-scene` (three/R3F)
+  is paid for only when mounted. No more `_layout` flag — the old `/playground` route is
   gone.
 - **drei `useGLTF` breaks under Metro** — it wires DRACO/meshopt loaders that use `import.meta`,
   which Metro can't eval ("Cannot use 'import.meta' outside a module"). Use a **plain three
@@ -420,11 +424,14 @@ ever wanted again, resurrect from git history (this section's last full version:
   surface (the web preview's native-audio path doesn't run).
 
 ## File map
-- `src/components/backgrounds/venus-head-scene.tsx` — **the live R3F POC** ("Ascendant Cortana":
-  the `Avatar` component + the GLB load/build + the `useFrame` orchestration/lip-sync/liveliness +
-  the `VenusHeadScene` Canvas export). ← work here. The pure builders were extracted into the 5
-  sibling modules below (behavior-preserving split, 1710→~770 lines), so this file is now the
-  scene logic, not the shader/geometry zoo.
+- `src/components/backgrounds/venus-orb-scene.tsx` — **the live scene** (the neural-constellation
+  orb: the build/orchestration, the `useFrame` motion + voice coupling, the Canvas export).
+  ← work here. The pure builders live in the sibling modules below, so this file is the scene
+  logic, not the shader/geometry zoo.
+- `src/components/backgrounds/venus-plasma.ts` — the orb GLSL (PLASMA/SHEATH/NUCLEUS/NET/NODE/DUST
+  shaders), ES2/expo-gl-safe.
+- `src/components/backgrounds/venus-points.ts` — the unified-lattice points shaders
+  (`LATTICE_VERT/FRAG`, the ported `SKIA_CHUNK`, `motionSelect`).
 - `src/components/backgrounds/venus-shaders.ts` — the GLSL sources (STREAM/CORE/HAIR/STRAND), ES2/
   expo-gl-safe. (The unified-lattice shaders still live in `venus-points.ts`.)
 - `src/components/backgrounds/venus-textures.ts` — procedural DataTexture/matcap makers
@@ -432,9 +439,11 @@ ever wanted again, resurrect from git history (this section's last full version:
 - `src/components/backgrounds/venus-geometry.ts` — geometry bake/derive helpers (`bakeHeadLocal`,
   `dropEars/dropAbove`, `bakeAurora`, `subsample`, the UNIFIED LATTICE `bakeUnifiedLattice` +
   `LAT_COLS/LAT_ROWS`, `bakeStreamField`).
-- `src/components/backgrounds/venus-hair.ts` — procedural BOB hair (`buildBobHair` shell +
-  `buildHairStrands` bristles) + the `BOB_*` shape consts.
-- `src/components/backgrounds/venus-eyes.ts` — `makeIris` (sclera + iris sprites) + `EYE_R`.
+- `src/components/backgrounds/venus-orb-bus.ts` — the shape-morph bus (`setVenusOrbShape`:
+  tee/heart/bolt requests into the scene).
+- `src/components/eve/eve-background.tsx` + `src/lib/eve-stage-bus.ts` — where the ONE avatar
+  **mounts** (the app root, behind every tab — pages sit on translucent scrims) and how surfaces
+  **drive** it (`setEveStage('talking' | 'silence')`); lowPower off the Eve tab.
 - `src/lib/venus-formants.ts` — pure **FFT + formant extractor** (`analyzeWindow` → F1/F2 + bands +
   rms/zcr/voicing). Zero-dep, Hermes-safe, Node-tested. Shared by both drivers.
 - `src/lib/venus-viseme-map.ts` — pure **`mapFeaturesToWeights`** (the F1/F2 → ARKit jaw/funnel/
@@ -450,26 +459,24 @@ ever wanted again, resurrect from git history (this section's last full version:
   `setVenusSpeechLatency(ms)` aligns lips to the ear.
 - `src/lib/live-voice.ts` — the **Gemini Live session** (mic up / 24 kHz PCM playback via
   react-native-audio-api). Feeds `venus-speech-level.ts` as it enqueues her audio.
-- `src/components/backgrounds/venus-field-scene.tsx` — earlier Skia canonical-mesh dots-morph
-  (scatter↔face + wireframe). Reference for the dots-morph reveal.
-- `src/components/backgrounds/face-mesh.ts` — canonical face mesh data (FACE_VERTS/EDGES/DOTS).
-- `src/components/venus-lab-screen.tsx` — the Lab UI (4-stage toggle + back); opened from Account.
+- `src/components/venus-lab-screen.tsx` — the Lab UI (the stage · shape · voice control card +
+  back); opened from Account.
 - `src/components/venus-avatar.tsx` / `.web.tsx` — the `<VenusAvatar>` component split (native
-  expo-gl / web R3F) that renders `venus-head-scene`, keeping three out of the native bundle until
-  mounted. Used by the Lab, the Studio interview, AND the editor bubble.
+  expo-gl / web R3F) that renders `venus-orb-scene`, keeping three out of the native bundle until
+  mounted. Used by the Lab, the root `EveBackground`, AND the editor bubble.
 - `src/components/venus-bubble.tsx` — `<VenusBubble>`: Eve's avatar as a circular, tappable bubble
-  with a reactive halo, for the site-critique editor (`site-preview.tsx`, replaced the NC `VenusOrb`).
+  with a reactive halo, for the site-critique editor (`site-preview.tsx`, replaced the NC `VenusOrb`)
+  and the `EveDesign` popup.
   `speaking` → stage. **Native gotcha (two of them):** an expo-gl `GLView` BLANKS on iOS when clipped
   by `overflow:hidden` OR covered by an SVG mask whose `fillRule="evenodd"` iOS doesn't honor (it
   filled the whole disc). So: WEB clips with web-only `overflow:hidden`; NATIVE renders the GLView
   UNCLIPPED and reads as a circle via the panel-matched disc bg + the ring/rim (no GL clipping, no SVG
   mask). If square corners ever peek on device, the fallback is `@react-native-masked-view`.
-- `src/app/studio.tsx` — the **build-a-brand interview** mounts `<VenusAvatar>` full-bleed in voice
-  mode (`VENUS_IN_INTERVIEW` flag, `venusStageFor` maps live state → stage). Legacy SVG orb
-  (`NCNucleus`/`Nucleus`) still in-file as the `false` fallback.
-- `src/components/backgrounds/dot-field-scene.tsx` + `app-background.tsx` — the **Skia dot-field
-  background** (separate, shipped: global continuous bg behind the tabs, scrim, focus, etc. — see
-  the `skia-playground` memory).
+- `src/components/backgrounds/dot-field-scene.tsx` + `app-background.tsx` — the **legacy Skia
+  dot-field**, now used only by `welcome.tsx` and as `screen-fade`'s optional bed (the background
+  behind the tabs is the root Eve orb, not this).
+- **Deleted (git history only):** `venus-head-scene.tsx` (the Cortana face POC), `venus-hair.ts`,
+  `venus-eyes.ts`, `venus-field-scene.tsx`, `face-mesh.ts`.
 
 ## Git / how to verify
 - Branch `feature/welcome-onboarding`. Eve-arc commits: `1d68065` (canonical morph, superseded)
@@ -483,8 +490,9 @@ ever wanted again, resurrect from git history (this section's last full version:
 
 ## 🧠 ORB v3 — "the NEURAL CONSTELLATION" (the DEFAULT embodiment, 2026-07-04)
 
-Eve's default look is the ORB scene (`venus-orb-scene.tsx` + `venus-plasma.ts`), not the face —
-`<VenusAvatar variant>` defaults to `'orb'`; the Cortana face stays behind the Lab's Face toggle.
+Eve's look is the ORB scene (`venus-orb-scene.tsx` + `venus-plasma.ts`) — the orb is her ONLY
+embodiment: `<VenusAvatar { stage, lowPower }>` always renders `venus-orb-scene`. The Cortana face
+scene is deleted (git history only); the Lab's panels are stage · shape · voice.
 Art direction (Joe, same day, two passes): first "translucent… not a planet", then "get away from
 it looking like an orb… keeping the nucleus… really we want a visual representation of a neural
 network… way more detail". v3 (3-lens panel + judge, ultracode) deleted EVERY spherical surface
@@ -508,7 +516,7 @@ ONLY surviving plasma) · SOMAS (8, procedural two-gaussian sprite, power-law si
 
 **Motion** (labels per Joe's annotated still — "Net" = peripheral web, "Limbic" = the trunk
 arcs around the core, "Nuculus" = the core): netGroup carries a slow CONTINUOUS spin (full turn
-~2min, quicker talking; paused while a shape object shows) + bounded sway + a long-period 5%
+~5min — slowed per Joe; quicker talking; paused while a shape object shows) + bounded sway + a long-period 5%
 swell. Accumulating rotation is safe ONLY because the lattice shader rotates/swells the dot
 LANDING TARGETS by the same `uSpinY`/`uTgtScale` uniforms (defaults 0 → head scene unchanged) —
 landed dots stay glued to their spinning somas.
@@ -552,10 +560,13 @@ shape-morph survives: dissolve → retarget → re-form, `uLead` makes the dots 
 the mind dims 88% behind it. Object scale 1.15R·layoutScale; `layoutScale` (framing guard for
 narrow aspects) lives on `orbGroup.scale` + is baked into the lattice handoff copy only.
 
-**Speech**: firing rate + packet brightness + packet WIDTH ride spk·tk, the web trembles
-(uJitAmp), trunks flare per phrase (uTrunk), the nucleus swells + flares on syllables, the sheath
-boils, and the bottom→top thought band crosses lattice + wiring + somas on ONE clock
-(fract(t·0.5), width 55, WORLD-y normalized by the baked cloud extents uYMin/uYSpan). At idle,
+**Speech — the MINIMAL voice model** (commit `d3c4b83`; superseded the multi-channel coupling):
+the wires are fully **decoupled** from voice (`uSpeak` pinned 0, `uJitAmp` 1.0, `uTrunk` 0,
+firing rate ambient-only) — voice drives ONLY the nucleus family: `uFlare = 1.6·env` (THE voice
+coupling — the heart IS her voice), nucleus scale `1 + 0.35·env`, the tight-halo bloom, and the
+sheath boil. The bottom→top thought band still crosses lattice + wiring + somas on ONE clock
+(fract(t·0.5), width 55, WORLD-y normalized by the baked cloud extents uYMin/uYSpan — it sweeps
+in silence too). At idle,
 one ganglion at a time flares every ~7s (`uHotGang`/`uGangFlare`) — she is visibly thinking.
 
 **Radius ladder (load-bearing)**: nucleus 0.18R < sheath 0.30R < CLEAR gap (no somas) to 0.38R
@@ -580,9 +591,11 @@ diagnosed and fixed four causes; the values are all evidence-based — don't re-
 - ONE asymmetric follower: **attack τ25ms (λ40) / HOLD 150ms flat / release τ200ms (λ5)** —
   articulates syllables (125–250ms), bridges consonant dips, band-limits to the 2–8Hz speech
   modulation spectrum. The old λ8→λ10 cascade (~225ms onset lag) is deleted;
-- waveform history is a **ring buffer + write head + fractional phase** (`uHistHead`/
-  `uHistPhase`/`uEnvNow`, C0-continuous `sampleWave()` in the verts) — the old whole-array
-  shift with nearest-slot indexing stepped the entire net at 18Hz (the "glitch");
-- **channel ownership**: voice owns brightness/displacement (perceptual `pow(w,0.6)` curve);
+- ~~waveform-history ring buffer~~ — **SUPERSEDED** (commit `d3c4b83`, the MINIMAL voice model):
+  the waveform-history / wire-displacement channel (`uHistHead`/`uHistPhase`/`uEnvNow`,
+  `sampleWave()`) was deleted outright — voice is now a single coupling into the nucleus family
+  (see **Speech** above); the web/trunk speech reactions (`uSpeak`/`uJitAmp`/`uTrunk` modulation)
+  are retired;
+- **channel ownership**: voice owns the nucleus (flare/scale/halo + sheath boil);
   the 80bpm beat owns the hue clocks and its brightness pop **ducks 22%→~3% while speaking**
   (state-driven crossfade ~165ms). One rhythm per channel.

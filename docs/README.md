@@ -56,7 +56,11 @@ of `docs/` is the **domain layer** — how the product works). Start at
 | [studio/FORGE_AI.md](studio/FORGE_AI.md) | How our AI talks to the forge robot — Eve now authors the brief + a Master `CLAUDE.md` conditions the robot (both shipped); the remaining gap is eyes + a real quality gate. |
 | [studio/DESIGN_GENERATOR.md](studio/DESIGN_GENERATOR.md) | The Design tab: products (Printful publish), model shots, scene video — the asset pipeline that replaces the forge's temporary placeholders |
 | [studio/EDIT_PIPELINE.md](studio/EDIT_PIPELINE.md) | The live-site edit flow (voice → plan → generate → place → forge), its 5 checkpoints, and how to trace a failed edit in logs + DB. |
-| [studio/VENUS_AVATAR.md](studio/VENUS_AVATAR.md) | **In progress (POC).** Turning Eve from an orb into a glowing wireframe face that materializes from the dot field + lip-syncs to her voice. R3F + Ready Player Me viseme rig; current state, the liveliness recipe, and what's next. |
+| [studio/EVE_CONTROL.md](studio/EVE_CONTROL.md) | **THE PIVOT** — Eve as the app's persistent living background + control surface, and the P3′ voice design loop. Code comments point here for the current architecture. |
+| [studio/GEMINI_LIVE.md](studio/GEMINI_LIVE.md) | The live-voice stack — Eve on Gemini Live realtime speech-to-speech (`live-voice.ts` + `use-live-voice.ts`, ephemeral token, `/api/say`). SHIPPED. |
+| [studio/VENUS_CENTRAL.md](studio/VENUS_CENTRAL.md) | The "Eve as the operating system" game plan (2026-07-05) — the grounded inventory + phase plan behind the pivot; EVE_CONTROL.md carries the current state. |
+| [studio/FORGE_DIVERSITY.md](studio/FORGE_DIVERSITY.md) | Why every generated site looks the same — the root causes (fonts pipeline, template/hero inventory, forge latitude) + the fix tracks. Continuation of FORGE_AI.md. |
+| [studio/VENUS_AVATAR.md](studio/VENUS_AVATAR.md) | Eve's avatar — the persistent orb/nucleus embodiment (the wireframe-face POC was retired; `venus-orb-scene.tsx` is her only embodiment), formant lip-sync, the liveliness recipe, and the Eve Lab. |
 
 ## 👤 Accounts (`accounts/`) — identity, orders, money
 
@@ -75,7 +79,7 @@ of `docs/` is the **domain layer** — how the product works). Start at
 
 | Doc | Covers |
 |---|---|
-| [app/PAGES.md](app/PAGES.md) | Every screen/section — the v1 tabs (Studio · Design · Market · Account) + their modals. The social feed is hidden for v1 (preserved at `/feed`, returns in v2). |
+| [app/PAGES.md](app/PAGES.md) | Every screen/section — the v1 tabs (Eve · Design · Market · Account; the `studio` route is the Eve page) + their modals. The social feed is hidden for v1 (preserved at `/feed`, returns in v2). |
 
 ## 🚀 Ops & roadmap (`ops/`, `roadmap/`)
 

@@ -1,5 +1,17 @@
 # VENUS CENTRAL — the game plan (2026-07-05)
 
+> **SUPERSEDED (2026-07/08).** This plan shipped, then was overtaken: the pull-down overlay
+> landed (efb1efc), Phases B/C landed (`src/app/api/eve/route+api.ts`, `EveDeveloping`,
+> `EveDesign`), and then **THE PIVOT retired the overlay surface entirely** — Eve is now the
+> persistent app background (`src/components/eve/eve-background.tsx`) and her voice surface is
+> the **Eve tab** (`src/app/studio.tsx`): `EveHome` is the default view, and the dashboard is the
+> `BrandDeck` (`src/components/eve/brand-deck.tsx`) pulled down OVER her — the interaction
+> contract inverted (swipe-down reveals the UI, not Eve); `StudioDashboard` is gone. Current
+> architecture: [`EVE_CONTROL.md`](EVE_CONTROL.md).
+> Line refs herein are as of 2026-07-05 and have drifted; two mechanism changes since: sessions
+> take a **per-connect instruction override** (how `eveCentralInstruction` ships), and
+> `sendImage`/`eve-vision-bus` is a **second injection path** beside `sendContext`.
+
 > Joe: "Eve should complement the app at whole… she should become a general AI assistant —
 > building the brand and editing the sites are just versions of how she helps… swipe down for
 > Eve… read stats… ideas for drops… control the design section… memes and video content…
@@ -169,7 +181,7 @@ SHIPPED (the steady-state MVP):
 ════════════════════════════════════════════════════════════════════════════════
 # VENUS CENTRAL — REVISED: THE STATEFUL SURFACE (2026-07-05)
 
-Supersedes the sheet-with-chips MVP in `docs/studio/VENUS_CENTRAL.md` (§2a + Phase 1 appendix). Everything below is grounded in the current code; line refs verified this session.
+Supersedes the sheet-with-chips MVP in `docs/studio/VENUS_CENTRAL.md` (§2a + Phase 1 appendix). Everything below is grounded in the code as of 2026-07-05; line refs were verified that session but have since drifted (see the banner at top) — don't trust individual numbers.
 
 ---
 
@@ -221,6 +233,13 @@ The provider hosts the **one** `useLiveVoice` instance and exposes it via contex
 | **developing** | the existing critique UI full-screen under overlay chrome: WebView + pen + `VenusBubble` panel | **re-homed** `PreviewContent` (`site-preview.tsx:171`) — exported, given an injected-session prop |
 | **design** | design image center-stage + `VenusBubble` + captions; voice edit loop | **new** `src/components/venus/venus-design.tsx` (§4) |
 
+> **SHIPPED DIFFERENTLY:** the shared-session injection was never built. `PreviewContent` is
+> exported but its signature is `{ url, onClose, critique, review }` — no injected-session prop —
+> and it still self-hosts its critique session. The escape-hatch **reconnect-per-state** model
+> shipped instead (`src/components/eve/eve-developing.tsx`): each surface owns its session and
+> the `activeLiveSession` singleton arbitrates the handoff. *design* also shipped differently —
+> see the §4 note.
+
 **Move vs. embed-by-navigation for the interview — weighed, decided: MOVE.**
 - *Navigate* (what the sheet MVP does — `router.push('/studio?mode=interview')`, handled at `studio.tsx:611-619`): zero studio risk, but yields two Eve surfaces, two GL mounts, no handle inside studio, and it makes the overlay a launcher — precisely the "interface with buttons" Joe rejected.
 - *Move*: one surface, one session, the handle contract holds everywhere; cost is studio surgery. **Chosen.** What moves into `venus-home.tsx` + the provider: the live wiring + state mirror (`studio.tsx:745-806`), the `buildReady` latch **with the cue regex verbatim** (`:767-775`, regex at `:773`), captions (`:1318-1329`), pause/finalize pills + `InterviewTopics` (`:1289-1316`), `ChatInterview` keyboard overlay (`:1349-1364` — keyboard mode survives, rendered inside the overlay), `BrandReview` + `createStore` + the `/api/say` fanfare (`:983-1026`, `:1221-1232`), `venusStageFor()` (`:73`) and the `venusIntro` timer. Mic permission request (`startVoice`, `:899-907`) fires on first summon instead of the primer. `Paywall` is an RN `Modal` — it renders above the overlay natively, so the 402 path (`:994-997`) works unchanged from inside home.
@@ -236,6 +255,11 @@ The provider hosts the **one** `useLiveVoice` instance and exposes it via contex
 
 ## 3. VOICE-INTENT ROUTING
 
+> **SHIPPED:** the router lives at `src/app/api/eve/route+api.ts` (not `api/venus/`), and the
+> intent set gained a 7th intent, `digest`. The persona shipped as `eveCentralInstruction`
+> (not `venusCentralInstruction`), and the dead `editSiteInstruction`/`EDIT_SITE_GREETING`
+> exports are already deleted.
+
 **Mechanism: distill-then-execute, per committed user turn — never Live tool-calling** (native-audio can't, `live-voice.ts:5`, `extract-brand+api.ts:8-10`). Both lanes are used: a small classification call decides the transition; `sendContext` steers what she *says* after it.
 
 - **New `src/app/api/venus/route+api.ts`** — clone the `extract-brand+api.ts` scaffold (`MODELS = ['gemini-2.5-flash','gemini-2.0-flash']` + `TRANSIENT` retry). Input: `{ turn, recent: last 6 messages, stores: [{name, slug, status, hasSite}], state, interviewActive }`. Output: `{ intent, storeSlug?, idea?, topic?, ask? }`.
@@ -249,6 +273,12 @@ The provider hosts the **one** `useLiveVoice` instance and exposes it via contex
 ---
 
 ## 4. THE DESIGN STATE (new UI — hands-free iteration)
+
+> **SUPERSEDED.** Shipped as `src/components/eve/eve-design.tsx`, then re-shaped (110c11a):
+> design is deliberately **not** a machine state — it renders as a **translucent popup ON TOP of
+> `EveHome`** so her home session keeps the mic (swapping it in unmounted `EveHome` and killed
+> the mic). Iteration is typed-instruction for now — the `design-turn` voice distiller was never
+> built; the voice design loop is **P3′** in [`EVE_CONTROL.md`](EVE_CONTROL.md).
 
 `src/components/venus/venus-design.tsx`: the current design large on the `#06080f` bed (expo-image `contain`, the `DesignEditor` stage look), `VenusBubble` beside the captions, busy shimmer + her "working on it" line during edits. **Not** the `DesignEditor` modal (that's the hands-on tool) — but the **same endpoint**, so behavior is identical.
 
@@ -287,7 +317,7 @@ Files: `venus-design.tsx`; `api/venus/design-turn+api.ts`; catalogue/generate/de
 Files: `api/venus/draft-post+api.ts`; draft card in `venus-home.tsx`; schema `scheduledAt` + posts-route changes + `api/internal/publish-due-posts+api.ts`.
 **Demoable:** draft a post by voice, schedule it for tomorrow 9am, it publishes and the site revalidates.
 
-**Phase E — Money + stats (re-based, content unchanged from VENUS_CENTRAL §3-4).** The 402 interceptor now surfaces **through the overlay** (`openVenus('home')` + gate context); the stats digest becomes home-state opening context; `sales-series` as planned.
+**Phase E — Money + stats (re-based, content unchanged from VENUS_CENTRAL §3-4).** The 402 interceptor now surfaces **through the overlay** (`openVenus('home')` + gate context); the stats digest becomes home-state opening context; `sales-series` as planned. *(Shipped differently: the digest landed as an on-demand `digest` intent + `src/lib/eve-digest.ts` over `/api/creator/stats` only — no `sales-series` endpoint yet; still open.)*
 
 ---
 
@@ -295,7 +325,7 @@ Files: `api/venus/draft-post+api.ts`; draft card in `venus-home.tsx`; schema `sc
 
 1. **GL context churn** — summon/dismiss thrash creates/destroys expo-gl contexts; mitigations: `mounted` gate + mount-after-slide, debounce re-summon (<400ms), and consider keeping the context alive during brief pauses later. Never mount full avatar + `VenusBubble` simultaneously (developing = bubble only). The orb scene has **no frameloop throttling** — a hidden-but-mounted Canvas would burn GPU forever; the unmount rule is load-bearing.
 2. **Gesture conflicts** — top handle vs. iOS notification-shade edge swipe (visible pill sits *below* `insets.top`; `activeOffsetY(12)` + velocity threshold already tuned); bottom handle vs. home-indicator swipe (strip sits above `insets.bottom`); closePan restricted to the strip or it steals WebView scroll and the pen `PanResponder` (`site-preview.tsx:255-297` claims at capture phase — untouched since it lives inside the web wrap).
-3. **Session lifecycle across state switches** — one session must survive home→developing→design: the injected-`venus` prop must fully bypass `PreviewContent`'s internal start/stop or the `activeLiveSession` singleton teardown (`live-voice.ts:291-294`) kills her mid-sentence ("looks like a crash"). 30-min cap + `uses:2` token can expire mid-state → provider needs re-mint+reconnect with transcript recap. Frozen `systemInstruction` means state briefs ride `sendContext` only — if steering proves weak, the reconnect-per-state fallback exists.
+3. **Session lifecycle across state switches** — one session must survive home→developing→design: the injected-`venus` prop must fully bypass `PreviewContent`'s internal start/stop or the `activeLiveSession` singleton teardown (`live-voice.ts:291-294`) kills her mid-sentence ("looks like a crash"). 30-min cap + `uses:2` token can expire mid-state → provider needs re-mint+reconnect with transcript recap. Frozen `systemInstruction` means state briefs ride `sendContext` only — if steering proves weak, the reconnect-per-state fallback exists. *(Resolved differently: reconnect-per-state IS the shipped model — see the §2 note — enabled by the per-connect instruction override that landed later.)*
 4. **buildReady cue regression** — `venusCentralInstruction` must carry the "ready to build your brand" phrasing verbatim or the `studio.tsx:773` regex (now in venus-home) silently never unlocks Build; the 6-turn safety net stays.
 5. **Studio migration blast radius** — `?mode=interview` deep link, Welcome/onboarding intents that previously `setMode('primer')`, `onFinishedBrand` dashboard refresh (`dashKey`), mic-permission prompt timing (now on first summon), and the signed-out flow (overlay handle hidden without a session) all need explicit re-wires; grep for `setMode(` before deleting modes.
 6. **Double-Eve during transition** — until Phase B, the composer critique path still self-hosts a session; `isVenusLive()` gating on the top handle must be airtight or two sessions fight the mic.
@@ -309,13 +339,13 @@ Files: `api/venus/draft-post+api.ts`; draft card in `venus-home.tsx`; schema `sc
 ## ADDENDUM (2026-07-05): PRODUCT MANAGEMENT TOOLS
 
 Joe: Eve should have access to PRODUCT DETAILS — including taking a product OFF a store.
-Add to the tool registry (both map to routes that exist today):
+Add to the tool registry (the first two map to routes that exist today):
 
 | Tool | Maps to | Status |
 |---|---|---|
 | `get_products` | `GET /api/creator/products?storeSlug=` (name/image/video/model shots/published state) | **exists-today** |
 | `remove_product` | `DELETE /api/creator/products/:id` ("remove a product everywhere the creator owns it") | **exists-today** |
-| `unpublish_product` | the PATCH publish toggle on `/api/creator/products/:id` (softer than delete — off the storefront, kept in the catalog) | **exists-today** (verify PATCH shape) |
+| `unpublish_product` | a PATCH publish toggle on `/api/creator/products/:id` (softer than delete — off the storefront, kept in the catalog) | **needs-building** (no PATCH exists on this route today — it has DELETE only; add a PATCH `{ isPublished }` toggle before wiring this tool) |
 
 Conversation design: "take the hoodie off my store" → she reads get_products for the store,
 matches by name (disambiguate via ask if fuzzy), then — GUARDRAIL — product removal is
@@ -366,3 +396,10 @@ Verified on web (signed-out path + summon/dismiss/handles/orb). The signed-in in
 same code, type-checked; live-voice it end-to-end on device next session.
 
 NEXT: Phase B — intent router + `developing` state (VenusBubble, console loading, submit→home).
+
+> **SUPERSEDED.** Phases B and C shipped after this entry (`src/app/api/eve/route+api.ts`,
+> `eve-developing.tsx`, `eve-design.tsx` — commits 37974fb, 3e7e674), and then **THE PIVOT
+> retired the overlay itself**: `eve-overlay.tsx` was deleted (83a6873, and the `__eve` dev hook
+> with it), Eve became the persistent app background (`eve-background.tsx`), and her voice
+> surface moved to the Eve tab (`studio.tsx` — `EveHome` default, `BrandDeck` pulled down over
+> her). Current architecture: [`EVE_CONTROL.md`](EVE_CONTROL.md).

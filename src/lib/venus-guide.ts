@@ -2,8 +2,8 @@
 // EVE_CENTRAL.md / EVE_CONTROL.md). Pure and cheap: eve-home feeds it /api/me data and shows the
 // greeting as her opening subtitle (and, later, as the seed of her spoken opening).
 //
-// The next-best-action SUGGESTIONS this used to compute are now the CAPABILITY REGISTRY
-// (src/lib/eve-capabilities.ts) — the energy orbs read that. This file is just the greeting.
+// The next-best-action SUGGESTIONS this used to compute are gone — the capability registry + orbs
+// that replaced them were themselves retired (83a6873). This file is greeting-only.
 
 export type VenusGuidance = { greeting: string };
 
