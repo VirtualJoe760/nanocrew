@@ -33,12 +33,13 @@ async function generateLogo(brand: BrandResult): Promise<string | null> {
     const palette = brand.designSystem.palette.map((p) => `${p.role}: ${p.hex}`).join(', ');
     const prompt =
       `Logo for the clothing brand "${brand.name}". ${brand.logo.direction}. ` +
-      `${brand.designStyle} design style. Use ONLY these brand colors: ${palette}. ` +
-      'A clean, iconic mark centered on a SOLID, UNIFORM, PURE MAGENTA (#FF00FF) background ' +
-      'filling the entire frame edge to edge — the mark itself must contain NO magenta or pink ' +
-      'hues (the magenta is keyed out to a transparent PNG). Never render a checkerboard pattern. ' +
-      'Square 1:1. No text other than the brand name, and only if the description asks for it — if it appears, ' +
-      'render the brand name EXACTLY ONCE (the direction may repeat it; never draw it twice). No watermark.';
+      `${brand.designStyle} design style. THE MARK ITSELF uses ONLY these brand colors: ${palette} — ` +
+      'and must contain NO magenta or pink hues. ' +
+      'THE BACKGROUND is separate from the mark and is NOT one of the brand colors: fill it edge to edge ' +
+      'with SOLID, UNIFORM, PURE MAGENTA (#FF00FF) — even if the brand palette is dark, the backdrop is ' +
+      'ALWAYS magenta (it is keyed out to a transparent PNG). Never render a checkerboard pattern. ' +
+      'Square 1:1. If the direction calls for text, render the brand name EXACTLY ONCE, spelled precisely, ' +
+      'and no other text. No border or frame around the canvas. No watermark.';
     const res = (await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],

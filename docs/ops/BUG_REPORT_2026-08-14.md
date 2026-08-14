@@ -43,8 +43,12 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 
 ### B5 · Med · Generated brand logo renders the name TWICE (+ transparency not applied)
 - **Evidence:** night-circuit's logo (stores.logoUrl) reads "NIGHT" stacked over "Night Circuit" on a solid black tile with a stray white frame — this is the brand's face in the site header, OG card, and app.
-- **Cause:** the logo prompt injects `brand.name` AND `brand.logo.direction` (which usually restates the name) — the model draws both. The magenta→transparent chroma-key path also didn't take (solid black bg came back).
-- **Fix (shipped, prompt-side):** [store+api.ts](../../src/app/api/store+api.ts) now instructs "render the brand name EXACTLY ONCE (the direction may repeat it; never draw it twice)". Transparency-keying reliability + regenerating night-circuit's logo → follow-up.
+- **Causes (verified):** (1) the prompt self-contradicted for dark brands — "Use ONLY these brand colors" (incl. black) vs "PURE MAGENTA background"; the model resolved it with a black backdrop, so `keyOutMagenta` correctly no-oped and the opaque tile shipped. Systematic for every dark-palette brand. (2) Image-model typesetting: "mostly wordmarks" makes it draw type, and it laid the name out twice with wobbly glyphs (the direction does NOT restate the name — earlier attribution corrected). (3) No quality gate before the image becomes the brand's face.
+- **Fix (shipped + verified):** [store+api.ts](../../src/app/api/store+api.ts) prompt now scopes the palette to THE MARK, mandates the magenta backdrop "even if the brand palette is dark", name EXACTLY ONCE, no frame. Regenerated night-circuit's logo with the new prompt: clean single wordmark on true magenta → keyed to a 735×163 transparent PNG → uploaded → stores.logo_url updated.
+- **Residuals for the report:** glyph precision (image models typeset imperfectly — recommend composing wordmark-style logos deterministically, as the OG card already does with Cloudinary text); add a cheap post-generation check (name-once + magenta-border) with one retry.
+
+### B8 · Med · Logo changes don't propagate to the deployed site
+- After updating `stores.logo_url`, store-night-circuit.vercel.app still serves the old Cloudinary asset — the logo is baked at forge build time, not read from the store API at runtime. A creator updating their logo sees no change on their site until some unrelated revision rebuilds it. Either read the logo live from the public store payload or trigger a site revision on logo change.
 
 ### B6 · Med · FIXED · Product picker collapses to a single column on 375pt screens
 - **Evidence:** category + search grids rendered one card per row with a dead right half (web mobile viewport; would reproduce natively on iPhone SE/mini-class).
