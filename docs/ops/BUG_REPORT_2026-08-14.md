@@ -39,6 +39,7 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 - Account: comp → ADVANCED surfacing; fresh-account empty states; Eve Lab hidden for non-admin.
 - Eve (web, post-B4-fix): connect → greeting → 3-turn typed interview → ✓ Build latch → extraction (on-brief palette/story) → template picker → store created `night-circuit` → forge site READY in ~3 min → storefront live at store-night-circuit.vercel.app (on-brand hero/logo/OG).
 - Digest: real numbers (0 orders / $0 / 1 view — the view being my own storefront visit); status-aware suggestion; guide greeting is store-aware ("isn't live yet — shall we finalize?").
+- Market (browser pass): Discover/Shop/Brands render real data; brand sheets theme per-brand (SL dark, Aether Run light); product detail (colors/sizes/desc/Buy) works in-sheet; checkout session creation verified to the boundary — 200 + checkout.stripe.com URL returned for a real variant, never opened (live keys). Buy-button synthetic press didn't fire in the pane (API path proven; re-verify tap on Simulator).
 - API: auth battery 9/9; eve-route intent battery 17/17 post-fix; rate limiter 429s at 60/min; /api/idea, /api/say, /api/generate (design persisted for night-circuit); tenant scoping (non-member 404 vs owner 400-past-gate); K1 deletion e2e (auth identity 404 after DELETE /api/me).
 
 ### B5 · Med · Generated brand logo renders the name TWICE (+ transparency not applied)
