@@ -21,6 +21,27 @@ clothing — consistent, on-brand model photography of the real product, not gen
   product looks like ITSELF in every photo. Credits suggestion: `lora_train: 600` (≈2× cost
   margin, one-time per product) · `lora_shot: 10` per image. Comp accounts exempt as usual.
 
+## The model: garment LoRA × avatar LoRA (Joe, 2026-08-15)
+Model shots are the COMBINATION of two trained subjects at generation time (Krea's `styles` array
+accepts multiple LoRA refs, each activated by its trigger word in the prompt):
+- **Garment LoRA** — per product, type `Object`, trained on the product's own renders. Makes the
+  clothing look like ITSELF in every shot.
+- **Avatar LoRA** — a person. Two sources:
+  1. **Base models (house library)** — a curated set Nano Crew ships (diverse, licensed/generated
+     photo sets we train once, platform-owned, `store_id` NULL). Every creator can shoot on them
+     at no training cost — only the per-shot fee.
+  2. **Creator models (user-uploaded)** — a creator uploads 10–20 photos of themselves (or their
+     model, with consent affirmation) → personal avatar LoRA, scoped to their account, usable
+     across all their brands. Billed like a garment LoRA (`lora_train`).
+- A shot prompt then reads: `<AVATAR_TRIGGER> wearing <GARMENT_TRIGGER>, <scene/pose from the
+  diversity bank>` — one garment, any avatar, any scene, unlimited consistent photography.
+- Schema: `loras.kind` (`'garment' | 'avatar'`), `product_id` nullable (avatars have none),
+  `creator_id` for personal avatars, `store_id` NULL for the house library. Avatar picker UI in
+  the shot flow: house grid + "your models" + upload-new.
+- **Consent/safety:** uploads gated by an explicit "I have rights to these photos / this is me or
+  a model who consented" affirmation; avatar LoRAs are private to the uploading account, never
+  shared or listed. No training on third-party/celebrity photos.
+
 ## Build phases
 - **K1 — Client lib** `src/lib/krea.ts`: auth (KREA_API_KEY env), submit training job, poll to
   completion, run LoRA inference. All jobs recorded in a new `loras` table
@@ -39,6 +60,9 @@ clothing — consistent, on-brand model photography of the real product, not gen
   can later seed from LoRA stills. Eve intent ("shoot my hoodie on a model") in a later pass.
 - **K5 — Credits + flag:** KREA_ENABLED env flag; credit keys above; API-balance low-water
   alert in the watchdog cron (Krea balance is prepaid — running dry silently kills the feature).
+- **K6 — Avatar library:** train the house base models (one-time platform spend, ~$3 each);
+  `loras.kind`/`creator_id` columns; photo-upload flow (Cloudinary) + consent affirmation →
+  personal avatar LoRA; avatar picker in the shot flow; shot generation passes BOTH LoRA refs.
 
 **Pilot:** Night Circuit's Circuit Owl Tee — train one LoRA (~$3), generate a 6-shot set, review
 in the same curation modal before anything lands on the site.
