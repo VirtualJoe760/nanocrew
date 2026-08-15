@@ -101,3 +101,6 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 | Upload as reference + prompt | PASS — image-to-image generation accepted |
 | More options | Present + functional: AI-effort slider (Low/Med/High/Max), 🎲 Random & ✨ Enhance (filled a full prompt) |
 - 8 designs in the First-drop collection dock at the end; every run went generate → review modal → Use this (except direct-upload, which skips review by design).
+
+### B14 · Med · FIXED · Meme mode rendered a person WEARING the meme tee
+- The meme prompt template opened "…PANEL printed on apparel" ([meme.ts](../../src/lib/meme.ts)) — the model took it literally and produced a product-photo mockup (person + shirt + magenta backdrop remnants) instead of the flat panel. Captions/humor were solid (correctly spelled Impact captions). Fixed: "flat artwork… render ONLY the panel — never a t-shirt, garment, mockup, or person." Verified with a regeneration below.

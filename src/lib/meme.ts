@@ -39,7 +39,10 @@ export function buildMemePrompt(idea: string): string {
 export function buildMemePromptForProduct(idea: string): string {
   const body = idea.trim().replace(/[.\s]+$/, '');
   return (
-    `Create a funny internet MEME as a SELF-CONTAINED RECTANGULAR PANEL printed on apparel. ${body}. ` +
+    // "printed on apparel" made the model render a PERSON WEARING the meme tee (B14) — the panel
+    // artwork is destined for printing, but the model must draw ONLY the flat panel itself.
+    `Create a funny internet MEME as a SELF-CONTAINED RECTANGULAR PANEL of flat artwork. ${body}. ` +
+    `Render ONLY the panel itself — never a t-shirt, garment, product mockup, or person wearing it. ` +
     `Inside the panel use classic meme formatting: caption text in bold ALL-CAPS condensed sans-serif ` +
     `(Impact font), pure white letters with a thick solid black outline, as a top and/or bottom caption, ` +
     `large and centered, inset just enough that the text isn't clipped. Spell every word correctly and ` +
