@@ -1,6 +1,6 @@
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
-import { generateLogo } from '@/lib/logo';
+import { generateLogoKit } from '@/lib/logo-kit';
 import { provisionStorefront } from '@/lib/provision';
 import { buildOgImageUrl } from '@/lib/og-image';
 import { canLaunchStore } from '@/lib/billing';
@@ -62,8 +62,11 @@ export async function POST(req: Request) {
         .slice(0, 40) || 'store';
 
     const { designSystem, ...profile } = brand;
-    const logo = await generateLogo(brand);
-    const logoUrl = logo?.url ?? null;
+    // THE NEW FLOW: the full identity kit — wordmark + icon-mark masters through the rebuilt
+    // pipeline (flat, validated, normalized) + derived tiles/favicons/monos. The wordmark is the
+    // brand's primary logoUrl; the kit rides stores.logo_kit for templates/derivations.
+    const kit = await generateLogoKit(brand);
+    const logoUrl = kit?.wordmark ?? kit?.mark ?? null;
     // The brand's OG / share card AND its avatar in-app — logo + tagline on the brand bg.
     // Built whether or not a website ever ships, so a shop-only brand still has a clean visual.
     const ogImageUrl = buildOgImageUrl({
@@ -88,9 +91,10 @@ export async function POST(req: Request) {
             // The raw interview is brand data too — the template engine and future
             // revisions mine what the creator actually said.
             // logoStyle rides the profile: templates suppress the text name next to a wordmark logo.
-            brandProfile: { ...profile, transcript, ...(logo ? { logoStyle: logo.style } : {}) },
+            brandProfile: { ...profile, transcript, ...(kit?.wordmark ? { logoStyle: 'wordmark' } : {}) },
             designSystem,
             logoUrl,
+            logoKit: kit,
             ogImageUrl,
             // Website plans build a site (building → ready); app-only brands are ready at once.
             status: website ? 'building' : 'ready',
@@ -113,7 +117,7 @@ export async function POST(req: Request) {
             slug: store.slug,
             brand,
             logoUrl,
-            logoStyle: logo?.style,
+            logoStyle: kit?.wordmark ? 'wordmark' : 'mark',
             transcript,
           });
         }
