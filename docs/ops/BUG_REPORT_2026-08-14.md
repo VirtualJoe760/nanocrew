@@ -70,3 +70,6 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 
 ### B10 · Med · FIXED · Product search fails natural queries
 - "oversized tee" → 0 results; "oversized" → 10. Cause: whole-phrase `name.includes(query)` — no tokenization, no synonyms ([ProductPicker.tsx](../../src/components/designer/ProductPicker.tsx)). Fixed with tokenized AND-matching + a small synonym map (tee→t-shirt, hoody→hoodie, …). Verified: "oversized tee" now returns 5. (Nit left as-is: "1 RESULTS" pluralization.)
+
+### B11 · Med · Market product tiles open the BRAND sheet, not the product
+- Every press handler in [market.tsx](../../src/app/market.tsx) calls `onOpen(item.storeSlug)` — product cards ("New this week" rows with name+price, hero product cards) discard the product id, so tapping "Quiet Horizon · $28.99" lands on Aether Run's landing sheet and the shopper must find the product again. `brand-store.tsx` already renders `ProductDetail`, so the fix is threading an optional productId through onOpen → sheet initial state.
