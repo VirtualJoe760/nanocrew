@@ -545,6 +545,26 @@ export const revisionStatus = pgEnum('revision_status', [
   'declined', // creator rejected the preview → branch discarded, never merged (production untouched)
 ]);
 
+// Krea LoRA training jobs (docs/architecture/KREA_LORA.md) — one row per trained garment LoRA.
+// Status mirrors Krea's job states plus watchdog outcomes; the forge-watchdog cron polls
+// non-terminal rows via /jobs/{id} (P7/P8 share the stalled/retry/abandoned pattern).
+export const loras = pgTable('loras', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  storeId: uuid('store_id')
+    .notNull()
+    .references(() => stores.id, { onDelete: 'cascade' }),
+  productId: uuid('product_id').references(() => products.id, { onDelete: 'cascade' }),
+  kreaJobId: text('krea_job_id').notNull(),
+  styleId: text('style_id'), // set when training completes — referenced in generation requests
+  triggerWord: text('trigger_word').notNull(),
+  status: text('status').notNull().default('queued'),
+  steps: integer('steps').notNull().default(1000),
+  costCents: integer('cost_cents'), // steps × 0.3¢, recorded at submit
+  errorMsg: text('error_msg'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  completedAt: timestamp('completed_at'),
+});
+
 export const storeRevisions = pgTable(
   'store_revisions',
   {

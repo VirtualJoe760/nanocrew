@@ -183,6 +183,13 @@
       "when": 1786749488212,
       "tag": "0025_steady_vapor",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786828577585,
+      "tag": "0026_exotic_calypso",
+      "breakpoints": true
     }
   ]
 }

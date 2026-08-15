@@ -66,6 +66,13 @@ The app users (people building stores).
   `name`/`phone` come from the email-signup form's `user_metadata` (providers usually supply name only);
   `/api/me` upserts them + stamps acceptance server-side on first sign-in (migration 0020).
 
+### `loras`
+Krea LoRA training jobs — one per trained garment LoRA ([KREA_LORA.md](KREA_LORA.md)).
+- `id`, `storeId` → `stores` (cascade), `productId` → `products` (cascade, nullable).
+- `kreaJobId`, `styleId` (set on completion; referenced in generation), `triggerWord`.
+- `status` (Krea job states + watchdog outcomes), `steps`, `costCents`, `errorMsg`,
+  `createdAt`/`completedAt`. Polled by the forge-watchdog cron (P7 pattern).
+
 ### `stores`
 One per creator website/store (the thing the app generates).
 - `id` (uuid PK), `creatorId` → `creators` (**cascade**) — the owner.
