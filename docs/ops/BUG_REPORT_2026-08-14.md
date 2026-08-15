@@ -104,3 +104,21 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 
 ### B14 · Med · FIXED · Meme mode rendered a person WEARING the meme tee
 - The meme prompt template opened "…PANEL printed on apparel" ([meme.ts](../../src/lib/meme.ts)) — the model took it literally and produced a product-photo mockup (person + shirt + magenta backdrop remnants) instead of the flat panel. Captions/humor were solid (correctly spelled Impact captions). Fixed: "flat artwork… render ONLY the panel — never a t-shirt, garment, mockup, or person." Verified with a regeneration below.
+
+## Native Simulator pass (2026-08-15, iPhone 16e, driven via screen control)
+- **PRODUCT CREATION FULLY OPERATIONAL through the UI**: native drag → Combine sheet (correct per-product placement labels) → composition render on canvas (grouped row, live "Rendering…") → Review & finalize (PlacementEditor with handles) → Pricing (price floor enforced: "min $39.40") → Publish → "Live on Printful — sync product #456028641 · 11 variants". The stretch that was untestable in the browser all works.
+- Also verified native: sign-in UI (incl. iOS-only Apple button correctly present), push-permission prompt fires, mic-permission prompt fires, cross-device canvas persistence (web-created nodes loaded on the sim), picker two-column grid (B6 fix holds natively).
+
+### B15 · High · Product picker header renders under the status bar (16e) — Close unreachable, user trapped
+- The full-screen picker modal has no top safe-area inset on iPhone 16e: breadcrumb + "Close" draw behind the clock/battery. Close's touch target is occluded; swipe-dismiss doesn't apply (full-screen modal). Only escape = selecting a product. Add safe-area padding to the picker header (and audit other full-screen modals on notch devices).
+
+### B16 · Low · Mic permission copy still says "Venus"
+- app.json NSMicrophoneUsageDescription: "…talk to Venus, your AI brand consultant." The Eve rename missed the iOS permission strings (needs a native rebuild to take effect).
+
+### B17 · Low · Publish success screen: missing icon glyph + rough layout
+- "Live on Printful" renders with a "[?]" placeholder glyph and awkward wrapping; Done button crowded.
+
+### Verify-later
+- Deep link nanocrew:///design opened the app to the Eve tab, not Design (may be route-shim behavior; re-check).
+- Eve tab's 3D scene rendered black on the 16e simulator (GL warnings in Metro; may be sim-only GL slowness — check on device).
+- LogBox warning toasts repeatedly overlay the tab bar in dev, swallowing taps (dev-only annoyance; the noisy warnings worth quieting: sim push-token warn ×N, THREE deprecations).
