@@ -14,30 +14,29 @@ clothing — consistent, on-brand model photography of the real product, not gen
   must fund and monitor it. Upscaling to 22K and video models ($0.05–0.40/s) available later.
 
 ## Unit economics for us
-- One-time per product: ~**$3.00** (1000-step LoRA on the garment).
+- One-time per avatar: ~**$3.00** (1000-step LoRA on the person).
 - Per model shot: ~**$0.04–0.07** → a 6-shot set ≈ $0.30.
 - Compare today's `model_shots` (3 Nano Banana renders, ~$0.12, 25 credits): similar per-shot
-  cost, but the LoRA gives **garment fidelity across unlimited shots/scenes/angles** — the
-  product looks like ITSELF in every photo. Credits suggestion: `lora_train: 600` (≈2× cost
+  cost, but the LoRA gives a **consistent model identity across unlimited shots/scenes/angles**.
+  Credits suggestion: `lora_train: 600` (≈2× cost
   margin, one-time per product) · `lora_shot: 10` per image. Comp accounts exempt as usual.
 
-## The model: garment LoRA × avatar LoRA (Joe, 2026-08-15)
-Model shots are the COMBINATION of two trained subjects at generation time (Krea's `styles` array
-accepts multiple LoRA refs, each activated by its trigger word in the prompt):
-- **Garment LoRA** — per product, type `Object`, trained on the product's own renders. Makes the
-  clothing look like ITSELF in every shot.
-- **Avatar LoRA** — a person. Two sources:
-  1. **Base models (house library)** — a curated set Nano Crew ships (diverse, licensed/generated
-     photo sets we train once, platform-owned, `store_id` NULL). Every creator can shoot on them
-     at no training cost — only the per-shot fee.
+## The model: AVATAR LoRAs only (Joe, 2026-08-15)
+**There will never be a garment LoRA.** Krea is used for exactly one thing: training **modeling
+avatars** — persistent virtual models. The avatar is the durable brand asset; products are
+matched onto avatars at shot time (the product render/design rides the generation as reference
+imagery + prompt, and our existing composite pipeline owns garment fidelity — NOT Krea training).
+- **Avatar LoRA** — a person, trained once (~$3):
+  1. **Base models (house library)** — a curated, diverse set Nano Crew ships (licensed/generated
+     photo sets, platform-owned, `store_id` NULL). Every creator shoots on them free — only the
+     per-shot fee.
   2. **Creator models (user-uploaded)** — a creator uploads 10–20 photos of themselves (or their
      model, with consent affirmation) → personal avatar LoRA, scoped to their account, usable
-     across all their brands. Billed like a garment LoRA (`lora_train`).
-- A shot prompt then reads: `<AVATAR_TRIGGER> wearing <GARMENT_TRIGGER>, <scene/pose from the
-  diversity bank>` — one garment, any avatar, any scene, unlimited consistent photography.
-- Schema: `loras.kind` (`'garment' | 'avatar'`), `product_id` nullable (avatars have none),
-  `creator_id` for personal avatars, `store_id` NULL for the house library. Avatar picker UI in
-  the shot flow: house grid + "your models" + upload-new.
+     across all their brands. Billed via `lora_train`.
+- A shot prompt reads: `<AVATAR_TRIGGER> wearing <product description>, <scene/pose from the
+  diversity bank>` with the product image as reference — one avatar, any product, any scene.
+- Schema: `loras` rows are avatars (`product_id` stays NULL / may be dropped), `creator_id` for
+  personal avatars, `store_id` NULL for the house library.
 - **Consent/safety:** uploads gated by an explicit "I have rights to these photos / this is me or
   a model who consented" affirmation; avatar LoRAs are private to the uploading account, never
   shared or listed. No training on third-party/celebrity photos.
@@ -47,22 +46,19 @@ accepts multiple LoRA refs, each activated by its trigger word in the prompt):
   completion, run LoRA inference. All jobs recorded in a new `loras` table
   (id, storeId, productId, kreaJobId, weightsRef, status, steps, costCents) — statuses ride the
   SAME watchdog pattern as forge jobs (stalled/retry/abandoned) via the FORGE_WATCHDOG cron.
-- **K2 — Training-set builder:** per product, assemble the set automatically: composition
-  renders (front/back), Printful mockups, the flat design on the garment, existing model_shots
-  if any (8–20 images), zip → train. Trigger word = the product slug. Store the LoRA ref on the
-  product.
-- **K3 — Shot generation:** scene/pose/diversity prompt bank (reuse docs/studio/FORGE_DIVERSITY
-  guidance for model diversity) → N shots per run via the LoRA endpoint → persist to the
-  product's image gallery + site galleries (same fields model_shots feeds today), storefront
-  revalidate on write.
+- **K2 — Avatar training flow:** photo upload (Cloudinary) + consent affirmation → train the
+  avatar LoRA (trigger word per avatar). House base models trained once by ops the same way.
+- **K3 — Shot generation:** avatar LoRA + the product render as reference + scene/pose prompt
+  bank (docs/studio/FORGE_DIVERSITY) → N shots per run → persist to the product's image gallery +
+  site galleries (same fields model_shots feeds today), storefront revalidate on write. Garment
+  fidelity = our composite pipeline + reference imagery, never Krea training.
 - **K4 — Surfaces:** the existing post-publish "Generate model shots" button reroutes to the
   LoRA path once a product has a trained LoRA (else offers training first). Sell-tab video ads
   can later seed from LoRA stills. Eve intent ("shoot my hoodie on a model") in a later pass.
 - **K5 — Credits + flag:** KREA_ENABLED env flag; credit keys above; API-balance low-water
   alert in the watchdog cron (Krea balance is prepaid — running dry silently kills the feature).
-- **K6 — Avatar library:** train the house base models (one-time platform spend, ~$3 each);
-  `loras.kind`/`creator_id` columns; photo-upload flow (Cloudinary) + consent affirmation →
-  personal avatar LoRA; avatar picker in the shot flow; shot generation passes BOTH LoRA refs.
+- **K6 — Avatar picker:** house grid + "your models" + upload-new in the shot flow;
+  `creator_id` column on `loras` for personal avatars.
 
-**Pilot:** Night Circuit's Circuit Owl Tee — train one LoRA (~$3), generate a 6-shot set, review
-in the same curation modal before anything lands on the site.
+**Pilot:** train one avatar (~$3) from a real photo set, then shoot the Circuit Owl Tee on it
+(product render as reference), review in the curation modal before anything lands on the site.
