@@ -74,3 +74,17 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 
 ### B11 · Med · Market product tiles open the BRAND sheet, not the product
 - Every press handler in [market.tsx](../../src/app/market.tsx) calls `onOpen(item.storeSlug)` — product cards ("New this week" rows with name+price, hero product cards) discard the product id, so tapping "Quiet Horizon · $28.99" lands on Aether Run's landing sheet and the shopper must find the product again. `brand-store.tsx` already renders `ProductDetail`, so the fix is threading an optional productId through onOpen → sheet initial state.
+
+### B12 · Med · Composition accepts invalid placements; publish fails late with a raw Printful 502
+- `POST /api/compositions` accepted `placement:"front"` for blank 1482 (All-Over Print tee, whose allowed keys are `front_dtfabric`/`back_dtfabric`/…); the error only surfaced at publish as `502 Printful 400: Incorrect file type: front` passthrough. Validate the placement against the blank's allowed set at composition time and return a 400 with the allowed keys.
+
+### B13 · Med · Publish allows image-less products → blank cards on the storefront
+- A composition created without its on-garment preview (API path skipping the UI's composite/mockup step) publishes successfully and renders as an empty dark card with just the name on the site's /shop. Publish should either refuse (409 "composition has no preview") or auto-render the preview server-side before listing.
+
+## Final pass log (browser-testable scope complete)
+- **Site revision console** (brand deck → edit): all four tabs render with real data — Site Options mini-CMS edit verified LIVE (headline change on the deployed site in ~20s, no rebuild); Sell shows video-ad tiers + credit costs; Settings shows real margins (Circuit Owl Tee $19.60 · 45%), views, returns queue, go-live gate (not pressed, per Joe), danger zone.
+- **Brand deck**: plan badge + credit balance (✦300), brand card with product image, finish-your-site checklist.
+- **Design endpoints**: /api/edit (10.4s) and meme-mode /api/generate (8.9s) pass; /api/edit requires catalogueId (contract, not bug).
+- **Routes**: /feed 200 (hidden tab reachable), /reset-password 200.
+- **Delete→recreate loop** (run twice): app DELETE cascade + Vercel/GitHub teardown + POST /api/store with inline kit gen (~10.5s) + forge build (~3min) — clean both times.
+- **Deferred to Simulator/device** (panel pending desktop-app restart): combine-on-drop tap, Buy-button tap, real voice (mic/barge-in), Apple Sign In, push, IAP, try-on camera. **Deferred by cost**: video-ad generation. **Deferred by instruction**: go-live.
