@@ -88,3 +88,16 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 - **Routes**: /feed 200 (hidden tab reachable), /reset-password 200.
 - **Delete→recreate loop** (run twice): app DELETE cascade + Vercel/GitHub teardown + POST /api/store with inline kit gen (~10.5s) + forge build (~3min) — clean both times.
 - **Deferred to Simulator/device** (panel pending desktop-app restart): combine-on-drop tap, Buy-button tap, real voice (mic/barge-in), Apple Sign In, push, IAP, try-on camera. **Deferred by cost**: video-ad generation. **Deferred by instruction**: go-live.
+
+## Generate-panel type matrix (2026-08-15, all through the UI)
+| Mode | Result |
+|---|---|
+| Transparent | PASS — moth sticker, review→accepted |
+| Filled | PASS — full-bleed poster |
+| Text | PASS — "SHIP IT" type design |
+| Meme | PASS — product-meme panel (by-design: meme composited as a product panel) |
+| Idea (surprise-me) | PASS — auto-generated + landed without manual prompt |
+| Upload (no prompt) | PASS — stored directly as a design, no review sheet (by design) |
+| Upload as reference + prompt | PASS — image-to-image generation accepted |
+| More options | Present + functional: AI-effort slider (Low/Med/High/Max), 🎲 Random & ✨ Enhance (filled a full prompt) |
+- 8 designs in the First-drop collection dock at the end; every run went generate → review modal → Use this (except direct-upload, which skips review by design).
