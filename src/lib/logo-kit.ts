@@ -60,9 +60,11 @@ export function deriveKit(
       markLight: tx(mark, 'e_colorize,co_rgb:ffffff'),
       markDark: tx(mark, 'e_colorize,co_rgb:0b0b0c'),
     },
-    appTile: tx(square, `c_fit,w_660,h_660/c_lpad,w_1024,h_1024,b_rgb:${bg}`),
-    touchIcon: tx(square, `c_fit,w_116,h_116/c_lpad,w_180,h_180,b_rgb:${bg}`),
-    favicon: tx(square, 'c_fit,w_64,h_64/c_lpad,w_64,h_64'),
+    // e_trim strips the master's baked margin first, so the fit percentage is EXACT art coverage.
+    // Real app icons run the mark at ~80% of the tile; favicons run tighter (~90%).
+    appTile: tx(square, `e_trim/c_fit,w_820,h_820/c_lpad,w_1024,h_1024,b_rgb:${bg}`),
+    touchIcon: tx(square, `e_trim/c_fit,w_144,h_144/c_lpad,w_180,h_180,b_rgb:${bg}`),
+    favicon: tx(square, 'e_trim/c_fit,w_58,h_58/c_lpad,w_64,h_64'),
   };
 }
 
