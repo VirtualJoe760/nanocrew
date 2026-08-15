@@ -1,4 +1,4 @@
-import { generateLogo, type LogoBrief } from '@/lib/logo';
+import { generateLogoMaster, type LogoBrief } from '@/lib/logo';
 
 // THE BRAND'S LOGO KIT — the full asset set a real identity ships with, built from exactly TWO
 // AI generations (the only stochastic surface):
@@ -70,8 +70,8 @@ export function deriveKit(
  *  Null only when BOTH generations fail — a partial kit beats none, and curation shows the holes. */
 export async function generateLogoKit(brief: LogoBrief, folder = 'nanocrew/logos'): Promise<LogoKit | null> {
   const [wordmark, mark] = await Promise.all([
-    generateLogo(brief, folder, 'wordmark'),
-    generateLogo(brief, folder, 'mark'),
+    generateLogoMaster(brief, 'wordmark', folder),
+    generateLogoMaster(brief, 'mark', folder),
   ]);
   if (!wordmark && !mark) return null;
   const background =
