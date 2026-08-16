@@ -5,14 +5,18 @@
 // every email-facing landing page sits on the one web host, which serves iOS, Android and web the
 // same way (and this one needs DB access to resolve the token).
 //
-// This page only PRESENTS the invite — it never accepts it. Acceptance happens signed-in, in the
-// app, where the invitee's account email must match the invite's email: possession of the link
-// alone must never grant store access (see db/schema.ts storeInvites). Here we just resolve the
-// token to a friendly state and deep-link onward.
+// DEVICE-AWARE (Joe, 2026-08-16 — the email rule: phones route into the app, laptops route
+// through the web). On a phone the pending state deep-links nanocrew:// as before; on a desktop
+// that link is a dead click, so the page renders a sign-in / create-account form instead and the
+// acceptance is written on the web (POST /api/public/invite, same email-match rules as the app).
+// Possession of the link alone still never grants store access.
 
 import { eq } from 'drizzle-orm';
+import { headers } from 'next/headers';
 
 import { db, schema } from '@/lib/db';
+
+import { WebAccept } from './web-accept';
 
 export const metadata = { title: 'Brand invitation — Nano Crew' };
 
@@ -25,6 +29,10 @@ export default async function InvitePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+  // Server-side UA sniff: phones get the app path, everything else the web path. Coarse on
+  // purpose — a tablet misread as desktop still lands on a working sign-in form.
+  const ua = (await headers()).get('user-agent') ?? '';
+  const isPhone = /iPhone|iPad|iPod|Android/i.test(ua);
 
   const [invite] = await db
     .select({
@@ -32,6 +40,7 @@ export default async function InvitePage({
       expiresAt: schema.storeInvites.expiresAt,
       storeId: schema.storeInvites.storeId,
       invitedBy: schema.storeInvites.invitedBy,
+      email: schema.storeInvites.email,
     })
     .from(schema.storeInvites)
     .where(eq(schema.storeInvites.token, token))
@@ -43,6 +52,7 @@ export default async function InvitePage({
     sub: string;
     btn?: { label: string; href: string };
     fine?: string;
+    web?: React.ReactNode; // the desktop sign-in/accept form (pending state only)
   };
 
   if (!invite) {
@@ -78,12 +88,27 @@ export default async function InvitePage({
       .from(schema.creators)
       .where(eq(schema.creators.id, invite.invitedBy))
       .limit(1);
+    const storeName = store?.name ?? 'a Nano Crew brand';
     view = {
       glyph: '✉',
-      headline: `You’re invited to ${store?.name ?? 'a Nano Crew brand'}`,
+      headline: `You’re invited to ${storeName}`,
       sub: `${inviter?.name ?? 'The owner'} asked you to collaborate — design and manage the brand together.`,
-      btn: { label: 'Open in Nano Crew', href: `nanocrew://account?invite=${encodeURIComponent(token)}` },
-      fine: 'No app yet? Sign up with this email address and the invite will be waiting in your Account tab.',
+      ...(isPhone
+        ? {
+            btn: { label: 'Open in Nano Crew', href: `nanocrew://account?invite=${encodeURIComponent(token)}` },
+            fine: 'No app yet? Sign up with this email address and the invite will be waiting in your Account tab.',
+          }
+        : {
+            web: (
+              <WebAccept
+                token={token}
+                invitedEmail={invite.email}
+                storeName={storeName}
+                supabaseUrl={process.env.SUPABASE_URL ?? ''}
+                supabaseKey={process.env.SUPABASE_PUBLISHABLE_KEY ?? ''}
+              />
+            ),
+          }),
     };
   }
 
@@ -96,6 +121,7 @@ export default async function InvitePage({
         {view.btn ? (
           <a href={view.btn.href} style={styles.btn}>{view.btn.label}</a>
         ) : null}
+        {view.web ?? null}
         {view.fine ? <p style={styles.fine}>{view.fine}</p> : null}
       </div>
     </main>
