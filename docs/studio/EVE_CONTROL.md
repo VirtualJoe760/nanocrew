@@ -329,8 +329,8 @@ code-verified only.
 | **P2** | The wheel (`eve-wheel.tsx`) | open |
 | **P3** | **Brand sheet** — replaces the deck AND the un-revisitable post-build success screen: identity (logo · palette · story · vibe, already served by `GET /api/creator/stores/:slug`), earnings + orders + views, unfinished tasks, **payout status**, site link | open — next |
 | **P3.1** | Edit identity in place — **must** go through `buildBrandPatch()` (NEVER_VIOLATE §2) | open |
-| **P4** | The D-01…D-18 batch | open |
-| **P4.1** | **Collaborator invite** — invite + accept endpoints and UI. Table and tenancy already work; this is the missing half. Decide whether a collaborator may go live / publish / buy a domain (those routes stay owner-only today). | open |
+| **P4** | The D-01…D-18 batch | **shipped 2026-08-16** (OTA `ec614fd6`) — D-01/02/07/08/14/15/16/17/18; D-03/04/23 landed with P0/P1 work; D-05/06/09–12 close with the wheel + brand sheet (P2/P3) |
+| **P4.1** | **Collaborator invite** — endpoints shipped 2026-08-16 (`/api/creator/stores/:slug/collaborators`, owner-only manage; membership admin stays owner-only, go-live/publish/domain unchanged). **UI still open** — needs a surface in the Console or Brand sheet. | endpoints shipped · UI open |
 | **P5** | Optional wake phrase (needs an on-device keyword spotter) | deferred |
 
 ---
