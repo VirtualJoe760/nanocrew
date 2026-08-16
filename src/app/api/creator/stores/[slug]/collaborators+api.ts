@@ -123,9 +123,11 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
       expiresAt: schema.storeInvites.expiresAt,
     });
 
-  // The branded email rides platform-api (Resend lives only there). Best-effort AFTER the DB writes
-  // — the invite exists and shows in-app even if the send hiccups.
-  void notifyPlatform({ action: 'collab_invite', inviteId: invite.id });
+  // The branded email rides platform-api (Resend lives only there). AWAITED, not fire-and-forget:
+  // on Cloud Run the CPU can be frozen the moment the response returns, so a dangling fetch is
+  // routinely killed before it ever leaves the box — the invite email simply never sent. The
+  // helper never throws (best-effort inside), so awaiting costs one round-trip, not reliability.
+  await notifyPlatform({ action: 'collab_invite', inviteId: invite.id });
 
   return Response.json({ invite });
 }
