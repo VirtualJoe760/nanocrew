@@ -35,11 +35,17 @@ import { useTheme } from '@/hooks/use-theme';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { ApiError, apiFetch, apiUrl, readJson } from '@/lib/api';
 import { sendPasswordReset, signInWithProvider, type OAuthProvider } from '@/lib/oauth';
+import { webBillingLinkAllowed } from '@/lib/web-billing';
 import { supabase } from '@/lib/supabase';
 
 type StoreRow = { id: string; name: string; slug: string; status: string };
 
 const DANGER = '#e24b4a';
+// Where a creator manages billing on the web. Plans are cheaper here than in-app (no store cut).
+// Points at the site ROOT until /pricing exists — verified 2026-08-16: nanocrew.app 200,
+// nanocrew.app/pricing 404. Repoint once the pricing page ships (see the payments build plan);
+// shipping a link to a 404 is the exact bug the Connect return URLs just had.
+const WEB_PRICING_URL = 'https://nanocrew.app';
 // Internal test tool: the Eve Lab (avatar appearance sandbox) is surfaced as a row on the Account
 // screen, visible ONLY to this tester account. Not a real feature — a private dev surface.
 const VENUS_LAB_EMAIL = 'josephsardella@gmail.com';
@@ -313,6 +319,27 @@ function AccountScreen() {
     }
   };
 
+  // Billing & payouts in a browser. An existing subscriber goes to the Stripe Customer Portal
+  // (real invoices, card, cancel); someone with no Stripe customer yet has nothing to manage, so
+  // send them to the web pricing page — which is also the cheaper rail.
+  const openWebBilling = async () => {
+    setError(null);
+    try {
+      const r = await apiFetch('/api/creator/billing/portal', { method: 'POST' });
+      if (r.ok) {
+        const d = (await r.json()) as { url?: string };
+        if (d.url) {
+          Linking.openURL(d.url).catch(() => {});
+          return;
+        }
+      }
+      // 409 no_billing_account is the normal "never subscribed" case, not an error.
+      Linking.openURL(WEB_PRICING_URL).catch(() => {});
+    } catch {
+      Linking.openURL(WEB_PRICING_URL).catch(() => {});
+    }
+  };
+
   const confirmDelete = () => {
     Alert.alert(
       'Delete account?',
@@ -426,6 +453,16 @@ function AccountScreen() {
                     tint={payouts?.chargesEnabled}
                     onPress={openPayouts}
                   />
+                  {/* The web rail. On iOS this row only appears once the anti-steering question is
+                      answered and EXPO_PUBLIC_WEB_BILLING_LINK is set — see lib/web-billing.ts. */}
+                  {webBillingLinkAllowed() ? (
+                    <Row
+                      title="Billing & payouts on the web"
+                      subtitle="Manage your plan, invoices and payout account in a browser"
+                      trailing="↗"
+                      onPress={openWebBilling}
+                    />
+                  ) : null}
                 </Card>
 
                 {isAdmin ? (
