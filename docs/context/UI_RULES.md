@@ -45,6 +45,27 @@ raw brand hue that can vanish into the background.
 Use the `Spacing` scale (`half`→`six`) for every margin/padding/gap — no magic numbers. Respect
 `MaxContentWidth` (800) for wide layouts and `BottomTabInset` above the tab bar.
 
+## Safe areas — never draw into the device chrome
+**Joe's rule, and it is a hard one:** nothing we draw may sit under the **Dynamic Island / notch** at
+the top or the **home indicator** at the bottom. A zero (or small fixed) top offset on a full-screen
+surface isn't "tight" — it is *physically covered by hardware* on most of our install base.
+
+- **Every top-anchored element offsets from `useSafeAreaInsets().top`.** The house pattern is
+  `paddingTop: insets.top + Spacing.four` for a screen header, and `insets.top + Spacing.two` for a
+  thin bar. Never `top: 0`, `top: 14`, or a bare `paddingTop: 12` on something that reaches the top edge.
+- **Every bottom-anchored element offsets from `.bottom`** (or `BottomTabInset` where the tab bar is
+  in flow). `Math.max(insets.bottom, Spacing.two)` is the idiom — the tab bar pads its own indicator,
+  so don't double it.
+- **Reference values, so a comp can be checked by eye:** Island devices ≈ **59pt** top / **34pt**
+  bottom; notch devices ≈ 47 / 34; the older flat phones ≈ 20 / 0. If a design puts anything in the
+  top ~59pt of the frame, the design is wrong before the code is.
+- **Inside `<Modal>` insets don't resolve** — pass the app-level insets in as props (see "Modals /
+  sheets" below), or you reintroduce the same bug one layer down.
+- **This governs mocks and design comps too.** Draw the Island in the frame so the constraint is
+  visible while the layout is being decided, rather than discovered on device.
+
+Hard-rule entry: [`NEVER_VIOLATE.md`](NEVER_VIOLATE.md) §4.
+
 ## The two glows are intentional
 Buttons glow **platinum** (`accent`); inputs glow **cool** (`accentCool`). A focused field must read
 differently from a CTA — don't unify them.

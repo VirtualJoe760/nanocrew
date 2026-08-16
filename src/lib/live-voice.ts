@@ -267,6 +267,10 @@ export class LiveVoiceSession {
   private instructionOverride?: string;
   private greetingOverride?: string;
   private enableBrandTool: boolean;
+  /** Speak first on connect. FALSE when the socket is being re-opened underneath an ongoing
+   *  conversation (a reconnect after a suspend expired) — she should pick up, not re-introduce
+   *  herself. The Eve tab only passes true when the creator has just asked her to talk. */
+  private greetOnOpen: boolean;
 
   constructor(opts: {
     accessToken: string;
@@ -276,6 +280,7 @@ export class LiveVoiceSession {
     instruction?: string;
     greeting?: string;
     enableBrandTool?: boolean;
+    greetOnOpen?: boolean;
     callbacks: LiveCallbacks;
   }) {
     this.accessToken = opts.accessToken;
@@ -285,6 +290,7 @@ export class LiveVoiceSession {
     this.instructionOverride = opts.instruction;
     this.greetingOverride = opts.greeting;
     this.enableBrandTool = opts.enableBrandTool ?? true;
+    this.greetOnOpen = opts.greetOnOpen ?? true;
     this.cb = opts.callbacks;
     this.token = '';
   }
@@ -461,6 +467,12 @@ export class LiveVoiceSession {
     }
     // Setup is done — NOW it's safe to nudge Venus to open the conversation.
     if (m.setupComplete) {
+      // A reconnect underneath a conversation already in progress must NOT re-greet — she'd
+      // introduce herself again mid-thread. Only an intentional "start talking" greets.
+      if (!this.greetOnOpen) {
+        console.warn('[live] setupComplete → resumed, no greeting');
+        return;
+      }
       console.warn('[live] setupComplete → greeting');
       const first = this.userName?.trim().split(/\s+/)[0];
       const hi = first ? `Hi ${first}` : 'Hi';

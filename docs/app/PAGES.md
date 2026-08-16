@@ -83,9 +83,22 @@ The in-app product page (full-screen `Modal`, brand-coloured, **← back**).
 The app's home — Eve's page (tab label **Eve**; the route is still `studio`). No screen chrome of
 its own: the container is transparent, so the **persistent root Eve avatar** (mounted app-wide via
 `src/components/eve/eve-background.tsx`) glows through. The default surface is **EveHome**
-(`src/components/eve/eve-home.tsx`) — talk to Eve. Her live mic is gated on the tab being focused
-AND the brand deck being closed; a top-edge swipe down (or a tap on the pill) pulls the
+(`src/components/eve/eve-home.tsx`). A top-edge swipe down (or a tap on the pill) pulls the
 **BrandDeck** down over her.
+
+**She arrives SILENT, and only a creator starts her.** Two states — `silent` and `talking` — with a
+tap anywhere on her surface (or on the state pill, top-right at the safe-area inset) moving between
+them. Landing on the tab opens no socket, sends no greeting, and does not even ask for the
+microphone; the mic is requested on the first tap. At rest she sits under a light 30% scrim that
+lifts when she talks, so the state change reads as her brightening rather than as a label.
+
+**Covered ≠ stopped.** `EveHome` takes a `covered` prop — the ONE signal that something is layered
+over her (the brand deck, the Brand Console, the Paywall, the Welcome modal). Covered or
+backgrounded → the session **suspends**: muted both ways, socket held for `SUSPEND_GRACE_MS`
+(45s, `src/hooks/use-live-voice.ts`), transcript intact, then released if the grace expires. So a
+glance at a brand costs nothing and she picks up mid-thread instead of reconnecting and re-greeting.
+A socket re-opened under an ongoing conversation passes `greetOnOpen: false`, so she never
+re-introduces herself (`src/lib/live-voice.ts`).
 
 - **First-launch Welcome (`src/components/welcome.tsx`):** a full-screen modal carousel (Eve ·
   Design · Market slides, real device captures) ending in three choices — **subscribe** (plan
@@ -95,8 +108,10 @@ AND the brand deck being closed; a top-edge swipe down (or a tap on the pill) pu
 - **Signed-out (intro):** EveGlyph, "FROM IDEA TO BRAND IN SECONDS", **"Meet Eve"** title + blurb,
   **Create an account** / **log in** CTAs (→ Account tab). "Free to explore. You only need a
   plan to launch a store."
-- **EveHome — guide view (default):** greeting + tools (build brand · edit site · designs · memes ·
-  posts) + the **digest** — Eve's status report over your real numbers (`buildDigest` /
+- **EveHome — guide view (default):** the caption block sits in the **lower third** — "Tap to talk
+  to Eve" while silent, her live transcript once talking (and an explicit "Eve can't hear you" if
+  the mic was denied, which routes into the typed path rather than dead-ending) — plus the
+  **digest** — Eve's status report over your real numbers (`buildDigest` /
   `digestBriefing` in `src/lib/eve-digest.ts`, fed by `/api/creator/stats`). Each spoken turn is
   distilled through the intent router (`/api/eve/route`), which routes her to her other surfaces;
   mid-conversation she can also **see** images (`sendImage` via `src/lib/eve-vision-bus.ts`).

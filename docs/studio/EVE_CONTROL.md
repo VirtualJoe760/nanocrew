@@ -232,6 +232,55 @@ build 40's background was black on Joe's PHONE is unconfirmed — check TestFlig
 
 ---
 
+# PHASE — WAKE AND WHEEL (2026-08-15)
+
+Joe, reviewing a full UI audit of this tab: *"it defaults to her talking. as soon as you click on eve
+she starts talking, even if the user didn't want to talk to her. This costs us money, as well as the
+user, its poor design."* Plus: the top-edge pull-down is a fake gesture, the digest button is the
+wrong control in the wrong place, and the subtitles sit too high.
+
+**The direction (settled).** Two states only — **silent** and **talking**; a tap moves between them.
+Press-and-hold opens a **radial wheel** of everything she can do, which replaces the BrandDeck's
+pull-down entirely. A wake phrase ("Hey Eve") is explicitly OFF the critical path: Gemini Live cannot
+provide one — anything the Live session hears is already a paid stream — so it needs an on-device
+keyword spotter, a dependency the project does not have. Tap-to-talk instead.
+
+Audit + defect list (D-01…D-24, each with file:line) and the mock/plan are the two artifacts linked
+from Joe's review thread.
+
+## P0 — SHIPPED 2026-08-15 (closes D-19 · D-20 · D-22)
+
+The credit bleed, fixed. No redesign, no new files.
+
+- **`talking` gates the session** (`eve-home.tsx`). It defaults to false and only a creator's tap
+  sets it. Arriving on the tab now opens no socket, sends no greeting, and does not prompt for the
+  microphone — `ensureMic()` runs on the first tap instead of on mount.
+- **One `covered` signal** (`studio.tsx` → `EveHome`), raised by the deck, the Brand Console, the
+  Paywall and the Welcome modal. Previously only the deck suppressed her, so tapping **edit** on a
+  brand closed the deck, flipped `open` back to true, and started a *brand-new* session that
+  immediately greeted the creator over the editor (D-20).
+- **Suspend, don't stop** (`use-live-voice.ts`): `suspend()` mutes both directions and holds the
+  socket for `SUSPEND_GRACE_MS` (45s) before releasing it; `resume()` returns false if the grace
+  already expired so the caller can open a fresh one. Mute now has two independent owners (keyboard
+  mode, suspend) OR-ed together — writing `setMuted` directly from both meant whichever fired last
+  won, and resuming un-muted a keyboard-mode session.
+- **`greetOnOpen`** (`live-voice.ts`): the setup-complete greeting nudge is skipped when a socket is
+  re-opened under an ongoing conversation, so she picks up rather than re-introducing herself.
+- **The state pill** (top-right, at `insets.top` — see the Safe areas rule in `UI_RULES.md`) is her
+  state, always on screen and tappable: SILENT · CONNECTING · LISTENING · THINKING · SPEAKING ·
+  PAUSED. At rest a 30% scrim dims her; it lifts when she talks.
+- **Verified in a foregrounded browser with full network capture:** arrival → pill SILENT, zero
+  `/api/voice-live-token`, zero Gemini sockets. Tap → one token, one socket, one greeting, pill
+  LISTENING. Opening the deck and then the Brand Console → **no** new token, socket or greeting, and
+  the transcript survives. (The mute-while-covered itself is code-verified, not observed — there is
+  no external signal for it.)
+
+**Still open from the plan:** P1 (caption block + status band + the D-08 toast overlap), P2 (the
+wheel component, `eve-wheel.tsx`), P3 (brand sheet replaces the deck), P4 (the D-01…D-18 batch),
+P5 (optional wake phrase).
+
+---
+
 # PHASE — EVE AS A CONVERSATIONALIST (build plan, 2026-08)
 
 Joe: *"I want her far more conversational. Right now she really knows one purpose — help create the

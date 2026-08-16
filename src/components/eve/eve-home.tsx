@@ -64,11 +64,15 @@ function siteUrlFor(s: StoreLite): string | null {
 
 export function EveHome({
   open,
+  covered = false,
   onRequestClose,
   onGo,
 }: {
   /** The surface is on screen (gates the live session — she is never vocal while hidden). */
   open: boolean;
+  /** Something is layered OVER her — the brand console, the paywall, the deck, the welcome panel.
+   *  She suspends rather than stops, so a glance costs nothing and the conversation survives. */
+  covered?: boolean;
   onRequestClose: () => void;
   /** Transition Eve's surface in place (home → developing/design) — the host's state machine. */
   onGo: (s: EveSummon) => void;
@@ -91,6 +95,11 @@ export function EveHome({
   const [paused, setPaused] = useState(false);
   const [appActive, setAppActive] = useState(true);
   const [guidance, setGuidance] = useState<VenusGuidance | null>(null);
+  // THE STATE MODEL: she is silent or talking, and only the creator moves her between them.
+  // Landing on the tab must never open a socket — that used to bill a Gemini Live connection plus a
+  // spoken greeting for anyone who tapped through to look at their brands.
+  const [talking, setTalking] = useState(false);
+  const wantGreetRef = useRef(false); // true only for the tap that STARTS a conversation
   const [hasStore, setHasStore] = useState(false);
   const [stores, setStores] = useState<StoreLite[]>([]);
   const [meResolved, setMeResolved] = useState(false); // instruction is chosen from this — never start before it
@@ -132,16 +141,15 @@ export function EveHome({
     };
   }, [open, session]);
 
-  // Returning creators get VOICE in the guide too (that's how intent routing hears them) — ask for
-  // the mic once, on summon. Denied → the guide still works by chips; the interview falls back to
-  // typing via its own path.
-  useEffect(() => {
-    if (!open || !meResolved || !hasStore || micOk !== null) return;
-    (async () => {
-      const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
-      setMicOk(!!perm?.granted);
-    })();
-  }, [open, meResolved, hasStore, micOk]);
+  // The mic is requested WHEN THE CREATOR ASKS HER TO TALK — never on arrival. Landing on her tab
+  // used to fire the OS permission prompt for someone who only wanted to see their brands.
+  const ensureMic = useCallback(async (): Promise<boolean> => {
+    if (micOk !== null) return micOk;
+    const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
+    const granted = !!perm?.granted;
+    setMicOk(granted);
+    return granted;
+  }, [micOk]);
 
   // ---- Gemini Live wiring (the realtime speech-to-speech session; GEMINI_LIVE.md) ----
   const creatorName =
@@ -252,6 +260,8 @@ export function EveHome({
     live.stop();
     setBuildReady(false);
     setKeyboardMode(false);
+    wantGreetRef.current = true; // a fresh interview: she opens it
+    setTalking(true);
     setView('interview');
   }, [live.stop]);
   const routeTurn = useCallback(
@@ -354,21 +364,28 @@ export function EveHome({
     routedUsers.current = said.length;
   }, [live.messages, hasStore, brand, routeTurn]);
 
-  // The ONE rule for when Eve is live: her overlay is on screen, app foregrounded, persona resolved,
-  // not paused / already done — in the interview always, and in the GUIDE for returning creators
-  // once the mic prompt is answered (that's the voice the intent router listens to). Anything else
-  // → stop, so she's never vocal outside her view.
+  // THE ONE RULE for when Eve is live. Two things had to change here (D-19 / D-20 / D-22):
+  //   · `talking` is a precondition. A surface appearing never opens a socket — only a creator does.
+  //   · Being covered or backgrounded SUSPENDS instead of stopping, so glancing at the brand console
+  //     no longer costs a fresh connection, a fresh greeting, and the whole transcript.
   // (Pause is a VOICE concept — in keyboard mode it must not gate the session or typed turns hang.)
   useEffect(() => {
-    const voiceView = view === 'interview' || (view === 'guide' && hasStore && micOk === true);
     // Only the returning-creator GUIDE persona (eveCentralInstruction) is built from /api/me, so only
     // it waits on meResolved. The first-brand interview uses the default persona and must never hang
     // on a stalled /api/me (which has no timeout) — otherwise typed turns vanish into a dead session.
     const personaReady = view === 'interview' ? true : meResolved;
-    const inHerView = voiceView && !brand && open && appActive && personaReady;
-    if (inHerView && (keyboardMode || !paused)) live.start();
-    else live.stop();
-  }, [view, hasStore, micOk, meResolved, brand, paused, keyboardMode, open, appActive, live.start, live.stop]);
+    const wants = talking && !brand && personaReady && (keyboardMode || !paused);
+    const reachable = open && appActive && !covered;
+
+    if (!wants) { live.stop(); return; }          // she's done: release it now
+    if (!reachable) { live.suspend(); return; }   // she's covered: hold it, quietly
+
+    // Resuming a held socket costs nothing and keeps the thread; only open a new one if the grace
+    // period already released it, and then WITHOUT a greeting — she's mid-conversation.
+    if (!live.resume()) live.start(wantGreetRef.current);
+    wantGreetRef.current = false;
+  }, [talking, covered, view, meResolved, brand, paused, keyboardMode, open, appActive,
+      live.start, live.stop, live.suspend, live.resume]);
   // Keyboard/chat mode mutes the mic so Eve doesn't react to the room while you type.
   useEffect(() => { live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
   useEffect(() => {
@@ -427,13 +444,36 @@ export function EveHome({
     setKeyboardMode(false);
     setPaused(false);
     pausedRef.current = false;
-    const perm = await AudioModule.requestRecordingPermissionsAsync().catch(() => null);
-    if (!perm?.granted) {
+    if (!(await ensureMic())) {
       setKeyboardMode(true);
       setError('No microphone access — you can type your answers, or enable the mic in Settings.');
     }
+    wantGreetRef.current = true;
+    setTalking(true);
     setView('interview');
-  }, [live.stop]);
+  }, [live.stop, ensureMic]);
+
+  /** TAP TO TALK — the whole state model, and the only thing that opens a paid session.
+   *  Silent → asks for the mic if we've never asked, then starts her (with a greeting).
+   *  Talking → stops her. The socket is held briefly by the gate's suspend path on the way out. */
+  const toggleTalk = useCallback(async () => {
+    if (talking) {
+      setTalking(false);
+      setPaused(false);
+      pausedRef.current = false;
+      return;
+    }
+    const granted = await ensureMic();
+    if (!granted) {
+      // No mic is not a dead end — it's the reason the typed path exists.
+      setKeyboardMode(true);
+      setError('No microphone access — you can type to Eve, or enable the mic in Settings.');
+    }
+    wantGreetRef.current = true;
+    setPaused(false);
+    pausedRef.current = false;
+    setTalking(true);
+  }, [talking, ensureMic]);
 
   const togglePause = useCallback(() => {
     setPaused((prev) => {
@@ -460,10 +500,14 @@ export function EveHome({
   const retryAfterCall = useCallback(() => {
     live.dismissAudioBusy();
     if (pausedRef.current) { pausedRef.current = false; setPaused(false); }
-    live.start();
+    // She never spoke — this IS the opening of the conversation, so let her greet.
+    wantGreetRef.current = true;
+    setTalking(true);
+    live.start(true);
   }, [live.dismissAudioBusy, live.start]);
 
-  // Back out of the interview (or finish a brand) → the guide, reset for a fresh run.
+  // Back out of the interview (or finish a brand) → the guide, reset for a fresh run. The
+  // conversation is over, so she goes silent too — the guide must never come back mid-sentence.
   const resetToGuide = useCallback(() => {
     messages.current = [];
     setBrand(null);
@@ -471,6 +515,7 @@ export function EveHome({
     setHeard('');
     setLine('');
     setKeyboardMode(false);
+    setTalking(false);
     setView('guide');
   }, []);
 
@@ -540,12 +585,42 @@ export function EveHome({
             ? '[ paused — tap to resume ]'
             : '[ connecting… ]';
 
+  // The state pill — the one place her state is always legible. Silent is the resting state and
+  // reads as such; everything else is a live session doing something.
+  const pill: { label: string; live: boolean } = !talking
+    ? { label: 'SILENT', live: false }
+    : paused
+      ? { label: 'PAUSED', live: false }
+      : state === 'speaking'
+        ? { label: 'SPEAKING', live: true }
+        : state === 'thinking'
+          ? { label: 'THINKING', live: true }
+          : state === 'listening'
+            ? { label: 'LISTENING', live: true }
+            : { label: 'CONNECTING', live: false };
+
   // Hosted inside the tab slot — the tab bar sits BELOW this surface, so no home-indicator
   // clearance is needed; just breathing room above the bar.
   const bottomPad = Spacing.five;
 
   return (
     <View style={styles.fill}>
+
+      {/* HER RESTING DIM. She stays clearly visible — this only takes enough off that the captions
+          read — and it lifts the moment she starts talking, so the state change IS the picture. */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, !talking && styles.restScrim]} />
+
+      {/* TAP TO TALK. Rendered FIRST so every control below sits above it: taps on empty space
+          reach this, taps on a button reach the button. This is the whole gesture surface — the
+          wheel (P2) will attach its long-press here too. */}
+      {session && !brand ? (
+        <Pressable
+          onPress={() => void toggleTalk()}
+          accessibilityRole="button"
+          accessibilityLabel={talking ? `Stop talking to ${AI_NAME}` : `Talk to ${AI_NAME}`}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
 
       {/* Mic-busy: iOS refused the audio session — almost always an active phone/FaceTime call. */}
       <Modal visible={live.audioBusy} animationType="fade" transparent onRequestClose={live.dismissAudioBusy}>
@@ -587,6 +662,21 @@ export function EveHome({
             EVE
           </ThemedText>
           <View style={styles.headerSpacer} />
+          {/* Her state, always on screen, always at the safe-area top. Tapping it is the same
+              toggle as tapping her — the discoverable version of the gesture. */}
+          {session && !brand ? (
+            <Pressable
+              onPress={() => void toggleTalk()}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={talking ? `Stop talking to ${AI_NAME}` : `Talk to ${AI_NAME}`}
+              style={[styles.statePill, { borderColor: pill.live ? `${p.accent}66` : p.line }]}>
+              <View style={[styles.stateDot, { backgroundColor: pill.live ? p.accent : p.faint }]} />
+              <ThemedText type="code" style={{ color: pill.live ? p.accent : p.dim, fontSize: 10.5, letterSpacing: 1.4 }}>
+                {pill.label}
+              </ThemedText>
+            </Pressable>
+          ) : null}
           {view === 'interview' && !brand ? (
             <View style={styles.headerIcons}>
               <Pressable onPress={resetToGuide} hitSlop={10} accessibilityLabel="Back to Eve's tools">
@@ -634,18 +724,32 @@ export function EveHome({
             bg={BG}
           />
         ) : view === 'guide' ? (
-          // Voice-first: subtitles ride above her; a single CTA below (orbs are gone — nav is the bar).
+          // She fills the middle; the caption block sits in the LOWER THIRD — near the eye and the
+          // thumb, not tucked under the status bar (D-23 is P1, this is the half of it the new
+          // silent copy needs). A CTA sits below it.
           <View style={styles.guideView}>
-            <View style={styles.subsTop}>
-              {heard ? (
-                <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
-                  {'you > ' + heard}
-                </ThemedText>
-              ) : null}
-              {/* Her spoken line once she talks; until then, her opening as a subtitle. */}
-              <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
-                {line || guidance?.greeting || '…'}
-              </ThemedText>
+            <View style={styles.subsLower}>
+              {talking ? (
+                <>
+                  {heard ? (
+                    <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
+                      {'you > ' + heard}
+                    </ThemedText>
+                  ) : null}
+                  <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
+                    {line || guidance?.greeting || '…'}
+                  </ThemedText>
+                </>
+              ) : (
+                <>
+                  <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={2}>
+                    {micOk === false ? `${AI_NAME} can’t hear you` : `Tap to talk to ${AI_NAME}`}
+                  </ThemedText>
+                  <ThemedText type="code" style={[styles.restSub, { color: p.faint }]}>
+                    {micOk === false ? 'TYPE INSTEAD, OR ENABLE THE MIC IN SETTINGS' : 'SHE STAYS QUIET UNTIL YOU DO'}
+                  </ThemedText>
+                </>
+              )}
             </View>
             <View style={styles.orbDock}>
               {!hasStore ? (
@@ -770,16 +874,24 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   eyebrow: { letterSpacing: 3 },
   headerSpacer: { flex: 1 },
-  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginLeft: Spacing.three },
+
+  // Her resting dim: enough that the captions read, never enough to hide her. She IS the page.
+  restScrim: { backgroundColor: 'rgba(6,8,12,0.30)' },
+  statePill: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 5 },
+  stateDot: { width: 6, height: 6, borderRadius: 3 },
 
   guideWrap: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: Spacing.six },
   guideTitle: { fontSize: 28, textAlign: 'center' },
   guideBody: { textAlign: 'center', maxWidth: 320, lineHeight: 22, marginTop: Spacing.two },
   ctaPrimary: { borderRadius: 14, paddingVertical: Spacing.three, paddingHorizontal: Spacing.six, alignItems: 'center', marginTop: Spacing.four },
 
-  // The guide: subtitles pinned at the TOP; Eve fills the middle; a single CTA at the BOTTOM.
-  guideView: { flex: 1, justifyContent: 'space-between' },
-  subsTop: { alignItems: 'center', gap: Spacing.two, minHeight: 72 },
+  // The guide: Eve fills the middle; the caption block sits in the LOWER THIRD, with the CTA under
+  // it. `justifyContent: flex-end` + the caption's reserved height keeps the CTA still while her
+  // lines stream in.
+  guideView: { flex: 1, justifyContent: 'flex-end' },
+  subsLower: { alignItems: 'center', gap: Spacing.two, minHeight: 96, justifyContent: 'flex-end', marginBottom: Spacing.five },
+  restSub: { fontSize: 10.5, letterSpacing: 1.4, textAlign: 'center' },
   orbDock: { alignItems: 'center', paddingBottom: Spacing.two, minHeight: 28 },
   guideCta: { borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.three },
 
