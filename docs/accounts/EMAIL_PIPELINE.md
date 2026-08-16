@@ -74,6 +74,15 @@ log on `!res.ok`, **env-gated no-op** when `RESEND_API_KEY` or the sending domai
 raw-`fetch` core (no SDK dependency required). The per-email bodies + the layout live in
 `platform-api/lib/email-templates.ts` (keeps `notify.ts` to senders).
 
+### The CTA rule — device-aware landing pages (2026-08-16)
+
+Every email CTA points at ONE web landing route on platform-api, and **that route does the
+branching**: a phone user-agent gets the `nanocrew://` deep link into the app; a desktop gets a
+web flow that completes the action after a sign-in (Supabase REST with the publishable key — the
+web page is only a way to get a bearer; the API enforces everything). First implementation:
+`/invite/[token]` + `POST /api/public/invite`. New emails MUST follow this shape — never put a bare
+`nanocrew://` link in an email, it's a dead click on every laptop.
+
 ### App-triggered sends · `POST /api/internal/notify` (INTERNAL_API_KEY-gated)
 
 App-side actions run on the **Cloud Run backend**, where Resend must NOT live (secrets + sender stay
