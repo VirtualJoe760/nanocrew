@@ -1,51 +1,95 @@
-// Generate the Nano Crew app icon set from the new raster art (the neon-bob Venus icon).
-// The source (assets/brand/app-icon-source.png) is a rounded app-icon mockup on a WHITE field; iOS
-// needs an OPAQUE, full-bleed square. We recolor the white margin + rounded corners to black (only
-// in the outer/corner zone, radial > 0.85, so the central eye glints stay), then render every slot
-// app.json references.
+// Generate the Nano Crew app icon set — EVE'S CONSTELLATION GLYPH, rendered from vectors.
+//
+// This replaced the raster neon-Venus pipeline on 2026-08-16 (Joe's signoff: variant B,
+// "atmospheric" — brighter glow + her starfield). The geometry below MIRRORS
+// src/components/eve/eve-glyph.tsx (same NODES/MIDS/nucleus in the same 120-space) so the icon is
+// literally her in-app mark; if the glyph component changes, change it here too. Being SVG-sourced,
+// every slot regenerates pixel-perfect at any size:
 //   node scripts/gen-app-icon.mjs
+// Writes: images/icon.png (iOS, 1024) · brand/app-icon-1024.png (App Store) · images/favicon.png ·
+// android adaptive foreground/background/monochrome · images/splash-icon.png · brand/eve-boot.png
+// (the launch loader portrait, 1024x1536 — animated-icon.tsx + the expo-splash-screen plugin).
 import sharp from 'sharp';
 
-const SRC = new URL('../assets/brand/app-icon-source.png', import.meta.url).pathname;
 const IMG = new URL('../assets/images/', import.meta.url);
 const BRAND = new URL('../assets/brand/', import.meta.url);
 const p = (dir, file) => new URL(file, dir).pathname;
 
-// 1. De-white the corners/margin (preserve the central eye glints).
-const { data, info } = await sharp(SRC).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-const { width: W, height: H, channels: ch } = info;
-const cx = (W - 1) / 2;
-const cy = (H - 1) / 2;
-for (let y = 0; y < H; y++) {
-  for (let x = 0; x < W; x++) {
-    const i = (y * W + x) * ch;
-    if (data[i] > 238 && data[i + 1] > 238 && data[i + 2] > 238) {
-      const nx = (x - cx) / cx;
-      const ny = (y - cy) / cy;
-      if (Math.hypot(nx, ny) > 0.85) {
-        data[i] = 0; data[i + 1] = 0; data[i + 2] = 0;
-        if (ch > 3) data[i + 3] = 255;
-      }
-    }
-  }
+const NET = '#7fd7e6', CORE = '#eaf4f9', BG = '#08080a';
+// eve-glyph.tsx geometry, verbatim.
+const NODES = [[30,32],[92,26],[102,64],[82,98],[50,104],[22,82],[16,48],[70,18]];
+const MIDS = [[45,46],[80,52],[66,82]];
+
+function glyph({ lineW, lineOp, nodeR }) {
+  let s = `<circle cx="60" cy="60" r="58" fill="url(#glow)"/>`;
+  for (const [x, y] of NODES) s += `<line x1="60" y1="60" x2="${x}" y2="${y}" stroke="${NET}" stroke-opacity="${lineOp}" stroke-width="${lineW}"/>`;
+  for (const [x, y] of NODES) s += `<circle cx="${x}" cy="${y}" r="${nodeR}" fill="${NET}" fill-opacity="0.85"/>`;
+  for (const [x, y] of MIDS) s += `<circle cx="${x}" cy="${y}" r="${nodeR * 0.7}" fill="${NET}" fill-opacity="0.6"/>`;
+  s += `<circle cx="60" cy="60" r="11" fill="${CORE}" fill-opacity="0.12"/>`;
+  s += `<circle cx="60" cy="60" r="7" fill="${CORE}"/>`;
+  s += `<circle cx="60" cy="60" r="11" fill="none" stroke="${NET}" stroke-width="${lineW}" stroke-opacity="0.7"/>`;
+  return s;
 }
-const clean = await sharp(data, { raw: { width: W, height: H, channels: ch } }).png().toBuffer();
-const square = (size) => sharp(clean).resize(size, size, { fit: 'cover' }).flatten({ background: '#000000' }).png();
+const defs = (glowOp) => `<defs><radialGradient id="glow" cx="50%" cy="50%" r="50%">
+  <stop offset="0%" stop-color="${NET}" stop-opacity="${glowOp}"/>
+  <stop offset="55%" stop-color="${NET}" stop-opacity="${glowOp * 0.3}"/>
+  <stop offset="100%" stop-color="${NET}" stop-opacity="0"/>
+</radialGradient></defs>`;
 
-// 2. iOS app icon + App Store marketing icon (opaque, full-bleed) + web favicon.
-await square(1024).toFile(p(IMG, 'icon.png'));
-await square(1024).toFile(p(BRAND, 'app-icon-1024.png'));
-await square(196).toFile(p(IMG, 'favicon.png'));
+// Her starfield — seeded so every regeneration is identical.
+function stars(seed, n, size, w, h) {
+  let s = '', x = seed;
+  const rnd = () => (x = (x * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let i = 0; i < n; i++) {
+    const px = rnd() * w, py = rnd() * h, r = size * (0.4 + rnd()), o = 0.10 + rnd() * 0.28;
+    s += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${r.toFixed(2)}" fill="${NET}" fill-opacity="${o.toFixed(2)}"/>`;
+  }
+  return s;
+}
 
-// 3. Android adaptive: subject scaled into the safe zone on transparent; dark background; grayscale mono.
-const fgInner = Math.round(1024 * 0.7);
-const fg = await sharp(clean).resize(fgInner, fgInner, { fit: 'cover' }).png().toBuffer();
-const onCanvas = (input) =>
-  sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-    .composite([{ input, gravity: 'center' }])
-    .png();
-await onCanvas(fg).toFile(p(IMG, 'android-icon-foreground.png'));
-await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#0a0a12' } }).png().toFile(p(IMG, 'android-icon-background.png'));
-await onCanvas(await sharp(fg).grayscale().png().toBuffer()).toFile(p(IMG, 'android-icon-monochrome.png'));
+// Variant B, as signed off: scale 0.78, weights 1.15/0.62/2.2, glow 0.5, starfield on.
+const B = { scale: 0.78, weights: { lineW: 1.15, lineOp: 0.62, nodeR: 2.2 }, glowOp: 0.5 };
 
-console.log('app icon set regenerated from assets/brand/app-icon-source.png → icon.png, app-icon-1024.png, favicon.png, android-icon-{foreground,background,monochrome}.png');
+function iconSVG({ transparentBg = false, monochrome = false, scale = B.scale } = {}) {
+  const size = 1024 * scale, off = (1024 - size) / 2;
+  const g = monochrome
+    ? glyph(B.weights).replaceAll(NET, '#ffffff').replaceAll(CORE, '#ffffff').replace(/url\(#glow\)/, 'none')
+    : glyph(B.weights);
+  return `<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  ${monochrome ? '' : defs(B.glowOp)}
+  ${transparentBg ? '' : `<rect width="1024" height="1024" fill="${BG}"/>`}
+  ${transparentBg || monochrome ? '' : stars(7, 90, 2.2, 1024, 1024)}
+  <g transform="translate(${off},${off}) scale(${size / 120})">${g}</g>
+</svg>`;
+}
+
+const render = (svg) => sharp(Buffer.from(svg)).png();
+
+// iOS app icon + App Store marketing icon (opaque, full-bleed) + web favicon.
+await render(iconSVG()).toFile(p(IMG, 'icon.png'));
+await render(iconSVG()).toFile(p(BRAND, 'app-icon-1024.png'));
+await render(iconSVG()).resize(196, 196).toFile(p(IMG, 'favicon.png'));
+
+// Android adaptive: the glyph alone (transparent, scaled into the safe zone), a flat dark
+// background layer, and a white monochrome layer for themed icons.
+await render(iconSVG({ transparentBg: true, scale: 0.6 })).toFile(p(IMG, 'android-icon-foreground.png'));
+await render(`<svg width="1024" height="1024"><rect width="1024" height="1024" fill="${BG}"/></svg>`).toFile(p(IMG, 'android-icon-background.png'));
+await render(iconSVG({ transparentBg: true, monochrome: true, scale: 0.6 })).toFile(p(IMG, 'android-icon-monochrome.png'));
+
+// Splash icon (kept for any splash config that wants the small centered mark).
+await render(iconSVG({ transparentBg: true })).resize(420, 420).toFile(p(IMG, 'splash-icon.png'));
+
+// The launch loader portrait (1024x1536): glyph riding upper-center over her starfield. Replaces
+// the Venus portrait in animated-icon.tsx and the expo-splash-screen plugin.
+const boot = `<svg width="1024" height="1536" viewBox="0 0 1024 1536" xmlns="http://www.w3.org/2000/svg">
+  ${defs(0.45)}
+  <rect width="1024" height="1536" fill="${BG}"/>
+  ${stars(11, 150, 2, 1024, 1536)}
+  <g transform="translate(212,468) scale(${600 / 120})">${glyph({ lineW: 1.1, lineOp: 0.55, nodeR: 2.1 })}</g>
+</svg>`;
+await render(boot).toFile(p(BRAND, 'eve-boot.png'));
+
+// Play Store listing icon.
+await render(iconSVG()).resize(512, 512).toFile(p(BRAND, 'play-store-icon-512.png'));
+
+console.log('✓ Eve icon set generated (variant B) — icon, favicon, android adaptive, splash, boot, play-store');

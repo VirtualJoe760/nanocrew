@@ -45,10 +45,10 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#000000",
-          "image": "./assets/brand/venus-portrait.png",
+          "image": "./assets/brand/eve-boot.png",
           "resizeMode": "cover",
           "android": {
-            "image": "./assets/brand/venus-portrait.png",
+            "image": "./assets/brand/eve-boot.png",
             "resizeMode": "cover",
             "backgroundColor": "#000000"
           }
