@@ -48,6 +48,10 @@ export interface UseLiveVoice {
  *  leave a paid connection open. */
 const SUSPEND_GRACE_MS = 45_000;
 
+/** How long queued context stays worth sending. A digest briefing is a snapshot of the numbers;
+ *  handing her a stale one when she finally wakes is worse than handing her nothing. */
+const CONTEXT_TTL_MS = 5 * 60_000;
+
 /**
  * React wrapper around LiveVoiceSession. Gemini Live is open-mic + VAD: once started, Eve
  * listens continuously, replies, and the user can interrupt by talking — a flowing conversation,
@@ -135,6 +139,33 @@ export function useLiveVoice(opts: {
 
   const isLive = useCallback(() => !!sessionRef.current, []);
 
+  // Context queued while she's SILENT, flushed when a session next opens.
+  //
+  // This exists because of the silent-by-default change: `sendContext` is a no-op with no socket
+  // (live-voice.ts drops it on `this.session?.`), and before P0 she was always live so it always
+  // landed. Now the common case is a creator opening the digest while she's quiet — the briefing
+  // was being thrown away, so the first thing she'd be asked about her numbers she'd guess at,
+  // silently undoing the whole point of digestBriefing().
+  //
+  // TTL'd because a briefing is a snapshot: handing her twenty-minute-old revenue when she finally
+  // wakes is worse than handing her nothing.
+  const pendingContext = useRef<{ text: string; at: number }[]>([]);
+  const flushContext = useCallback(() => {
+    const fresh = pendingContext.current.filter((c) => Date.now() - c.at < CONTEXT_TTL_MS);
+    pendingContext.current = [];
+    for (const c of fresh) sessionRef.current?.sendContext(c.text);
+  }, []);
+
+  const sendContext = useCallback((text: string) => {
+    if (sessionRef.current) {
+      sessionRef.current.sendContext(text);
+      return;
+    }
+    pendingContext.current.push({ text, at: Date.now() });
+    // Keep only the most recent few — this is context, not a log.
+    if (pendingContext.current.length > 4) pendingContext.current.shift();
+  }, []);
+
   const start = useCallback((greet = true) => {
     if (sessionRef.current || !opts.accessToken) return;
     clearGrace();
@@ -164,7 +195,7 @@ export function useLiveVoice(opts: {
       },
     });
     sessionRef.current = s;
-    s.start().catch((e) => {
+    s.start().then(flushContext).catch((e) => {
       sessionRef.current = null;
       // On a call → show the dedicated "mic busy" modal, not the generic error banner.
       if (e instanceof AudioSessionBusyError) {
@@ -175,15 +206,12 @@ export function useLiveVoice(opts: {
       setError(e instanceof Error ? e.message : 'Could not start voice');
       setState('error');
     });
-  }, [opts.accessToken, opts.userName, opts.firstTime, opts.voiceName, opts.instruction, opts.greeting, opts.enableBrandTool, clearGrace]);
+  }, [opts.accessToken, opts.userName, opts.firstTime, opts.voiceName, opts.instruction, opts.greeting, opts.enableBrandTool, clearGrace, flushContext]);
 
   const sendText = useCallback((text: string) => {
     sessionRef.current?.sendText(text);
   }, []);
 
-  const sendContext = useCallback((text: string) => {
-    sessionRef.current?.sendContext(text);
-  }, []);
 
   const sendImage = useCallback((base64: string, mimeType: string, note?: string) => {
     sessionRef.current?.sendImage(base64, mimeType, note);
