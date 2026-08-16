@@ -20,8 +20,18 @@ export interface UseLiveVoice {
   dismissAudioBusy: () => void;
   /** Extracting the brand from the transcript (the "build my brand" step). */
   finalizing: boolean;
-  start: () => void;
+  /** Open the session. `greet` false re-opens under an ongoing conversation without re-introducing. */
+  start: (greet?: boolean) => void;
   stop: () => void;
+  /** Go quiet WITHOUT tearing down: mute in both directions and hold the socket for a grace period,
+   *  so glancing at another surface and coming back is instant, free, and keeps the transcript.
+   *  The socket is closed only if the grace expires. */
+  suspend: () => void;
+  /** Come back from a suspend. Returns false if the socket has already been released — the caller
+   *  then decides whether to `start(false)` a fresh one. */
+  resume: () => boolean;
+  /** Is a live socket currently held (open or suspended)? */
+  isLive: () => boolean;
   sendText: (text: string) => void;
   /** Push silent context into the session (no reply) — e.g. which site section was just circled. */
   sendContext: (text: string) => void;
@@ -33,10 +43,22 @@ export interface UseLiveVoice {
   finalize: () => void;
 }
 
+/** How long a suspended session is held before the socket is released. Long enough to cover a
+ *  glance at the brand console or a hop to another tab; short enough that walking away doesn't
+ *  leave a paid connection open. */
+const SUSPEND_GRACE_MS = 45_000;
+
 /**
  * React wrapper around LiveVoiceSession. Gemini Live is open-mic + VAD: once started, Eve
  * listens continuously, replies, and the user can interrupt by talking — a flowing conversation,
  * no push-to-talk. Caller controls start/stop (e.g. on interview focus / pause).
+ *
+ * THREE levels of "not talking", and the difference is money:
+ *   mute()    — text mode; socket open, both directions silenced.
+ *   suspend() — she's covered or the app is backgrounded; socket HELD for SUSPEND_GRACE_MS so
+ *               coming back is instant and the transcript survives, then released.
+ *   stop()    — done; socket closed now.
+ * A session is only ever opened by an explicit start(), never by a surface merely appearing.
  */
 export function useLiveVoice(opts: {
   accessToken: string | undefined;
@@ -61,13 +83,62 @@ export function useLiveVoice(opts: {
   const onBrandRef = useRef(opts.onBrand);
   onBrandRef.current = opts.onBrand;
 
-  const stop = useCallback(() => {
-    sessionRef.current?.stop();
-    sessionRef.current = null;
+  // Mute has two independent owners — keyboard mode and a suspend — so track them separately and
+  // apply the OR. Letting either one write `setMuted` directly means whichever fires last wins, and
+  // resuming from a suspend would un-mute a keyboard-mode session.
+  const mutedByKeyboard = useRef(false);
+  const mutedBySuspend = useRef(false);
+  const applyMute = useCallback(() => {
+    sessionRef.current?.setMuted(mutedByKeyboard.current || mutedBySuspend.current);
   }, []);
 
-  const start = useCallback(() => {
+  const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearGrace = useCallback(() => {
+    if (graceTimer.current) {
+      clearTimeout(graceTimer.current);
+      graceTimer.current = null;
+    }
+  }, []);
+
+  const stop = useCallback(() => {
+    clearGrace();
+    mutedBySuspend.current = false;
+    sessionRef.current?.stop();
+    sessionRef.current = null;
+  }, [clearGrace]);
+
+  const suspend = useCallback(() => {
+    if (!sessionRef.current || mutedBySuspend.current) return;
+    mutedBySuspend.current = true;
+    applyMute();
+    clearGrace();
+    graceTimer.current = setTimeout(() => {
+      graceTimer.current = null;
+      // Grace expired — release the socket (and the iOS audio session with it) rather than holding
+      // a paid connection open for someone who has moved on.
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+      mutedBySuspend.current = false;
+    }, SUSPEND_GRACE_MS);
+  }, [applyMute, clearGrace]);
+
+  const resume = useCallback(() => {
+    clearGrace();
+    if (!sessionRef.current) {
+      mutedBySuspend.current = false;
+      return false;
+    }
+    mutedBySuspend.current = false;
+    applyMute();
+    return true;
+  }, [applyMute, clearGrace]);
+
+  const isLive = useCallback(() => !!sessionRef.current, []);
+
+  const start = useCallback((greet = true) => {
     if (sessionRef.current || !opts.accessToken) return;
+    clearGrace();
+    mutedBySuspend.current = false;
     setError(null);
     setAudioBusy(false);
     setVenusText('');
@@ -81,6 +152,7 @@ export function useLiveVoice(opts: {
       instruction: opts.instruction,
       greeting: opts.greeting,
       enableBrandTool: opts.enableBrandTool,
+      greetOnOpen: greet,
       callbacks: {
         onState: setState,
         // session emits the FULL current utterance (with per-turn resets), so just replace.
@@ -103,7 +175,7 @@ export function useLiveVoice(opts: {
       setError(e instanceof Error ? e.message : 'Could not start voice');
       setState('error');
     });
-  }, [opts.accessToken, opts.userName, opts.firstTime, opts.voiceName, opts.instruction, opts.greeting, opts.enableBrandTool]);
+  }, [opts.accessToken, opts.userName, opts.firstTime, opts.voiceName, opts.instruction, opts.greeting, opts.enableBrandTool, clearGrace]);
 
   const sendText = useCallback((text: string) => {
     sessionRef.current?.sendText(text);
@@ -118,8 +190,9 @@ export function useLiveVoice(opts: {
   }, []);
 
   const mute = useCallback((m: boolean) => {
-    sessionRef.current?.setMuted(m);
-  }, []);
+    mutedByKeyboard.current = m;
+    applyMute();
+  }, [applyMute]);
 
   const dismissAudioBusy = useCallback(() => setAudioBusy(false), []);
 
@@ -152,8 +225,9 @@ export function useLiveVoice(opts: {
     }
   }, [finalizing, opts.accessToken]);
 
-  // Always tear down on unmount.
-  useEffect(() => () => { sessionRef.current?.stop(); sessionRef.current = null; }, []);
+  // Always tear down on unmount — including a pending suspend grace timer, which would otherwise
+  // fire against a dead session.
+  useEffect(() => () => { clearGrace(); sessionRef.current?.stop(); sessionRef.current = null; }, [clearGrace]);
 
-  return { state, venusText, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, sendText, sendContext, sendImage, mute, finalize };
+  return { state, venusText, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, suspend, resume, isLive, sendText, sendContext, sendImage, mute, finalize };
 }

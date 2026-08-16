@@ -308,7 +308,15 @@ function StudioScreen() {
           // Signed-in DEFAULT — talk to Eve. Her mic is live only while this tab is focused and the
           // deck is closed. Swipe down (or tap the top handle) reveals the brand deck over her.
           <>
-            <EveHome open={focused && !deckShown} onRequestClose={() => setEve(null)} onGo={setEve} />
+            {/* `covered` is the ONE signal for "something is layered over her". It used to be the
+                deck alone, so opening a brand's console restarted her session and she narrated the
+                editor (D-20). Every surface that sits on top of her must feed this. */}
+            <EveHome
+              open={focused}
+              covered={deckShown || showComposer || !!paywall || welcomeVisible}
+              onRequestClose={() => setEve(null)}
+              onGo={setEve}
+            />
             {hasStore ? (
               <>
                 {!deckShown ? (

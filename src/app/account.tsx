@@ -1,9 +1,10 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -137,6 +138,19 @@ function AccountScreen() {
   const [showVenusLab, setShowVenusLab] = useState(false);
 
   // Ensure the creators row exists + load this creator's stores; probe platform-admin access + plan.
+  // Payout status is the one thing here that changes OUTSIDE the app: the creator leaves for
+  // Stripe's hosted onboarding and comes back verified. Re-read it rather than trusting mount state,
+  // or they return to "Finish payout setup" after having just finished it.
+  const loadPayouts = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/creator/connect');
+      const d = r.ok ? ((await r.json()) as { connected?: boolean; chargesEnabled?: boolean }) : null;
+      setPayouts(d ? { connected: !!d.connected, chargesEnabled: !!d.chargesEnabled } : null);
+    } catch {
+      setPayouts(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (!session) {
       setStores([]);
@@ -154,17 +168,29 @@ function AccountScreen() {
     apiFetch('/api/platform/admin')
       .then((r) => setIsAdmin(r.ok))
       .catch(() => setIsAdmin(false));
-    apiFetch('/api/creator/connect')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { connected?: boolean; chargesEnabled?: boolean } | null) =>
-        setPayouts(d ? { connected: !!d.connected, chargesEnabled: !!d.chargesEnabled } : null),
-      )
-      .catch(() => setPayouts(null));
+    void loadPayouts();
     apiFetch('/api/creator/subscription')
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { entitlements?: { plan?: string } } | null) => setPlan(d?.entitlements?.plan ?? 'free'))
       .catch(() => setPlan(null));
-  }, [session]);
+  }, [session, loadPayouts]);
+
+  // Coming back from Stripe's hosted onboarding, two ways, because only one of them is reliable:
+  //   · the return page's deep link (nanocrew://account?payouts=return) — precise, but only fires
+  //     if they tap the button rather than just swiping back to the app;
+  //   · foregrounding — catches the swipe-back case, which is what most people actually do.
+  // Both just re-read the status; Stripe is the source of truth, not the redirect.
+  const payoutParam = useLocalSearchParams<{ payouts?: string }>().payouts;
+  useEffect(() => {
+    if (session && payoutParam) void loadPayouts();
+  }, [session, payoutParam, loadPayouts]);
+  useEffect(() => {
+    if (!session) return;
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void loadPayouts();
+    });
+    return () => sub.remove();
+  }, [session, loadPayouts]);
 
   // Dev-only: deep-linking /account?auto=google|facebook starts the flow hands-free,
   // so simulator test runs don't need a tap (clicks are unreliable to automate there).

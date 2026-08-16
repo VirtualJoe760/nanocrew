@@ -106,6 +106,9 @@ export const CRITIQUE_GREETING =
 
 const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
 const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
+/** Backstop for an announcement session (speakOnly) — it closes on turnComplete, but never lives
+ *  longer than this even if that signal is lost. One spoken line is a few seconds. */
+const ANNOUNCE_MAX_MS = 25_000;
 
 export type LiveState = 'connecting' | 'listening' | 'speaking' | 'thinking' | 'idle' | 'error';
 
@@ -267,6 +270,17 @@ export class LiveVoiceSession {
   private instructionOverride?: string;
   private greetingOverride?: string;
   private enableBrandTool: boolean;
+  /** Speak first on connect. FALSE when the socket is being re-opened underneath an ongoing
+   *  conversation (a reconnect after a suspend expired) — she should pick up, not re-introduce
+   *  herself. The Eve tab only passes true when the creator has just asked her to talk. */
+  private greetOnOpen: boolean;
+  /** ANNOUNCEMENT MODE: say one line in her real voice, then close. The microphone is never
+   *  started, so this is not a conversation and nothing is listening — it exists because a
+   *  one-shot TTS model renders the same voice NAME as a different person, and the launch line
+   *  has to sound like the Eve the creator just spent five minutes talking to. */
+  private speakOnly: boolean;
+  private announceDone = false; // announcement close scheduled once
+  private announceCap: ReturnType<typeof setTimeout> | null = null;
 
   constructor(opts: {
     accessToken: string;
@@ -276,6 +290,8 @@ export class LiveVoiceSession {
     instruction?: string;
     greeting?: string;
     enableBrandTool?: boolean;
+    greetOnOpen?: boolean;
+    speakOnly?: boolean;
     callbacks: LiveCallbacks;
   }) {
     this.accessToken = opts.accessToken;
@@ -285,6 +301,8 @@ export class LiveVoiceSession {
     this.instructionOverride = opts.instruction;
     this.greetingOverride = opts.greeting;
     this.enableBrandTool = opts.enableBrandTool ?? true;
+    this.greetOnOpen = opts.greetOnOpen ?? true;
+    this.speakOnly = opts.speakOnly ?? false;
     this.cb = opts.callbacks;
     this.token = '';
   }
@@ -387,8 +405,17 @@ export class LiveVoiceSession {
       model: d.model,
       callbacks: {
         onopen: () => {
-          console.warn('[live] ws open → starting mic');
           this.clearWatchdog();
+          if (this.speakOnly) {
+            // No recorder, ever. She says her line and we close — nothing is listening.
+            console.warn('[live] ws open → announcement (mic never started)');
+            this.cb.onState?.('speaking');
+            // Hard cap: if turnComplete never lands (dropped frame, model stall), the socket still
+            // closes. An announcement must never become an open-ended connection.
+            this.announceCap = setTimeout(() => { void this.stop(); }, ANNOUNCE_MAX_MS);
+            return;
+          }
+          console.warn('[live] ws open → starting mic');
           this.startMic();
         },
         onmessage: (m) => this.onMessage(m),
@@ -461,6 +488,12 @@ export class LiveVoiceSession {
     }
     // Setup is done — NOW it's safe to nudge Venus to open the conversation.
     if (m.setupComplete) {
+      // A reconnect underneath a conversation already in progress must NOT re-greet — she'd
+      // introduce herself again mid-thread. Only an intentional "start talking" greets.
+      if (!this.greetOnOpen) {
+        console.warn('[live] setupComplete → resumed, no greeting');
+        return;
+      }
       console.warn('[live] setupComplete → greeting');
       const first = this.userName?.trim().split(/\s+/)[0];
       const hi = first ? `Hi ${first}` : 'Hi';
@@ -541,6 +574,16 @@ export class LiveVoiceSession {
         this.transcript.push({ role: 'assistant', text: this.curVenus.trim() });
         this.cb.onTranscript?.(this.getTranscript());
         this.curVenus = '';
+      }
+      if (this.speakOnly) {
+        // Generation is done but her audio is still queued — close once it has actually played out,
+        // or we cut her off mid-word. `playEndsAt` is the wall-clock end of the queued audio.
+        if (!this.announceDone) {
+          this.announceDone = true;
+          const wait = Math.max(0, this.playEndsAt - Date.now()) + 400;
+          setTimeout(() => { void this.stop(); }, wait);
+        }
+        return;
       }
       this.cb.onState?.('listening');
     }
@@ -641,6 +684,7 @@ export class LiveVoiceSession {
     this.closed = true;
     if (activeLiveSession === this) activeLiveSession = null; // release the single-session slot
     this.clearWatchdog();
+    if (this.announceCap) { clearTimeout(this.announceCap); this.announceCap = null; }
     resetSpeechLevel(); // no more audio → the avatar's mouth rests
 
     try {
@@ -663,5 +707,35 @@ export class LiveVoiceSession {
     this.outCtx = null;
     this.session = null;
     this.cb.onState?.('idle');
+  }
+}
+
+/**
+ * ANNOUNCE — say one line in Eve's REAL voice, then close.
+ *
+ * Why this exists rather than `/api/say`: that route is a one-shot TTS model
+ * (`gemini-2.5-flash-preview-tts`) while the conversation runs on native-audio. The same voice NAME
+ * renders as a different person across the two engines, so the launch line sounded like a stranger
+ * right after five minutes of talking to her. Generating through the Live model is the only way to
+ * match her, so an announcement is a Live session that never opens the microphone and closes itself
+ * as soon as she has finished speaking.
+ *
+ * Fire-and-forget: a failed announcement must never block or break the flow that triggered it.
+ */
+export async function announce(accessToken: string, text: string, voiceName?: string): Promise<void> {
+  const s = new LiveVoiceSession({
+    accessToken,
+    voiceName,
+    instruction:
+      'You are Eve. Say EXACTLY the line you are given, once, warmly and briefly. Add nothing, ask nothing.',
+    greeting: `(Say exactly this, and nothing else: "${text}")`,
+    enableBrandTool: false,
+    speakOnly: true,
+    callbacks: {},
+  });
+  try {
+    await s.start();
+  } catch {
+    void s.stop();
   }
 }

@@ -62,7 +62,16 @@ Sourced verbatim from the codebase's existing warnings (root `CLAUDE.md`, `TECH_
 - **🟡 Dev build only.** Expo Go is retired (build #12) — native modules (notifications, apple-auth,
   IAP, view-shot, audio-api) require an EAS dev/standalone build.
 
-## 4. Process discipline
+## 4. Screen safety (device chrome)
+
+- **🟡 Nothing lives under the Dynamic Island, notch, or home indicator.** Every top-anchored element
+  offsets from `useSafeAreaInsets().top` and every bottom-anchored one from `.bottom` — never a raw
+  `top: 0` / `top: 14` / `paddingTop: 12` on a full-screen surface. On an Island device the top inset
+  is ~59pt; content placed above that is physically covered by hardware, not merely tight. This
+  applies to mocks and design comps too: if a comp shows chrome at the very top of the frame, the comp
+  is wrong before the code is. Full rule + the values: [`UI_RULES.md`](UI_RULES.md) "Safe areas".
+
+## 5. Process discipline
 
 - **🟡 Reuse before you build. Audit first.** Most things already exist (one Supabase identity,
   orders-by-email, the design generator, go-live phases, the UI primitives). Search the code **and**

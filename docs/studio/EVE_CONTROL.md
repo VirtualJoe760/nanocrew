@@ -232,6 +232,109 @@ build 40's background was black on Joe's PHONE is unconfirmed — check TestFlig
 
 ---
 
+# PHASE — WAKE AND WHEEL (2026-08-15)
+
+Joe, reviewing a full UI audit of this tab: *"it defaults to her talking. as soon as you click on eve
+she starts talking, even if the user didn't want to talk to her. This costs us money, as well as the
+user, its poor design."* Plus: the top-edge pull-down is a fake gesture, the digest button is the
+wrong control in the wrong place, and the subtitles sit too high.
+
+**The direction (settled).** Two states only — **silent** and **talking**; a tap moves between them.
+Press-and-hold opens a **radial wheel** of everything she can do, which replaces the BrandDeck's
+pull-down entirely. A wake phrase ("Hey Eve") is explicitly OFF the critical path: Gemini Live cannot
+provide one — anything the Live session hears is already a paid stream — so it needs an on-device
+keyword spotter, a dependency the project does not have. Tap-to-talk instead.
+
+Audit + defect list (D-01…D-24, each with file:line) and the mock/plan are the two artifacts linked
+from Joe's review thread.
+
+## P0 — SHIPPED 2026-08-15 (closes D-19 · D-20 · D-22)
+
+The credit bleed, fixed. No redesign, no new files.
+
+- **`talking` gates the session** (`eve-home.tsx`). It defaults to false and only a creator's tap
+  sets it. Arriving on the tab now opens no socket, sends no greeting, and does not prompt for the
+  microphone — `ensureMic()` runs on the first tap instead of on mount.
+- **One `covered` signal** (`studio.tsx` → `EveHome`), raised by the deck, the Brand Console, the
+  Paywall and the Welcome modal. Previously only the deck suppressed her, so tapping **edit** on a
+  brand closed the deck, flipped `open` back to true, and started a *brand-new* session that
+  immediately greeted the creator over the editor (D-20).
+- **Suspend, don't stop** (`use-live-voice.ts`): `suspend()` mutes both directions and holds the
+  socket for `SUSPEND_GRACE_MS` (45s) before releasing it; `resume()` returns false if the grace
+  already expired so the caller can open a fresh one. Mute now has two independent owners (keyboard
+  mode, suspend) OR-ed together — writing `setMuted` directly from both meant whichever fired last
+  won, and resuming un-muted a keyboard-mode session.
+- **`greetOnOpen`** (`live-voice.ts`): the setup-complete greeting nudge is skipped when a socket is
+  re-opened under an ongoing conversation, so she picks up rather than re-introducing herself.
+- **The state pill** (top-right, at `insets.top` — see the Safe areas rule in `UI_RULES.md`) is her
+  state, always on screen and tappable: SILENT · CONNECTING · LISTENING · THINKING · SPEAKING ·
+  PAUSED. At rest a 30% scrim dims her; it lifts when she talks.
+- **Verified in a foregrounded browser with full network capture:** arrival → pill SILENT, zero
+  `/api/voice-live-token`, zero Gemini sockets. Tap → one token, one socket, one greeting, pill
+  LISTENING. Opening the deck and then the Brand Console → **no** new token, socket or greeting, and
+  the transcript survives. (The mute-while-covered itself is code-verified, not observed — there is
+  no external signal for it.)
+
+### Follow-ups from Joe's device pass (2026-08-16)
+
+- **Tint** — the brand-review screen is a form over a moving avatar and was unreadable. EveHome's
+  scrim now tracks how much reading the surface demands: none while talking, `0.30` at rest, `0.82`
+  behind brand review and the interview topic list. Same fix covers the post-create "store online"
+  state, which is the same screen. Also drops `talking` when the `BrandResult` lands — the socket was
+  already closed by `finalize()`, but the intent flag stayed set and the pill claimed she was
+  listening while the creator read a form.
+- **Launch voice** — the fanfare moved off `/api/say` onto an announcement-mode Live session
+  (`announce()` / `speakOnly`). Full rationale in [GEMINI_LIVE.md](GEMINI_LIVE.md) → "Launch
+  announcement". Needs a **device** check: web has no audio playback path.
+- **Collaborators**: `store_collaborators` + `tenant.ts` already grant access; only the invite/accept
+  flow and its UI are missing. (`GET /api/creator/stores/:slug` was matching `creatorId` directly and
+  404ing collaborators — fixed, and `DELETE` is now explicitly owner-only.)
+
+### PAYOUTS — LIVE 2026-08-16
+
+Connect is **enabled** on the Nano Crew platform account (`acct_1ThhvX5lsCYjUGb3`, charges enabled,
+`transfers` + `card_payments` active) and `STRIPE_CONNECT_ENABLED=1` is set. `connectEnabled()` is
+true, so **the go-live gate is real**: a store can only go live once its creator is `charges_enabled`.
+
+The code was already complete (`src/lib/connect.ts` — Express accounts, destination charges with the
+platform application fee, payouts held until ship date + return window then transferred, refunds with
+transfer reversal; `/api/creator/connect`; `/api/internal/release-payouts`; UI in Account). Turning it
+on exposed one latent bug, now fixed:
+
+- **Where the Stripe landing pages live.** `createOnboardingLink` returns creators to
+  `{BILLING_RETURN_URL | PLATFORM_API_BASE}/connect/return` → `nanocrew-api.vercel.app`, but the only
+  `connect/return` pages were in **nanocrew-site**. A creator finishing identity verification hit a
+  404. **The rule, going forward: every Stripe-facing landing page lives in `platform-api`, next to
+  `billing/success`.** That keeps the money surfaces off the app bundle — isolated from Apple's rules
+  — and gives one web host serving iOS, Android and web identically. `connect/return` +
+  `connect/refresh` are now platform-api pages with a `nanocrew://` deep link home. The
+  nanocrew-site copies are superseded and should be deleted or redirected.
+- **Status refresh on return.** Account read payout status once per session, so a creator came back
+  from a completed onboarding and still saw "Finish payout setup". It now re-reads on the deep-link
+  param and on foregrounding (most people swipe back rather than tapping the button).
+
+**Open:** surface payout state on the **Brand sheet** (below) rather than only in Account — a creator
+should see "payouts active" / "finish setup" on the brand that earns the money. Also unverified end
+to end: no creator has completed real Connect onboarding yet, so the return round-trip is
+code-verified only.
+
+### Revised plan (2026-08-16)
+
+| | | Status |
+|---|---|---|
+| **P0** | Silent by default · covered-suspends · tap-to-talk | **shipped** |
+| **P0.1** | Reading tints · launch voice through the Live model | **shipped** |
+| **P0.2** | Payouts live: Connect enabled, return pages on platform-api, status refresh | **shipped** |
+| **P1** | Caption block + status band + the D-08 toast overlap | open |
+| **P2** | The wheel (`eve-wheel.tsx`) | open |
+| **P3** | **Brand sheet** — replaces the deck AND the un-revisitable post-build success screen: identity (logo · palette · story · vibe, already served by `GET /api/creator/stores/:slug`), earnings + orders + views, unfinished tasks, **payout status**, site link | open — next |
+| **P3.1** | Edit identity in place — **must** go through `buildBrandPatch()` (NEVER_VIOLATE §2) | open |
+| **P4** | The D-01…D-18 batch | open |
+| **P4.1** | **Collaborator invite** — invite + accept endpoints and UI. Table and tenancy already work; this is the missing half. Decide whether a collaborator may go live / publish / buy a domain (those routes stay owner-only today). | open |
+| **P5** | Optional wake phrase (needs an on-device keyword spotter) | deferred |
+
+---
+
 # PHASE — EVE AS A CONVERSATIONALIST (build plan, 2026-08)
 
 Joe: *"I want her far more conversational. Right now she really knows one purpose — help create the
