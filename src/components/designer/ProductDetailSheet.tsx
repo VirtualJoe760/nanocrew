@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Image } from 'expo-image';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { GlowButton } from '@/components/glow-button';
 import { ThemedText } from '@/components/themed-text';
@@ -99,8 +99,10 @@ export function ProductDetailSheet({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <ThemedView style={styles.fill}>
-        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+      {/* Nested provider: safe-area context doesn't cross into a Modal's native window (B15). */}
+      <SafeAreaProvider>
+        <ThemedView style={styles.fill}>
+          <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
           <View style={styles.topBar}>
             <View style={styles.flexShrink}>
               <ThemedText type="smallBold" numberOfLines={1}>
@@ -191,8 +193,9 @@ export function ProductDetailSheet({
               <GlowButton label={selected ? `Use ${selected.color}` : 'Use this colour'} onPress={apply} />
             </View>
           ) : null}
-        </SafeAreaView>
-      </ThemedView>
+          </SafeAreaView>
+        </ThemedView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

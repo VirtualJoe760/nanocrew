@@ -22,6 +22,8 @@ export async function GET(req: Request) {
     const pool = await db
       .select({
         id: schema.products.id,
+        // The product's own slug — market tiles need it to deep-open ProductDetail (B11).
+        slug: schema.products.slug,
         name: schema.products.name,
         imageUrl: schema.products.imageUrl,
         modelShots: schema.products.modelShots,
@@ -46,6 +48,7 @@ export async function GET(req: Request) {
     const shot = (p: Prod) => p.modelShots?.[0] ?? p.imageUrl;
     const toItem = (p: Prod) => ({
       id: p.id,
+      slug: p.slug,
       name: p.name,
       imageUrl: shot(p),
       videoUrl: p.videoUrl,

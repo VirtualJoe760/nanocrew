@@ -11,11 +11,11 @@
       "bundleIdentifier": "com.nanocrew.app",
       "supportsTablet": false,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Nano Crew uses the microphone so you can talk to Venus, your AI brand consultant.",
+        "NSMicrophoneUsageDescription": "Nano Crew uses the microphone so you can talk to Eve, your AI brand consultant.",
         "NSPhotoLibraryUsageDescription": "Nano Crew uses your photos for virtual try-on and to set your brand's post and product images.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "50"
+      "buildNumber": "51"
     },
     "android": {
       "package": "com.nanocrew.app",

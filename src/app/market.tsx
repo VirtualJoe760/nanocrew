@@ -30,6 +30,7 @@ import { apiUrl } from '@/lib/api';
 
 type Product = {
   id: string;
+  slug: string;
   name: string;
   imageUrl: string | null;
   videoUrl: string | null;
@@ -56,7 +57,7 @@ const FALLBACK = 'rgba(205,209,217,0.08)';
 const price = (c: number | null) => (c != null ? `$${(c / 100).toFixed(2)}` : '');
 
 // ── Discover: a full-bleed, paged marketing hero. ──────────────────────────────────────────────
-function Hero({ items, width, onOpen }: { items: Product[]; width: number; onOpen: (slug: string) => void }) {
+function Hero({ items, width, onOpen }: { items: Product[]; width: number; onOpen: (slug: string, productSlug?: string) => void }) {
   const [page, setPage] = useState(0);
   const h = Math.min(Math.round(width * 1.02), 460);
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => setPage(Math.round(e.nativeEvent.contentOffset.x / width));
@@ -64,7 +65,7 @@ function Hero({ items, width, onOpen }: { items: Product[]; width: number; onOpe
     <View>
       <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
         {items.map((item) => (
-          <Pressable key={item.id} onPress={() => onOpen(item.storeSlug)} style={{ width, height: h }}>
+          <Pressable key={item.id} onPress={() => onOpen(item.storeSlug, item.slug)} style={{ width, height: h }}>
             {item.imageUrl ? (
               <Image source={{ uri: item.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" />
             ) : (
@@ -117,9 +118,9 @@ function CollectionCard({ col, onOpen }: { col: Collection; onOpen: (slug: strin
 }
 
 // A flexible-width product card for the 2-up grids (Shop + Discover's curated section).
-function ProductCard({ item, w, onOpen }: { item: Product; w: number; onOpen: (slug: string) => void }) {
+function ProductCard({ item, w, onOpen }: { item: Product; w: number; onOpen: (slug: string, productSlug?: string) => void }) {
   return (
-    <Pressable style={[styles.pCard, { width: w }]} onPress={() => onOpen(item.storeSlug)}>
+    <Pressable style={[styles.pCard, { width: w }]} onPress={() => onOpen(item.storeSlug, item.slug)}>
       {item.imageUrl ? (
         <Image source={{ uri: item.imageUrl }} style={{ width: w, height: Math.round(w * 1.25) }} contentFit="cover" contentPosition="top" />
       ) : (
@@ -191,6 +192,13 @@ function MarketScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [storeSlug, setStoreSlug] = useState<string | null>(null);
+  // Product tiles deep-open the PRODUCT inside the brand sheet; brand tiles leave this null and
+  // land on the brand itself (B11 — every tile used to drop the product and open the brand).
+  const [openProductSlug, setOpenProductSlug] = useState<string | null>(null);
+  const openStore = useCallback((slug: string, productSlug?: string) => {
+    setOpenProductSlug(productSlug ?? null);
+    setStoreSlug(slug);
+  }, []);
 
   const [blocked, setBlocked] = useState<Set<string>>(new Set());
   const refreshBlocked = useCallback(() => { void getBlockedBrands().then((s) => setBlocked(new Set(s))); }, []);
@@ -256,24 +264,24 @@ function MarketScreen() {
             {searching ? (
               <View style={styles.padWrap}>
                 {brands.length ? (
-                  brands.map((b) => <BrandRow key={b.id} brand={b} onOpen={setStoreSlug} />)
+                  brands.map((b) => <BrandRow key={b.id} brand={b} onOpen={openStore} />)
                 ) : (
                   <View style={styles.emptyCard}><ThemedText type="small" themeColor="textSecondary">No brands match “{query.trim()}”.</ThemedText></View>
                 )}
               </View>
             ) : tab === 'discover' ? (
               <>
-                {featured.length ? <Hero items={featured} width={width} onOpen={setStoreSlug} /> : null}
+                {featured.length ? <Hero items={featured} width={width} onOpen={openStore} /> : null}
                 {collections.length ? (
                   <Rail title="Fresh drops">
-                    {collections.map((c) => <CollectionCard key={`${c.storeSlug}-${c.slug}`} col={c} onOpen={setStoreSlug} />)}
+                    {collections.map((c) => <CollectionCard key={`${c.storeSlug}-${c.slug}`} col={c} onOpen={openStore} />)}
                   </Rail>
                 ) : null}
                 {trending.length ? (
                   <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.railTitle}>New this week</ThemedText>
                     <View style={styles.grid}>
-                      {trending.map((item) => <ProductCard key={item.id} item={item} w={col} onOpen={setStoreSlug} />)}
+                      {trending.map((item) => <ProductCard key={item.id} item={item} w={col} onOpen={openStore} />)}
                     </View>
                   </View>
                 ) : null}
@@ -294,7 +302,7 @@ function MarketScreen() {
                 ) : null}
                 <View style={[styles.grid, styles.padWrap]}>
                   {shopItems.length ? (
-                    shopItems.map((item) => <ProductCard key={item.id} item={item} w={col} onOpen={setStoreSlug} />)
+                    shopItems.map((item) => <ProductCard key={item.id} item={item} w={col} onOpen={openStore} />)
                   ) : (
                     <ThemedText type="small" themeColor="textSecondary">Nothing here yet.</ThemedText>
                   )}
@@ -303,7 +311,7 @@ function MarketScreen() {
             ) : (
               <View style={[styles.grid, styles.padWrap]}>
                 {brands.length ? (
-                  brands.map((b) => <BrandTile key={b.id} brand={b} w={col} onOpen={setStoreSlug} />)
+                  brands.map((b) => <BrandTile key={b.id} brand={b} w={col} onOpen={openStore} />)
                 ) : (
                   <View style={styles.emptyCard}><ThemedText type="small" themeColor="textSecondary">No live storefronts yet.</ThemedText></View>
                 )}
@@ -312,7 +320,12 @@ function MarketScreen() {
           </ScrollView>
         )}
       </SafeAreaView>
-      <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => { setStoreSlug(null); refreshBlocked(); }} />
+      <BrandStore
+        slug={storeSlug}
+        initialProductSlug={openProductSlug}
+        visible={!!storeSlug}
+        onClose={() => { setStoreSlug(null); setOpenProductSlug(null); refreshBlocked(); }}
+      />
     </View>
   );
 }

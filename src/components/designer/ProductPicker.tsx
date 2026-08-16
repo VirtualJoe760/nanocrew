@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Image } from 'expo-image';
 import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { GlowButton } from '@/components/glow-button';
 import { GlowInput } from '@/components/glow-input';
@@ -223,8 +223,12 @@ export function ProductPicker({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close}>
-      <ThemedView style={styles.fill}>
-        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+      {/* A RN Modal is its own native window, so the app's safe-area context doesn't reach it and
+          SafeAreaView resolves every edge to 0 — the header drew under the status bar and Close
+          became untappable (B15). A nested provider measures the modal's own window. */}
+      <SafeAreaProvider>
+        <ThemedView style={styles.fill}>
+          <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
           {/* Header: breadcrumb (Supplier › Type › Gender › Category) + close. */}
           <View style={styles.header}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.crumbs}>
@@ -345,8 +349,9 @@ export function ProductPicker({
               />
             </View>
           </View>
-        </SafeAreaView>
-      </ThemedView>
+          </SafeAreaView>
+        </ThemedView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

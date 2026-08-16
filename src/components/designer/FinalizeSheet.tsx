@@ -258,8 +258,12 @@ export function FinalizeSheet({
             <ActivityIndicator style={{ marginVertical: Spacing.six }} />
           ) : publishedId ? (
             <View style={styles.doneWrap}>
-              <ThemedText type="title">🎉 Live on Printful</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
+              {/* The brand font ships no COLOR EMOJI, so 🎉 drew as a missing-glyph box (B17).
+                  ✓ is in the face — the same glyph the shots hint below already uses. */}
+              <ThemedText type="title" style={styles.doneTitle}>
+                ✓ Live on Printful
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.doneTitle}>
                 Sync product #{publishedId} · {selectedCount} variants
               </ThemedText>
               {warnings.length ? (
@@ -320,7 +324,7 @@ export function FinalizeSheet({
                   ) : null}
                 </View>
               ) : null}
-              <Pressable onPress={onClose}>
+              <Pressable onPress={onClose} style={styles.doneBtn}>
                 <View style={[styles.publish, { backgroundColor: theme.text }]}>
                   <ThemedText type="smallBold" style={{ color: theme.background }}>
                     Done
@@ -436,6 +440,9 @@ const styles = StyleSheet.create({
   },
   swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.5)' },
   doneWrap: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
+  doneTitle: { textAlign: 'center' },
+  // Full-width so the pill isn't squeezed to the label's width (B17).
+  doneBtn: { alignSelf: 'stretch', marginTop: Spacing.one },
   shotsBlock: { alignSelf: 'stretch', gap: Spacing.two },
   shotsStrip: { gap: Spacing.two, paddingVertical: Spacing.one },
   shot: { width: 108, height: 138, borderRadius: Spacing.two, backgroundColor: 'rgba(255,255,255,0.04)' },

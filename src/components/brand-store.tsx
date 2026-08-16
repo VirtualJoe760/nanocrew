@@ -36,7 +36,18 @@ const hex = (h: string | null | undefined, fallback: string) => {
 };
 const price = (c: number | null) => (c == null ? '' : `$${(c / 100).toFixed(2)}`);
 
-export function BrandStore({ slug, visible, onClose }: { slug: string | null; visible: boolean; onClose: () => void }) {
+export function BrandStore({
+  slug,
+  visible,
+  onClose,
+  initialProductSlug = null,
+}: {
+  slug: string | null;
+  visible: boolean;
+  onClose: () => void;
+  /** Open straight onto a product (market product tiles) instead of the brand landing (B11). */
+  initialProductSlug?: string | null;
+}) {
   const { width } = useWindowDimensions();
   // SafeAreaView's edges don't resolve inside a RN <Modal> (separate window → 0 inset), so the
   // header tucked under the dynamic island. Read the inset from the hook (app provider) and pad
@@ -65,6 +76,11 @@ export function BrandStore({ slug, visible, onClose }: { slug: string | null; vi
       void load();
     }
   }, [visible, slug, load]);
+
+  // Opening from a product tile lands on that product; closing it falls back to the brand sheet.
+  useEffect(() => {
+    if (visible) setProductSlug(initialProductSlug);
+  }, [visible, slug, initialProductSlug]);
 
   const brand = data?.brand;
   const bg = hex(brand?.bgHex, '#0b0b0f');
