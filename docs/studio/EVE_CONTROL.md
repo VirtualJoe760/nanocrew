@@ -286,16 +286,52 @@ The credit bleed, fixed. No redesign, no new files.
 - **Launch voice** — the fanfare moved off `/api/say` onto an announcement-mode Live session
   (`announce()` / `speakOnly`). Full rationale in [GEMINI_LIVE.md](GEMINI_LIVE.md) → "Launch
   announcement". Needs a **device** check: web has no audio playback path.
-- **Audited, already built:** Stripe **payouts** are complete end to end (`src/lib/connect.ts`,
-  `/api/creator/connect`, held-then-released transfers, UI in the Account tab). They are inert only
-  because `STRIPE_CONNECT_ENABLED` is unset and Connect isn't enabled on the platform Stripe account
-  — configuration, not code. **Collaborators**: `store_collaborators` + `tenant.ts` already grant
-  access; only the invite/accept flow and its UI are missing.
+- **Collaborators**: `store_collaborators` + `tenant.ts` already grant access; only the invite/accept
+  flow and its UI are missing. (`GET /api/creator/stores/:slug` was matching `creatorId` directly and
+  404ing collaborators — fixed, and `DELETE` is now explicitly owner-only.)
 
-**Still open from the plan:** P1 (caption block + status band + the D-08 toast overlap), P2 (the
-wheel component, `eve-wheel.tsx`), P3 (brand sheet replaces the deck — now also carrying earnings,
-unfinished tasks, payout status and in-place identity editing), P4 (the D-01…D-18 batch),
-P5 (optional wake phrase). Plus the collaborator invite flow.
+### PAYOUTS — LIVE 2026-08-16
+
+Connect is **enabled** on the Nano Crew platform account (`acct_1ThhvX5lsCYjUGb3`, charges enabled,
+`transfers` + `card_payments` active) and `STRIPE_CONNECT_ENABLED=1` is set. `connectEnabled()` is
+true, so **the go-live gate is real**: a store can only go live once its creator is `charges_enabled`.
+
+The code was already complete (`src/lib/connect.ts` — Express accounts, destination charges with the
+platform application fee, payouts held until ship date + return window then transferred, refunds with
+transfer reversal; `/api/creator/connect`; `/api/internal/release-payouts`; UI in Account). Turning it
+on exposed one latent bug, now fixed:
+
+- **Where the Stripe landing pages live.** `createOnboardingLink` returns creators to
+  `{BILLING_RETURN_URL | PLATFORM_API_BASE}/connect/return` → `nanocrew-api.vercel.app`, but the only
+  `connect/return` pages were in **nanocrew-site**. A creator finishing identity verification hit a
+  404. **The rule, going forward: every Stripe-facing landing page lives in `platform-api`, next to
+  `billing/success`.** That keeps the money surfaces off the app bundle — isolated from Apple's rules
+  — and gives one web host serving iOS, Android and web identically. `connect/return` +
+  `connect/refresh` are now platform-api pages with a `nanocrew://` deep link home. The
+  nanocrew-site copies are superseded and should be deleted or redirected.
+- **Status refresh on return.** Account read payout status once per session, so a creator came back
+  from a completed onboarding and still saw "Finish payout setup". It now re-reads on the deep-link
+  param and on foregrounding (most people swipe back rather than tapping the button).
+
+**Open:** surface payout state on the **Brand sheet** (below) rather than only in Account — a creator
+should see "payouts active" / "finish setup" on the brand that earns the money. Also unverified end
+to end: no creator has completed real Connect onboarding yet, so the return round-trip is
+code-verified only.
+
+### Revised plan (2026-08-16)
+
+| | | Status |
+|---|---|---|
+| **P0** | Silent by default · covered-suspends · tap-to-talk | **shipped** |
+| **P0.1** | Reading tints · launch voice through the Live model | **shipped** |
+| **P0.2** | Payouts live: Connect enabled, return pages on platform-api, status refresh | **shipped** |
+| **P1** | Caption block + status band + the D-08 toast overlap | open |
+| **P2** | The wheel (`eve-wheel.tsx`) | open |
+| **P3** | **Brand sheet** — replaces the deck AND the un-revisitable post-build success screen: identity (logo · palette · story · vibe, already served by `GET /api/creator/stores/:slug`), earnings + orders + views, unfinished tasks, **payout status**, site link | open — next |
+| **P3.1** | Edit identity in place — **must** go through `buildBrandPatch()` (NEVER_VIOLATE §2) | open |
+| **P4** | The D-01…D-18 batch | open |
+| **P4.1** | **Collaborator invite** — invite + accept endpoints and UI. Table and tenancy already work; this is the missing half. Decide whether a collaborator may go live / publish / buy a domain (those routes stay owner-only today). | open |
+| **P5** | Optional wake phrase (needs an on-device keyword spotter) | deferred |
 
 ---
 
