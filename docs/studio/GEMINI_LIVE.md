@@ -257,16 +257,29 @@ The interview voice is now a **Gemini** voice. Map the chosen `AI_VOICES` id →
 (default `Aoede`) for the Live session. The ElevenLabs-based `previewVoice` mismatches the real voice
 now — either repoint preview to a Gemini sample or drop it (follow-up; not blocking).
 
-### Launch announcement (post-build) — `/api/say`
-After the brand is built, `createStore` plays a one-line "your store is online" fanfare. The Live
-session is already torn down by `finalize()` (`s.stop()` before hand-off), so this is a **one-shot**
-synthesized in Eve's **same Gemini voice** via [`/api/say`](../../src/app/api/say+api.ts) (model
-`gemini-2.5-flash-preview-tts`, voice **`Kore`** — matching `LIVE_VOICE` in `eve-home.tsx`), NOT the
-legacy ElevenLabs `/api/voice` `say` path (that switch was a jarring voice regression). Production
-calls get a `VENUS_TONE` in-character delivery direction prefixed to the text; requests may also name
-a `voice` (the Lab audition — validated against the 30-voice `VOICE_OPTIONS` catalog). Gemini TTS
-returns raw PCM16/24k mono; `/api/say` WAV-wraps it server-side and `playSpeech(audio, 'wav')` plays
-it. The fanfare stays best-effort (try/catch) — a TTS failure is silent, never blocks store creation.
+### Launch announcement (post-build) — `announce()`, an announcement-mode Live session
+After the brand is built, `createStore` plays a one-line "your store is online" fanfare.
+
+**This used to go through `/api/say` and it sounded wrong** (Joe, on device, 2026-08-16). Matching
+voice *names* is not enough: `/api/say` runs `gemini-2.5-flash-preview-tts` while the conversation
+runs on the **native-audio** Live model, and the same `Kore` renders as a different person across the
+two engines — so seconds after a long conversation with Eve, a stranger announced the launch.
+
+The fanfare now goes through the **Live model**, which is the only way to match her, via
+[`announce()`](../../src/lib/live-voice.ts) — a `LiveVoiceSession` with `speakOnly: true`:
+- **the microphone is never started** (`onopen` skips `startMic`), so this is an announcement, not a
+  conversation, and nothing is listening;
+- it **closes itself** on `turnComplete`, waiting out `playEndsAt` first so she isn't cut off
+  mid-word, with a hard `ANNOUNCE_MAX_MS` (25s) backstop if that signal is ever lost;
+- it is **fire-and-forget** — a failed fanfare never blocks or breaks store creation.
+
+`/api/say` remains for the **Eve Lab voice audition** (`venus-lab-screen.tsx`), which is exactly what
+a one-shot TTS route is good for. The old `playSpeech`/`useAudioPlayer` path in `eve-home.tsx` had no
+remaining callers and was deleted with this change.
+
+⚠ **Web is silent here.** `react-native-audio-api`'s web build has no buffer-queue source (see B4 in
+the 2026-08-14 bug report), so an announcement produces captions and no audio in a browser. Verify
+the fanfare **on device**.
 
 ### Transcript for `createStore`
 Live has no `messages.current`. Accumulate completed turns in the hook (push `userText`/`venusText`

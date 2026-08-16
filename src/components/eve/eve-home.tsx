@@ -11,8 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AudioModule, setAudioModeAsync, useAudioPlayer } from 'expo-audio';
-import * as FileSystem from 'expo-file-system/legacy';
+import { AudioModule } from 'expo-audio';
 
 import { BrandReview } from '@/components/brand-review';
 import { ChatInterview } from '@/components/chat-interview';
@@ -30,7 +29,7 @@ import { sendDesignCommand } from '@/lib/design-bus';
 import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
-import { eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
+import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
 import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
@@ -111,11 +110,7 @@ export function EveHome({
   const [micOk, setMicOk] = useState<boolean | null>(null); // guide-view auto-voice needs an answered mic prompt
 
   const messages = useRef<ChatMessage[]>([]);
-  const playCount = useRef(0);
-  const playGenRef = useRef(0); // bumps each playSpeech so a stale playback watchdog bails
   const pausedRef = useRef(false);
-  const openRef = useRef(open);
-  openRef.current = open;
 
   // Her read of the creator's world — refetched each time the overlay opens (cheap /api/me).
   useEffect(() => {
@@ -402,47 +397,6 @@ export function EveHome({
     return () => sub.remove();
   }, []);
 
-  // The launch fanfare (post-createStore /api/say) — one-shot playback with the load/no-op guards
-  // carried over from the Studio (see playSpeech history there: silent play() races on iOS).
-  const player = useAudioPlayer();
-  const playSpeech = useCallback(
-    async (b64: string, ext: 'mp3' | 'wav' = 'wav') => {
-      const gen = ++playGenRef.current;
-      const file = `${FileSystem.cacheDirectory}eve-${playCount.current++}.${ext}`;
-      await FileSystem.writeAsStringAsync(file, b64, { encoding: FileSystem.EncodingType.Base64 });
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      if (!openRef.current || pausedRef.current) { setState('idle'); return; }
-      try {
-        player.replace({ uri: file });
-      } catch {
-        setState('idle');
-        return;
-      }
-      // Wait for the clip to actually LOAD before play() — play() on an unloaded source no-ops.
-      for (let i = 0; i < 25 && !player.isLoaded; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-        if (gen !== playGenRef.current) return;
-      }
-      if (gen !== playGenRef.current || !openRef.current || pausedRef.current) { setState('idle'); return; }
-      setState('speaking');
-      player.play();
-      // Watchdog: confirm playback ACTUALLY started; nudge twice, then drop to idle — never hang.
-      for (let i = 0; i < 16; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-        if (gen !== playGenRef.current || pausedRef.current) return;
-        if (player.playing || player.currentTime > 0.02) return;
-        if (i === 4 || i === 9) {
-          try {
-            await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-            player.play();
-          } catch {}
-        }
-      }
-      if (gen === playGenRef.current && !player.playing && player.currentTime <= 0.02) setState('idle');
-    },
-    [player],
-  );
-
   // Entering the interview requests the mic HERE — the OS dialog appears when the user chooses to
   // talk, before the Live session opens its recorder. On denial, fall back to typing. Stop any guide
   // session first (enterInterview) so the interview starts fresh — no carried-over transcript.
@@ -487,13 +441,10 @@ export function EveHome({
     setPaused((prev) => {
       const next = !prev;
       pausedRef.current = next;
-      if (next) {
-        try { player.pause(); } catch {}
-      }
       setState('idle');
       return next;
     });
-  }, [player]);
+  }, []);
 
   const toggleKeyboard = useCallback(() => {
     const entering = !keyboardMode;
@@ -553,25 +504,18 @@ export function EveHome({
       setHasStore(true);
       setLogoUrl(d.store.logoUrl ?? null);
       emitEveEvent({ kind: 'store-created', slug: d.store.slug }); // the Studio dashboard refetches
-      // Eve announces the launch in her OWN voice (Kore /api/say) — the live session is already
-      // torn down by finalize() at this point, so the one-shot keeps the voice consistent.
-      try {
-        const v = await fetch(apiUrl('/api/say'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ text: `${brand.name} is online. Head to the Design tab — let's make your first drop.` }),
-        });
-        const s = await readJson<{ audio?: string }>(v);
-        if (s.audio) await playSpeech(s.audio, 'wav');
-      } catch {
-        // launch fanfare is optional
-      }
+      // Eve announces the launch in her REAL voice. This goes through the LIVE model, not the
+      // one-shot TTS route: the two engines render the same voice name as different people, so
+      // `/api/say` made her sound like a stranger seconds after a long conversation with her.
+      // `announce()` opens a session that never starts the mic and closes itself when she's done —
+      // no listening, no conversation. Fire-and-forget: the fanfare is never worth blocking on.
+      void announce(session.access_token, `${brand.name} is online. Head to the Design tab — let's make your first drop.`, LIVE_VOICE);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create store');
     } finally {
       setCreating(false);
     }
-  }, [session, brand, playSpeech]);
+  }, [session, brand]);
 
   // Drive the SHARED root avatar (eve-background) — this surface no longer mounts its own GL.
   // 'talking' raises her energy while she speaks (syllable-level reactivity rides the module-level

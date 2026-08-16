@@ -275,9 +275,27 @@ The credit bleed, fixed. No redesign, no new files.
   the transcript survives. (The mute-while-covered itself is code-verified, not observed — there is
   no external signal for it.)
 
+### Follow-ups from Joe's device pass (2026-08-16)
+
+- **Tint** — the brand-review screen is a form over a moving avatar and was unreadable. EveHome's
+  scrim now tracks how much reading the surface demands: none while talking, `0.30` at rest, `0.82`
+  behind brand review and the interview topic list. Same fix covers the post-create "store online"
+  state, which is the same screen. Also drops `talking` when the `BrandResult` lands — the socket was
+  already closed by `finalize()`, but the intent flag stayed set and the pill claimed she was
+  listening while the creator read a form.
+- **Launch voice** — the fanfare moved off `/api/say` onto an announcement-mode Live session
+  (`announce()` / `speakOnly`). Full rationale in [GEMINI_LIVE.md](GEMINI_LIVE.md) → "Launch
+  announcement". Needs a **device** check: web has no audio playback path.
+- **Audited, already built:** Stripe **payouts** are complete end to end (`src/lib/connect.ts`,
+  `/api/creator/connect`, held-then-released transfers, UI in the Account tab). They are inert only
+  because `STRIPE_CONNECT_ENABLED` is unset and Connect isn't enabled on the platform Stripe account
+  — configuration, not code. **Collaborators**: `store_collaborators` + `tenant.ts` already grant
+  access; only the invite/accept flow and its UI are missing.
+
 **Still open from the plan:** P1 (caption block + status band + the D-08 toast overlap), P2 (the
-wheel component, `eve-wheel.tsx`), P3 (brand sheet replaces the deck), P4 (the D-01…D-18 batch),
-P5 (optional wake phrase).
+wheel component, `eve-wheel.tsx`), P3 (brand sheet replaces the deck — now also carrying earnings,
+unfinished tasks, payout status and in-place identity editing), P4 (the D-01…D-18 batch),
+P5 (optional wake phrase). Plus the collaborator invite flow.
 
 ---
 
