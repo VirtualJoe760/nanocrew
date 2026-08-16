@@ -645,6 +645,38 @@ export const storeCollaborators = pgTable(
   (c) => ({ memberIdx: uniqueIndex('store_collaborators_member_idx').on(c.storeId, c.creatorId) }),
 );
 
+// A pending invitation to collaborate on a store — CONSENT-based membership (Joe, 2026-08-16:
+// "users should get emails to accept"), and the reason invites key on EMAIL rather than creators.id:
+// the invitee may not have an account yet. The row waits; when they sign up with that email the
+// invite shows in their Account. Accepting inserts the store_collaborators row; the invite itself
+// never grants access (tenant.ts only ever reads store_collaborators).
+export const storeInvites = pgTable(
+  'store_invites',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    storeId: uuid('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(), // lowercased at write
+    role: text('role').notNull().default('admin'), // what they become on accept
+    // The email deep-link credential (accept URL). Possession + a signed-in account whose email
+    // matches is what accepts — the token alone never grants anything.
+    token: text('token').notNull().unique(),
+    invitedBy: uuid('invited_by')
+      .notNull()
+      .references(() => creators.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'), // pending | accepted | declined | revoked
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    expiresAt: timestamp('expires_at').notNull(), // createdAt + 14d; expired invites are re-sendable
+    respondedAt: timestamp('responded_at'),
+  },
+  (i) => ({
+    storeIdx: index('store_invites_store_idx').on(i.storeId),
+    emailIdx: index('store_invites_email_idx').on(i.email), // "invites for me" lookup on sign-in
+  }),
+);
+
+
 // ---------- Relations ----------
 
 export const creatorsRelations = relations(creators, ({ many, one }) => ({

@@ -1,10 +1,11 @@
 import { timingSafeEqual } from 'node:crypto';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import {
   sendBrandLive,
+  sendCollabInvite,
   sendContentReport,
   sendPayoutNotification,
   sendReturnApproved,
@@ -27,11 +28,13 @@ import {
 //  - brand-live:{ action: 'brand_live', slug }                        → creator email (from Nano Crew)
 //  - payout:    { action: 'payout', orderId }                         → creator email (from Nano Crew)
 //  - report:    { action: 'report', targetType, slug, reason, reporter? } → ops email (Market UGC)
+//  - collab:    { action: 'collab_invite', inviteId }                 → invitee email (from Nano Crew)
 type NotifyBody =
   | { action: 'approved' | 'declined'; returnId: string; reason?: string }
   | { action: 'brand_live'; slug: string }
   | { action: 'payout'; orderId: string }
-  | { action: 'report'; targetType: string; slug: string; reason: string; reporter?: string };
+  | { action: 'report'; targetType: string; slug: string; reason: string; reporter?: string }
+  | { action: 'collab_invite'; inviteId: string };
 
 function authorized(req: Request): boolean {
   const expected = process.env.INTERNAL_API_KEY;
@@ -84,6 +87,48 @@ export async function POST(req: Request) {
     if (email) {
       const url = store.customDomain ? `https://${store.customDomain}` : `https://nanocrew.app/b/${store.slug}`;
       await sendBrandLive({ to: email, brandName: store.name, url });
+    }
+    return Response.json({ ok: true }, { status: 202 });
+  }
+
+  // ── Collaborator invited → email the invitee (FROM Nano Crew). ──────────────────────────────────
+  if (body.action === 'collab_invite') {
+    if (!body.inviteId) return Response.json({ ok: false, error: 'inviteId required' }, { status: 400 });
+    // Only pending invites get a send — and a missing/non-pending row 202s SILENTLY (unlike the 404s
+    // above): the invite may have been revoked or accepted between the app's write and this notify
+    // landing, and that race must not surface as a failure of the creator's action.
+    const [invite] = await db
+      .select({
+        email: schema.storeInvites.email,
+        token: schema.storeInvites.token,
+        storeId: schema.storeInvites.storeId,
+        invitedBy: schema.storeInvites.invitedBy,
+      })
+      .from(schema.storeInvites)
+      .where(and(eq(schema.storeInvites.id, body.inviteId), eq(schema.storeInvites.status, 'pending')))
+      .limit(1);
+    if (invite) {
+      const [store] = await db
+        .select({ name: schema.stores.name })
+        .from(schema.stores)
+        .where(eq(schema.stores.id, invite.storeId))
+        .limit(1);
+      if (store) {
+        const [inviter] = await db
+          .select({ name: schema.creators.name })
+          .from(schema.creators)
+          .where(eq(schema.creators.id, invite.invitedBy))
+          .limit(1);
+        // The email's landing page (app/invite/[token]) lives on this host — same reasoning as the
+        // Stripe return pages: every email-facing landing page sits on the one web host.
+        const base = (process.env.PLATFORM_API_BASE ?? 'https://nanocrew-api.vercel.app').trim().replace(/\/+$/, '');
+        await sendCollabInvite({
+          to: invite.email,
+          brandName: store.name,
+          inviterName: inviter?.name ?? null,
+          acceptUrl: `${base}/invite/${invite.token}`,
+        });
+      }
     }
     return Response.json({ ok: true }, { status: 202 });
   }

@@ -109,6 +109,20 @@ implicit and never listed here. Lets a client (e.g. Stephen Lawyer) and the agen
 
 ## 4. Design generator (catalogue → design → composition → canvas)
 
+### `store_invites`
+
+Consent-based collaboration (2026-08-16: invitees get an email and accept — nobody is added to a
+brand silently). Keys on **email**, not `creators.id`, so someone without an account can be invited;
+the row waits for their sign-up. An invite never grants access — `tenant.ts` only reads
+`store_collaborators`, which the accept inserts.
+
+- `id` uuid PK · `storeId` FK stores cascade · `email` (lowercased) · `role` (default `admin`)
+- `token` unique — the email deep-link credential; possession + a signed-in matching email accepts
+- `invitedBy` FK creators · `status` `pending|accepted|declined|revoked` · `createdAt` ·
+  `expiresAt` (+14d; expired = re-sendable) · `respondedAt`
+- Indexes: `store_invites_store_idx`, `store_invites_email_idx` (the "invites for me" lookup)
+- RLS enabled (deny-all, like every table). Migration `0027_mute_ben_urich`.
+
 ### `catalogues` — **collections / drops**
 A catalogue **IS** a collection/drop, used for storefront grouping.
 - `id`, `storeId` → `stores` (cascade).

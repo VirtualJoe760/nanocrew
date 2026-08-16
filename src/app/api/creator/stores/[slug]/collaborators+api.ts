@@ -1,23 +1,30 @@
+import { randomBytes } from 'node:crypto';
+
 import { and, eq, sql } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
+import { notifyPlatform } from '@/lib/notify-internal';
 
-// GET    /api/creator/stores/:slug/collaborators — list the store's collaborators (the owner is
-//        implicit and never listed — see the store_collaborators schema comment).
-// POST   /api/creator/stores/:slug/collaborators { email } — invite an existing Nano Crew creator
-//        by email as an 'admin' collaborator (same semantics as scripts/add-collaborator.mjs).
-// DELETE /api/creator/stores/:slug/collaborators { collaboratorId } — remove one.
+// GET    /api/creator/stores/:slug/collaborators — the store's collaborators + pending invites.
+// POST   /api/creator/stores/:slug/collaborators { email } — INVITE by email. Consent-based (Joe,
+//        2026-08-16): nobody is added to a brand without accepting. The invitee gets a branded
+//        email (via platform-api) and an in-app Accept on their Account page; they do NOT need a
+//        Nano Crew account yet — the invite waits on their email.
+// DELETE /api/creator/stores/:slug/collaborators { collaboratorId? | inviteId? } — remove a
+//        collaborator, or revoke a pending invite.
 //
 // All OWNER-only: collaborators design + manage the store, but only the owner administers
 // membership — so this deliberately does NOT use storeForMember. A collaborator (or stranger)
 // probing the route gets the same opaque 404 as a store that doesn't exist.
 
-async function resolveOwned(req: Request, slug: string): Promise<{ id: string; creatorId: string } | Response> {
+const INVITE_TTL_DAYS = 14;
+
+async function resolveOwned(req: Request, slug: string): Promise<{ id: string; name: string; creatorId: string } | Response> {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   const [store] = await db
-    .select({ id: schema.stores.id, creatorId: schema.stores.creatorId })
+    .select({ id: schema.stores.id, name: schema.stores.name, creatorId: schema.stores.creatorId })
     .from(schema.stores)
     .where(and(eq(schema.stores.slug, slug), eq(schema.stores.creatorId, user.id)))
     .limit(1);
@@ -26,7 +33,7 @@ async function resolveOwned(req: Request, slug: string): Promise<{ id: string; c
 }
 
 /** One collaborator row as the client sees it — collaborator id + who they are. */
-const entry = {
+const memberEntry = {
   id: schema.storeCollaborators.id,
   email: schema.creators.email,
   name: schema.creators.name,
@@ -39,11 +46,30 @@ export async function GET(req: Request, { slug }: Record<string, string>) {
   if (r instanceof Response) return r;
 
   const collaborators = await db
-    .select(entry)
+    .select(memberEntry)
     .from(schema.storeCollaborators)
     .innerJoin(schema.creators, eq(schema.storeCollaborators.creatorId, schema.creators.id))
     .where(eq(schema.storeCollaborators.storeId, r.id));
-  return Response.json({ collaborators });
+
+  // Pending, unexpired invites only — accepted/declined/revoked history isn't a management surface.
+  const invites = await db
+    .select({
+      id: schema.storeInvites.id,
+      email: schema.storeInvites.email,
+      role: schema.storeInvites.role,
+      createdAt: schema.storeInvites.createdAt,
+      expiresAt: schema.storeInvites.expiresAt,
+    })
+    .from(schema.storeInvites)
+    .where(
+      and(
+        eq(schema.storeInvites.storeId, r.id),
+        eq(schema.storeInvites.status, 'pending'),
+        sql`${schema.storeInvites.expiresAt} > now()`,
+      ),
+    );
+
+  return Response.json({ collaborators, invites });
 }
 
 export async function POST(req: Request, { slug }: Record<string, string>) {
@@ -52,64 +78,83 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
 
   const b = (await req.json().catch(() => null)) as { email?: string } | null;
   const email = typeof b?.email === 'string' ? b.email.trim().toLowerCase() : '';
-  if (!email) return Response.json({ error: 'invalid body' }, { status: 400 });
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return Response.json({ error: 'a valid email is required' }, { status: 400 });
+  }
 
-  // The invitee must already have a Nano Crew account — collaborator rows key on creators.id, so
-  // there's nothing to link until they've signed up.
-  const [creator] = await db
+  // Already a member? Look up whether this email belongs to a creator who's the owner or already
+  // collaborates — both are 409s, not invites.
+  const [existing] = await db
     .select({ id: schema.creators.id })
     .from(schema.creators)
     .where(sql`lower(${schema.creators.email}) = ${email}`)
     .limit(1);
-  if (!creator) {
-    return Response.json(
-      { error: 'No Nano Crew account for that email yet — have them sign up first, then add them.' },
-      { status: 404 },
-    );
-  }
-  if (creator.id === r.creatorId) {
-    return Response.json({ error: 'already the owner' }, { status: 409 });
+  if (existing) {
+    if (existing.id === r.creatorId) return Response.json({ error: 'already the owner' }, { status: 409 });
+    const [member] = await db
+      .select({ id: schema.storeCollaborators.id })
+      .from(schema.storeCollaborators)
+      .where(and(eq(schema.storeCollaborators.storeId, r.id), eq(schema.storeCollaborators.creatorId, existing.id)))
+      .limit(1);
+    if (member) return Response.json({ error: 'already a collaborator' }, { status: 409 });
   }
 
-  // onConflictDoNothing makes a re-invite idempotent (unique on store + creator); on conflict
-  // .returning() is empty, so fall back to the existing row to answer with the same shape.
-  const [inserted] = await db
-    .insert(schema.storeCollaborators)
-    .values({ storeId: r.id, creatorId: creator.id, role: 'admin' })
-    .onConflictDoNothing()
-    .returning({ id: schema.storeCollaborators.id });
-  const rowId =
-    inserted?.id ??
-    (
-      await db
-        .select({ id: schema.storeCollaborators.id })
-        .from(schema.storeCollaborators)
-        .where(and(eq(schema.storeCollaborators.storeId, r.id), eq(schema.storeCollaborators.creatorId, creator.id)))
-        .limit(1)
-    )[0]?.id;
-  if (!rowId) return Response.json({ error: 'could not add collaborator' }, { status: 500 });
+  // One live invite per store+email: re-inviting supersedes the old one (fresh token + clock)
+  // instead of accumulating parallel valid tokens for the same person.
+  await db
+    .update(schema.storeInvites)
+    .set({ status: 'revoked', respondedAt: new Date() })
+    .where(and(eq(schema.storeInvites.storeId, r.id), eq(schema.storeInvites.email, email), eq(schema.storeInvites.status, 'pending')));
 
-  const [collaborator] = await db
-    .select(entry)
-    .from(schema.storeCollaborators)
-    .innerJoin(schema.creators, eq(schema.storeCollaborators.creatorId, schema.creators.id))
-    .where(eq(schema.storeCollaborators.id, rowId))
-    .limit(1);
-  return Response.json({ collaborator });
+  const [invite] = await db
+    .insert(schema.storeInvites)
+    .values({
+      storeId: r.id,
+      email,
+      token: randomBytes(24).toString('base64url'),
+      invitedBy: r.creatorId,
+      expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000),
+    })
+    .returning({
+      id: schema.storeInvites.id,
+      email: schema.storeInvites.email,
+      role: schema.storeInvites.role,
+      createdAt: schema.storeInvites.createdAt,
+      expiresAt: schema.storeInvites.expiresAt,
+    });
+
+  // The branded email rides platform-api (Resend lives only there). Best-effort AFTER the DB writes
+  // — the invite exists and shows in-app even if the send hiccups.
+  void notifyPlatform({ action: 'collab_invite', inviteId: invite.id });
+
+  return Response.json({ invite });
 }
 
 export async function DELETE(req: Request, { slug }: Record<string, string>) {
   const r = await resolveOwned(req, slug);
   if (r instanceof Response) return r;
 
-  const b = (await req.json().catch(() => null)) as { collaboratorId?: string } | null;
-  if (!b?.collaboratorId) return Response.json({ error: 'invalid body' }, { status: 400 });
+  const b = (await req.json().catch(() => null)) as { collaboratorId?: string; inviteId?: string } | null;
 
-  // Scoped to this store so a collaborator id from another brand can't be removed through it.
-  const removed = await db
-    .delete(schema.storeCollaborators)
-    .where(and(eq(schema.storeCollaborators.id, b.collaboratorId), eq(schema.storeCollaborators.storeId, r.id)))
-    .returning({ id: schema.storeCollaborators.id });
-  if (!removed.length) return Response.json({ error: 'not found' }, { status: 404 });
-  return Response.json({ ok: true });
+  if (b?.inviteId) {
+    const revoked = await db
+      .update(schema.storeInvites)
+      .set({ status: 'revoked', respondedAt: new Date() })
+      .where(and(eq(schema.storeInvites.id, b.inviteId), eq(schema.storeInvites.storeId, r.id), eq(schema.storeInvites.status, 'pending')))
+      .returning({ id: schema.storeInvites.id });
+    if (!revoked.length) return Response.json({ error: 'not found' }, { status: 404 });
+    return Response.json({ ok: true });
+  }
+
+  if (b?.collaboratorId) {
+    // Scoped to this store so a collaborator id from another brand can't be removed through it.
+    const removed = await db
+      .delete(schema.storeCollaborators)
+      .where(and(eq(schema.storeCollaborators.id, b.collaboratorId), eq(schema.storeCollaborators.storeId, r.id)))
+      .returning({ id: schema.storeCollaborators.id });
+    if (!removed.length) return Response.json({ error: 'not found' }, { status: 404 });
+    return Response.json({ ok: true });
+  }
+
+  return Response.json({ error: 'invalid body' }, { status: 400 });
 }

@@ -428,6 +428,34 @@ export async function sendBrandLive(opts: {
   });
 }
 
+/**
+ * Collaborator invite — fired from the internal notify route when a creator invites someone to
+ * co-run a brand. Sent from the PLATFORM sender: it's Nano Crew brokering the introduction, not a
+ * shopper email from the brand. The invite keys on EMAIL (the invitee may have no account yet — see
+ * db/schema.ts storeInvites), so the copy covers both doors: the accept link for anyone with the
+ * email, and the sign-in-with-this-email path where the invite waits under Account in the app.
+ */
+export async function sendCollabInvite(opts: {
+  to: string;
+  inviterName: string | null;
+  brandName: string;
+  acceptUrl: string;
+}): Promise<void> {
+  const inviter = opts.inviterName ?? 'A Nano Crew creator';
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: `${inviter} invited you to collaborate on ${opts.brandName}`,
+    heading: 'You’re invited.',
+    preheader: `Join ${opts.brandName} on Nano Crew.`,
+    cta: { label: 'View invitation', url: opts.acceptUrl },
+    body:
+      p(`${esc(inviter)} invited you to collaborate on ${esc(opts.brandName)} — design products and manage the brand together on Nano Crew.`, { html: true }) +
+      p(`No app yet? The invite also appears under Account in the Nano Crew app when you sign in with this email address.`, { muted: true }),
+  });
+}
+
 /** A user reported Market content (Apple Guideline 1.2 + the INFORM consumer-report mechanism). Routes
  *  to OPS_EMAIL; if unset it's logged so nothing is lost. Best-effort — never throws into the caller. */
 export async function sendContentReport(opts: {

@@ -25,6 +25,7 @@ import { GlowInput } from '@/components/glow-input';
 import { glow } from '@/constants/glow';
 import { BrandStore } from '@/components/brand-store';
 import { EarningsCockpit } from '@/components/earnings-cockpit';
+import { Collaborators } from '@/components/collaborators';
 import { Purchases } from '@/components/purchases';
 import { Paywall } from '@/components/paywall';
 import { PlatformAdmin } from '@/components/platform-admin';
@@ -141,6 +142,12 @@ function AccountScreen() {
   const [plan, setPlan] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showVenusLab, setShowVenusLab] = useState(false);
+  const [showCollaborators, setShowCollaborators] = useState(false);
+  // Pending brand-collaboration invites FOR this creator (matched on email server-side).
+  const [myInvites, setMyInvites] = useState<
+    { id: string; storeName: string; storeSlug: string; invitedByName: string | null; invitedByEmail: string }[]
+  >([]);
+  const [inviteBusy, setInviteBusy] = useState<string | null>(null);
 
   // Ensure the creators row exists + load this creator's stores; probe platform-admin access + plan.
   // Payout status is the one thing here that changes OUTSIDE the app: the creator leaves for
@@ -167,6 +174,41 @@ function AccountScreen() {
     }
   }, []);
 
+  const loadInvites = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/creator/invites');
+      const d = r.ok ? ((await r.json()) as { invites?: typeof myInvites }) : null;
+      setMyInvites(d?.invites ?? []);
+    } catch {
+      setMyInvites([]);
+    }
+  }, []);
+
+  // Accept/decline an invite from the card. Accepting makes the brand appear in their stores list,
+  // so both refetch.
+  const respondInvite = useCallback(
+    async (inviteId: string, action: 'accept' | 'decline') => {
+      setInviteBusy(inviteId);
+      setError(null);
+      try {
+        const r = await apiFetch('/api/creator/invites', { method: 'POST', body: JSON.stringify({ inviteId, action }) });
+        const d = await readJson<{ accepted?: boolean; store?: { name: string } }>(r);
+        if (d.accepted && d.store) setNotice(`You're on ${d.store.name} now.`);
+        await loadInvites();
+        if (session) {
+          const me = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } });
+          const md = (await me.json().catch(() => ({}))) as { stores?: StoreRow[] };
+          setStores(md.stores ?? []);
+        }
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : 'Could not respond to the invite.');
+      } finally {
+        setInviteBusy(null);
+      }
+    },
+    [session, loadInvites],
+  );
+
   useEffect(() => {
     if (!session) {
       setStores([]);
@@ -185,11 +227,12 @@ function AccountScreen() {
       .then((r) => setIsAdmin(r.ok))
       .catch(() => setIsAdmin(false));
     void loadPayouts();
+    void loadInvites();
     apiFetch('/api/creator/subscription')
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { entitlements?: { plan?: string } } | null) => setPlan(d?.entitlements?.plan ?? 'free'))
       .catch(() => setPlan(null));
-  }, [session, loadPayouts]);
+  }, [session, loadPayouts, loadInvites]);
 
   // Coming back from Stripe's hosted onboarding, two ways, because only one of them is reliable:
   //   · the return page's deep link (nanocrew://account?payouts=return) — precise, but only fires
@@ -197,6 +240,27 @@ function AccountScreen() {
   //   · foregrounding — catches the swipe-back case, which is what most people actually do.
   // Both just re-read the status; Stripe is the source of truth, not the redirect.
   const payoutParam = useLocalSearchParams<{ payouts?: string }>().payouts;
+  // The email landing page deep-links nanocrew://account?invite=<token>. Accept by token (the
+  // server still requires the signed-in email to match — a forwarded link can't join a stranger).
+  const inviteToken = useLocalSearchParams<{ invite?: string }>().invite;
+  const inviteTokenHandled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!session || !inviteToken || inviteTokenHandled.current === inviteToken) return;
+    inviteTokenHandled.current = inviteToken;
+    void (async () => {
+      try {
+        const r = await apiFetch('/api/creator/invites', {
+          method: 'POST',
+          body: JSON.stringify({ token: inviteToken, action: 'accept' }),
+        });
+        const d = await readJson<{ accepted?: boolean; store?: { name: string } }>(r);
+        if (d.accepted && d.store) setNotice(`You're on ${d.store.name} now.`);
+        await loadInvites();
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : 'Could not accept the invite.');
+      }
+    })();
+  }, [session, inviteToken, loadInvites]);
   useEffect(() => {
     if (session && payoutParam) void loadPayouts();
   }, [session, payoutParam, loadPayouts]);
@@ -456,6 +520,36 @@ function AccountScreen() {
                   />
                 </Card>
 
+                {myInvites.length ? (
+                  <>
+                    <SectionLabel>Invitations</SectionLabel>
+                    <Card>
+                      {myInvites.map((inv, i) => (
+                        <View key={inv.id} style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: `${theme.textSecondary}22` }]}>
+                          <View style={styles.rowMeta}>
+                            <ThemedText type="smallBold">{inv.storeName}</ThemedText>
+                            <ThemedText type="code" themeColor="textSecondary" style={styles.rowSub}>
+                              {(inv.invitedByName || inv.invitedByEmail) + ' invited you to collaborate'}
+                            </ThemedText>
+                          </View>
+                          {inviteBusy === inv.id ? (
+                            <ActivityIndicator color={theme.tint} />
+                          ) : (
+                            <View style={{ flexDirection: 'row', gap: Spacing.three }}>
+                              <Pressable onPress={() => void respondInvite(inv.id, 'decline')} hitSlop={10}>
+                                <ThemedText type="code" themeColor="textSecondary">decline</ThemedText>
+                              </Pressable>
+                              <Pressable onPress={() => void respondInvite(inv.id, 'accept')} hitSlop={10}>
+                                <ThemedText type="code" themeColor="tint">accept ✓</ThemedText>
+                              </Pressable>
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                    </Card>
+                  </>
+                ) : null}
+
                 <SectionLabel>Commerce</SectionLabel>
                 <Card>
                   {stores.length ? (
@@ -489,6 +583,14 @@ function AccountScreen() {
                       subtitle="Manage your plan, invoices and payout account in a browser"
                       trailing="↗"
                       onPress={openWebBilling}
+                    />
+                  ) : null}
+                  {stores.length ? (
+                    <Row
+                      title="Brand collaborators"
+                      subtitle="Invite someone to design & manage a brand with you"
+                      trailing="›"
+                      onPress={() => setShowCollaborators(true)}
                     />
                   ) : null}
                 </Card>
@@ -682,6 +784,7 @@ function AccountScreen() {
       {session ? <Purchases visible={showPurchases} onClose={() => setShowPurchases(false)} /> : null}
       {session ? <Paywall visible={showPaywall} onClose={() => setShowPaywall(false)} token={session.access_token} reason="manage" /> : null}
       <BrandStore slug={storeSlug} visible={!!storeSlug} onClose={() => setStoreSlug(null)} />
+      <Collaborators visible={showCollaborators} onClose={() => setShowCollaborators(false)} stores={stores} />
       {/* Gated internal test tool — full-screen Eve avatar Lab. "‹ back" returns here to Account. */}
       {isVenusTester ? (
         <Modal

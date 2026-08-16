@@ -88,6 +88,7 @@ caller's action). Accepted actions:
 | `{ action: 'approved'\|'declined', returnId, reason? }` | claim → store → buyer → `sendReturnApproved`/`sendReturnDeclined` | `creator/returns/[id]/approve+api.ts` · `decline+api.ts` |
 | `{ action: 'brand_live', slug }` | store → creator → `sendBrandLive` (url = customDomain or `nanocrew.app/b/{slug}`) | `creator/stores/[slug]/publish+api.ts` (first publish only) |
 | `{ action: 'payout', orderId }` | order → store → creator → `sendPayoutNotification` | `internal/release-payouts+api.ts` (per released order) |
+| `{ action: 'collab_invite', inviteId }` | invite (pending only) → store + inviter → `sendCollabInvite` to the invitee, CTA → `/invite/<token>` on platform-api | `stores/[slug]/collaborators+api.ts` POST |
 
 The app posts via the shared `notifyPlatform(payload)` helper (`src/lib/notify-internal.ts`) — no-ops
 in dev when `PLATFORM_API_BASE`/`INTERNAL_API_KEY` are unset. The other emails fire directly from their

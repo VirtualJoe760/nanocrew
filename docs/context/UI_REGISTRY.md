@@ -50,3 +50,5 @@ The Next.js **storefront templates** have their own component system (shared blo
 that's [`../storefront/COMPONENT_SYSTEM.md`](../storefront/COMPONENT_SYSTEM.md), not this registry.
 Same philosophy (reuse blocks, don't reinvent), different stack. The forge robot is being conditioned
 toward that block system as a follow-up.
+
+| `Collaborators` | `src/components/collaborators.tsx` | `visible onClose stores` | Account → brand collaborator management (invite/revoke/remove). |
