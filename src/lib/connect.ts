@@ -94,19 +94,30 @@ export async function ensureConnectedAccount(creatorId: string, email: string): 
   const existing = await getConnectedAccount(creatorId);
   if (existing.stripeAccountId) return existing.stripeAccountId;
 
-  const account = await stripePost('/accounts', {
-    type: 'express',
-    email,
-    capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
-    business_profile: { product_description: 'Creator clothing brand on Nano Crew' },
-    metadata: { creatorId },
-  });
+  // Idempotency key keyed to the CREATOR: two concurrent callers (store creation fires this
+  // best-effort in the background while the creator can simultaneously tap "Set up payouts") get
+  // the SAME Stripe account back instead of each creating a real one. Without it, the loser's
+  // account was orphaned — and worse, its id was returned, so the creator onboarded onto an account
+  // the DB doesn't reference and their KYC never flipped the stored flags.
+  const account = await stripePost(
+    '/accounts',
+    {
+      type: 'express',
+      email,
+      capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+      business_profile: { product_description: 'Creator clothing brand on Nano Crew' },
+      metadata: { creatorId },
+    },
+    `connect_acct_${creatorId}`,
+  );
   const stripeAccountId = account.id as string;
   await db
     .insert(schema.connectedAccounts)
     .values({ creatorId, stripeAccountId })
     .onConflictDoNothing();
-  return stripeAccountId;
+  // Return what the DB actually holds — if a concurrent insert won, that row is the truth.
+  const settled = await getConnectedAccount(creatorId);
+  return settled.stripeAccountId ?? stripeAccountId;
 }
 
 /** Where Stripe returns a creator after Connect onboarding — the **platform-api** host, same as
@@ -139,22 +150,42 @@ export async function createOnboardingLink(stripeAccountId: string): Promise<str
   return link.url as string;
 }
 
+/** Live status + what Stripe still wants. `requirementsDue`/`disabledReason` are TRANSIENT — read
+ *  fresh from Stripe each time, never persisted (no schema change; they'd only go stale anyway). */
+export interface ConnectLiveStatus extends ConnectStatus {
+  /** Stripe requirement keys still outstanding (e.g. 'individual.id_number') — empty when clear. */
+  requirementsDue: string[];
+  /** Why charges/payouts are off, when Stripe says so (e.g. 'requirements.past_due'). */
+  disabledReason: string | null;
+}
+
 /** Pull the live capability flags from Stripe and persist them (also called by the webhook path). */
-export async function refreshConnectedAccount(creatorId: string): Promise<ConnectStatus> {
+export async function refreshConnectedAccount(creatorId: string): Promise<ConnectLiveStatus> {
   const current = await getConnectedAccount(creatorId);
-  if (!current.stripeAccountId) return current;
+  if (!current.stripeAccountId) return { ...current, requirementsDue: [], disabledReason: null };
   const acct = await stripeGet(`/accounts/${current.stripeAccountId}`);
-  const status: ConnectStatus = {
+  const req = (acct.requirements ?? {}) as { currently_due?: string[]; past_due?: string[]; disabled_reason?: string | null };
+  const status: ConnectLiveStatus = {
     stripeAccountId: current.stripeAccountId,
     chargesEnabled: !!acct.charges_enabled,
     payoutsEnabled: !!acct.payouts_enabled,
     detailsSubmitted: !!acct.details_submitted,
+    requirementsDue: [...new Set([...(req.past_due ?? []), ...(req.currently_due ?? [])])],
+    disabledReason: req.disabled_reason ?? null,
   };
   await db
     .update(schema.connectedAccounts)
     .set({ chargesEnabled: status.chargesEnabled, payoutsEnabled: status.payoutsEnabled, detailsSubmitted: status.detailsSubmitted })
     .where(eq(schema.connectedAccounts.creatorId, creatorId));
   return status;
+}
+
+/** A one-time login link to the creator's Express dashboard — where a VERIFIED creator manages
+ *  their bank account and sees payout history. Only valid for accounts that completed onboarding;
+ *  callers should fall back to an onboarding link otherwise. */
+export async function createExpressLoginLink(stripeAccountId: string): Promise<string> {
+  const link = await stripePost(`/accounts/${stripeAccountId}/login_links`, {});
+  return link.url as string;
 }
 
 /** Refund a payment over REST. For a Connect destination charge, reverse the brand's transfer and

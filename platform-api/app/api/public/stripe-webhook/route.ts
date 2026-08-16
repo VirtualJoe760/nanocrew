@@ -4,7 +4,7 @@ import type Stripe from 'stripe';
 import { db, schema } from '@/lib/db';
 import { submitOrderToPrintful } from '@/lib/fulfill';
 import { sendCreatorSale, sendOrderConfirmation, sendRefundConfirmation } from '@/lib/notify';
-import { stripe, WEBHOOK_SECRET } from '@/lib/stripe';
+import { CONNECT_WEBHOOK_SECRET, stripe, WEBHOOK_SECRET } from '@/lib/stripe';
 
 // POST /api/public/stripe-webhook — Stripe events (no CORS: server-to-server).
 // checkout.session.completed flips the pending order to paid and records the
@@ -16,7 +16,16 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     const sig = req.headers.get('stripe-signature') ?? '';
-    event = await stripe.webhooks.constructEventAsync(await req.text(), sig, WEBHOOK_SECRET);
+    // One URL serves two Stripe endpoints — the account-scoped one (checkout, refunds) and the
+    // Connect-scoped one (account.updated on connected accounts) — each signing with its own
+    // secret. Try both; a signature that matches neither is rejected as before.
+    const raw = await req.text();
+    try {
+      event = await stripe.webhooks.constructEventAsync(raw, sig, WEBHOOK_SECRET);
+    } catch (err) {
+      if (!CONNECT_WEBHOOK_SECRET) throw err;
+      event = await stripe.webhooks.constructEventAsync(raw, sig, CONNECT_WEBHOOK_SECRET);
+    }
   } catch {
     return Response.json({ error: 'bad signature' }, { status: 400 });
   }
@@ -111,7 +120,37 @@ export async function POST(req: Request) {
           .update(schema.orders)
           .set({ status: 'refunded' })
           .where(eq(schema.orders.stripePaymentIntentId, pi))
-          .returning({ id: schema.orders.id, storeId: schema.orders.storeId, customerEmail: schema.orders.customerEmail });
+          .returning({
+            id: schema.orders.id,
+            storeId: schema.orders.storeId,
+            customerEmail: schema.orders.customerEmail,
+            payoutStatus: schema.orders.payoutStatus,
+            payoutTransferId: schema.orders.payoutTransferId,
+          });
+        // RECONCILE THE PAYOUT STATE — this event also fires for dashboard-initiated refunds, which
+        // bypass refundOrder() entirely. Left alone, a held order stayed 'held' (the release job
+        // skips refunded statuses, but the state lied) and a released one kept the brand's money
+        // with no reversal, silently. Same semantics + idempotency keys as the refund routes, so a
+        // webhook retry or a race with an app-side refund dedupes at Stripe.
+        if (order && order.payoutStatus === 'held') {
+          await db
+            .update(schema.orders)
+            .set({ payoutStatus: 'skipped' })
+            .where(and(eq(schema.orders.id, order.id), eq(schema.orders.payoutStatus, 'held')));
+        } else if (order && order.payoutStatus === 'released' && order.payoutTransferId) {
+          try {
+            await stripe!.transfers.createReversal(order.payoutTransferId, {}, { idempotencyKey: `reverse_${order.id}` });
+            await db
+              .update(schema.orders)
+              .set({ payoutStatus: 'reversed' })
+              .where(and(eq(schema.orders.id, order.id), eq(schema.orders.payoutStatus, 'released')));
+          } catch (re) {
+            // Reversal can fail (balance already paid out to the creator's bank). Leave the state as
+            // 'released' — honest, visible — and log loudly rather than recording a reversal that
+            // never happened. The webhook still 200s: retrying won't fix an insufficient balance.
+            console.error('[stripe-webhook] transfer reversal failed for order', order.id, re instanceof Error ? re.message : re);
+          }
+        }
         // Refund confirmation — covers dashboard-initiated refunds too (the in-app/admin refund path
         // sends its own). Best-effort. See docs/accounts/EMAIL_PIPELINE.md #7.
         if (order) {

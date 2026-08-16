@@ -12,15 +12,17 @@ import { Spacing } from '@/constants/theme';
 // It's a NUDGE, not a gate (Venus still leads): coverage is a forgiving keyword heuristic on the
 // transcript — over-marking "covered" is harmless, the value is the example prompts.
 
-type Topic = { key: string; label: string; example: string; kws: string[] };
+// `example` is display-only (a hint of what a creator might say); `ask` is what tapping actually
+// sends — an instruction for Venus to raise the topic, so placeholder blanks never enter the chat.
+type Topic = { key: string; label: string; example: string; ask: string; kws: string[] };
 
 const TOPICS: Topic[] = [
-  { key: 'name', label: 'Brand name', example: 'I want to call it ___ — it stands for ___', kws: ['name', 'call it', 'called', 'brand is', 'named', "it's called"] },
-  { key: 'products', label: 'Products', example: 'I want to sell oversized tees and hoodies', kws: ['tee', 't-shirt', 'shirt', 'hoodie', 'hat', 'cap', 'sell', 'product', 'apparel', 'merch', 'crewneck', 'sweat', 'jacket', 'tote'] },
-  { key: 'style', label: 'Style & look', example: 'Clean and minimal — not loud', kws: ['minimal', 'bold', 'street', 'elegant', 'vintage', 'clean', 'edgy', 'luxe', 'retro', 'modern', 'aesthetic', 'look', 'style', 'grunge', 'y2k'] },
-  { key: 'colors', label: 'Colors', example: 'Mostly black and white, with a pop of red', kws: ['color', 'colour', 'black', 'white', 'red', 'blue', 'green', 'pink', 'neon', 'pastel', 'monochrome', 'palette', 'gold', 'silver', 'cream', 'beige'] },
-  { key: 'logo', label: 'Logo', example: 'A simple wordmark — no icon', kws: ['logo', 'wordmark', 'icon', 'mark', 'symbol', 'emblem', 'monogram', 'lettering'] },
-  { key: 'vibe', label: 'Vibe & feel', example: 'It should feel premium and a little rebellious', kws: ['vibe', 'feel', 'mood', 'tone', 'energy', 'audience', 'premium', 'luxury', 'playful', 'rebellious', 'cozy', 'confident'] },
+  { key: 'name', label: 'Brand name', example: 'I want to call it ___ — it stands for ___', ask: 'Ask me about my brand name.', kws: ['name', 'call it', 'called', 'brand is', 'named', "it's called"] },
+  { key: 'products', label: 'Products', example: 'I want to sell oversized tees and hoodies', ask: 'Ask me what products I want to sell.', kws: ['tee', 't-shirt', 'shirt', 'hoodie', 'hat', 'cap', 'sell', 'product', 'apparel', 'merch', 'crewneck', 'sweat', 'jacket', 'tote'] },
+  { key: 'style', label: 'Style & look', example: 'Clean and minimal — not loud', ask: 'Ask me about the style and look.', kws: ['minimal', 'bold', 'street', 'elegant', 'vintage', 'clean', 'edgy', 'luxe', 'retro', 'modern', 'aesthetic', 'look', 'style', 'grunge', 'y2k'] },
+  { key: 'colors', label: 'Colors', example: 'Mostly black and white, with a pop of red', ask: 'Ask me about my colors.', kws: ['color', 'colour', 'black', 'white', 'red', 'blue', 'green', 'pink', 'neon', 'pastel', 'monochrome', 'palette', 'gold', 'silver', 'cream', 'beige'] },
+  { key: 'logo', label: 'Logo', example: 'A simple wordmark — no icon', ask: 'Ask me about the logo.', kws: ['logo', 'wordmark', 'icon', 'mark', 'symbol', 'emblem', 'monogram', 'lettering'] },
+  { key: 'vibe', label: 'Vibe & feel', example: 'It should feel premium and a little rebellious', ask: 'Ask me about the vibe and feel.', kws: ['vibe', 'feel', 'mood', 'tone', 'energy', 'audience', 'premium', 'luxury', 'playful', 'rebellious', 'cozy', 'confident'] },
 ];
 
 export function InterviewTopics({
@@ -29,7 +31,7 @@ export function InterviewTopics({
   p,
 }: {
   messages: ChatMessage[];
-  /** Send an example prompt as the creator's turn (Venus answers it). Optional. */
+  /** Send a topic's "ask me about…" line as the creator's turn (Venus raises it). Optional. */
   onAsk?: (text: string) => void;
   p: Palette;
 }) {
@@ -68,7 +70,7 @@ export function InterviewTopics({
                   <ThemedText type="smallBold" style={{ color: done ? p.dim : p.ink }}>
                     {t.label}
                   </ThemedText>
-                  <Pressable onPress={() => onAsk?.(t.example)} disabled={!onAsk} hitSlop={6}>
+                  <Pressable onPress={() => onAsk?.(t.ask)} disabled={!onAsk} hitSlop={6}>
                     <ThemedText type="code" style={{ color: p.faint, fontSize: 12, marginTop: 2 }}>
                       {onAsk ? '“' + t.example + '”  ⟶' : '“' + t.example + '”'}
                     </ThemedText>
@@ -78,7 +80,7 @@ export function InterviewTopics({
             );
           })}
           <ThemedText type="code" style={{ color: p.faint, fontSize: 11, marginTop: Spacing.two, lineHeight: 16 }}>
-            Just talk naturally — Venus leads. Tap a line to have her dig into it.
+            Just talk naturally — Eve leads. Tap a line to have her dig into it.
           </ThemedText>
         </ScrollView>
       ) : null}

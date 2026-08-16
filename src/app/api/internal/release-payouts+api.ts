@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 
-import { and, eq, lt, notInArray } from 'drizzle-orm';
+import { and, eq, isNull, lt, notInArray } from 'drizzle-orm';
 
 import { releasePayout } from '@/lib/connect';
 import { db, schema } from '@/lib/db';
@@ -11,12 +11,13 @@ import { notifyPlatform } from '@/lib/notify-internal';
 // Under separate charges + transfers a sale captures 100% to the platform and the brand's net is
 // HELD until the return window closes (ship date + RETURN_WINDOW_DAYS). This job scans for orders
 // whose hold has elapsed with no open return/refund and transfers each brand its net. It runs on
-// the persistent Railway backend (NOT EAS Hosting — see CLAUDE.md) so the long Stripe loop can't be
-// killed mid-flight by a serverless timeout. See docs/accounts/RETURNS_REFUNDS.md (the release job).
+// the persistent Cloud Run backend (NOT EAS Hosting — see CLAUDE.md) so the long Stripe loop can't
+// be killed mid-flight by a serverless timeout. See docs/accounts/RETURNS_REFUNDS.md (the release job).
 //
-// SCHEDULING (owner config — not code): a Railway cron OR a Vercel Cron must POST this route on an
-// interval (e.g. hourly) with the internal key. Nothing auto-invokes it. A silently-failing job
-// means brands never get paid — wire failure alerting on the non-zero `failed` count it returns.
+// SCHEDULING — LIVE since 2026-08-16: Cloud Scheduler job `release-payouts` (project nanocrew-api,
+// us-west1) POSTs this route at 0 17 1,15 * * UTC — the 1st and 15th, Joe's biweekly disbursement —
+// with the internal key. Alerting should watch the non-zero `failed` count and `stuckHeld` in the
+// response (Cloud Scheduler logs the response of each run).
 //
 // Auth: INTERNAL_API_KEY via the x-internal-key header, constant-time compared (mirrors the
 // first-drop service path). Idempotent + durable: each order is re-guarded on payoutStatus='held'
@@ -83,5 +84,27 @@ export async function POST(req: Request) {
     }
   }
 
-  return Response.json({ scanned: due.length, released, failed, errors });
+  // STUCK-FUNDS SWEEP. An order only ever gets a payoutReleaseAt from Printful's package_shipped
+  // webhook — if that webhook never arrives (Printful hiccup, misrouted store id), the money sits
+  // 'held' with a NULL release date and the scan above can never match it (lt() is never true for
+  // NULL). That's a creator silently never getting paid. Surface them here so the scheduler run's
+  // log/alerting sees a non-empty stuckHeld instead of nobody ever noticing.
+  const staleCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const stuck = await db
+    .select({ id: schema.orders.id, status: schema.orders.status, createdAt: schema.orders.createdAt })
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.payoutStatus, 'held'),
+        isNull(schema.orders.payoutReleaseAt),
+        lt(schema.orders.createdAt, staleCutoff),
+        notInArray(schema.orders.status, [...BLOCKED_STATUSES]),
+      ),
+    )
+    .limit(100);
+  if (stuck.length) {
+    console.error('[release-payouts] STUCK HELD FUNDS — held >14d with no ship webhook:', stuck.map((s) => s.id).join(', '));
+  }
+
+  return Response.json({ scanned: due.length, released, failed, errors, stuckHeld: stuck.length, stuckHeldIds: stuck.map((s) => s.id) });
 }

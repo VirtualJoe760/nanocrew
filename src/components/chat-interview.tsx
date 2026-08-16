@@ -11,6 +11,10 @@ import type { ChatMessage } from '@/lib/interview';
 // Keyboard mode = a full-screen chat window (its own surface, rendered OVER the studio), not the orb
 // layout with a cramped input. Venus's turns + the creator's typed turns render as message bubbles;
 // it's a TEXT experience (her voice is muted in this mode). Switching to voice returns to the orb.
+
+// Same reading-scrim eve-home uses (READ_SCRIM) — Eve glows faintly through the chat instead of
+// being blacked out; bubbles stay opaque so long copy still reads.
+const CHAT_SCRIM = 'rgba(6,8,12,0.82)';
 //
 // It manages its own bottom inset off the live keyboard height so the composer sits above the
 // keyboard when open and above the native tab bar when closed — it does NOT live inside the studio's
@@ -83,7 +87,7 @@ export function ChatInterview({
   const bottomInset = kb > 0 ? kb + Spacing.two : BottomTabInset + insets.bottom + Spacing.two;
 
   return (
-    <View style={[s.root, { backgroundColor: bg, paddingTop: insets.top + Spacing.two, paddingBottom: bottomInset }]}>
+    <View style={[s.root, { backgroundColor: CHAT_SCRIM, paddingTop: insets.top + Spacing.two, paddingBottom: bottomInset }]}>
       {/* Header: back out · Venus · (switch to voice / build once ready) */}
       <View style={s.header}>
         <Pressable onPress={onExit} hitSlop={10} style={s.leftBtn}>

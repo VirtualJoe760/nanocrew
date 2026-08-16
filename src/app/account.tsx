@@ -42,10 +42,9 @@ type StoreRow = { id: string; name: string; slug: string; status: string };
 
 const DANGER = '#e24b4a';
 // Where a creator manages billing on the web. Plans are cheaper here than in-app (no store cut).
-// Points at the site ROOT until /pricing exists — verified 2026-08-16: nanocrew.app 200,
-// nanocrew.app/pricing 404. Repoint once the pricing page ships (see the payments build plan);
-// shipping a link to a 404 is the exact bug the Connect return URLs just had.
-const WEB_PRICING_URL = 'https://nanocrew.app';
+// The /pricing page ships in the same change as this repoint (B2) — never point at a page that
+// isn't deployed; that's the bug the Connect return URLs had.
+const WEB_PRICING_URL = 'https://nanocrew.app/pricing';
 // Internal test tool: the Eve Lab (avatar appearance sandbox) is surfaced as a row on the Account
 // screen, visible ONLY to this tester account. Not a real feature — a private dev surface.
 const VENUS_LAB_EMAIL = 'josephsardella@gmail.com';
@@ -138,7 +137,7 @@ function AccountScreen() {
   const [showEarnings, setShowEarnings] = useState(false);
   const [showPurchases, setShowPurchases] = useState(false);
   const [storeSlug, setStoreSlug] = useState<string | null>(null);
-  const [payouts, setPayouts] = useState<{ connected: boolean; chargesEnabled: boolean } | null>(null);
+  const [payouts, setPayouts] = useState<{ connected: boolean; chargesEnabled: boolean; payoutsEnabled: boolean; requirementsDue: number } | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showVenusLab, setShowVenusLab] = useState(false);
@@ -150,8 +149,19 @@ function AccountScreen() {
   const loadPayouts = useCallback(async () => {
     try {
       const r = await apiFetch('/api/creator/connect');
-      const d = r.ok ? ((await r.json()) as { connected?: boolean; chargesEnabled?: boolean }) : null;
-      setPayouts(d ? { connected: !!d.connected, chargesEnabled: !!d.chargesEnabled } : null);
+      const d = r.ok
+        ? ((await r.json()) as { connected?: boolean; chargesEnabled?: boolean; payoutsEnabled?: boolean; requirementsDue?: string[] })
+        : null;
+      setPayouts(
+        d
+          ? {
+              connected: !!d.connected,
+              chargesEnabled: !!d.chargesEnabled,
+              payoutsEnabled: !!d.payoutsEnabled,
+              requirementsDue: d.requirementsDue?.length ?? 0,
+            }
+          : null,
+      );
     } catch {
       setPayouts(null);
     }
@@ -356,7 +366,25 @@ function AccountScreen() {
   const emailAddr = user?.email ?? '';
   const initial = (emailAddr[0] ?? '?').toUpperCase();
   const planLabel = plan ? (PLAN_LABEL[plan] ?? plan) : null;
-  const payoutTitle = payouts?.chargesEnabled ? 'Payouts active' : payouts?.connected ? 'Finish payout setup' : 'Set up payouts';
+  // "Active" requires BOTH flags — charges_enabled without payouts_enabled means sales are taken
+  // but Stripe can't pay their bank (unverified/paused), which the old label overstated as active.
+  const payoutsReady = !!payouts?.chargesEnabled && !!payouts?.payoutsEnabled;
+  const payoutTitle = payoutsReady
+    ? 'Payouts active'
+    : payouts?.chargesEnabled
+      ? 'Payouts paused — action needed'
+      : payouts?.connected
+        ? 'Finish payout setup'
+        : 'Set up payouts';
+  const payoutSubtitle = payoutsReady
+    ? 'Your store sales pay out to your account'
+    : payouts?.chargesEnabled
+      ? payouts.requirementsDue > 0
+        ? `Stripe needs ${payouts.requirementsDue} more ${payouts.requirementsDue === 1 ? 'item' : 'items'} to resume payouts`
+        : 'Stripe has paused payouts to your bank — tap to review'
+      : payouts?.connected && payouts.requirementsDue > 0
+        ? `Stripe needs ${payouts.requirementsDue} more ${payouts.requirementsDue === 1 ? 'item' : 'items'}`
+        : 'Get paid when your brand sells';
   const isVenusTester = emailAddr.trim().toLowerCase() === VENUS_LAB_EMAIL;
 
   return (
@@ -448,9 +476,9 @@ function AccountScreen() {
                   />
                   <Row
                     title={payoutTitle}
-                    subtitle={payouts?.chargesEnabled ? 'Your store sales pay out to your account' : 'Get paid when your brand sells'}
-                    trailing={payouts?.chargesEnabled ? '✓' : '↗'}
-                    tint={payouts?.chargesEnabled}
+                    subtitle={payoutSubtitle}
+                    trailing={payoutsReady ? '✓' : '↗'}
+                    tint={payoutsReady}
                     onPress={openPayouts}
                   />
                   {/* The web rail. On iOS this row only appears once the anti-steering question is

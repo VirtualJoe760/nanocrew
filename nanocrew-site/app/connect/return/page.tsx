@@ -1,29 +1,7 @@
-import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
-import { Footer, Nav } from '../../site-chrome';
-
-export const metadata: Metadata = { title: 'Payouts set up — Nano Crew' };
-
-// Where Stripe sends a creator after they finish payout (Connect) onboarding.
+// This page moved to platform-api (Stripe's Connect return_url points there now);
+// redirect so this copy can't drift into a second version.
 export default function ConnectReturn() {
-  return (
-    <>
-      <Nav />
-      <main className="wrap prose">
-        <h1>You&rsquo;re all set</h1>
-        <p>
-          Thanks for setting up payouts. Stripe is reviewing your details — once you&rsquo;re verified,
-          your brand can take its own sales and the money lands in your account automatically.
-        </p>
-        <p>
-          Head back to the <strong>Nano Crew app</strong> to finish launching your store. Your payout
-          status updates there under <em>Account → Payouts</em>.
-        </p>
-        <p className="updated" style={{ marginTop: 36 }}>
-          You can close this tab.
-        </p>
-      </main>
-      <Footer />
-    </>
-  );
+  redirect('https://nanocrew-api.vercel.app/connect/return');
 }

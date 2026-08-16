@@ -27,6 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       status: schema.orders.status,
       paymentIntentId: schema.orders.stripePaymentIntentId,
       payoutStatus: schema.orders.payoutStatus,
+      payoutTransferId: schema.orders.payoutTransferId,
     })
     .from(schema.orders)
     .innerJoin(schema.stores, eq(schema.stores.id, schema.orders.storeId))
@@ -37,15 +38,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!REFUNDABLE.includes(order.status)) return corsJson({ error: `cannot refund a ${order.status} order` }, { status: 409 });
   if (!order.paymentIntentId) return corsJson({ error: 'no payment to refund' }, { status: 409 });
 
-  // Only an already-released Connect transfer needs reversing; a held order's transfer was never sent.
-  const reverseTransfer = order.payoutStatus === 'released';
+  // SEPARATE CHARGES + TRANSFERS — the charge has NO attached transfer, so `reverse_transfer` on the
+  // refund is dead wrong here (Stripe rejects it: "charge has no associated transfer"). This route
+  // used to do exactly that — destination-charge semantics left over from the old model — which made
+  // released orders unrefundable from a brand site's /admin, and would never have clawed back the
+  // brand's money. An already-sent transfer is reversed EXPLICITLY, by id.
+  //
+  // Idempotency keys match the app path (src/lib/connect.ts refundOrder: `refund_${id}` /
+  // `reverse_${id}`) on purpose — a refund attempted from both surfaces dedupes at Stripe instead of
+  // double-moving money.
   const nextPayoutStatus =
     order.payoutStatus === 'released' ? 'reversed' : order.payoutStatus === 'held' ? 'skipped' : order.payoutStatus;
   try {
-    await stripe.refunds.create({
-      payment_intent: order.paymentIntentId,
-      ...(reverseTransfer ? { reverse_transfer: true, refund_application_fee: true } : {}),
-    });
+    await stripe.refunds.create(
+      { payment_intent: order.paymentIntentId },
+      { idempotencyKey: `refund_${order.id}` },
+    );
+    if (order.payoutStatus === 'released' && order.payoutTransferId) {
+      // The brand was already paid — claw the net back. If THIS fails (e.g. the creator's balance
+      // was already paid out), the buyer is still refunded; we return 502 and leave payoutStatus
+      // untouched so the un-reversed transfer stays visible instead of being recorded as reversed.
+      await stripe.transfers.createReversal(
+        order.payoutTransferId,
+        {},
+        { idempotencyKey: `reverse_${order.id}` },
+      );
+    }
     await db.update(schema.orders).set({ status: 'refunded', payoutStatus: nextPayoutStatus }).where(eq(schema.orders.id, order.id));
     return corsJson({ status: 'refunded' });
   } catch (e) {

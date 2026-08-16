@@ -25,6 +25,7 @@ import { showEve } from '@/lib/eve-vision-bus';
 
 const BG = '#08080a';
 const EDIT_COST = 8; // display mirror of CREDIT_COSTS.design_edit (server is source of truth)
+const GENERATE_COST = 8; // display mirror of CREDIT_COSTS.design_generate (server is source of truth)
 
 type Design = { id: string; url: string; prompt: string };
 type Phase = 'resolving' | 'idle' | 'busy' | 'ready' | 'error';
@@ -176,8 +177,14 @@ export function EveDesign({
   const undo = () => {
     if (stackRef.current.length < 2) return;
     stackRef.current = stackRef.current.slice(0, -1);
-    setCurrent(stackRef.current[stackRef.current.length - 1]);
+    const prior = stackRef.current[stackRef.current.length - 1];
+    setCurrent(prior);
     setLine('Reverted. What next?');
+    // Re-point her eyes too — otherwise she keeps reacting to the discarded iteration.
+    showEve({
+      url: prior.url,
+      note: '(They reverted to this earlier version — the one you saw last is discarded. This is what\'s on the canvas now; react to it, and don\'t mention the old one.)',
+    });
   };
 
   const openInDesign = () => {
@@ -259,7 +266,7 @@ export function EveDesign({
           style={[styles.input, { color: p.ink, backgroundColor: 'rgba(12,18,26,0.7)', borderColor: `${p.dim}44` }]}
         />
         <Pressable onPress={submit} disabled={busy || !input.trim()} style={[styles.send, { backgroundColor: p.accent, opacity: busy || !input.trim() ? 0.5 : 1 }]}>
-          <ThemedText type="smallBold" style={{ color: BG }}>{current ? `✦ ${EDIT_COST}` : '✦'}</ThemedText>
+          <ThemedText type="smallBold" style={{ color: BG }}>{current ? `✦ ${EDIT_COST}` : `✦ ${GENERATE_COST}`}</ThemedText>
         </Pressable>
       </View>
     </KeyboardAvoidingView>

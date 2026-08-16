@@ -118,7 +118,12 @@ export function EveHome({
     let alive = true;
     (async () => {
       try {
-        const r = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${session.access_token}` } });
+        // Timed out rather than open-ended: a hung /api/me would otherwise leave her surface
+        // degraded forever — the catch/finally below fall back to a safe greeting and resolve.
+        const r = await fetch(apiUrl('/api/me'), {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          signal: AbortSignal.timeout(8000),
+        });
         const d = (await r.json().catch(() => ({}))) as {
           creator?: { name?: string | null };
           stores?: StoreLite[];
@@ -374,8 +379,8 @@ export function EveHome({
   // (Pause is a VOICE concept — in keyboard mode it must not gate the session or typed turns hang.)
   useEffect(() => {
     // Only the returning-creator GUIDE persona (eveCentralInstruction) is built from /api/me, so only
-    // it waits on meResolved. The first-brand interview uses the default persona and must never hang
-    // on a stalled /api/me (which has no timeout) — otherwise typed turns vanish into a dead session.
+    // it waits on meResolved. The first-brand interview uses the default persona and must never wait
+    // on a stalled /api/me (8s worst case) — otherwise typed turns vanish into a dead session.
     const personaReady = view === 'interview' ? true : meResolved;
     const wants = talking && !brand && personaReady && (keyboardMode || !paused);
     const reachable = open && appActive && !covered;
@@ -687,6 +692,12 @@ export function EveHome({
             bg={BG}
           />
         ) : view === 'guide' ? (
+          !meResolved ? (
+            // Cold load: /api/me hasn't answered yet, so we don't know WHICH guide this is — a
+            // returning creator used to flash the first-brand mic CTA for a beat. Hold her surface
+            // quiet (no CTA, no greeting, no spinner over her) until the answer lands.
+            <View style={styles.guideView} />
+          ) : (
           // She fills the middle; the caption block sits in the LOWER THIRD — near the eye and the
           // thumb, not tucked under the status bar (D-23 is P1, this is the half of it the new
           // silent copy needs). A CTA sits below it.
@@ -730,6 +741,7 @@ export function EveHome({
               )}
             </View>
           </View>
+          )
         ) : keyboardMode ? null : (
           <>
             {/* "What to talk about" — name, products, style, colors, logo, vibe; checks off as they go. */}
@@ -775,7 +787,9 @@ export function EveHome({
         )}
 
         {error ? (
-          <Pressable onPress={() => setError(null)} style={[styles.errorBar, { bottom: bottomPad }]}>
+          // Anchored ABOVE the control zone: at bottomPad the toast sat exactly on the guide's
+          // only button (the digest / build CTA) — an error must never eat the way forward.
+          <Pressable onPress={() => setError(null)} style={[styles.errorBar, { bottom: Spacing.six * 2 }]}>
             <ThemedText type="code" style={styles.error}>{error}</ThemedText>
             <ThemedText type="code" style={styles.errorDismiss}>tap to dismiss</ThemedText>
           </Pressable>
@@ -800,8 +814,10 @@ export function EveHome({
         />
       ) : null}
 
-      {/* THE DIGEST — Eve's proactive status report, over the home state. */}
-      {showDigest ? (
+      {/* THE DIGEST — Eve's proactive status report. A real <Modal> (the mic-busy pattern), not an
+          in-page overlay: absolute positioning only dimmed the page, leaving the tab bar below it
+          bright and tappable under a supposedly modal card. */}
+      <Modal visible={showDigest} animationType="fade" transparent onRequestClose={() => setShowDigest(false)}>
         <Pressable style={styles.digestBackdrop} onPress={() => setShowDigest(false)}>
           <Pressable style={[styles.digestCard, { backgroundColor: p.bgTop, borderColor: p.line }]} onPress={() => {}}>
             <ThemedText type="code" style={[styles.digestEyebrow, { color: p.accent }]}>YOUR DIGEST</ThemedText>
@@ -826,7 +842,7 @@ export function EveHome({
             </Pressable>
           </Pressable>
         </Pressable>
-      ) : null}
+      </Modal>
     </View>
   );
 }
