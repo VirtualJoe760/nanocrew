@@ -106,6 +106,7 @@ export default async function InvitePage({
                 storeName={storeName}
                 supabaseUrl={process.env.SUPABASE_URL ?? ''}
                 supabaseKey={process.env.SUPABASE_PUBLISHABLE_KEY ?? ''}
+                facebookEnabled={process.env.FACEBOOK_LOGIN_ENABLED === '1'}
               />
             ),
           }),

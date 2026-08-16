@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // The DESKTOP half of the invite landing page (Joe, 2026-08-16): a laptop can't open nanocrew://,
 // so instead of a dead deep-link button the invitee signs in — or creates their account — right
@@ -19,6 +19,7 @@ export function WebAccept({
   storeName,
   supabaseUrl,
   supabaseKey,
+  facebookEnabled,
 }: {
   token: string;
   /** Shown as a hint — the server rejects any other account with 403 email_mismatch. */
@@ -26,6 +27,10 @@ export function WebAccept({
   storeName: string;
   supabaseUrl: string;
   supabaseKey: string;
+  /** Facebook isn't configured in Supabase yet (verified 2026-08-16: /authorize returns "provider
+   *  is not enabled") — a visible button would dead-end on a JSON error page. Flipped by the
+   *  FACEBOOK_LOGIN_ENABLED env once the provider has its App ID + secret. */
+  facebookEnabled: boolean;
 }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState(invitedEmail);
@@ -35,6 +40,49 @@ export function WebAccept({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<'accepted' | 'confirm_email' | null>(null);
+
+  // OAUTH RETURN. "Continue with Google/Facebook" round-trips through Supabase's /authorize, which
+  // (implicit flow — we send no code_challenge) puts the tokens in the URL HASH on the way back to
+  // this exact page. Pick them up once, scrub the hash so tokens never sit in the address bar or
+  // history, and accept immediately — the server still enforces the email match, so signing in with
+  // the wrong Google account gets the same 403 message as any other mismatch.
+  const oauthHandled = useRef(false);
+  useEffect(() => {
+    if (oauthHandled.current) return;
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const oauthErr = hash.get('error_description');
+    const bearer = hash.get('access_token');
+    if (!oauthErr && !bearer) return;
+    oauthHandled.current = true;
+    window.history.replaceState(null, '', window.location.pathname);
+    if (oauthErr) {
+      setError(oauthErr);
+      return;
+    }
+    void (async () => {
+      setBusy(true);
+      try {
+        const acceptRes = await fetch('/api/public/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bearer}` },
+          body: JSON.stringify({ token, action: 'accept' }),
+        });
+        const accept = (await acceptRes.json()) as { accepted?: boolean; error?: string };
+        if (!acceptRes.ok || !accept.accepted) throw new Error(accept.error ?? 'Could not accept the invitation.');
+        setDone('accepted');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Something went wrong — try again.');
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [token]);
+
+  function oauth(provider: 'google' | 'facebook') {
+    // Round-trip back to this page; the invite token rides the path, so nothing else to carry.
+    const back = window.location.origin + window.location.pathname;
+    window.location.href = `${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(back)}`;
+  }
 
   async function authAndAccept() {
     setBusy(true);
@@ -116,6 +164,16 @@ export function WebAccept({
 
   return (
     <div style={s.wrap}>
+      <button style={s.oauthBtn} onClick={() => oauth('google')} type="button" disabled={busy}>
+        Continue with Google
+      </button>
+      {facebookEnabled ? (
+        <button style={s.oauthBtn} onClick={() => oauth('facebook')} type="button" disabled={busy}>
+          Continue with Facebook
+        </button>
+      ) : null}
+      <div style={s.divider}><span style={s.dividerLine} /><span style={s.dividerText}>or use email</span><span style={s.dividerLine} /></div>
+
       <div style={s.tabs}>
         <button style={{ ...s.tab, ...(mode === 'login' ? s.tabOn : {}) }} onClick={() => setMode('login')} type="button">
           Sign in
@@ -167,6 +225,10 @@ export function WebAccept({
 
 const s: Record<string, React.CSSProperties> = {
   wrap: { display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 340, marginTop: 8 },
+  oauthBtn: { background: '#101318', color: '#e7e9ee', border: '1px solid #2a2d34', borderRadius: 999, padding: '12px 26px', fontSize: 14.5, fontWeight: 600, cursor: 'pointer' },
+  divider: { display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 2px' },
+  dividerLine: { flex: 1, height: 1, background: '#2a2d34' },
+  dividerText: { fontSize: 11.5, color: '#8b909b', letterSpacing: 1, textTransform: 'uppercase' as const },
   tabs: { display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 4 },
   tab: { background: 'transparent', color: '#8b909b', border: '1px solid #2a2d34', borderRadius: 999, padding: '7px 18px', fontSize: 13, cursor: 'pointer' },
   tabOn: { color: '#08080a', background: '#cdd1d9', borderColor: '#cdd1d9', fontWeight: 700 },
