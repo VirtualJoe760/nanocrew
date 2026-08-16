@@ -109,9 +109,27 @@ export async function ensureConnectedAccount(creatorId: string, email: string): 
   return stripeAccountId;
 }
 
+/** Where Stripe returns a creator after Connect onboarding — the **platform-api** host, same as
+ *  billing's success/cancel pages.
+ *
+ *  Every Stripe-facing landing page lives on platform-api on purpose: it keeps the money surfaces
+ *  off the app bundle (isolating them from Apple's rules) and gives one web host that serves iOS,
+ *  Android and web alike. `connect/return` + `connect/refresh` are served there next to
+ *  `billing/success`.
+ *
+ *  Normalized the way `billing.ts` does it — a host-only env var (no scheme) makes Stripe reject
+ *  the account link outright. */
+function connectReturnBase(): string {
+  let base = (process.env.BILLING_RETURN_URL ?? process.env.PLATFORM_API_BASE ?? 'https://nanocrew.app')
+    .trim()
+    .replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+  return base;
+}
+
 /** A Stripe-hosted onboarding link for the creator to finish identity/bank verification. */
 export async function createOnboardingLink(stripeAccountId: string): Promise<string> {
-  const base = process.env.BILLING_RETURN_URL ?? process.env.PLATFORM_API_BASE ?? 'https://nanocrew.app';
+  const base = connectReturnBase();
   const link = await stripePost('/account_links', {
     account: stripeAccountId,
     refresh_url: `${base}/connect/refresh`,
