@@ -84,6 +84,24 @@ export async function POST(req: Request) {
       .where(eq(schema.connectedAccounts.creatorId, store.creatorId))
       .limit(1);
 
+    // HARD GATE (Joe, 2026-08-16): a brand cannot take money until its creator has completed
+    // Stripe's KYC (charges_enabled). This is the enforcement point that matters — publish is gated
+    // app-side too, but checkout is public and reachable by slug, so it must refuse on its own.
+    // The old fallback ("settle 100% to the platform, brandNetCents 0") completed the sale with the
+    // creator silently earning nothing transferable — worse than failing, because nobody notices.
+    // Opt-out for platform-owned demo stores only: PLATFORM_SETTLED_SLUGS (comma-separated).
+    const platformSettled = (process.env.PLATFORM_SETTLED_SLUGS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .includes(store.slug);
+    if (!platformSettled && !(connected?.stripeAccountId && connected.chargesEnabled)) {
+      return corsJson(
+        { error: 'This shop can’t take orders yet — the owner is still setting up payments.' },
+        { status: 409 },
+      );
+    }
+
     const totalCents = subtotalCents + shippingCents + processingFeeCents;
     let applicationFeeCents = 0;
     // The deferred payout fields, persisted on the order row (default = platform-settled / 'none').

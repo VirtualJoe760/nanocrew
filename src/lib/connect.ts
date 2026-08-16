@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 
@@ -181,17 +181,31 @@ export interface ReleasablePayout {
   payoutStatus?: string | null;
 }
 
-/** Transfer a held order's net to the brand's connected account, then mark it released. Idempotent:
- *  guarded by the caller on payoutStatus='held', and a per-order Stripe idempotency key so a retried
- *  release can't double-pay. Sets payoutTransferId + payoutStatus='released'. */
+/** Transfer a held order's net to the brand's connected account, then mark it released.
+ *
+ *  RE-GUARDED HERE, not just at scan time: the release job scans a batch and then works through it
+ *  with awaits, so minutes can pass between "this order was held" and "transfer it" — long enough
+ *  for a refund to land and mark the order 'skipped'. Without the re-check the transfer went out
+ *  anyway and the final write clobbered 'skipped' back to 'released': the brand got paid for a
+ *  refunded order. So: re-read immediately before the transfer, and make every state write
+ *  conditional on payoutStatus still being 'held' — a concurrent refund's write wins, never ours.
+ *  The per-order Stripe idempotency key remains the backstop against double-pay on retries. */
 export async function releasePayout(order: ReleasablePayout): Promise<void> {
+  const [fresh] = await db
+    .select({ payoutStatus: schema.orders.payoutStatus })
+    .from(schema.orders)
+    .where(eq(schema.orders.id, order.id))
+    .limit(1);
+  if (fresh?.payoutStatus !== 'held') return; // refunded/settled since the scan — not ours to touch
+
   if (!order.connectedAccountId || order.brandNetCents <= 0 || !order.stripeChargeId) {
-    // Nothing transferable (no destination, zero net, or no source charge) — there's no payout to
-    // make. Settle the state so the release job stops re-scanning it.
+    // Nothing transferable (no destination, zero net, or no source charge). 'skipped' — the honest
+    // state: no transfer was ever sent. It used to write 'released', and a later refund would then
+    // "reverse" a transfer that never existed, recording 'reversed' for a no-op.
     await db
       .update(schema.orders)
-      .set({ payoutStatus: 'released' })
-      .where(eq(schema.orders.id, order.id));
+      .set({ payoutStatus: 'skipped' })
+      .where(and(eq(schema.orders.id, order.id), eq(schema.orders.payoutStatus, 'held')));
     return;
   }
   const transfer = await stripePost(
@@ -210,7 +224,7 @@ export async function releasePayout(order: ReleasablePayout): Promise<void> {
   await db
     .update(schema.orders)
     .set({ payoutTransferId: transfer.id as string, payoutStatus: 'released' })
-    .where(eq(schema.orders.id, order.id));
+    .where(and(eq(schema.orders.id, order.id), eq(schema.orders.payoutStatus, 'held')));
 }
 
 /** Refund an order, branching on its payout state (the held-marketplace refund):

@@ -92,3 +92,37 @@ webhook later that calls the same refresh — nice-to-have, not required for lau
 
 Unset `STRIPE_CONNECT_ENABLED` (or set to empty) and redeploy — onboarding hides and new checkouts
 stop splitting (settling to the platform). Already-connected accounts are untouched.
+
+## LIVE — 2026-08-16 (supersedes the checklist above where they differ)
+
+Connect is enabled on the platform account (`acct_1ThhvX5lsCYjUGb3`) and `STRIPE_CONNECT_ENABLED=1`
+is set. Three things changed going live; the "Money flow reference" above still says destination
+charges — the code is actually **separate charges + transfers** (100% captured to the platform,
+brand net HELD, transferred later).
+
+- **Selling is now gated on KYC** (Joe: creators complete Stripe's verification *before* they can
+  sell). Two enforcement points, both required:
+  - `POST /api/creator/stores/:slug/publish` refuses (`409 payouts_required`) until
+    `charges_enabled` — opening the shop is the real "start selling", not the domain flow.
+  - `POST /api/public/checkout` (platform-api) refuses on its own — it is public and reachable by
+    slug, so it cannot trust publish. The old silent fallback (settle 100% to the platform,
+    `brandNetCents 0`) is gone; escape hatch for platform-owned demo stores:
+    `PLATFORM_SETTLED_SLUGS` (comma-separated slugs).
+- **The release job is actually scheduled now.** Cloud Scheduler job `release-payouts`
+  (project `nanocrew-api`, `us-west1`): `0 17 1,15 * *` UTC — the 1st and 15th, the biweekly
+  disbursement cadence — POSTing the Cloud Run route with `x-internal-key`. Verified live with a
+  forced run (HTTP 200). Money therefore moves: held → (ship + `RETURN_WINDOW_DAYS`, default 7) →
+  next 1st/15th → Stripe transfer → creator's bank on Stripe's automatic payout.
+- **`releasePayout()` re-guards at transfer time** — re-reads `payoutStatus` immediately before the
+  Stripe transfer and makes every state write conditional on it still being `held`, so a refund
+  landing between scan and transfer wins instead of being clobbered. Nothing-transferable orders now
+  settle as `skipped` (honest — no transfer was ever sent), not `released`.
+
+Known follow-ups (from the 2026-08-16 money-path audit, in priority order): the platform-api twin
+refund route still uses destination-charge semantics (`reverse_transfer: true`) and must be ported to
+`refundOrder()`'s held/released branching; `charge.refunded` webhook doesn't reconcile
+`payoutStatus`; `ensureConnectedAccount` has an orphan-account race (no idempotency key, insert
+no-ops without returning the existing row); the UI never shows `payoutsEnabled` or Stripe's
+`requirements.currently_due`, so "Payouts active" can overstate; no Express dashboard login-link for
+verified creators; orders that never get a `package_shipped` webhook hold funds forever with no
+sweep.

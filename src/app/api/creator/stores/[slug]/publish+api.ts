@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
 import { getEntitlements } from '@/lib/billing';
+import { goLiveBlockReason } from '@/lib/connect';
 import { notifyPlatform } from '@/lib/notify-internal';
 
 // POST /api/creator/stores/:slug/publish { listed?: boolean } — open (or close) the brand's shop in
@@ -32,6 +33,14 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
     // Selling in the ecosystem needs an active plan (Starter and up). No website entitlement needed.
     const { active } = await getEntitlements(user.id);
     if (!active) return Response.json({ error: 'subscription_required' }, { status: 402 });
+
+    // And a payout-ready Stripe account (Joe, 2026-08-16: creators go through Stripe's KYC BEFORE
+    // they can start selling). Without this gate a no-KYC store could open, take money, and earn
+    // $0 transferable — checkout settles 100% to the platform when there's no charges-enabled
+    // account (payoutStatus 'none', brandNetCents 0), a silent underpayment, not an error. The gate
+    // was previously only on the custom-domain flow; opening the shop is the real "start selling".
+    const payoutBlock = await goLiveBlockReason(user.id);
+    if (payoutBlock) return Response.json({ error: payoutBlock, code: 'payouts_required' }, { status: 409 });
 
     // Don't open an empty shop.
     const published = await db
