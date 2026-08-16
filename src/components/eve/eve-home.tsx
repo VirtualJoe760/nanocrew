@@ -52,6 +52,11 @@ type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 const BG = '#08080a'; // dark ink for text ON the gold accent buttons
 const AI_NAME = 'Eve';
 
+// How far Eve is dimmed behind each kind of surface. She is the app's background, so the only
+// question is how much reading the thing in front of her demands.
+const REST_SCRIM = 'rgba(6,8,12,0.30)'; // captions over her — she still reads as the page
+const READ_SCRIM = 'rgba(6,8,12,0.82)'; // forms + long copy (brand review) — her net must not compete
+
 type StoreLite = { name: string; slug: string; status: string; deploymentUrl?: string | null; customDomain?: string | null };
 
 /** The REAL storefront URL — same rule as /api/store/[slug]: prefer the custom domain, else a
@@ -173,6 +178,9 @@ export function EveHome({
     greeting: hasStore ? EVE_CENTRAL_GREETING : undefined,
     onBrand: (b, transcript) => {
       setBrand(b);
+      // The interview is over and finalize() has already closed the socket — drop the intent too,
+      // or the pill claims she's listening while the creator reads a form in silence.
+      setTalking(false);
       if (transcript?.length) messages.current = transcript;
     },
   });
@@ -585,6 +593,9 @@ export function EveHome({
             ? '[ paused — tap to resume ]'
             : '[ connecting… ]';
 
+  // Surfaces that are read and typed into rather than glanced at — they get the deep scrim.
+  const dense = !!brand || (view === 'interview' && !keyboardMode);
+
   // The state pill — the one place her state is always legible. Silent is the resting state and
   // reads as such; everything else is a live session doing something.
   const pill: { label: string; live: boolean } = !talking
@@ -606,9 +617,17 @@ export function EveHome({
   return (
     <View style={styles.fill}>
 
-      {/* HER RESTING DIM. She stays clearly visible — this only takes enough off that the captions
-          read — and it lifts the moment she starts talking, so the state change IS the picture. */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, !talking && styles.restScrim]} />
+      {/* HER TINT, in three steps. She is the background of the whole app, which is lovely behind a
+          caption and unreadable behind a form — so the scrim tracks how much READING the surface in
+          front of her demands:
+            talking, nothing over her → none (she performs at full brightness)
+            resting                   → light, just enough that the captions read
+            a dense surface (brand review, the interview's topic list) → deep, so fields and long
+                                        copy sit on a calm ground instead of over a moving net. */}
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: dense ? READ_SCRIM : talking ? 'transparent' : REST_SCRIM }]}
+      />
 
       {/* TAP TO TALK. Rendered FIRST so every control below sits above it: taps on empty space
           reach this, taps on a button reach the button. This is the whole gesture surface — the
@@ -876,8 +895,6 @@ const styles = StyleSheet.create({
   headerSpacer: { flex: 1 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, marginLeft: Spacing.three },
 
-  // Her resting dim: enough that the captions read, never enough to hide her. She IS the page.
-  restScrim: { backgroundColor: 'rgba(6,8,12,0.30)' },
   statePill: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 5 },
   stateDot: { width: 6, height: 6, borderRadius: 3 },
 
