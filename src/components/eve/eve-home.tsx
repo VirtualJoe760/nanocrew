@@ -356,9 +356,15 @@ export function EveHome({
               onRequestClose();
               sendDesignCommand({ kind: 'open-generate', prompt: d.idea, meme: true });
               router.push('/design');
-            } else {
+            } else if (d.idea) {
               // Into Eve's design state with the spoken idea — she generates it in her own surface.
               onGo({ state: 'design', payload: { idea: d.idea } });
+            } else {
+              // A design ask with no subject ("make me a t-shirt") — opening EveDesign empty lands
+              // in a typed form. She asks for the artwork instead; the answer re-routes with idea.
+              live.sendContext(
+                "(They want a design but haven't said what the artwork is — in one short sentence, ask what should go on it.)",
+              );
             }
             return;
           case 'write-post':
@@ -595,11 +601,14 @@ export function EveHome({
           void startVoice();
           return;
         case 'design':
-          // HER surface, not the Design tab. studio.tsx renders <EveDesign> for this state and it
-          // takes an optional idea — omitted here on purpose, so she opens by asking what they want
-          // to make rather than generating something nobody described. Sending them to /design was
-          // a redirect away from the person they just asked for help.
-          onGo({ state: 'design' });
+          // Voice-first, not form-first. Opening <EveDesign> with no idea landed people in a bare
+          // text input ("What shall I make?") — a typed form nobody asked for. Instead she stays
+          // home, ASKS out loud, and the answer routes back as new-design{idea} → EveDesign opens
+          // already generating (VENUS_CENTRAL C3: "no idea given → she asks first, then transitions").
+          if (!talking) void toggleTalk();
+          live.sendContext(
+            "(The creator picked DESIGN on your wheel — they want to create a design. In one short sentence, ask what they'd like to make. When they answer, their app opens your design surface with it — don't describe that mechanism, just ask.)",
+          );
           return;
         case 'digest':
           void openDigest();

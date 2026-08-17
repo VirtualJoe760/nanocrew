@@ -458,7 +458,10 @@ down.** No session-lifting needed.
    TRANSLUCENT popup over EveHome (**shipped**, `110c11a` — `design` is excluded from `deep`, so her
    session survives).
 2. Generate in place — `POST /api/generate`; iterate by typed instruction via `POST /api/edit`
-   (**shipped**; spoken-turn iteration is C3b, open).
+   (**shipped**; spoken-turn iteration is C3b, open). Both calls send `background: 'transparent'`
+   (2026-08-17) — the Design tab's product default, so her output is a print-ready cutout graphic;
+   `'filled'` rendered artwork OF the thing described ("a tee" → a photo of a tee). The router's
+   `idea` is likewise the ARTWORK concept, never the garment (route+api.ts system prompt).
 3. She SEES it — `eve-vision-bus` (`showEve` in EveDesign → `imageForEve` → `live.sendImage` in
    EveHome) fires on every settled generation/edit, and she reacts to the actual image (**shipped**).
 4. "put it on a hoodie" → she offers options from `GET /api/blanks` (**open** — endpoint exists,
@@ -504,7 +507,7 @@ the render share one hit test.
 | Sector | Does | Notes |
 |---|---|---|
 | **TALK** (12 o'clock, amber) | `toggleTalk()` | the ONLY spoke that spends money — set apart in amber for that reason |
-| **DESIGN** | `onGo({ state: 'design' })` | **her own surface** (`<EveDesign>`), NOT `/design`. No idea passed → she opens by asking |
+| **DESIGN** | voice-ask via `sendContext` | she stays home and ASKS what to make (starts talking if silent); the answer routes back as `new-design{idea}` → `<EveDesign>` opens already generating. Never opens the typed form — a routed `new-design` with no idea also re-asks instead of opening empty (2026-08-17; was `onGo({state:'design'})`, which landed in a bare text input) |
 | **SITE** | `onGo({ state: 'developing' })` | brand-scoped; a brand with no live site explains itself through Eve |
 | **ASSETS** | `/design?panel=web` | brand-scoped |
 | **DIGEST** | `openDigest()` | brand-scoped; also briefs her with the real figures |

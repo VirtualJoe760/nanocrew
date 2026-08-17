@@ -96,7 +96,10 @@ export function EveDesign({
         const r = await fetch(apiUrl('/api/generate'), {
           method: 'POST',
           headers: authHeaders(),
-          body: JSON.stringify({ prompt, catalogueId, background: 'filled', aspectRatio: '1:1' }),
+          // 'transparent' = the Design tab's product default: the chroma-key pipeline renders the
+          // idea as a standalone print graphic (cutout on magenta → real alpha). 'filled' asked for
+          // full-bleed ARTWORK OF the thing described — "a tee" came back as a photo of a tee.
+          body: JSON.stringify({ prompt, catalogueId, background: 'transparent', aspectRatio: '1:1' }),
         });
         const d = (await r.json().catch(() => ({}))) as { image?: string; id?: string; error?: string; needed?: number };
         if (!r.ok || !d.image || !d.id) throw new Error(failFrom(r.status, d));
@@ -131,7 +134,7 @@ export function EveDesign({
         const r = await fetch(apiUrl('/api/edit'), {
           method: 'POST',
           headers: authHeaders(),
-          body: JSON.stringify({ designId: current.id, catalogueId, instruction, mode: 'custom', background: 'filled' }),
+          body: JSON.stringify({ designId: current.id, catalogueId, instruction, mode: 'custom', background: 'transparent' }),
         });
         const d = (await r.json().catch(() => ({}))) as { image?: string; id?: string; prompt?: string; error?: string; needed?: number };
         if (!r.ok || !d.image || !d.id) throw new Error(failFrom(r.status, d));

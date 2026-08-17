@@ -26,7 +26,7 @@ const SYSTEM = `You classify ONE spoken utterance from a clothing-brand creator 
 Intents:
 - "edit-site": they clearly want to change/edit/fix their EXISTING website ("I want to edit my site", "let's change the homepage", "can we update the hero on my store"). If the utterance names one of the provided stores, set storeSlug to that store's slug (must be from the list). If several stores could match and it's ambiguous, keep intent "edit-site", omit storeSlug, and set ask to a one-line question naming the options.
 - "create-brand": they clearly want to start/build a NEW brand ("let's build another brand", "I want to start a new label").
-- "new-design": they clearly ask to create a design, graphic, or meme ("make me a meme about mondays", "new tee design with a chrome skull"). Put their concept in idea, short.
+- "new-design": they clearly ask to create a design, graphic, or meme ("make me a meme about mondays", "new tee design with a chrome skull"). Put their concept in idea, short. idea is the ARTWORK to print — the graphic itself, never the garment carrying it: "new tee design with a chrome skull" → idea "chrome skull graphic"; "make me a t-shirt" (no subject given) → idea omitted, so Eve asks what goes on it.
 - "write-post": they clearly ask to write/draft a blog post. topic = short topic.
 - "digest": they ASK how their store/brand is doing, for stats, sales, orders, views, revenue, or a status update ("how am I doing", "yes" to a digest offer, "show my numbers", "any sales?"). Statements ABOUT sales or news that don't ask for numbers ("we sold out at the market last weekend") are conversation → "none".
 - "done": they are clearly finished with Eve ("that's all for now", "we're done", "goodbye Eve").
