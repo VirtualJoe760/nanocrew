@@ -149,3 +149,13 @@ robot — see [../studio/FORGE_AI.md](../studio/FORGE_AI.md) and
   annotated-screenshot rig already used for revisions is the foundation.)
 - ⚪ **A real quality gate** — stop swallowing the robot's exit code (`|| true`) and gate the
   `ready`-flip on more than "does it compile," so a weak build doesn't silently ship.
+
+
+## Web account surface (2026-08-16)
+`nanocrew.app/account` now mirrors the app's Account page for: profile details (name/phone —
+editable on the web, which the app still doesn't allow), **your brands**, **collaborators**
+(invite/remove/revoke, owner-only) and **Stripe payout setup** (reuses the app's existing
+`/api/creator/connect`).
+
+Still app-only, by scope: earnings, orders/purchases, subscription & paywall, platform admin,
+Eve Lab, and account deletion.

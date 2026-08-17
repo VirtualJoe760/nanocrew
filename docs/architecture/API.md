@@ -213,3 +213,22 @@ The signed-in creator's own profile — `{ profile: { id, email, name, phone, im
 PATCH accepts `{ name?, phone? }` only. **Email is intentionally not editable**: collaboration
 invites (`store_invites.email`) and customer order-lookups match on it. Powers
 `nanocrew.app/account`, the site's one signed-in surface; the app shows this identity read-only.
+
+
+### Creator routes on platform-api (the web's authed surface)
+- `GET /api/creator/stores` — every brand the creator can reach: `{ id, slug, name, status,
+  customDomain, role: 'owner'|'collaborator' }`. Owners sort first.
+- `GET/POST/DELETE /api/creator/stores/:slug/collaborators` — members + pending invites, invite by
+  email, remove a member or revoke an invite. **Owner-only** (not `storeForMember`): a collaborator
+  must never be able to remove the owner. Non-owners get an opaque 404 on every verb.
+
+Invite emails for BOTH this route and the app's (via `/api/internal/notify`) go through
+`lib/collab-invite.ts` — one implementation, so the link and copy can't drift.
+
+**Which backend serves what.** The site uses two bases, deliberately:
+- `platform.nanocrew.app` (platform-api) — anything needing `PATCH`/`DELETE`, because we control its
+  CORS: account, collaborators, stores.
+- `api.nanocrew.app` (the app's Cloud Run backend) — **Stripe Connect payouts only**
+  (`GET/POST /api/creator/connect`). Its CORS is emitted by the Expo server runtime and allows only
+  `GET, POST, OPTIONS`, so nothing needing another verb can live there — but reusing it avoids a
+  second Connect integration against one Stripe account.
