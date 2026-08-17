@@ -107,6 +107,11 @@ export function EveHome({
   // the two gestures are raced so they can never both fire.
   const [wheel, setWheel] = useState<{ x: number; y: number } | null>(null);
   const [wheelPick, setWheelPick] = useState<WheelId | null>(null);
+  /** One release per hold. The web fallback below and the gesture's own onEnd both land here, and a
+   *  spoke that fired twice would navigate twice. */
+  const wheelSpent = useRef(false);
+  /** The press-and-hold surface, so web can stop the OS stealing the hold. See below. */
+  const wheelSurface = useRef<View | null>(null);
   const [paused, setPaused] = useState(false);
   const [appActive, setAppActive] = useState(true);
   // THE STATE MODEL: she is silent or talking, and only the creator moves her between them.
@@ -628,6 +633,8 @@ export function EveHome({
   /** Release: act on the highlighted sector, or cancel when the thumb is in the centre. */
   const commitWheel = useCallback(
     (id: WheelId | null) => {
+      if (wheelSpent.current) return;
+      wheelSpent.current = true;
       setWheel(null);
       setWheelPick(null);
       if (!id) return; // released in the dead zone — she carries on exactly as she was
@@ -653,6 +660,7 @@ export function EveHome({
   // UI thread, which crashes the app outright. (It survived the browser preview because web has no
   // separate UI thread; only a device shows it.)
   const openWheel = useCallback((wx: number, wy: number) => {
+    wheelSpent.current = false;
     setWheel({ x: wx, y: wy });
     setWheelPick(null);
   }, []);
@@ -662,6 +670,35 @@ export function EveHome({
     setWheel(null);
     setWheelPick(null);
   }, []);
+
+  // WEB ONLY — the wheel is opened by a press-and-hold, which is also how macOS asks for its native
+  // context menu (a two-finger click does it outright). That menu takes the pointer with it, so the
+  // release never comes back to the page: the Pan never ends and the wheel hangs open with no way
+  // to dismiss it. Refusing the menu on this surface keeps the hold ours. Phones have no such menu,
+  // so nothing about the gesture creators actually use changes.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = wheelSurface.current as unknown as HTMLElement | null;
+    if (!el) return;
+    const block = (e: Event) => e.preventDefault();
+    el.addEventListener('contextmenu', block);
+    return () => el.removeEventListener('contextmenu', block);
+  }, [session, brand]);
+
+  // And a belt-and-braces release for web: if anything else still swallows the pointer-up (an
+  // extension, a devtools overlay), the wheel resolves on the window's copy instead of hanging.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !wheel) return;
+    const release = (e: { clientX: number; clientY: number }) =>
+      commitWheel(spokeAt(e.clientX - wheel.x, e.clientY - wheel.y));
+    const cancel = () => closeWheel();
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', cancel);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', cancel);
+    };
+  }, [wheel, commitWheel, closeWheel]);
 
   const wheelGesture = useMemo(() => {
     const pan = Gesture.Pan()
@@ -728,6 +765,7 @@ export function EveHome({
       {session && !brand ? (
         <GestureDetector gesture={wheelGesture}>
           <View
+            ref={wheelSurface}
             accessibilityRole="button"
             accessibilityLabel={talking ? `Stop talking to ${AI_NAME}` : `Talk to ${AI_NAME}`}
             accessibilityHint="Press and hold for the menu"

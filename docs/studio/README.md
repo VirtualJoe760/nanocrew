@@ -15,6 +15,7 @@ division references the storefront docs rather than duplicating them.
 | Doc | Covers |
 |---|---|
 | **[EVE_CONTROL.md](EVE_CONTROL.md)** | **The division's current center of gravity** — THE PIVOT: Eve as the app's persistent living background + control surface, the capability tree, and the P3′ voice design loop. Code comments point here for the current architecture. |
+| [`EVE_VOICE.md`](EVE_VOICE.md) | How she TALKS — register, the golden-circle method, the noun test. Product logic, not copy. |
 | **[BUILD_FLOW.md](BUILD_FLOW.md)** | The end-to-end build → refine → publish arc from the creator's POV. The narrative spine; links out to the mechanics. **Honest about CURRENT vs TARGET.** |
 | **[FORGE_AI.md](FORGE_AI.md)** | THE doc on how our AI talks to the forge robot — Eve authors the brief (gemini-2.5-pro in `provision.ts`; mail-merge only as fallback) and the Master `CLAUDE.md` conditions the robot on every build; the remaining gap is eyes + a real quality gate. |
 | **[DESIGN_GENERATOR.md](DESIGN_GENERATOR.md)** | The Design tab + generator: making products (Printful publish), model shots, and scene video — and how those assets flow to the storefront, replacing the temporary placeholders the forge ships. |

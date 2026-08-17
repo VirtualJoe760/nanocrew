@@ -28,6 +28,7 @@ is in [`AGENTS.md`](AGENTS.md); the working rules live in [`docs/context/`](docs
 | A brand website · catalogue · public API | [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](docs/storefront/STOREFRONT_DATA_CONTRACT.md) |
 | App UI — buttons, inputs, tokens, a new screen | [`docs/context/UI_RULES.md`](docs/context/UI_RULES.md) (+ UI_TOKENS, UI_REGISTRY) |
 | Eve build → forge → publish | [`docs/studio/BUILD_FLOW.md`](docs/studio/BUILD_FLOW.md) · [`FORGE_AI.md`](docs/studio/FORGE_AI.md) |
+| How Eve TALKS (persona, questions) | [`docs/studio/EVE_VOICE.md`](docs/studio/EVE_VOICE.md) — change one persona, change all three |
 | Eve's avatar look | [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md) + the Eve Lab (below) |
 | Identity · orders · money · credits | [`docs/accounts/`](docs/accounts/README.md) |
 | The **account page** (app *or* web) | [`docs/accounts/ACCOUNT_SURFACE.md`](docs/accounts/ACCOUNT_SURFACE.md) — **change all three: app · site · API** |

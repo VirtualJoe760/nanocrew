@@ -363,8 +363,9 @@ tool-calling** — that is why the router exists. New capabilities go through **
 
 ## The four gaps
 
-1. **She is an interviewer, not a conversationalist.** `eveCentralInstruction` is ~80% brand-interview
-   text; open-ended chat is one line telling her to be brief and "always nudge toward making something".
+1. ~~**She is an interviewer, not a conversationalist.**~~ **CLOSED 2026-08-17.** Rewritten around
+   Sinek's golden circle: she probes for the why instead of asking for it, and every question must be
+   answerable by naming a thing. See [`EVE_VOICE.md`](EVE_VOICE.md).
 2. **The digest is conversationally dead.** It renders and she reads a headline, but **no numbers enter
    her context** — she cannot answer "how was last week?" or compare brands.
 3. **She cannot see what she made.** Only `audio` is sent to the session. SDK `@google/genai` 2.8.0's
@@ -494,3 +495,31 @@ money), New design, Edit site, Site assets, Digest, Brand info, New brand, Type 
 - **Brand info** has no in-place editor yet (P3.1 below is still open), so it asks Eve rather than
   stubbing one; edits still go through `buildBrandPatch()`.
 - Still to prove on device: the tap/long-press race, per the mock's own note.
+
+## The wheel's spokes — what each one owns (2026-08-17)
+
+Eight sectors, cardinals + diagonals. `spokeAt()` in `eve-wheel.tsx` is exported so the gesture and
+the render share one hit test.
+
+| Sector | Does | Notes |
+|---|---|---|
+| **TALK** (12 o'clock, amber) | `toggleTalk()` | the ONLY spoke that spends money — set apart in amber for that reason |
+| **DESIGN** | `onGo({ state: 'design' })` | **her own surface** (`<EveDesign>`), NOT `/design`. No idea passed → she opens by asking |
+| **SITE** | `onGo({ state: 'developing' })` | brand-scoped; a brand with no live site explains itself through Eve |
+| **ASSETS** | `/design?panel=web` | brand-scoped |
+| **DIGEST** | `openDigest()` | brand-scoped; also briefs her with the real figures |
+| **BRAND** | asks Eve conversationally | no in-place editor yet (P3.1); edits still go through `buildBrandPatch()` |
+| **NEW** | `startVoice()` | NOT `enterInterview()` — startVoice carries the mic request + typing fallback |
+| **TYPE** | `setKeyboardMode(true)` | the path when the mic is denied |
+
+Brand-scoped sectors dim **only when we know** there are no brands: `storesKnown && !stores.length`.
+`stores.length === 0` alone conflated "no brands", "not loaded yet" and "the request failed" — a
+creator with six brands saw four dead spokes. A failed `/api/me` now retries once and fails **lit**.
+
+`hidden` on `<EveHome>` is **pixels only**. Her own full-screen states sit on top of home, so its
+chrome must not print through — but the live session and the vision listener live in EveHome and the
+overlay publishes to them (`lib/eve-vision-bus`). Suspending her there would mute her for the whole
+design flow and stop her ever seeing what she made. `covered` remains for surfaces she must not
+narrate; her own states are not among them.
+
+Both CTAs under her ("Build your brand", "View your digest") are gone — they're spokes now.

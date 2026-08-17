@@ -45,6 +45,17 @@ raw brand hue that can vanish into the background.
 Use the `Spacing` scale (`half`→`six`) for every margin/padding/gap — no magic numbers. Respect
 `MaxContentWidth` (800) for wide layouts and `BottomTabInset` above the tab bar.
 
+## Layout containers must not eat touches
+
+A full-screen `View` (or `KeyboardAvoidingView`) that exists purely to lay children out still takes
+`pointerEvents="auto"` by default, so it **swallows every touch on empty space** and anything
+beneath it never sees a finger. Give layout wrappers **`pointerEvents="box-none"`** — they lay out,
+their children still receive, and taps fall through.
+
+This shipped a broken OTA: three such wrappers sat above Eve's gesture surface, so the new
+press-and-hold wheel could never open **and tap-to-talk broke with it**. Neither TypeScript nor the
+bundler can catch it; it only shows when a finger (or a click) lands on empty space.
+
 ## Safe areas — never draw into the device chrome
 **Joe's rule, and it is a hard one:** nothing we draw may sit under the **Dynamic Island / notch** at
 the top or the **home indicator** at the bottom. A zero (or small fixed) top offset on a full-screen

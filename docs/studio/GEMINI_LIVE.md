@@ -307,3 +307,16 @@ explain the section — changes are logged as they go, and **Submit** builds the
 existing `POST /api/creator/revise` (forge revision) — no API change. The old record→transcribe
 pipeline is gone, which leaves `POST /api/transcribe` (`src/app/api/transcribe+api.ts`) with zero
 callers — retired dead code (its header comment still claims the critique flow uses it).
+
+
+## Available and unused (researched 2026-08-17)
+
+| Feature | Field | Status |
+|---|---|---|
+| Affective dialog — she adapts her style to the creator's tone | `enableAffectiveDialog` | supported by our model; **needs `apiVersion: v1beta`**, we connect on `v1alpha` |
+| Proactive audio — she may decline to respond when nothing needs saying | `proactivity.proactiveAudio` | same |
+
+Both fit the casual persona directly. Deliberately NOT bundled with a prompt change: a bad session
+config has silenced her before (see the `speechConfig` note above), and shipping both together would
+make it impossible to tell which one broke her. Ship as its own testable change.
+Source: https://ai.google.dev/gemini-api/docs/live-guide

@@ -12,6 +12,7 @@ Store app and is painful to change later.
 
 ## 0. One-time
 ```bash
+npx expo install expo-dev-client   # REQUIRED — eas build refuses a dev-client build without it
 npm i -D eas-cli           # or: npm i -g eas-cli
 npx eas login              # your Expo account
 npx eas build:configure    # links the project (creates the EAS project id)
@@ -69,7 +70,9 @@ See `docs/storefront/IMAGE_TARGETS.md`.
 
 ## 5. Build + run
 ```bash
-npx eas build --profile development --platform ios   # simulator build
+npx eas build --profile development --platform ios          # SIMULATOR build
+npx eas build --profile development-device --platform ios   # a real DEVICE (ad-hoc; needs the
+                                                            # device registered on the Apple team)
 # install the resulting build, then:
 npm start            # Metro serves JS into the dev client (not Expo Go)
 ```
