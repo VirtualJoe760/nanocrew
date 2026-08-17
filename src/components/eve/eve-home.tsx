@@ -10,7 +10,9 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 import { AudioModule } from 'expo-audio';
 
 import { BrandReview } from '@/components/brand-review';
@@ -29,6 +31,7 @@ import { sendDesignCommand } from '@/lib/design-bus';
 import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
+import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
 import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
 import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
@@ -96,6 +99,12 @@ export function EveHome({
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [paywall, setPaywall] = useState<'subscription_required' | 'brand_limit' | null>(null);
   const [keyboardMode, setKeyboardMode] = useState(false);
+
+  // THE WHEEL. Press-and-hold anywhere on her opens a radial menu at the thumb; drag to a sector;
+  // release to choose. Releasing in the centre cancels. Quick tap keeps its old meaning entirely —
+  // the two gestures are raced so they can never both fire.
+  const [wheel, setWheel] = useState<{ x: number; y: number } | null>(null);
+  const [wheelPick, setWheelPick] = useState<WheelId | null>(null);
   const [paused, setPaused] = useState(false);
   const [appActive, setAppActive] = useState(true);
   const [guidance, setGuidance] = useState<VenusGuidance | null>(null);
@@ -547,6 +556,102 @@ export function EveHome({
 
   // The state pill — the one place her state is always legible. Silent is the resting state and
   // reads as such; everything else is a live session doing something.
+  // What each sector does. Kept next to the gesture so a spoke can never point at nothing: every
+  // id here exists in eve-wheel's SPOKES, and every brand-scoped one is guarded.
+  const chooseSpoke = useCallback(
+    (id: WheelId) => {
+      const withSites = stores.filter((st) => siteUrlFor(st));
+      const target = withSites[0] ?? stores[0] ?? null;
+      switch (id) {
+        case 'toggle':
+          void toggleTalk();
+          return;
+        case 'type':
+          setKeyboardMode(true);
+          if (!talking) void toggleTalk();
+          return;
+        case 'newbr':
+          enterInterview();
+          return;
+        case 'design':
+          router.push('/design');
+          return;
+        case 'digest':
+          void openDigest();
+          return;
+        case 'assets':
+          router.push('/design?panel=web');
+          return;
+        case 'site': {
+          const url = target ? siteUrlFor(target) : null;
+          // A brand with no live site yet routes nowhere useful — say so instead of opening an
+          // empty editor (the mock's rule).
+          if (target && url) onGo({ state: 'developing', payload: { slug: target.slug, url, name: target.name } });
+          else if (target) live.sendContext(`The creator wants to edit ${target.name}'s site, but it has no live site yet. Offer to finish and publish it.`);
+          return;
+        }
+        case 'brand':
+          // There is no in-place identity editor yet (EVE_CONTROL P3.1 is open), and inventing a
+          // half one here would be worse than the thing that already works: ask Eve. Edits still go
+          // through buildBrandPatch on her side, so NEVER_VIOLATE §2 holds.
+          if (!target) return;
+          if (!talking) void toggleTalk();
+          live.sendContext(
+            `The creator wants to change ${target.name}'s brand info — name, voice, palette or story. Ask which, then confirm before applying.`,
+          );
+          return;
+      }
+    },
+    [stores, talking, toggleTalk, enterInterview, openDigest, onGo, live],
+  );
+
+  /** Release: act on the highlighted sector, or cancel when the thumb is in the centre. */
+  const commitWheel = useCallback(
+    (id: WheelId | null) => {
+      setWheel(null);
+      setWheelPick(null);
+      if (!id) return; // released in the dead zone — she carries on exactly as she was
+      const brandScoped = id === 'site' || id === 'assets' || id === 'digest' || id === 'brand';
+      if (brandScoped && !stores.length) return; // dimmed sector — do nothing rather than misfire
+      chooseSpoke(id);
+    },
+    [chooseSpoke, stores.length],
+  );
+
+  /** Quick tap keeps exactly its old meaning. */
+  const tapEve = useCallback(() => {
+    void toggleTalk();
+  }, [toggleTalk]);
+
+  // A tap RACED against long-press-then-pan, so the two can never both fire: the pan can only win
+  // once the 180ms hold passes, and anything shorter resolves as the tap it always was.
+  const wheelGesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .activateAfterLongPress(180)
+      .onStart((e) => {
+        'worklet';
+        scheduleOnRN(setWheel, { x: e.absoluteX, y: e.absoluteY });
+        scheduleOnRN(setWheelPick, null);
+      })
+      .onUpdate((e) => {
+        'worklet';
+        scheduleOnRN(setWheelPick, spokeAt(e.translationX, e.translationY));
+      })
+      .onEnd((e) => {
+        'worklet';
+        scheduleOnRN(commitWheel, spokeAt(e.translationX, e.translationY));
+      })
+      .onFinalize(() => {
+        'worklet';
+        scheduleOnRN(setWheel, null);
+      });
+    const tap = Gesture.Tap().onEnd((_e, ok) => {
+      'worklet';
+      if (ok) scheduleOnRN(tapEve);
+    });
+    return Gesture.Exclusive(pan, tap);
+  }, [commitWheel, tapEve]);
+
   const pill: { label: string; live: boolean } = !talking
     ? { label: 'SILENT', live: false }
     : paused
@@ -582,11 +687,25 @@ export function EveHome({
           reach this, taps on a button reach the button. This is the whole gesture surface — the
           wheel (P2) will attach its long-press here too. */}
       {session && !brand ? (
-        <Pressable
-          onPress={() => void toggleTalk()}
-          accessibilityRole="button"
-          accessibilityLabel={talking ? `Stop talking to ${AI_NAME}` : `Talk to ${AI_NAME}`}
-          style={StyleSheet.absoluteFill}
+        <GestureDetector gesture={wheelGesture}>
+          <View
+            accessibilityRole="button"
+            accessibilityLabel={talking ? `Stop talking to ${AI_NAME}` : `Talk to ${AI_NAME}`}
+            accessibilityHint="Press and hold for the menu"
+            style={StyleSheet.absoluteFill}
+          />
+        </GestureDetector>
+      ) : null}
+
+      {/* THE WHEEL — above her and the scrim, below the modals. Purely presentational: the gesture
+          owns the selection, this draws it. */}
+      {wheel ? (
+        <EveWheel
+          x={wheel.x}
+          y={wheel.y}
+          active={wheelPick}
+          hasBrand={stores.length > 0}
+          talking={talking}
         />
       ) : null}
 
