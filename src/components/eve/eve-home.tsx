@@ -71,11 +71,14 @@ function siteUrlFor(s: StoreLite): string | null {
 export function EveHome({
   open,
   covered = false,
+  hidden = false,
   onRequestClose,
   onGo,
 }: {
   /** The surface is on screen (gates the live session — she is never vocal while hidden). */
   open: boolean;
+  /** She's in another of her states (design/developing) — render nothing, don't just go quiet. */
+  hidden?: boolean;
   /** Something is layered OVER her — the brand console, the paywall, the deck, the welcome panel.
    *  She suspends rather than stops, so a glance costs nothing and the conversation survives. */
   covered?: boolean;
@@ -587,7 +590,11 @@ export function EveHome({
           void startVoice();
           return;
         case 'design':
-          router.push('/design');
+          // HER surface, not the Design tab. studio.tsx renders <EveDesign> for this state and it
+          // takes an optional idea — omitted here on purpose, so she opens by asking what they want
+          // to make rather than generating something nobody described. Sending them to /design was
+          // a redirect away from the person they just asked for help.
+          onGo({ state: 'design' });
           return;
         case 'digest':
           void openDigest();
@@ -697,6 +704,8 @@ export function EveHome({
   // Hosted inside the tab slot — the tab bar sits BELOW this surface, so no home-indicator
   // clearance is needed; just breathing room above the bar.
   const bottomPad = Spacing.five;
+
+  if (hidden) return null;
 
   return (
     <View style={styles.fill}>
@@ -886,19 +895,9 @@ export function EveHome({
                 </>
               )}
             </View>
-            {/* "Build your brand" is gone (Joe, 2026-08-17): it did exactly what tapping her does —
-                both called startVoice() — and starting a brand is now also a wheel spoke. */}
-            {hasStore ? (
-              <View style={styles.orbDock}>
-                {/* Tapping it briefs her too (no-op when she isn't connected) — otherwise she's blind
-                    to what the creator is looking at and can't answer a spoken follow-up about it. */}
-                <Pressable
-                  onPress={() => void openDigest().then((rows) => live.sendContext(digestBriefing(rows)))}
-                  style={({ pressed }) => [styles.guideCta, { borderColor: `${p.dim}66` }, pressed && { opacity: 0.7 }]}>
-                  <ThemedText type="code" style={{ color: p.dim }}>View your digest</ThemedText>
-                </Pressable>
-              </View>
-            ) : null}
+            {/* Both CTAs are gone (Joe, 2026-08-17). "Build your brand" did exactly what tapping
+                her does, and the digest button was the badly-placed one he flagged on day one —
+                both are wheel spokes now, so the surface under her stays clear. */}
           </View>
           )
         ) : keyboardMode ? null : (
@@ -1028,8 +1027,6 @@ const styles = StyleSheet.create({
   guideView: { flex: 1, justifyContent: 'flex-end' },
   subsLower: { alignItems: 'center', gap: Spacing.two, minHeight: 96, justifyContent: 'flex-end', marginBottom: Spacing.five },
   restSub: { fontSize: 10.5, letterSpacing: 1.4, textAlign: 'center' },
-  orbDock: { alignItems: 'center', paddingBottom: Spacing.two, minHeight: 28 },
-  guideCta: { borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.five, paddingVertical: Spacing.three },
 
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.four },
   hint: { letterSpacing: 1 },

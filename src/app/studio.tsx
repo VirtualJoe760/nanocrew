@@ -311,9 +311,14 @@ function StudioScreen() {
             {/* `covered` is the ONE signal for "something is layered over her". It used to be the
                 deck alone, so opening a brand's console restarted her session and she narrated the
                 editor (D-20). Every surface that sits on top of her must feed this. */}
+            {/* Her HOME chrome — hidden whenever she's in another state. `developing` and `design`
+                are full-screen surfaces of hers, so leaving home mounted printed "Tap to talk to
+                Eve" straight through her design prompt and collided the state pill with its back
+                button. The avatar itself lives at the app root, so she stays visible underneath. */}
             <EveHome
-              open={focused}
-              covered={deckShown || showComposer || !!paywall || welcomeVisible}
+              open={focused && !eve}
+              covered={deckShown || showComposer || !!paywall || welcomeVisible || !!eve}
+              hidden={!!eve}
               onRequestClose={() => setEve(null)}
               onGo={setEve}
             />
