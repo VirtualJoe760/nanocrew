@@ -92,6 +92,11 @@ export function BetaSignup() {
             ? "Your place is held against this email. We'll write when your TestFlight invite is ready."
             : `We sent a confirmation link to ${email}. Confirm it and your place is locked in.`}
         </p>
+        {done === 'in' ? (
+          <a className="btn ghost" href="/account" style={{ textAlign: 'center', marginTop: 4 }}>
+            Your account
+          </a>
+        ) : null}
       </div>
     );
   }

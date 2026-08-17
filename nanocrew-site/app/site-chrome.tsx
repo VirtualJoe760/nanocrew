@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { authConfigured, supabase } from '@/lib/supabase';
 
 import { EveMark } from './eve-mark';
 
@@ -16,6 +18,17 @@ const NAV_LINKS = [
 export function Nav() {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
+  // Signed-in creators get an Account entry — the site's one signed-in surface. Rendered only
+  // once we KNOW there's a session, so the nav never flashes a link a signed-out visitor can't use.
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    if (!authConfigured) return;
+    void supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => setSignedIn(!!sess));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+  const links = signedIn ? [...NAV_LINKS, { href: '/account', label: 'Account' }] : NAV_LINKS;
   return (
     <nav className="nav wrap">
       <Link href="/" className="mark" aria-label="Nano Crew — home" onClick={close}>
@@ -25,7 +38,7 @@ export function Nav() {
 
       {/* Desktop: inline links */}
       <div className="links links-desktop">
-        {NAV_LINKS.map((l) => (
+        {links.map((l) => (
           <Link key={l.href} href={l.href}>
             {l.label}
           </Link>
@@ -50,7 +63,7 @@ export function Nav() {
       {/* Mobile: dropdown panel (wraps to its own row in the flex nav) */}
       {open ? (
         <div className="links-mobile">
-          {NAV_LINKS.map((l) => (
+          {links.map((l) => (
             <Link key={l.href} href={l.href} onClick={close}>
               {l.label}
             </Link>

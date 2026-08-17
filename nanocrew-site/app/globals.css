@@ -303,3 +303,54 @@ h1, h2, h3 { font-weight: 300; letter-spacing: -0.02em; text-wrap: balance; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ── Account (nanocrew.app/account) ──────────────────────
+   Mirrors the app's grouped, iOS-settings-style list: a read-only identity header, then
+   labelled cards. See src/app/account.tsx. */
+.account { padding-block: 34px 80px; max-width: 680px; }
+.acct-muted { color: var(--dim); }
+.acct-head { display: flex; align-items: center; gap: 16px; margin: 18px 0 34px; }
+.acct-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; display: block; }
+.acct-avatar-fallback {
+  display: grid; place-items: center; border: 1px solid var(--accent);
+  background: var(--surface); color: var(--accent); font-size: 22px; font-weight: 300;
+}
+.acct-id { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.acct-email { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acct-plan {
+  font-size: 10px; letter-spacing: 0.2em; color: var(--accent);
+  border: 1px solid rgba(205, 209, 217, 0.4); border-radius: 999px; padding: 3px 9px;
+}
+.acct-code { font-size: 12px; letter-spacing: 0.08em; color: var(--dim); }
+.acct-label {
+  font-size: 10.5px; letter-spacing: 0.28em; text-transform: uppercase;
+  color: var(--dim); margin: 30px 0 12px;
+}
+.acct-card {
+  background: var(--surface); border: 1px solid var(--edge); border-radius: 18px;
+  padding: 24px; display: flex; flex-direction: column; gap: 18px;
+}
+.acct-field { display: flex; flex-direction: column; gap: 7px; }
+.acct-field > span { font-size: 12.5px; letter-spacing: 0.06em; color: var(--dim); }
+.acct-card .field {
+  background: #0d0d11; border: 1px solid var(--edge); border-radius: 11px; color: var(--text);
+  padding: 13px 15px; font: inherit; font-size: 15px; outline: none; width: 100%;
+}
+.acct-card .field:focus { border-color: var(--eve); }
+.acct-card .field:disabled { color: var(--dim); cursor: not-allowed; }
+.acct-hint { font-style: normal; font-size: 12.5px; color: #5f6572; line-height: 1.5; }
+.acct-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.acct-actions .btn { border: none; cursor: pointer; font: inherit; font-weight: 500; }
+.acct-actions .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+.acct-actions .btn.ghost { border: 1px solid var(--line); }
+.acct-ok { color: var(--eve); font-size: 13.5px; }
+.acct-err { color: #ff8a8a; font-size: 13.5px; }
+.acct-signedout { align-items: flex-start; gap: 12px; }
+.acct-signedout h1 { font-size: 1.6rem; margin: 0; }
+.acct-signedout .btn { margin-top: 6px; }
+.acct-foot {
+  margin-top: 38px; padding-top: 26px; border-top: 1px solid var(--edge);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+}
+.acct-foot .btn { border: 1px solid var(--line); cursor: pointer; font: inherit; }
