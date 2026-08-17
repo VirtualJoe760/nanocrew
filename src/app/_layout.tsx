@@ -4,6 +4,8 @@ import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { UpdateGate } from '@/components/update-gate';
+
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import EveBackground from '@/components/eve/eve-background';
@@ -43,6 +45,9 @@ export default function TabLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#08080a' }}>
+      {/* Applies a downloaded OTA on the next return from background, so a fix doesn't need two
+          force-quits to land. See components/update-gate.tsx. */}
+      <UpdateGate />
       {/* THE PIVOT (docs/studio/EVE_CONTROL.md): Eve is the living background of the whole app. Her
           ONE GL avatar mounts here, behind everything, for the app's lifetime. The tab screens sit on
           translucent scrims (withScreenFade `eveThrough`) so she shows through. */}

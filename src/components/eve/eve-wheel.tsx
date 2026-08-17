@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import Svg, { Circle, G, Path } from 'react-native-svg';
+import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -24,6 +24,9 @@ export type WheelId = 'toggle' | 'design' | 'site' | 'assets' | 'digest' | 'bran
 type Spoke = {
   id: WheelId;
   label: string;
+  /** Drawn under the icon so the glyphs aren't a guessing game. Short enough not to collide with
+   *  its neighbours — the hub carries the full phrasing when a sector is selected. */
+  short: string;
   /** Degrees, 0 = right, clockwise. Matches the signed-off mock exactly. */
   deg: number;
   /** Path in a 16x16 box centred on 0,0. */
@@ -33,14 +36,14 @@ type Spoke = {
 };
 
 const SPOKES: Spoke[] = [
-  { id: 'toggle', label: 'Talk to Eve', deg: -90, icon: 'M -5 -6 L 7 0 L -5 6 Z' },
-  { id: 'design', label: 'New design', deg: -45, icon: 'M -6 6 L 2 -6 L 6 0' },
-  { id: 'site', label: 'Edit site', deg: 0, icon: 'M -7 -5 h 14 v 10 h -14 z M -7 -1 h 14', needsBrand: true },
-  { id: 'assets', label: 'Site assets', deg: 45, icon: 'M -7 -6 h 14 v 12 h -14 z M -7 4 L -1 -3 L 3 2 L 7 -2', needsBrand: true },
-  { id: 'digest', label: 'Digest', deg: 90, icon: 'M -6 5 v -6 M 0 5 v -10 M 6 5 v -3', needsBrand: true },
-  { id: 'brand', label: 'Brand info', deg: 135, icon: 'M 0 -7 L 6 -3 v 8 L 0 8 L -6 5 v -8 Z', needsBrand: true },
-  { id: 'newbr', label: 'New brand', deg: 180, icon: 'M 0 -7 v 14 M -7 0 h 14' },
-  { id: 'type', label: 'Type instead', deg: -135, icon: 'M -8 -5 h 16 v 10 h -16 z M -4 1 h 8' },
+  { id: 'toggle', label: 'Talk to Eve', short: 'TALK', deg: -90, icon: 'M -5 -6 L 7 0 L -5 6 Z' },
+  { id: 'design', label: 'New design', short: 'DESIGN', deg: -45, icon: 'M -6 6 L 2 -6 L 6 0' },
+  { id: 'site', label: 'Edit site', short: 'SITE', deg: 0, icon: 'M -7 -5 h 14 v 10 h -14 z M -7 -1 h 14', needsBrand: true },
+  { id: 'assets', label: 'Site assets', short: 'ASSETS', deg: 45, icon: 'M -7 -6 h 14 v 12 h -14 z M -7 4 L -1 -3 L 3 2 L 7 -2', needsBrand: true },
+  { id: 'digest', label: 'Digest', short: 'DIGEST', deg: 90, icon: 'M -6 5 v -6 M 0 5 v -10 M 6 5 v -3', needsBrand: true },
+  { id: 'brand', label: 'Brand info', short: 'BRAND', deg: 135, icon: 'M 0 -7 L 6 -3 v 8 L 0 8 L -6 5 v -8 Z', needsBrand: true },
+  { id: 'newbr', label: 'New brand', short: 'NEW', deg: 180, icon: 'M 0 -7 v 14 M -7 0 h 14' },
+  { id: 'type', label: 'Type instead', short: 'TYPE', deg: -135, icon: 'M -8 -5 h 16 v 10 h -16 z M -4 1 h 8' },
 ];
 
 /**
@@ -173,6 +176,16 @@ export function EveWheel({
                 <G transform={`translate(${px}, ${py}) scale(${(RADIUS / 118).toFixed(3)})`}>
                   <Path d={s.icon} fill="none" stroke={tone} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
                 </G>
+                <SvgText
+                  x={px}
+                  y={py + RADIUS * 0.145}
+                  fill={tone}
+                  fontSize={RADIUS * 0.062}
+                  letterSpacing={1.1}
+                  textAnchor="middle"
+                  opacity={on ? 1 : 0.85}>
+                  {s.short}
+                </SvgText>
               </G>
             );
           })}
