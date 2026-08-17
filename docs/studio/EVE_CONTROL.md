@@ -476,3 +476,21 @@ store by voice — no Printful, no pricing, no listing. Worst case of a misheari
 ### Everything reused
 `/api/generate` · `/api/blanks` · `/api/composite` · the design bus · `live.sendImage` · the Modal
 pattern already in eve-home. New code = the in-place modal + the voice loop that drives it.
+
+
+## The wheel — shipped 2026-08-16
+
+Press-and-hold anywhere on Eve opens the radial menu (`src/components/eve/eve-wheel.tsx`); drag to a
+sector, release to choose; release in the centre dead zone to cancel. A quick tap still just toggles
+her — the two are raced via `Gesture.Exclusive(pan.activateAfterLongPress(180), tap)` so they can
+never both fire.
+
+Eight sectors, cardinals + diagonals: **Talk to Eve** (12 o'clock, amber — the only one that spends
+money), New design, Edit site, Site assets, Digest, Brand info, New brand, Type instead.
+
+- `spokeAt()` is exported and shared by the gesture and the render — one hit-test definition.
+- Brand-scoped sectors (site, assets, digest, brand) dim until the creator has a brand, and a dimmed
+  sector does nothing rather than misfiring.
+- **Brand info** has no in-place editor yet (P3.1 below is still open), so it asks Eve rather than
+  stubbing one; edits still go through `buildBrandPatch()`.
+- Still to prove on device: the tap/long-press race, per the mock's own note.

@@ -52,3 +52,7 @@ Same philosophy (reuse blocks, don't reinvent), different stack. The forge robot
 toward that block system as a follow-up.
 
 | `Collaborators` | `src/components/collaborators.tsx` | `visible onClose stores` | Account → brand collaborator management (invite/revoke/remove). |
+
+- **`EveWheel`** (`src/components/eve/eve-wheel.tsx`) — Eve's press-and-hold radial menu. Eight
+  sectors on the cardinals/diagonals; presentational only (the gesture lives in `eve-home`).
+  Exports `spokeAt(dx,dy)` so the hit test and the highlight share one definition.
