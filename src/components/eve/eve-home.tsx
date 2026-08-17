@@ -33,7 +33,6 @@ import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
 import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
-import { venusGuide, type VenusGuidance } from '@/lib/venus-guide';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // EVE'S HOME STATE — her voice surface, hosted by the Eve tab (/studio) since the overlay
@@ -107,7 +106,6 @@ export function EveHome({
   const [wheelPick, setWheelPick] = useState<WheelId | null>(null);
   const [paused, setPaused] = useState(false);
   const [appActive, setAppActive] = useState(true);
-  const [guidance, setGuidance] = useState<VenusGuidance | null>(null);
   // THE STATE MODEL: she is silent or talking, and only the creator moves her between them.
   // Landing on the tab must never open a socket — that used to bill a Gemini Live connection plus a
   // spoken greeting for anyone who tapped through to look at their brands.
@@ -138,14 +136,11 @@ export function EveHome({
           stores?: StoreLite[];
         };
         if (!alive) return;
-        const firstName = (d.creator?.name ?? (session.user?.user_metadata?.name as string | undefined))
-          ?.trim()
-          .split(/\s+/)[0];
         setStores(d.stores ?? []);
         setHasStore((d.stores?.length ?? 0) > 0);
-        setGuidance(venusGuide({ firstName, stores: d.stores ?? [] }));
       } catch {
-        if (alive) setGuidance(venusGuide({ stores: [] }));
+        // /api/me failed — stores stay empty and meResolved still flips below, so the surface
+        // settles into its signed-in-but-unknown state instead of hanging on a spinner.
       } finally {
         if (alive) setMeResolved(true);
       }
@@ -850,9 +845,16 @@ export function EveHome({
                       {'you > ' + heard}
                     </ThemedText>
                   ) : null}
-                  <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
-                    {line || guidance?.greeting || '…'}
-                  </ThemedText>
+                  {/* ONLY her actual words (Joe, 2026-08-17). `line` mirrors live.venusText — the
+                      real transcript — and it used to fall back to guidance.greeting or an ellipsis
+                      while the socket was still connecting, so the caption showed a canned line she
+                      never said. Nothing is a truer caption than nothing; the state pill already
+                      says CONNECTING / THINKING, so the surface isn't silent about what's going on. */}
+                  {line ? (
+                    <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
+                      {line}
+                    </ThemedText>
+                  ) : null}
                 </>
               ) : (
                 <>
