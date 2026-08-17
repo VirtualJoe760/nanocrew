@@ -741,7 +741,11 @@ export function EveHome({
         />
       ) : null}
 
+      {/* box-none: this is a LAYOUT container, not a touch target. Without it the full-screen flex
+          box swallows every tap on empty space and the gesture surface beneath it — tap-to-talk and
+          the wheel's long-press — never sees a finger. Its children still receive normally. */}
       <KeyboardAvoidingView
+        pointerEvents="box-none"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.content, { paddingTop: insets.top + Spacing.four, paddingBottom: bottomPad }]}>
         <View style={styles.headerRow}>
@@ -786,7 +790,7 @@ export function EveHome({
         </View>
 
         {!session ? (
-          <View style={styles.guideWrap}>
+          <View pointerEvents="box-none" style={styles.guideWrap}>
             <ThemedText type="title" style={[styles.guideTitle, { color: p.ink }]}>Meet {AI_NAME}</ThemedText>
             <ThemedText type="small" style={[styles.guideBody, { color: p.dim }]}>
               Your AI brand consultant. Talk it through, and {AI_NAME} designs your clothing brand,
@@ -815,12 +819,12 @@ export function EveHome({
             // Cold load: /api/me hasn't answered yet, so we don't know WHICH guide this is — a
             // returning creator used to flash the first-brand mic CTA for a beat. Hold her surface
             // quiet (no CTA, no greeting, no spinner over her) until the answer lands.
-            <View style={styles.guideView} />
+            <View pointerEvents="box-none" style={styles.guideView} />
           ) : (
           // She fills the middle; the caption block sits in the LOWER THIRD — near the eye and the
           // thumb, not tucked under the status bar (D-23 is P1, this is the half of it the new
           // silent copy needs). A CTA sits below it.
-          <View style={styles.guideView}>
+          <View pointerEvents="box-none" style={styles.guideView}>
             <View style={styles.subsLower}>
               {talking ? (
                 <>
@@ -865,7 +869,7 @@ export function EveHome({
           <>
             {/* "What to talk about" — name, products, style, colors, logo, vibe; checks off as they go. */}
             <InterviewTopics messages={live.messages} onAsk={live.sendText} p={p} />
-            <View style={styles.entityArea}>
+            <View pointerEvents="box-none" style={styles.entityArea}>
               <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
                 {hint}
               </ThemedText>

@@ -59,8 +59,8 @@ export function spokeAt(dx: number, dy: number): WheelId | null {
   let best: Spoke = SPOKES[0];
   let bestDelta = 999;
   for (const s of SPOKES) {
-    let d = Math.abs(((deg - s.deg + 540) % 360) - 180);
-    d = 180 - d; // distance from the spoke's own heading
+    // Shortest angular distance between the drag heading and this spoke's heading.
+    const d = Math.abs(((deg - s.deg + 540) % 360) - 180);
     if (d < bestDelta) {
       bestDelta = d;
       best = s;
