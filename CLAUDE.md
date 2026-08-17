@@ -30,6 +30,8 @@ is in [`AGENTS.md`](AGENTS.md); the working rules live in [`docs/context/`](docs
 | Eve build → forge → publish | [`docs/studio/BUILD_FLOW.md`](docs/studio/BUILD_FLOW.md) · [`FORGE_AI.md`](docs/studio/FORGE_AI.md) |
 | Eve's avatar look | [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md) + the Eve Lab (below) |
 | Identity · orders · money · credits | [`docs/accounts/`](docs/accounts/README.md) |
+| The **account page** (app *or* web) | [`docs/accounts/ACCOUNT_SURFACE.md`](docs/accounts/ACCOUNT_SURFACE.md) — **change all three: app · site · API** |
+| The marketing site / nanocrew.app | [`nanocrew-site/CLAUDE.md`](nanocrew-site/CLAUDE.md) |
 | Creating a template | [`docs/storefront/TEMPLATE_AUTHORING.md`](docs/storefront/TEMPLATE_AUTHORING.md) |
 | Schema · endpoints | [`docs/architecture/DATABASE_PLAN.md`](docs/architecture/DATABASE_PLAN.md) · [`API.md`](docs/architecture/API.md) |
 | What's shipped vs open | [`docs/roadmap/REMAINING_FEATURES.md`](docs/roadmap/REMAINING_FEATURES.md) |
@@ -51,6 +53,8 @@ Memory and review are **behaviors, not commands** — see [`docs/context/CODE_ST
 ## Per-unit rules
 - **App backend** (`src/app/**+api.ts`, Cloud Run): no `fetch()` before the first DB query.
 - **platform-api/** — its own [`CLAUDE.md`](platform-api/CLAUDE.md) (Next + Stripe; schema-copy sync).
+- **nanocrew-site/** — its own [`CLAUDE.md`](nanocrew-site/CLAUDE.md) (nanocrew.app; no DB credential,
+  the app's palette, account parity with the app).
 - **forge-worker/** — its own [`CLAUDE.md`](forge-worker/CLAUDE.md) (re-scp the worker). NB:
   `forge-worker/forge-CLAUDE.md` conditions the storefront-building **robot**, not the dev agent.
 

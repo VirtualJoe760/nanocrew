@@ -71,7 +71,21 @@ Sourced verbatim from the codebase's existing warnings (root `CLAUDE.md`, `TECH_
   applies to mocks and design comps too: if a comp shows chrome at the very top of the frame, the comp
   is wrong before the code is. Full rule + the values: [`UI_RULES.md`](UI_RULES.md) "Safe areas".
 
-## 5. Process discipline
+## 5. Account-surface parity
+
+**The account page exists twice — the app (`src/app/account.tsx`) and the website
+(`nanocrew-site/app/account/`). Never change one without the other.**
+
+One creator identity, two front doors. A capability added to the app and not the web (or the
+reverse) is a defect, not a backlog item: the creator who opens a laptop finds a different product.
+Touching either side means touching the app, the website **and** the API in the same commit, then
+updating the parity matrix in [`../accounts/ACCOUNT_SURFACE.md`](../accounts/ACCOUNT_SURFACE.md).
+
+Intentional one-sided capabilities are allowed but must be **recorded there with the reason**
+(today: email is never editable anywhere; account deletion stays in the app). An undocumented gap is
+drift.
+
+## 6. Process discipline
 
 - **🟡 Reuse before you build. Audit first.** Most things already exist (one Supabase identity,
   orders-by-email, the design generator, go-live phases, the UI primitives). Search the code **and**

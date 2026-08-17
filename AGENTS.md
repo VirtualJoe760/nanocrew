@@ -31,13 +31,18 @@ fast-moving API (RN, AI model IDs) against current docs rather than memory
 - **Don't rush; don't over-engineer.** Confirm the plan, reuse existing pieces, keep changes scoped.
   Quality + correctness over speed. When in doubt, audit and show the map before writing code.
 
-## The four deployable units (one shared Supabase Postgres)
+## The five deployable units (one shared Supabase Postgres)
 1. **Mobile app** — this repo. `src/app/**+api.ts` server routes hold authed creator logic; **the
    backend runs on Cloud Run** (persistent Node via `expo serve`) — NOT EAS Hosting.
 2. **platform-api** — `platform-api/` (Next.js, Vercel). Public storefront API + webhooks.
    `platform-api/db/schema.ts` is a **copy** of `src/db/schema.ts` — re-sync every migration.
-3. **nanocrew-templates** (sibling repo) — 5 Next.js storefront templates; `brand.json` token contract.
-4. **forge** — DO droplet (`ssh nanocrew-forge`) running headless Claude; provisions + revises brand
+3. **nanocrew-site** — `nanocrew-site/` (Next.js, Vercel) at **nanocrew.app**. The public web
+   surface: marketing, the HQ store, and the **signed-in account page**. Holds **no** database
+   credential — it consumes the API over HTTP, anonymously for the catalogue and with a Supabase
+   bearer via `lib/api.ts` (the web sibling of the app's `apiFetch()`). Its own
+   [`CLAUDE.md`](nanocrew-site/CLAUDE.md).
+4. **nanocrew-templates** (sibling repo) — 5 Next.js storefront templates; `brand.json` token contract.
+5. **forge** — DO droplet (`ssh nanocrew-forge`) running headless Claude; provisions + revises brand
    sites on working branches via `forge-worker/`.
 
 Details + versions: [`docs/architecture/TECH_STACK.md`](docs/architecture/TECH_STACK.md) and
@@ -67,6 +72,11 @@ affects, in the same change.**
 - Touch an API route/shape → [`API.md`](docs/architecture/API.md) (+ [`STOREFRONT_DATA_CONTRACT.md`](docs/storefront/STOREFRONT_DATA_CONTRACT.md) if a storefront reads it).
 - Touch storefront data/provisioning/sync → [`STOREFRONT_ENGINE.md`](docs/storefront/STOREFRONT_ENGINE.md) + the data contract.
 - Add a reusable component → [`docs/context/UI_REGISTRY.md`](docs/context/UI_REGISTRY.md).
+- 🔴 Touch the **account page** → change it in **all three**: the app (`src/app/account.tsx`), the
+  website (`nanocrew-site/app/account/`) and the API, in the same commit — then update the parity
+  matrix in [`docs/accounts/ACCOUNT_SURFACE.md`](docs/accounts/ACCOUNT_SURFACE.md). One creator
+  identity, two front doors; they are not allowed to drift. Intentional exceptions are recorded
+  there with a reason, not left implicit.
 - Build a storefront-facing feature → wire it at the **template level** so every generated site gets it.
 - Finish a feature → move it in [`REMAINING_FEATURES.md`](docs/roadmap/REMAINING_FEATURES.md).
 
