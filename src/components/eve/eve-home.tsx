@@ -625,32 +625,46 @@ export function EveHome({
 
   // A tap RACED against long-press-then-pan, so the two can never both fire: the pan can only win
   // once the 180ms hold passes, and anything shorter resolves as the tap it always was.
+  // These run on the JS thread. The worklets below hand over RAW NUMBERS and nothing else —
+  // spokeAt() is an ordinary imported function, and calling one from a worklet executes it on the
+  // UI thread, which crashes the app outright. (It survived the browser preview because web has no
+  // separate UI thread; only a device shows it.)
+  const openWheel = useCallback((wx: number, wy: number) => {
+    setWheel({ x: wx, y: wy });
+    setWheelPick(null);
+  }, []);
+  const moveWheel = useCallback((dx: number, dy: number) => setWheelPick(spokeAt(dx, dy)), []);
+  const endWheel = useCallback((dx: number, dy: number) => commitWheel(spokeAt(dx, dy)), [commitWheel]);
+  const closeWheel = useCallback(() => {
+    setWheel(null);
+    setWheelPick(null);
+  }, []);
+
   const wheelGesture = useMemo(() => {
     const pan = Gesture.Pan()
       .activateAfterLongPress(180)
       .onStart((e) => {
         'worklet';
-        scheduleOnRN(setWheel, { x: e.absoluteX, y: e.absoluteY });
-        scheduleOnRN(setWheelPick, null);
+        scheduleOnRN(openWheel, e.absoluteX, e.absoluteY);
       })
       .onUpdate((e) => {
         'worklet';
-        scheduleOnRN(setWheelPick, spokeAt(e.translationX, e.translationY));
+        scheduleOnRN(moveWheel, e.translationX, e.translationY);
       })
       .onEnd((e) => {
         'worklet';
-        scheduleOnRN(commitWheel, spokeAt(e.translationX, e.translationY));
+        scheduleOnRN(endWheel, e.translationX, e.translationY);
       })
       .onFinalize(() => {
         'worklet';
-        scheduleOnRN(setWheel, null);
+        scheduleOnRN(closeWheel);
       });
     const tap = Gesture.Tap().onEnd((_e, ok) => {
       'worklet';
       if (ok) scheduleOnRN(tapEve);
     });
     return Gesture.Exclusive(pan, tap);
-  }, [commitWheel, tapEve]);
+  }, [openWheel, moveWheel, endWheel, closeWheel, tapEve]);
 
   const pill: { label: string; live: boolean } = !talking
     ? { label: 'SILENT', live: false }
