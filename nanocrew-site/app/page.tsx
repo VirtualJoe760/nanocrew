@@ -68,6 +68,9 @@ export default function Home() {
         <p className="beta-line">
           <span className="dot" /> Private beta on iOS — your account holds your place in line.
         </p>
+        <p className="hero-login">
+          Already have an account? <a href="/?login=1#beta">Log in</a>
+        </p>
       </header>
 
       <div className="wrap">

@@ -22,6 +22,9 @@ export function BetaSignup() {
   // Coming back from the Google/Apple round-trip lands here with a session already established —
   // without this the form would just re-render empty and the whole trip would look like it failed.
   useEffect(() => {
+    // Arriving from the hero's "Log in" (/?login=1#beta) should land on the login form, not the
+    // signup one. Read from location rather than useSearchParams so the homepage stays static.
+    if (new URLSearchParams(window.location.search).get('login') === '1') setMode('login');
     if (!authConfigured) return;
     void supabase.auth.getSession().then(({ data }) => {
       if (data.session) setDone('in');
