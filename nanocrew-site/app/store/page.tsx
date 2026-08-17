@@ -22,9 +22,9 @@ export default async function StorePage() {
 
       {products.length === 0 ? (
         <div className="store-empty">
-          <p>The shop is being stocked. Check back soon — or join the waitlist for the app.</p>
-          <Link className="btn ghost" href="/#waitlist">
-            Join the waitlist
+          <p>The shop is being stocked. Check back soon — or create your account to get the app.</p>
+          <Link className="btn ghost" href="/#beta">
+            Create your account
           </Link>
         </div>
       ) : (

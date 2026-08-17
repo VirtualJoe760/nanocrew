@@ -64,7 +64,7 @@ export default function Pricing() {
             Open the Nano Crew app
           </a>
           <p style={{ marginTop: 16 }}>
-            Don&rsquo;t have it yet? <a href="/#waitlist">Get the app</a>.
+            Don&rsquo;t have it yet? <a href="/#beta">Get the app</a>.
           </p>
         </div>
       </section>

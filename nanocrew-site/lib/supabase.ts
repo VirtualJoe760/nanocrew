@@ -10,7 +10,12 @@ import { createClient } from '@supabase/supabase-js';
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '';
 
-export const supabase = createClient(url, key, {
+// createClient THROWS when the url is blank, and this module is imported by the homepage — so a
+// missing env var would take the whole marketing site down, not just the sign-up box. Fall back to
+// a placeholder and let the forms report the problem instead.
+export const authConfigured = Boolean(url && key);
+
+export const supabase = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder', {
   auth: {
     persistSession: true,
     autoRefreshToken: true,

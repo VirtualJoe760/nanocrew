@@ -1,10 +1,23 @@
+/* Nano Crew site palette — taken from the APP (src/constants/theme.ts + eve-glyph.tsx), not
+   invented. The site commits to Eve's night the way the app does: one unbroken dark ground with
+   content floating over it. Cool monochrome + platinum silver, no gold (AGENTS.md). */
 :root {
-  --paper: #faf8f3;
-  --ink: #15130f;
-  --gold: #c9a86a;
-  --line: #e7e2d6;
-  --dim: #6b6356;
+  --bg: #08080a;          /* app: Colors.dark.background */
+  --surface: #131317;     /* app: backgroundElement, cooled a touch */
+  --edge: #212127;
+  --text: #f4f4f6;        /* app: Colors.dark.text */
+  --dim: #8b909b;         /* cool grey, biased toward the platinum */
+  --accent: #cdd1d9;      /* app: Colors.dark.tint — the one accent */
+  --eve: #7fd7e6;         /* eve-glyph network teal — only where Eve herself is */
   --max: 1080px;
+
+  /* Legacy aliases. The old names carried the right ROLES (background / text / accent / border),
+     only the values were warm — so every existing page inherits the new palette untouched.
+     Prefer the names above in new code. */
+  --paper: var(--bg);
+  --ink: var(--text);
+  --gold: var(--accent);
+  --line: var(--edge);
 }
 
 * { box-sizing: border-box; }
@@ -13,7 +26,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 400 16px/1.65 var(--font-jost), ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 a { color: inherit; text-decoration: none; }
 .wrap { max-width: var(--max); margin: 0 auto; padding-inline: 24px; }
@@ -21,12 +34,7 @@ a { color: inherit; text-decoration: none; }
 /* ── Nav ─────────────────────────────────────────────── */
 .nav { display: flex; align-items: center; justify-content: space-between; padding-block: 22px; }
 .mark { display: flex; align-items: center; gap: 10px; }
-.mark .nc {
-  font-family: Georgia, "Times New Roman", serif;
-  font-weight: 600; font-size: 20px; letter-spacing: 0.04em;
-  width: 38px; height: 38px; display: grid; place-items: center;
-  border: 1px solid var(--ink); border-radius: 10px;
-}
+.mark .nc { display: grid; place-items: center; width: 38px; height: 38px; }
 .mark .nc-img { width: 30px; height: 30px; border-radius: 8px; display: block; }
 .mark .word { font-size: 13px; letter-spacing: 0.32em; text-transform: uppercase; }
 .nav { position: relative; flex-wrap: wrap; }
@@ -60,7 +68,7 @@ a { color: inherit; text-decoration: none; }
 
 /* ── Buttons ─────────────────────────────────────────── */
 .btn {
-  display: inline-block; background: var(--gold); color: #15130f;
+  display: inline-block; background: var(--accent); color: var(--bg);
   border: 0; border-radius: 999px; padding: 13px 26px;
   font-weight: 600; font-size: 15px; cursor: pointer;
   transition: transform 0.15s ease, opacity 0.15s ease;
@@ -95,19 +103,19 @@ a { color: inherit; text-decoration: none; }
 .wl-form { display: flex; gap: 10px; max-width: 460px; margin: 0 auto; }
 .wl-form input {
   flex: 1; padding: 13px 16px; border: 1px solid var(--line); border-radius: 999px;
-  font: inherit; background: #fff;
+  font: inherit; background: var(--surface); color: var(--text);
 }
 .wl-form input:focus { outline: none; border-color: var(--gold); }
 .wl-note { font-size: 13px; margin-top: 14px; min-height: 18px; }
-.wl-note.ok { color: #1c7c3c; }
-.wl-note.err { color: #a85b14; }
+.wl-note.ok { color: #7fd7e6; }
+.wl-note.err { color: #ff8a8a; }
 @media (max-width: 520px) { .wl-form { flex-direction: column; } }
 
 /* ── Legal / prose ───────────────────────────────────── */
 .prose { padding-block: 70px; max-width: 720px; }
 .prose h1 { font-size: 2rem; letter-spacing: -0.02em; }
 .prose h2 { font-size: 1.15rem; margin-top: 34px; }
-.prose p, .prose li { color: #2b2820; }
+.prose p, .prose li { color: var(--dim); }
 .prose .updated { color: var(--dim); font-size: 13px; }
 
 /* ── Footer ──────────────────────────────────────────── */
@@ -124,10 +132,10 @@ a { color: inherit; text-decoration: none; }
 .store-empty { color: var(--dim); display: flex; flex-direction: column; align-items: flex-start; gap: 18px; padding: 40px 0; }
 .store-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px 24px; }
 .pcard { display: block; }
-.pcard-img { aspect-ratio: 4 / 5; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.pcard-img { aspect-ratio: 4 / 5; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .pcard-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.3s ease; }
 .pcard:hover .pcard-img img { transform: scale(1.04); }
-.pcard-noimg { width: 100%; height: 100%; background: linear-gradient(135deg, var(--line), #fff); }
+.pcard-noimg { width: 100%; height: 100%; background: linear-gradient(135deg, var(--edge), var(--surface)); }
 .pcard-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px; font-size: 14px; }
 .pcard-name { letter-spacing: -0.01em; }
 .pcard-price { color: var(--dim); white-space: nowrap; }
@@ -138,7 +146,7 @@ a { color: inherit; text-decoration: none; }
 .back:hover { color: var(--ink); }
 .product-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; margin-top: 22px; align-items: start; }
 .product-gallery { display: flex; flex-direction: column; gap: 14px; }
-.product-gallery img { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: #fff; display: block; }
+.product-gallery img { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); display: block; }
 .product-gallery .pcard-noimg { aspect-ratio: 4 / 5; border-radius: 12px; }
 .product-info h1 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.02em; margin: 0; }
 .product-price { font-size: 1.15rem; margin: 12px 0 0; }
@@ -150,7 +158,7 @@ a { color: inherit; text-decoration: none; }
 .opt { width: 100%; }
 .opt-label { display: block; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
 .opt-choices { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font: inherit; font-size: 13px; cursor: pointer; transition: all 0.15s ease; }
+.chip { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; transition: all 0.15s ease; }
 .chip:hover { border-color: var(--ink); }
 .chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .buy .btn { border: none; cursor: pointer; font: inherit; }
@@ -163,13 +171,13 @@ a { color: inherit; text-decoration: none; }
 .cart-empty { color: var(--dim); margin: 0 0 22px; }
 .cart-lines { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
 .cart-line { display: grid; grid-template-columns: 88px 1fr auto; gap: 18px; align-items: start; padding: 22px 0; border-bottom: 1px solid var(--line); }
-.cart-img { aspect-ratio: 4 / 5; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.cart-img { aspect-ratio: 4 / 5; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .cart-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cart-detail { display: flex; flex-direction: column; gap: 6px; }
 .cart-name { letter-spacing: -0.01em; }
 .cart-variant { font-size: 13px; color: var(--dim); }
 .cart-qty { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.cart-qty button { width: 28px; height: 28px; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; font: inherit; }
+.cart-qty button { width: 28px; height: 28px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; cursor: pointer; font: inherit; }
 .cart-qty button:hover { border-color: var(--ink); }
 .cart-remove { width: auto !important; padding: 0 10px; font-size: 12px; color: var(--dim); letter-spacing: 0.06em; }
 .cart-line-price { white-space: nowrap; font-size: 14px; }
@@ -178,7 +186,7 @@ a { color: inherit; text-decoration: none; }
 .cart-tax { color: var(--dim); font-size: 13px; margin: 8px 0 20px; }
 .cart-foot .btn { border: none; cursor: pointer; font: inherit; }
 .cart-foot .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.cart-error { color: #a85b14; font-size: 13px; margin-top: 12px; }
+.cart-error { color: #ff8a8a; font-size: 13px; margin-top: 12px; }
 
 @media (max-width: 720px) {
   .store-grid { grid-template-columns: repeat(2, 1fr); }
@@ -203,4 +211,86 @@ a { color: inherit; text-decoration: none; }
 /* Very small phones — keep two product columns from getting cramped */
 @media (max-width: 380px) {
   .store-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Eve's field ─────────────────────────────────────────
+   One canvas behind every page (app/eve-sky.tsx), the way the app mounts one persistent avatar
+   at its root. Content sits above it on z-index 1. */
+.eve-sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+body > * { position: relative; z-index: 1; }
+body { background: var(--bg); color: var(--text); }
+
+/* ── Home ────────────────────────────────────────────────
+   The redesign (2026-08-16). Typography is Jost — the app's own face, via next/font/local. */
+h1, h2, h3 { font-weight: 300; letter-spacing: -0.02em; text-wrap: balance; }
+.hero h1 { font-weight: 300; }
+.eyebrow { color: var(--eve); font-size: 10.5px; letter-spacing: 0.34em; }
+.btn { font-weight: 500; box-shadow: 0 0 30px rgba(205, 209, 217, 0.22); }
+.btn:hover { box-shadow: 0 0 44px rgba(205, 209, 217, 0.34); }
+.btn.ghost { box-shadow: none; background: rgba(19, 19, 23, 0.55); color: var(--text); }
+.btn.ghost:hover { border-color: var(--accent); }
+.section { border-top: 0; }
+.rule { height: 1px; background: linear-gradient(90deg, transparent, var(--edge) 18%, var(--edge) 82%, transparent); }
+
+.beta-line { font-size: 13px; color: var(--dim); margin-top: 20px; display: flex; align-items: flex-start; gap: 9px; }
+.beta-line .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--eve); box-shadow: 0 0 10px var(--eve); flex: none; margin-top: 0.52em; }
+
+/* The conversation — the product, shown rather than described. */
+.talk { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(28px, 5vw, 64px); align-items: center; }
+.thread { display: flex; flex-direction: column; gap: 14px; }
+.msg { max-width: 82%; padding: 14px 18px; border-radius: 16px; font-size: 15px; line-height: 1.55; }
+.msg .who { font-size: 9.5px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; display: block; }
+.msg-eve { align-self: flex-start; background: rgba(127, 215, 230, 0.07); border: 1px solid rgba(127, 215, 230, 0.22); border-bottom-left-radius: 5px; }
+.msg-eve .who { color: var(--eve); }
+.msg-you { align-self: flex-end; background: var(--surface); border: 1px solid var(--edge); border-bottom-right-radius: 5px; }
+
+.brandcard { background: var(--surface); border: 1px solid var(--edge); border-radius: 18px; padding: 26px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55); }
+.brandcard .label { font-size: 9.5px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--dim); }
+.brandname { font-size: 1.75rem; font-weight: 300; letter-spacing: 0.06em; text-transform: uppercase; }
+.swatches { display: flex; gap: 8px; }
+.sw { width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.09); }
+.bmeta { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13.5px; color: var(--dim); }
+.bmeta b { color: var(--text); font-weight: 400; }
+
+/* What you get */
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.card { background: var(--surface); border: 1px solid var(--edge); border-radius: 18px; padding: 28px 26px; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s ease, transform 0.2s ease; }
+.card:hover { border-color: rgba(205, 209, 217, 0.34); transform: translateY(-2px); }
+.card h3 { font-size: 1.12rem; font-weight: 500; letter-spacing: 0; margin: 0; }
+.card p { font-size: 14.5px; color: var(--dim); margin: 0; }
+.card svg { width: 34px; height: 34px; color: var(--eve); opacity: 0.9; }
+
+/* Beta signup */
+.beta { display: grid; grid-template-columns: 1fr auto; gap: clamp(28px, 5vw, 60px); align-items: center; }
+.beta-copy { display: flex; flex-direction: column; gap: 14px; max-width: 60ch; }
+.beta-copy h2 { font-size: clamp(1.9rem, 3.6vw, 2.7rem); margin: 0; }
+.beta-copy > p { color: var(--dim); margin: 0; }
+.perks { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 9px; }
+.perks li { display: flex; gap: 11px; font-size: 14px; color: var(--dim); align-items: flex-start; }
+.perks .tick { color: var(--eve); flex: none; line-height: 1.5; }
+
+.signup { background: var(--surface); border: 1px solid var(--edge); border-radius: 18px; padding: 30px; display: flex; flex-direction: column; gap: 11px; min-width: 330px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5); }
+.signup .field { background: #0d0d11; border: 1px solid var(--edge); border-radius: 11px; color: var(--text); padding: 13px 15px; font: inherit; font-size: 15px; outline: none; width: 100%; }
+.signup .field::placeholder { color: #5f6572; }
+.signup .field:focus { border-color: var(--eve); }
+.signup .oauth { background: #16161b; border: 1px solid #2c4d55; border-radius: 999px; color: var(--text); padding: 12px 22px; font: inherit; font-size: 14px; cursor: pointer; width: 100%; }
+.signup .oauth:hover { border-color: var(--eve); }
+.signup .oauth:disabled, .signup .btn:disabled { opacity: 0.5; cursor: default; }
+.signup .or { display: flex; align-items: center; gap: 10px; margin: 3px 0; }
+.signup .or span { flex: 1; height: 1px; background: var(--edge); }
+.signup .or em { font-style: normal; font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: #5f6572; }
+.signup .fine { font-size: 12px; color: #5f6572; margin: 2px 0 0; line-height: 1.5; }
+.signup .err { color: #ff8a8a; font-size: 13.5px; margin: 0; }
+.signup .ok { color: var(--eve); font-size: 15px; font-weight: 500; margin: 0; }
+
+:focus-visible { outline: 2px solid var(--eve); outline-offset: 3px; border-radius: 4px; }
+
+@media (max-width: 900px) {
+  .talk, .beta, .cards { grid-template-columns: 1fr; }
+  .signup { min-width: 0; }
+  .msg { max-width: 90%; }
+  .hero { padding-top: calc(48px + 7vh); }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
 }

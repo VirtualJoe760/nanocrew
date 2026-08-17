@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { EveMark } from '../eve-mark';
+
 import { useCart } from './cart-store';
 
 // Store header — same NC mark + hamburger as the marketing nav, plus a live cart count.
@@ -14,7 +16,7 @@ export function StoreNav() {
   return (
     <nav className="nav wrap">
       <Link href="/" className="mark" aria-label="Nano Crew — home" onClick={close}>
-        <span className="nc">NC</span>
+        <span className="nc"><EveMark size={34} /></span>
         <span className="word">Nano Crew</span>
       </Link>
 

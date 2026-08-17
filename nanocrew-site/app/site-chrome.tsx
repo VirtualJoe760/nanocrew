@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { EveMark } from './eve-mark';
+
 const NAV_LINKS = [
   { href: '/store', label: 'Store' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/#how', label: 'How it works' },
-  { href: '/#waitlist', label: 'Waitlist' },
+  { href: '/#beta', label: 'Beta' },
   { href: '/contact', label: 'Contact' },
 ];
 
@@ -17,7 +19,7 @@ export function Nav() {
   return (
     <nav className="nav wrap">
       <Link href="/" className="mark" aria-label="Nano Crew — home" onClick={close}>
-        <span className="nc">NC</span>
+        <span className="nc"><EveMark size={34} /></span>
         <span className="word">Nano Crew</span>
       </Link>
 

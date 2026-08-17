@@ -1,6 +1,21 @@
 import type { Metadata } from 'next';
+import localFont from 'next/font/local';
+
 import './globals.css';
+import { EveSky } from './eve-sky';
 import { CartProvider } from './store/cart-store';
+
+// Jost — the app's own typeface (assets/fonts, mirrored into app/fonts). Self-hosted so the site
+// and the app render the same face; `display: swap` keeps first paint fast.
+const jost = localFont({
+  src: [
+    { path: './fonts/Jost-Light.ttf', weight: '300', style: 'normal' },
+    { path: './fonts/Jost-Regular.ttf', weight: '400', style: 'normal' },
+    { path: './fonts/Jost-Medium.ttf', weight: '500', style: 'normal' },
+  ],
+  display: 'swap',
+  variable: '--font-jost',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.SITE_URL || 'https://nanocrew.app'),
@@ -17,8 +32,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={jost.variable}>
       <body>
+        {/* Eve sits behind every page — the site's echo of the app's one persistent avatar. */}
+        <EveSky />
         <CartProvider>{children}</CartProvider>
       </body>
     </html>
