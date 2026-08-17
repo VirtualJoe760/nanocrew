@@ -59,5 +59,5 @@ it must live on the app backend, it has to be expressible as `GET`/`POST`.
 3. Update the parity matrix here, and [`API.md`](../architecture/API.md) if a route shape changed.
 4. If a capability is intentionally one-sided, add it to **Deliberate exceptions** with the reason.
 
-Related: [`AUTH_IDENTITY.md`](AUTH_IDENTITY.md) · [`PAYOUTS_SETUP.md`](PAYOUTS_SETUP.md) ·
+Related: [`AUTH_IDENTITY.md`](AUTH_IDENTITY.md) · [`PAYOUTS_SETUP.md`](../ops/PAYOUTS_SETUP.md) ·
 [`EMAIL_PIPELINE.md`](EMAIL_PIPELINE.md) · [`../architecture/ARCHITECTURE.md`](../architecture/ARCHITECTURE.md)
