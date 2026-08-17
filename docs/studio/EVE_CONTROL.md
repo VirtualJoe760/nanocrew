@@ -508,7 +508,7 @@ the render share one hit test.
 |---|---|---|
 | **TALK** (12 o'clock, amber) | `toggleTalk()` | the ONLY spoke that spends money — set apart in amber for that reason |
 | **DESIGN** | voice-ask via `sendContext` | she stays home and ASKS what to make (starts talking if silent); the answer routes back as `new-design{idea}` → `<EveDesign>` opens already generating. Never opens the typed form — a routed `new-design` with no idea also re-asks instead of opening empty (2026-08-17; was `onGo({state:'design'})`, which landed in a bare text input) |
-| **SITE** | `onOpenConsole(slug, name)` | opens the **Brand Console** (Edit site · Posts · Sell · Settings — `studio-composer.tsx`), which handles a no-site brand itself ("Build site"). Voice edits stay reachable by asking her (`edit-site` intent → `EveDeveloping`). (2026-08-17; was `onGo({state:'developing'})`, which stranded the console once the wheel replaced the deck as the main path) |
+| **SITE** | `onShowBrands()` | summons the **Your-Brands deck** — pick the brand, then its **Console** (Edit site · Posts · Sell · Settings) via the deck's edit action. Voice edits stay reachable by asking her (`edit-site` intent → `EveDeveloping`). (2026-08-17; was `onGo({state:'developing'})`, which stranded the console once the wheel replaced the deck as the main path) |
 | **ASSETS** | `/design?panel=web` | brand-scoped |
 | **DIGEST** | `openDigest()` | brand-scoped; also briefs her with the real figures |
 | **BRAND** | asks Eve conversationally | no in-place editor yet (P3.1); edits still go through `buildBrandPatch()` |

@@ -74,7 +74,7 @@ export function EveHome({
   hidden = false,
   onRequestClose,
   onGo,
-  onOpenConsole,
+  onShowBrands,
 }: {
   /** The surface is on screen (gates the live session — she is never vocal while hidden). */
   open: boolean;
@@ -86,8 +86,9 @@ export function EveHome({
   onRequestClose: () => void;
   /** Transition Eve's surface in place (home → developing/design) — the host's state machine. */
   onGo: (s: EveSummon) => void;
-  /** Open a brand's Console (the Edit site · Posts · Sell · Settings sheet) — the wheel's SITE spoke. */
-  onOpenConsole: (slug: string, name: string) => void;
+  /** Summon the Your-Brands deck (pick a brand → its Console: Edit site · Posts · Sell · Settings) —
+   *  the wheel's SITE spoke. */
+  onShowBrands: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const p = usePalette();
@@ -620,11 +621,11 @@ export function EveHome({
           router.push('/design?panel=web');
           return;
         case 'site': {
-          // The Brand Console — Edit site · Posts · Sell · Settings (Joe, 2026-08-17: the wheel's
-          // SITE goes to the app's console popup, not Eve's voice-edit surface). The console handles
-          // a brand with no live site itself ("Build site" on the Edit tab), so no dead-end here.
-          // Voice edits stay reachable by ASKING her (the edit-site intent → EveDeveloping).
-          if (target) onOpenConsole(target.slug, target.name);
+          // The Your-Brands deck (Joe, 2026-08-17): pick the brand FIRST, then its Console
+          // (Edit site · Posts · Sell · Settings) via the deck's edit action — not Eve's voice-edit
+          // surface, and not the first brand's console unasked. Voice edits stay reachable by
+          // ASKING her (the edit-site intent → EveDeveloping).
+          onShowBrands();
           return;
         }
         case 'brand':
@@ -639,7 +640,7 @@ export function EveHome({
           return;
       }
     },
-    [stores, talking, toggleTalk, startVoice, openDigest, onGo, onOpenConsole, live],
+    [stores, talking, toggleTalk, startVoice, openDigest, onGo, onShowBrands, live],
   );
 
   /** Release: act on the highlighted sector, or cancel when the thumb is in the centre. */
