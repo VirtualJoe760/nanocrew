@@ -74,6 +74,7 @@ export function EveHome({
   hidden = false,
   onRequestClose,
   onGo,
+  onOpenConsole,
 }: {
   /** The surface is on screen (gates the live session — she is never vocal while hidden). */
   open: boolean;
@@ -85,6 +86,8 @@ export function EveHome({
   onRequestClose: () => void;
   /** Transition Eve's surface in place (home → developing/design) — the host's state machine. */
   onGo: (s: EveSummon) => void;
+  /** Open a brand's Console (the Edit site · Posts · Sell · Settings sheet) — the wheel's SITE spoke. */
+  onOpenConsole: (slug: string, name: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const p = usePalette();
@@ -617,11 +620,11 @@ export function EveHome({
           router.push('/design?panel=web');
           return;
         case 'site': {
-          const url = target ? siteUrlFor(target) : null;
-          // A brand with no live site yet routes nowhere useful — say so instead of opening an
-          // empty editor (the mock's rule).
-          if (target && url) onGo({ state: 'developing', payload: { slug: target.slug, url, name: target.name } });
-          else if (target) live.sendContext(`The creator wants to edit ${target.name}'s site, but it has no live site yet. Offer to finish and publish it.`);
+          // The Brand Console — Edit site · Posts · Sell · Settings (Joe, 2026-08-17: the wheel's
+          // SITE goes to the app's console popup, not Eve's voice-edit surface). The console handles
+          // a brand with no live site itself ("Build site" on the Edit tab), so no dead-end here.
+          // Voice edits stay reachable by ASKING her (the edit-site intent → EveDeveloping).
+          if (target) onOpenConsole(target.slug, target.name);
           return;
         }
         case 'brand':
@@ -636,7 +639,7 @@ export function EveHome({
           return;
       }
     },
-    [stores, talking, toggleTalk, startVoice, openDigest, onGo, live],
+    [stores, talking, toggleTalk, startVoice, openDigest, onGo, onOpenConsole, live],
   );
 
   /** Release: act on the highlighted sector, or cancel when the thumb is in the centre. */

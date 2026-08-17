@@ -323,6 +323,7 @@ function StudioScreen() {
               hidden={!!eve}
               onRequestClose={() => setEve(null)}
               onGo={setEve}
+              onOpenConsole={(slug, name) => { setConsoleBrand({ slug, name }); setShowComposer(true); }}
             />
             {hasStore ? (
               <>
