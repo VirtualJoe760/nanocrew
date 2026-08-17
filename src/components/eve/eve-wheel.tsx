@@ -85,6 +85,7 @@ export function EveWheel({
   y,
   active,
   hasBrand,
+  brandsKnown,
   talking,
   micDenied,
 }: {
@@ -94,6 +95,12 @@ export function EveWheel({
   /** Currently highlighted sector, or null when the thumb is in the dead zone. */
   active: WheelId | null;
   hasBrand: boolean;
+  /**
+   * Do we actually KNOW yet? `hasBrand` alone conflated three states — no brands, not loaded, and
+   * load-failed — so a creator with six brands saw four dead spokes if they held before /api/me
+   * answered, or forever if it errored. Never dim on ignorance: dim only once the answer is in.
+   */
+  brandsKnown: boolean;
   talking: boolean;
   micDenied?: boolean;
 }) {
@@ -123,9 +130,9 @@ export function EveWheel({
   const disabledFor = useMemo(
     () => (s: Spoke) => {
       if (s.id === 'toggle' && micDenied) return true;
-      return !!s.needsBrand && !hasBrand;
+      return !!s.needsBrand && brandsKnown && !hasBrand;
     },
-    [hasBrand, micDenied],
+    [hasBrand, brandsKnown, micDenied],
   );
 
   const activeSpoke = SPOKES.find((s) => s.id === active) ?? null;

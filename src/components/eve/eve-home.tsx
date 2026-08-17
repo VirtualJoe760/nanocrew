@@ -113,7 +113,11 @@ export function EveHome({
   const wantGreetRef = useRef(false); // true only for the tap that STARTS a conversation
   const [hasStore, setHasStore] = useState(false);
   const [stores, setStores] = useState<StoreLite[]>([]);
-  const [meResolved, setMeResolved] = useState(false); // instruction is chosen from this — never start before it
+  const [meResolved, setMeResolved] = useState(false);
+  // Separate from meResolved on purpose. meResolved means "we stopped waiting" (it gates which
+  // persona starts, and must flip even on failure). storesKnown means "we actually got an answer" —
+  // the only honest basis for dimming a brand-scoped spoke. A 500 must never read as "no brands".
+  const [storesKnown, setStoresKnown] = useState(false); // instruction is chosen from this — never start before it
   const [micOk, setMicOk] = useState<boolean | null>(null); // guide-view auto-voice needs an answered mic prompt
 
   const messages = useRef<ChatMessage[]>([]);
@@ -124,26 +128,37 @@ export function EveHome({
     if (!open || !session?.access_token) return;
     let alive = true;
     (async () => {
-      try {
-        // Timed out rather than open-ended: a hung /api/me would otherwise leave her surface
-        // degraded forever — the catch/finally below fall back to a safe greeting and resolve.
-        const r = await fetch(apiUrl('/api/me'), {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          signal: AbortSignal.timeout(8000),
-        });
-        const d = (await r.json().catch(() => ({}))) as {
-          creator?: { name?: string | null };
-          stores?: StoreLite[];
-        };
-        if (!alive) return;
-        setStores(d.stores ?? []);
-        setHasStore((d.stores?.length ?? 0) > 0);
-      } catch {
-        // /api/me failed — stores stay empty and meResolved still flips below, so the surface
-        // settles into its signed-in-but-unknown state instead of hanging on a spinner.
-      } finally {
-        if (alive) setMeResolved(true);
+      // One retry: Cloud Run cold starts are the common failure here, and a single blip used to
+      // leave the creator's brands invisible for the whole session.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          // Timed out rather than open-ended: a hung /api/me would otherwise leave her surface
+          // degraded forever — the fallbacks below resolve her to a safe greeting instead.
+          const r = await fetch(apiUrl('/api/me'), {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!r.ok) throw new Error(String(r.status)); // a 500 is NOT "you have no brands"
+          const d = (await r.json()) as {
+            creator?: { name?: string | null };
+            stores?: StoreLite[];
+          };
+          if (!alive) return;
+          setStores(d.stores ?? []);
+          setHasStore((d.stores?.length ?? 0) > 0);
+          setStoresKnown(true);
+          break;
+        } catch {
+          if (attempt === 0) {
+            await new Promise((r) => setTimeout(r, 900));
+            continue;
+          }
+          // Still failing: storesKnown stays false, so brand-scoped spokes stay LIT rather than
+          // claiming the creator has nothing. Trying one and finding nothing beats being told a
+          // lie about your own account.
+        }
       }
+      if (alive) setMeResolved(true);
     })();
     return () => {
       alive = false;
@@ -610,7 +625,10 @@ export function EveHome({
       setWheelPick(null);
       if (!id) return; // released in the dead zone — she carries on exactly as she was
       const brandScoped = id === 'site' || id === 'assets' || id === 'digest' || id === 'brand';
-      if (brandScoped && !stores.length) return; // dimmed sector — do nothing rather than misfire
+      // Only refuse when we KNOW there's nothing to act on. If /api/me hasn't answered, the spoke
+      // wasn't dimmed, so refusing here would be an invisible no-op — the exact confusion this
+      // whole change removes.
+      if (brandScoped && storesKnown && !stores.length) return;
       chooseSpoke(id);
     },
     [chooseSpoke, stores.length],
@@ -717,6 +735,7 @@ export function EveHome({
           y={wheel.y}
           active={wheelPick}
           hasBrand={stores.length > 0}
+          brandsKnown={storesKnown}
           talking={talking}
         />
       ) : null}
