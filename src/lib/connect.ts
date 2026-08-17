@@ -90,9 +90,34 @@ export async function getConnectedAccount(creatorId: string): Promise<ConnectSta
 
 /** Ensure the creator has a Stripe Express account (creates one on first call). Throws if Connect
  *  isn't enabled on the platform yet — callers decide whether that's fatal or best-effort. */
+/**
+ * Does this account still exist under the CURRENT platform key?
+ *
+ * A stored id can go dead — created in test mode, or under a platform account that was since
+ * rotated. Stripe then answers "does not have access ... or that account does not exist" for every
+ * call, including account_links, so "Set up payouts" dead-ends forever with no way back.
+ * Distinguish that from a transient outage: only a definite 4xx-style missing/permission answer
+ * counts as gone, anything else is rethrown so we never discard a live account on a blip.
+ */
+async function accountStillExists(accountId: string): Promise<boolean> {
+  try {
+    await stripeGet(`/accounts/${accountId}`);
+    return true;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message.toLowerCase() : '';
+    if (msg.includes('does not have access') || msg.includes('no such account') || msg.includes('does not exist')) {
+      return false;
+    }
+    throw e;
+  }
+}
+
 export async function ensureConnectedAccount(creatorId: string, email: string): Promise<string> {
   const existing = await getConnectedAccount(creatorId);
-  if (existing.stripeAccountId) return existing.stripeAccountId;
+  if (existing.stripeAccountId) {
+    if (await accountStillExists(existing.stripeAccountId)) return existing.stripeAccountId;
+    console.warn(`[connect] ${creatorId}: stored account ${existing.stripeAccountId} is unknown to this platform key — re-provisioning`);
+  }
 
   // Idempotency key keyed to the CREATOR: two concurrent callers (store creation fires this
   // best-effort in the background while the creator can simultaneously tap "Set up payouts") get
@@ -108,13 +133,20 @@ export async function ensureConnectedAccount(creatorId: string, email: string): 
       business_profile: { product_description: 'Creator clothing brand on Nano Crew' },
       metadata: { creatorId },
     },
-    `connect_acct_${creatorId}`,
+    // The key is namespaced by the account being replaced: a heal must NOT replay the original
+    // request and hand back the very account we just found to be dead.
+    existing.stripeAccountId ? `connect_acct_${creatorId}_after_${existing.stripeAccountId}` : `connect_acct_${creatorId}`,
   );
   const stripeAccountId = account.id as string;
+  // Upsert, not insert-ignore: on a heal the row already exists and must be repointed, with the
+  // capability flags reset — the new account has submitted nothing yet.
   await db
     .insert(schema.connectedAccounts)
     .values({ creatorId, stripeAccountId })
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: schema.connectedAccounts.creatorId,
+      set: { stripeAccountId, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false },
+    });
   // Return what the DB actually holds — if a concurrent insert won, that row is the truth.
   const settled = await getConnectedAccount(creatorId);
   return settled.stripeAccountId ?? stripeAccountId;
@@ -163,6 +195,12 @@ export interface ConnectLiveStatus extends ConnectStatus {
 export async function refreshConnectedAccount(creatorId: string): Promise<ConnectLiveStatus> {
   const current = await getConnectedAccount(creatorId);
   if (!current.stripeAccountId) return { ...current, requirementsDue: [], disabledReason: null };
+  // A stored id that this platform key doesn't know (test-mode leftover, rotated platform account)
+  // must read as "not set up yet" — otherwise the status call 502s and the creator is shown an
+  // error instead of the button that would fix it. ensureConnectedAccount re-provisions on click.
+  if (!(await accountStillExists(current.stripeAccountId))) {
+    return { ...NO_ACCOUNT, requirementsDue: [], disabledReason: null };
+  }
   const acct = await stripeGet(`/accounts/${current.stripeAccountId}`);
   const req = (acct.requirements ?? {}) as { currently_due?: string[]; past_due?: string[]; disabled_reason?: string | null };
   const status: ConnectLiveStatus = {
