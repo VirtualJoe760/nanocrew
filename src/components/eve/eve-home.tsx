@@ -571,7 +571,10 @@ export function EveHome({
           if (!talking) void toggleTalk();
           return;
         case 'newbr':
-          enterInterview();
+          // startVoice, not enterInterview: it's the same fresh-interview reset PLUS the mic
+          // request and the fall-back-to-typing-on-denial that a first brand needs. The removed
+          // "Build your brand" button used this path; the spoke inherits it.
+          void startVoice();
           return;
         case 'design':
           router.push('/design');
@@ -602,7 +605,7 @@ export function EveHome({
           return;
       }
     },
-    [stores, talking, toggleTalk, enterInterview, openDigest, onGo, live],
+    [stores, talking, toggleTalk, startVoice, openDigest, onGo, live],
   );
 
   /** Release: act on the highlighted sector, or cancel when the thumb is in the centre. */
@@ -862,21 +865,19 @@ export function EveHome({
                 </>
               )}
             </View>
-            <View style={styles.orbDock}>
-              {!hasStore ? (
-                <Pressable onPress={() => void startVoice()} style={({ pressed }) => [styles.guideCta, { borderColor: `${p.accent}66` }, pressed && { opacity: 0.7 }]}>
-                  <ThemedText type="smallBold" style={{ color: p.accent }}>🎙  Build your brand</ThemedText>
-                </Pressable>
-              ) : (
-                // Tapping it briefs her too (no-op when she isn't connected) — otherwise she's blind
-                // to what the creator is looking at and can't answer a spoken follow-up about it.
+            {/* "Build your brand" is gone (Joe, 2026-08-17): it did exactly what tapping her does —
+                both called startVoice() — and starting a brand is now also a wheel spoke. */}
+            {hasStore ? (
+              <View style={styles.orbDock}>
+                {/* Tapping it briefs her too (no-op when she isn't connected) — otherwise she's blind
+                    to what the creator is looking at and can't answer a spoken follow-up about it. */}
                 <Pressable
                   onPress={() => void openDigest().then((rows) => live.sendContext(digestBriefing(rows)))}
                   style={({ pressed }) => [styles.guideCta, { borderColor: `${p.dim}66` }, pressed && { opacity: 0.7 }]}>
                   <ThemedText type="code" style={{ color: p.dim }}>View your digest</ThemedText>
                 </Pressable>
-              )}
-            </View>
+              </View>
+            ) : null}
           </View>
           )
         ) : keyboardMode ? null : (

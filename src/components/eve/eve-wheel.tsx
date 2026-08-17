@@ -43,9 +43,17 @@ const SPOKES: Spoke[] = [
   { id: 'type', label: 'Type instead', deg: -135, icon: 'M -8 -5 h 16 v 10 h -16 z M -4 1 h 8' },
 ];
 
-/** Centre dead-zone radius. Inside it nothing is selected — releasing there cancels. */
-export const WHEEL_DEAD_ZONE = 46;
-const RADIUS = 118;
+/**
+ * Centre dead-zone radius. Inside it nothing is selected — releasing there cancels.
+ * Deliberately NOT screen-relative: it's a measure of thumb travel from the press point, which
+ * doesn't change with the phone. spokeAt() hit-tests against it, so it must stay a constant.
+ */
+export const WHEEL_DEAD_ZONE = 54;
+
+/** Visual radius only. Bigger on bigger phones, but never so wide it can't clear the edges. */
+function radiusFor(width: number, height: number): number {
+  return Math.round(Math.min(172, Math.max(136, Math.min(width, height) * 0.38)));
+}
 
 /**
  * Which sector does this offset from the wheel's centre fall in?
@@ -88,6 +96,7 @@ export function EveWheel({
 }) {
   const theme = useTheme();
   const { width, height } = useWindowDimensions();
+  const RADIUS = radiusFor(width, height);
   const [lastActive, setLastActive] = useState<WheelId | null>(null);
 
   // A tick each time the highlight moves — this is what makes it feel like a physical dial.
@@ -139,7 +148,7 @@ export function EveWheel({
       {/* Scrim so the wheel reads over her, without hiding her — she stays present. */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(6,8,12,0.55)' }]} />
 
-      <Animated.View style={[styles.wheel, { left: cx - RADIUS, top: cy - RADIUS }, pop]}>
+      <Animated.View style={[styles.wheel, { left: cx - RADIUS, top: cy - RADIUS, width: RADIUS * 2, height: RADIUS * 2 }, pop]}>
         <Svg width={RADIUS * 2} height={RADIUS * 2} viewBox={`0 0 ${RADIUS * 2} ${RADIUS * 2}`}>
           {/* The ring the sectors sit on */}
           <Circle cx={RADIUS} cy={RADIUS} r={RADIUS - 6} fill="rgba(14,16,20,0.72)" stroke={`${theme.tint}33`} strokeWidth={1} />
@@ -159,10 +168,10 @@ export function EveWheel({
             return (
               <G key={s.id} opacity={opacity}>
                 {on && !dim ? (
-                  <Circle cx={px} cy={py} r={30} fill={`${tone}22`} stroke={tone} strokeWidth={1.2} />
+                  <Circle cx={px} cy={py} r={RADIUS * 0.235} fill={`${tone}22`} stroke={tone} strokeWidth={1.3} />
                 ) : null}
-                <G x={px} y={py}>
-                  <Path d={s.icon} fill="none" stroke={tone} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                <G transform={`translate(${px}, ${py}) scale(${(RADIUS / 118).toFixed(3)})`}>
+                  <Path d={s.icon} fill="none" stroke={tone} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
                 </G>
               </G>
             );
@@ -184,9 +193,9 @@ export function EveWheel({
 }
 
 const styles = StyleSheet.create({
-  wheel: { position: 'absolute', width: RADIUS * 2, height: RADIUS * 2, alignItems: 'center', justifyContent: 'center' },
-  hub: { position: 'absolute', width: WHEEL_DEAD_ZONE * 1.9, alignItems: 'center', justifyContent: 'center' },
-  hubText: { fontSize: 11, letterSpacing: 1.2, textAlign: 'center', textTransform: 'uppercase' },
+  wheel: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  hub: { position: 'absolute', width: WHEEL_DEAD_ZONE * 2.0, alignItems: 'center', justifyContent: 'center' },
+  hubText: { fontSize: 12, letterSpacing: 1.3, textAlign: 'center', textTransform: 'uppercase' },
 });
 
 export { SPOKES };
