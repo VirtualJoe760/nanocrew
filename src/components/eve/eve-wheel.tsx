@@ -156,13 +156,14 @@ export function EveWheel({
       entering={FadeIn.duration(120)}
       exiting={FadeOut.duration(110)}>
       {/* Scrim so the wheel reads over her, without hiding her — she stays present. */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(6,8,12,0.55)' }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(6,8,12,0.72)' }]} />
 
       <Animated.View style={[styles.wheel, { left: cx - RADIUS, top: cy - RADIUS, width: RADIUS * 2, height: RADIUS * 2 }, pop]}>
         <Svg width={RADIUS * 2} height={RADIUS * 2} viewBox={`0 0 ${RADIUS * 2} ${RADIUS * 2}`}>
-          {/* The ring the sectors sit on */}
-          <Circle cx={RADIUS} cy={RADIUS} r={RADIUS - 6} fill="rgba(14,16,20,0.72)" stroke={`${theme.tint}33`} strokeWidth={1} />
-          <Circle cx={RADIUS} cy={RADIUS} r={WHEEL_DEAD_ZONE} fill="rgba(8,8,10,0.9)" stroke={`${theme.tint}22`} strokeWidth={1} />
+          {/* The ring the sectors sit on. Joe (2026-08-17): the wheel was too faint to find —
+              brighter ring, stronger strokes, fuller labels. */}
+          <Circle cx={RADIUS} cy={RADIUS} r={RADIUS - 6} fill="rgba(18,21,27,0.9)" stroke={`${theme.tint}66`} strokeWidth={1.5} />
+          <Circle cx={RADIUS} cy={RADIUS} r={WHEEL_DEAD_ZONE} fill="rgba(8,8,10,0.92)" stroke={`${theme.tint}44`} strokeWidth={1} />
 
           {SPOKES.map((s) => {
             const rad = (s.deg * Math.PI) / 180;
@@ -174,14 +175,14 @@ export function EveWheel({
             // The talk toggle is set apart from the six that navigate — it's the only one that
             // spends money, so it never looks like just another destination.
             const tone = s.id === 'toggle' ? '#e8c07d' : theme.tint;
-            const opacity = dim ? 0.25 : on ? 1 : 0.72;
+            const opacity = dim ? 0.3 : on ? 1 : 0.92;
             return (
               <G key={s.id} opacity={opacity}>
                 {on && !dim ? (
-                  <Circle cx={px} cy={py} r={RADIUS * 0.235} fill={`${tone}22`} stroke={tone} strokeWidth={1.3} />
+                  <Circle cx={px} cy={py} r={RADIUS * 0.235} fill={`${tone}33`} stroke={tone} strokeWidth={1.6} />
                 ) : null}
                 <G transform={`translate(${px}, ${py}) scale(${(RADIUS / 118).toFixed(3)})`}>
-                  <Path d={s.icon} fill="none" stroke={tone} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d={s.icon} fill="none" stroke={tone} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                 </G>
                 <SvgText
                   x={px}
@@ -190,7 +191,7 @@ export function EveWheel({
                   fontSize={RADIUS * 0.062}
                   letterSpacing={1.1}
                   textAnchor="middle"
-                  opacity={on ? 1 : 0.85}>
+                  opacity={1}>
                   {s.short}
                 </SvgText>
               </G>

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { usePathname } from 'expo-router';
+import * as Device from 'expo-device';
 
 import VenusAvatar from '@/components/venus-avatar';
+import { EveGlyph } from '@/components/eve/eve-glyph';
 import { subscribeEveStage, type EveStage } from '@/lib/eve-stage-bus';
 
 // THE PERSISTENT EVE (docs/studio/EVE_CONTROL.md — THE PIVOT). Eve is the living background of the
@@ -34,10 +36,21 @@ export default function EveBackground() {
     return () => cancelAnimationFrame(id);
   }, []);
 
+  // The iOS SIMULATOR runs the GL scene but renders the point-sprite constellation invisibly
+  // (its GLES emulation, not our shaders — she renders fine on hardware). Rather than debug a
+  // rig no creator ever sees, the sim shows her static glyph so the surface is never a void.
+  const simulator = !Device.isDevice;
+
   return (
     // A brand-dark bed under the GL so nothing flashes white before/while the context paints.
     <View style={[styles.root, styles.bed, { width, height }]} pointerEvents="none">
-      {ready ? <VenusAvatar stage={stage} lowPower={lowPower} /> : null}
+      {!ready ? null : simulator ? (
+        <View style={styles.glyphWrap}>
+          <EveGlyph size={Math.round(Math.min(width, height) * 0.55)} />
+        </View>
+      ) : (
+        <VenusAvatar stage={stage} lowPower={lowPower} />
+      )}
     </View>
   );
 }
@@ -45,4 +58,5 @@ export default function EveBackground() {
 const styles = StyleSheet.create({
   root: { position: 'absolute', top: 0, left: 0 },
   bed: { backgroundColor: '#08080a' },
+  glyphWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });
