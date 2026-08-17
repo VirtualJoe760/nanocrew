@@ -136,6 +136,12 @@ When they say that's everything, tell them to tap Submit and you'll build the pr
 export const CRITIQUE_GREETING =
   "(The creator just opened the live view of their site to edit it. In ONE short sentence, greet them and tell them to circle anything they want to change and say the adjustment — OR, if they don't know what a part is called, circle it and ask and you'll explain it and suggest changes.)";
 
+/** EVE'S VOICE — Joe's pick (Lab audition 2026-07-05): Kore × the 'british robot' delivery. The
+ *  single source: every live session defaults to it, and /api/say's VENUS_VOICE must match. The
+ *  site-critique session silently ran the old 'Aoede' default for weeks because it never passed a
+ *  name — that's the "why does she have a different voice" bug (2026-08-17). */
+export const LIVE_VOICE = 'Kore';
+
 const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
 const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
 /** Backstop for an announcement session (speakOnly) — it closes on turnComplete, but never lives
@@ -329,7 +335,7 @@ export class LiveVoiceSession {
     this.accessToken = opts.accessToken;
     this.userName = opts.userName;
     this.firstTime = opts.firstTime;
-    this.voiceName = opts.voiceName ?? 'Aoede'; // known-good native-audio voice (see speechConfig note below)
+    this.voiceName = opts.voiceName ?? LIVE_VOICE; // one Eve, one voice — a session that forgets to pass a name must not sound like someone else
     this.instructionOverride = opts.instruction;
     this.greetingOverride = opts.greeting;
     this.enableBrandTool = opts.enableBrandTool ?? true;

@@ -32,7 +32,7 @@ import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/li
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
-import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING } from '@/lib/live-voice';
+import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // EVE'S HOME STATE — her voice surface, hosted by the Eve tab (/studio) since the overlay
@@ -46,7 +46,7 @@ import type { BrandResult, ChatMessage } from '@/lib/interview';
 // She has NO avatar of her own: the persistent root Eve (eve-background) is already behind this
 // surface, and EveHome DRIVES it through the stage bus — one GL context, ever.
 
-const LIVE_VOICE = 'Kore'; // Joe's pick (Lab audition 2026-07-05): Kore × the 'british robot' delivery
+// Her voice is LIVE_VOICE from lib/live-voice — the single source every session defaults to.
 
 type EntityState = 'idle' | 'listening' | 'thinking' | 'speaking';
 

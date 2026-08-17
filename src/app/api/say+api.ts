@@ -12,7 +12,7 @@ import { guardRate } from '@/lib/rate-limit';
 // straight from a .wav file. Body: { text }. Returns: { audio: base64 WAV }.
 
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
-const VENUS_VOICE = 'Kore'; // Joe's pick — MUST match studio LIVE_VOICE ('Kore', british-robot delivery)
+const VENUS_VOICE = 'Kore'; // Joe's pick — MUST match LIVE_VOICE in src/lib/live-voice.ts ('Kore', british-robot delivery)
 // Her ASSIGNED delivery (matches the live session's DELIVERY instruction). Auto-applied to
 // production calls; requests that specify a `voice` (the Lab audition) compose their own
 // direction client-side and are passed through untouched.
@@ -22,7 +22,7 @@ const RATE = 24000; // Gemini TTS PCM sample rate (Hz), mono, 16-bit
 // Voice AUDITION (the Lab's orb-mode picker): the request may name any Gemini prebuilt voice.
 // This is the FULL catalog (gemini-2.5 TTS + native-audio Live). NB Sulafat broke the LIVE
 // session once (studio.tsx) — auditioning it here via TTS is fine, just don't make it LIVE_VOICE
-// without re-testing. Making a choice permanent = VENUS_VOICE here + LIVE_VOICE in studio.tsx.
+// without re-testing. Making a choice permanent = VENUS_VOICE here + LIVE_VOICE in lib/live-voice.ts.
 const VOICE_OPTIONS = [
   'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe', 'Autonoe',
   'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib', 'Rasalgethi',
