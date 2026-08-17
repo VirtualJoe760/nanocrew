@@ -206,3 +206,10 @@ These back the storefront's own `/admin` console (it calls platform-api `apiBase
 
 ### `GET /api/public/invite/:token`
 Resolve an invite token to display copy (masked email). Unauthenticated — the token is the credential. Lets nanocrew.app host the invite page without DB access.
+
+
+### `GET/PATCH /api/creator/account`
+The signed-in creator's own profile — `{ profile: { id, email, name, phone, image, createdAt }, plan }`.
+PATCH accepts `{ name?, phone? }` only. **Email is intentionally not editable**: collaboration
+invites (`store_invites.email`) and customer order-lookups match on it. Powers
+`nanocrew.app/account`, the site's one signed-in surface; the app shows this identity read-only.
