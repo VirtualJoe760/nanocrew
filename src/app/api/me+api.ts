@@ -45,6 +45,7 @@ export async function GET(req: Request) {
         status: schema.stores.status,
         logoUrl: schema.stores.logoUrl,
         ogImageUrl: schema.stores.ogImageUrl,
+        tagline: schema.stores.tagline,
         siteAssets: schema.stores.siteAssets,
         // Eve's developing state (edit-site) needs the real storefront URL — it is never derived
         // from the slug (github.com deploymentUrl = placeholder, no site yet). Client applies the
@@ -54,6 +55,17 @@ export async function GET(req: Request) {
       })
       .from(schema.stores)
       .where(inArray(schema.stores.id, await accessibleStoreIds(user.id)));
+    // A brand's banner is GENERATED, never hand-uploaded: stores created before the OG card
+    // existed (or renamed since — buildBrandPatch nulls og_image_url) fall back to the same
+    // deterministic Cloudinary transform at read time. Pure URL construction — no fetch, no
+    // write; Cloudinary renders + CDN-caches on first view. Brands with no logo return null
+    // and the client keeps its tile fallback.
+    const { buildOgImageUrl } = await import('@/lib/og-image');
+    for (const s of stores) {
+      if (!s.ogImageUrl && s.logoUrl) {
+        s.ogImageUrl = buildOgImageUrl({ logoUrl: s.logoUrl, tagline: s.tagline });
+      }
+    }
     // Read back the stored (backfilled) name so Eve can greet returning creators by name even when
     // the auth token metadata lacks it (e.g. Apple sign-in after the first login).
     const [profile] = await db

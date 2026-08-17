@@ -2304,7 +2304,13 @@ function DesignScreen() {
       {catSheetOpen ? (
         <Modal visible animationType="slide" onRequestClose={() => setCatSheetOpen(false)}>
           <ThemedView style={styles.fillScreen}>
-            <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+            {/* Insets don't resolve inside <Modal> (UI_RULES "Safe areas") — the screen's insets are
+                applied by hand, or Close ends up above the battery icon. */}
+            <View
+              style={[
+                styles.flex,
+                { paddingTop: insets.top + Spacing.two, paddingBottom: Math.max(insets.bottom, Spacing.two) },
+              ]}>
               <View style={styles.setupTopBar}>
                 {setupStep === 'collection' && brands.length > 1 ? (
                   <Pressable onPress={() => setSetupStep('brand')} hitSlop={10}>
@@ -2342,7 +2348,7 @@ function DesignScreen() {
                         return (
                           <View key={b.id} style={styles.brandItem}>
                             <Pressable onPress={() => chooseBrand(b)}>
-                            <View style={[styles.brandCard, on && { borderColor: theme.tint, borderWidth: 2 }]}>
+                            <View style={[styles.brandCard, { borderColor: theme.backgroundSelected }, on && { borderColor: theme.tint, borderWidth: 2 }]}>
                               {img ? (
                                 <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" />
                               ) : (
@@ -2408,7 +2414,7 @@ function DesignScreen() {
                     {(() => {
                       const heroImg = brandImage(brand);
                       return (
-                        <View style={styles.brandHero}>
+                        <View style={[styles.brandHero, { borderColor: theme.backgroundSelected }]}>
                           {heroImg ? (
                             <Image source={{ uri: heroImg }} style={StyleSheet.absoluteFill} contentFit="cover" />
                           ) : (
@@ -2558,7 +2564,7 @@ function DesignScreen() {
                   </>
                 )}
               </ScrollView>
-            </SafeAreaView>
+            </View>
           </ThemedView>
         </Modal>
       ) : null}
@@ -3203,27 +3209,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
-  setupTitleBlock: { gap: Spacing.one, paddingVertical: Spacing.two },
+  setupTitleBlock: { gap: Spacing.one, paddingTop: Spacing.four, paddingBottom: Spacing.three },
   setupScroll: { flex: 1 },
   setupScrollContent: { gap: Spacing.two, paddingHorizontal: Spacing.three, paddingBottom: Spacing.six },
-  // Brand OG banner cards (brand step) + hero banner (collection step)
+  // Brand OG banner cards (brand step) + hero banner (collection step). The cards render at the
+  // OG card's own 1200×630 ratio so the generated banner shows uncropped, as designed — a fixed
+  // height + `cover` was slicing wordmarks off mid-letter. Border color is set inline (theme).
   brandCard: {
-    height: 132,
+    aspectRatio: 1200 / 630,
     borderRadius: Spacing.four,
     overflow: 'hidden',
     justifyContent: 'flex-end',
     borderWidth: 1,
-    borderColor: 'transparent',
   },
   brandScrim: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(8,8,10,0.5)' },
   brandCardRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, padding: Spacing.three },
   brandLogo: { width: 42, height: 42, borderRadius: Spacing.two },
   brandHero: {
-    height: 200,
+    aspectRatio: 1200 / 630,
     borderRadius: Spacing.four,
     overflow: 'hidden',
     justifyContent: 'flex-end',
     marginBottom: Spacing.one,
+    borderWidth: 1,
   },
   brandHeroContent: { padding: Spacing.four, gap: Spacing.one },
   brandHeroLogo: { width: 52, height: 52, borderRadius: Spacing.two, marginBottom: Spacing.one },

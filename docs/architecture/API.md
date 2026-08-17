@@ -27,7 +27,7 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/me` | bearer | Verify token; bootstrap the creator row + stores list. |
+| GET | `/api/me` | bearer | Verify token; bootstrap the creator row + stores list. A store with no `ogImageUrl` but a logo gets one computed at read time (`buildOgImageUrl` — deterministic Cloudinary URL, no write), so brand banners are always generated, never hand-uploaded. |
 | DELETE | `/api/me` | bearer | Delete the account and its data. |
 | GET | `/api/platform/admin` | bearer (admin email) | All stores + totals + creator count (`PLATFORM_ADMIN_EMAILS`). No in-app UI yet. |
 

@@ -219,7 +219,11 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
 
 - **Setup popup (first thing on the tab):** pick the **brand** you're designing for, then **what
   for** — either **🌐 Site assets** (the brand's website: hero / logo / social — **no collection
-  needed**) or a **collection** (products). One brand → it's pre-selected and you land on the
+  needed**) or a **collection** (products). Brand banner cards render at the OG card's own
+  1200×630 ratio (uncropped) with a subtle border; the banner itself is **generated** —
+  `/api/me` computes the OG card at read time for any logo'd brand missing one, so "Add a brand
+  image" appears only for brands with no logo at all. The popup is a `<Modal>`, so it applies the
+  screen's insets by hand (UI_RULES "Safe areas"). One brand → it's pre-selected and you land on the
   second step. The top-left chip (`BRAND · Site assets` or `BRAND · COLLECTION ▾`) reopens it to
   switch. Catalogues are brand-scoped (`/api/catalogues?store=<slug>`, access-checked).
   - **Site assets mode** (`assetMode`): the dock opens straight to **Web assets** and the session is
