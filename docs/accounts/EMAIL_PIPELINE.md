@@ -76,11 +76,12 @@ raw-`fetch` core (no SDK dependency required). The per-email bodies + the layout
 
 ### The CTA rule — device-aware landing pages (2026-08-16)
 
-Every email CTA points at ONE web landing route on platform-api, and **that route does the
-branching**: a phone user-agent gets the `nanocrew://` deep link into the app; a desktop gets a
+Every email CTA points at ONE web landing route on **nanocrew.app** (the site — never a raw
+vercel.app host), and **that route does the branching**: a phone user-agent gets the `nanocrew://` deep link into the app; a desktop gets a
 web flow that completes the action after a sign-in (Supabase REST with the publishable key — the
-web page is only a way to get a bearer; the API enforces everything). First implementation:
-`/invite/[token]` + `POST /api/public/invite`. New emails MUST follow this shape — never put a bare
+web page is only a way to get a bearer; the API enforces everything). First implementation: `nanocrew.app/invite/[token]`
+(page) + `GET/POST /api/public/invite` on platform-api (data + accept). The site authenticates via
+`nanocrew-site/lib/api.ts` — the web sibling of the app's `apiFetch()`. New emails MUST follow this shape — never put a bare
 `nanocrew://` link in an email, it's a dead click on every laptop.
 
 ### App-triggered sends · `POST /api/internal/notify` (INTERNAL_API_KEY-gated)

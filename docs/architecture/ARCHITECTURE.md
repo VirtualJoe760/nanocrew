@@ -300,3 +300,17 @@ migration must `ENABLE ROW LEVEL SECURITY` on its new table.
     "system" isn't already there before adding one (Joe's strongest, repeated correction).
 12. **Every code change updates the docs it affects, in the same change** (AGENTS.md documentation
     discipline).
+
+## The site ↔ API contract (2026-08-16)
+
+`nanocrew-site` (nanocrew.app) holds **no database credential** and never will. It consumes
+platform-api over HTTP — anonymously for the public catalogue, and **authenticated** via
+`nanocrew-site/lib/api.ts`, the web sibling of the app's `apiFetch()`: Supabase session → bearer →
+`platform.nanocrew.app`. Same contract as the app has with its Cloud Run backend.
+
+Hosts:
+- `nanocrew.app` → nanocrew-site (marketing, HQ storefront, **user-facing product pages**)
+- `platform.nanocrew.app` → platform-api (DB + Stripe + Resend; also `nanocrew-api.vercel.app`)
+- `api.nanocrew.app` → the **app's** Cloud Run backend (`EXPO_PUBLIC_API_URL`) — not platform-api
+
+Rule: user-facing pages live on the site; the API serves data. Don't add pages to platform-api.

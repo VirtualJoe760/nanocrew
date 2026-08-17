@@ -202,3 +202,7 @@ These back the storefront's own `/admin` console (it calls platform-api `apiBase
 - **Store launch** (`/api/store`) `402` carries `{error:'subscription_required'|'brand_limit', plan, maxBrands, brandCount}`.
 - Public storefront reads set `Cache-Control`; `/api/publish` and the webhooks are idempotent.
 - **`platform-api/db/schema.ts` is a COPY of `src/db/schema.ts`** — re-sync on every migration.
+
+
+### `GET /api/public/invite/:token`
+Resolve an invite token to display copy (masked email). Unauthenticated — the token is the credential. Lets nanocrew.app host the invite page without DB access.
