@@ -1,0 +1,71 @@
+/* Eve's palette — mirrors the app's tokens (cool monochrome + platinum, no gold) and the glyph's
+   teal network colour from src/components/eve/eve-glyph.tsx. */
+.eve-scope {
+  --ink: #08080a;
+  --surface: rgba(14, 16, 20, 0.82);
+  --edge: #1f242b;
+  --net: #7fd7e6;      /* Eve's network teal */
+  --platinum: #cdd1d9; /* app accent */
+  --text: #e9edf2;
+  --muted: #949cab;
+  --faint: #646c7a;
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  background: radial-gradient(ellipse 90% 60% at 50% 28%, #0c1216 0%, #08080a 65%);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+.eve-page {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Never under the Dynamic Island / notch — safe-area insets on every edge (UI_RULES). */
+  padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+           max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+}
+.eve-card {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 22px;
+  padding: 36px 30px;
+  box-shadow: 0 0 80px rgba(127, 215, 230, 0.07), 0 24px 60px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+}
+.eve-eyebrow { font-size: 10.5px; letter-spacing: 3px; color: var(--net); margin: 2px 0 0; font-family: ui-monospace, Menlo, monospace; }
+.eve-h1 { font-size: 25px; font-weight: 650; margin: 0; letter-spacing: -0.3px; }
+.eve-p { font-size: 15px; line-height: 1.6; color: var(--muted); margin: 0; }
+.eve-fine { font-size: 12.5px; color: var(--faint); margin: 4px 0 0; line-height: 1.55; }
+.eve-cta {
+  margin-top: 10px; background: var(--platinum); color: var(--ink); text-decoration: none;
+  font-weight: 700; border-radius: 999px; padding: 14px 28px; font-size: 15px; border: none;
+  cursor: pointer; box-shadow: 0 0 24px rgba(205, 209, 217, 0.3);
+}
+.eve-cta:disabled { opacity: 0.5; cursor: default; }
+.eve-form { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 340px; margin-top: 8px; }
+.eve-oauth {
+  background: #14171c; color: var(--text); border: 1px solid #2f5b66; border-radius: 999px;
+  padding: 12px 26px; font-size: 14.5px; font-weight: 600; cursor: pointer;
+}
+.eve-oauth:disabled { opacity: 0.5; cursor: default; }
+.eve-divider { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+.eve-divider span:first-child, .eve-divider span:last-child { flex: 1; height: 1px; background: var(--edge); }
+.eve-divider em { font-size: 11.5px; color: var(--faint); letter-spacing: 1px; text-transform: uppercase; font-style: normal; }
+.eve-tabs { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }
+.eve-tab { background: transparent; color: var(--muted); border: 1px solid var(--edge); border-radius: 999px; padding: 7px 18px; font-size: 13px; cursor: pointer; }
+.eve-tab[data-on='true'] { color: var(--ink); background: var(--net); border-color: var(--net); font-weight: 700; }
+.eve-input { background: #0e1014; border: 1px solid var(--edge); border-radius: 10px; color: var(--text); padding: 12px 14px; font-size: 15px; outline: none; width: 100%; }
+.eve-input:focus { border-color: var(--net); }
+.eve-terms { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); text-align: left; }
+.eve-terms a { color: var(--platinum); }
+.eve-error { color: #ff8a8a; font-size: 13.5px; margin: 0; }
+.eve-success { color: var(--net); font-size: 17px; font-weight: 600; margin: 0; }

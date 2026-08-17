@@ -119,9 +119,9 @@ export async function POST(req: Request) {
           .from(schema.creators)
           .where(eq(schema.creators.id, invite.invitedBy))
           .limit(1);
-        // The email's landing page (app/invite/[token]) lives on this host — same reasoning as the
-        // Stripe return pages: every email-facing landing page sits on the one web host.
-        const base = (process.env.PLATFORM_API_BASE ?? 'https://nanocrew-api.vercel.app').trim().replace(/\/+$/, '');
+        // Email links go through our OWN domain (Joe, 2026-08-16), never a raw vercel.app host:
+        // nanocrew.app serves the invite page, platform-api serves its data + the accept endpoint.
+        const base = (process.env.EMAIL_LINK_BASE ?? 'https://nanocrew.app').trim().replace(/\/+$/, '');
         await sendCollabInvite({
           to: invite.email,
           brandName: store.name,

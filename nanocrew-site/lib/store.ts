@@ -3,7 +3,7 @@
 // or Printful secret; checkout forwards to the central POS (see app/api/checkout/route.ts).
 // See docs/storefront/STOREFRONT_DATA_CONTRACT.md.
 
-export const API_BASE = process.env.NANOCREW_API || 'https://nanocrew-api.vercel.app';
+export const API_BASE = process.env.NANOCREW_API || 'https://platform.nanocrew.app';
 export const STORE_SLUG = 'nanocrew';
 
 export type Variant = {
