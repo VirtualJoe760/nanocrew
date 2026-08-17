@@ -314,3 +314,22 @@ Hosts:
 - `api.nanocrew.app` → the **app's** Cloud Run backend (`EXPO_PUBLIC_API_URL`) — not platform-api
 
 Rule: user-facing pages live on the site; the API serves data. Don't add pages to platform-api.
+
+### The site's visual language (redesigned 2026-08-16)
+
+`nanocrew.app` wears the **app's** palette and type, not its own. Sources of truth:
+- colour → `src/constants/theme.ts` (`Colors.dark`): `#08080a` ground, `#cdd1d9` platinum accent
+- Eve's teal `#7fd7e6` → `src/components/eve/eve-glyph.tsx`; use it ONLY where Eve herself appears
+- type → **Jost**, the app's face, self-hosted from `nanocrew-site/app/fonts` via `next/font/local`
+- the mark → `nanocrew-site/app/eve-mark.tsx`, the same NODES/MIDS arrays as the glyph and the icon
+
+**No gold, no warm neutrals** (AGENTS.md). The site's legacy tokens (`--paper`, `--ink`, `--gold`,
+`--line`) are kept as aliases of `--bg` / `--text` / `--accent` / `--edge` so older pages inherit the
+palette; prefer the new names in new code.
+
+Eve is drawn behind every page by `app/eve-sky.tsx` (Canvas 2D — deliberately not react-three-fiber;
+the marketing page's job is sign-ups and the real avatar is far too heavy for the front door). Her
+starfield is site-wide; the constellation is homepage-only and fades out as the hero scrolls away.
+
+Creating an account on the site IS the waitlist and the beta-tester queue — `app/beta-signup.tsx`,
+using the site's Supabase auth, plus a best-effort write to the existing `waitlist` table.
