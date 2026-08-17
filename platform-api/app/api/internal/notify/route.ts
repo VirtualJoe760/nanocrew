@@ -2,10 +2,10 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
 
+import { sendInviteEmail } from '@/lib/collab-invite';
 import { db, schema } from '@/lib/db';
 import {
   sendBrandLive,
-  sendCollabInvite,
   sendContentReport,
   sendPayoutNotification,
   sendReturnApproved,
@@ -94,42 +94,11 @@ export async function POST(req: Request) {
   // ── Collaborator invited → email the invitee (FROM Nano Crew). ──────────────────────────────────
   if (body.action === 'collab_invite') {
     if (!body.inviteId) return Response.json({ ok: false, error: 'inviteId required' }, { status: 400 });
-    // Only pending invites get a send — and a missing/non-pending row 202s SILENTLY (unlike the 404s
-    // above): the invite may have been revoked or accepted between the app's write and this notify
-    // landing, and that race must not surface as a failure of the creator's action.
-    const [invite] = await db
-      .select({
-        email: schema.storeInvites.email,
-        token: schema.storeInvites.token,
-        storeId: schema.storeInvites.storeId,
-        invitedBy: schema.storeInvites.invitedBy,
-      })
-      .from(schema.storeInvites)
-      .where(and(eq(schema.storeInvites.id, body.inviteId), eq(schema.storeInvites.status, 'pending')))
-      .limit(1);
-    if (invite) {
-      const [store] = await db
-        .select({ name: schema.stores.name })
-        .from(schema.stores)
-        .where(eq(schema.stores.id, invite.storeId))
-        .limit(1);
-      if (store) {
-        const [inviter] = await db
-          .select({ name: schema.creators.name })
-          .from(schema.creators)
-          .where(eq(schema.creators.id, invite.invitedBy))
-          .limit(1);
-        // Email links go through our OWN domain (Joe, 2026-08-16), never a raw vercel.app host:
-        // nanocrew.app serves the invite page, platform-api serves its data + the accept endpoint.
-        const base = (process.env.EMAIL_LINK_BASE ?? 'https://nanocrew.app').trim().replace(/\/+$/, '');
-        await sendCollabInvite({
-          to: invite.email,
-          brandName: store.name,
-          inviterName: inviter?.name ?? null,
-          acceptUrl: `${base}/invite/${invite.token}`,
-        });
-      }
-    }
+    // One implementation, shared with the web's own collaborators route — see lib/collab-invite.ts.
+    // A missing or non-pending invite sends nothing and still 202s: it may have been revoked or
+    // accepted between the app's write and this notify landing, and that race must not read as a
+    // failure of the creator's action.
+    await sendInviteEmail(body.inviteId);
     return Response.json({ ok: true }, { status: 202 });
   }
 

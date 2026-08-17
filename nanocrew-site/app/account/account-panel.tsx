@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from '@/lib/api';
+
+import { Brands } from './brands';
 import { authConfigured, supabase } from '@/lib/supabase';
 
 // The signed-in account surface. Reads and writes through platform-api
@@ -180,6 +182,8 @@ export function AccountPanel() {
           {error ? <span className="acct-err">{error}</span> : null}
         </div>
       </form>
+
+      <Brands />
 
       <p className="acct-label">Password</p>
       <form className="acct-card" onSubmit={changePassword}>

@@ -354,3 +354,37 @@ h1, h2, h3 { font-weight: 300; letter-spacing: -0.02em; text-wrap: balance; }
   display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
 }
 .acct-foot .btn { border: 1px solid var(--line); cursor: pointer; font: inherit; }
+
+/* Account — brands, payouts, collaborators (mirrors the app's grouped rows) */
+.acct-list { padding: 8px 0; gap: 0; }
+.acct-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 24px; }
+.acct-list .acct-row + .acct-row { border-top: 1px solid var(--edge); }
+.acct-row-plain { padding: 0; }
+.acct-row-meta { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.acct-row-title { font-size: 15px; }
+.acct-row-sub { font-size: 12.5px; color: var(--dim); }
+.acct-row-actions { display: flex; gap: 16px; align-items: center; }
+.acct-link {
+  background: none; border: 0; padding: 0; font: inherit; font-size: 13px;
+  color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+}
+.acct-link:hover { color: var(--eve); }
+.acct-link.danger { color: var(--dim); }
+.acct-link.danger:hover { color: #ff8a8a; }
+.acct-collab {
+  flex-basis: 100%; margin-top: 14px; padding-top: 16px;
+  border-top: 1px dashed var(--edge); display: flex; flex-direction: column; gap: 12px;
+}
+.acct-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.acct-people li { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; }
+.acct-people em {
+  font-style: normal; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--dim); margin-left: 10px;
+}
+.acct-invite { display: flex; gap: 8px; flex-wrap: wrap; }
+.acct-invite .field {
+  flex: 1; min-width: 190px; background: #0d0d11; border: 1px solid var(--edge);
+  border-radius: 999px; color: var(--text); padding: 11px 16px; font: inherit; font-size: 14px; outline: none;
+}
+.acct-invite .field:focus { border-color: var(--eve); }
+.acct-invite .btn { border: 1px solid var(--line); cursor: pointer; font: inherit; white-space: nowrap; }
