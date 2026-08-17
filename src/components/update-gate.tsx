@@ -21,11 +21,19 @@ export function UpdateGate() {
 
     let cancelled = false;
 
-    const check = async () => {
+    // `coldStart` is the difference between a change landing in ONE launch and needing two. On a
+    // cold start nothing is in progress — no transcript, no live turn — so reloading the moment the
+    // download finishes is free. Later in the session we wait for a background/foreground hop.
+    const check = async (coldStart = false) => {
       try {
         const result = await Updates.checkForUpdateAsync();
         if (cancelled || !result.isAvailable) return;
         await Updates.fetchUpdateAsync();
+        if (cancelled) return;
+        if (coldStart) {
+          void Updates.reloadAsync().catch(() => {});
+          return;
+        }
         pending.current = true;
       } catch {
         // Offline, or the server is unreachable — the app keeps running on what it has. An update
@@ -33,7 +41,7 @@ export function UpdateGate() {
       }
     };
 
-    void check();
+    void check(true); // launch: fetch and apply straight away
 
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
