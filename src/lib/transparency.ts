@@ -124,6 +124,45 @@ export async function keyOutMagenta(input: Buffer): Promise<Buffer> {
 }
 
 // Verification helper: are the corners actually transparent?
+/** After keying: does the artwork read as a BOXED CARD — an opaque rectangle with its own
+ *  background panel — instead of die-cut art? The chroma key can only remove magenta; when the
+ *  model draws the subject ON a white/colored card, that card ships as a printed border (Joe's
+ *  "huge no-no", 2026-08-17: the california-flag card). Heuristic: the opaque region's bounding
+ *  box has a near-fully-opaque perimeter AND fills most of the canvas. */
+export function looksBoxed(input: Buffer): boolean {
+  try {
+    const { data, width, height } = decode(input);
+    let minX = width, minY = height, maxX = -1, maxY = -1, opaque = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (data[(y * width + x) * 4 + 3] > 32) {
+          opaque++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return false; // fully transparent — a different failure
+    const boxW = maxX - minX + 1;
+    const boxH = maxY - minY + 1;
+    const boxFill = opaque / (boxW * boxH); // how solid the bounding box is
+    // Perimeter opacity of the bounding box ring (inset 1px to dodge antialiasing).
+    let edgeTotal = 0, edgeOpaque = 0;
+    const test = (x: number, y: number) => {
+      edgeTotal++;
+      if (data[(y * width + x) * 4 + 3] > 32) edgeOpaque++;
+    };
+    for (let x = minX + 1; x < maxX; x += 2) { test(x, minY + 1); test(x, maxY - 1); }
+    for (let y = minY + 1; y < maxY; y += 2) { test(minX + 1, y); test(maxX - 1, y); }
+    const edgeRatio = edgeTotal ? edgeOpaque / edgeTotal : 0;
+    return edgeRatio > 0.92 && boxFill > 0.9;
+  } catch {
+    return false;
+  }
+}
+
 export function isTransparent(input: Buffer): boolean {
   const png = PNG.sync.read(input);
   const { data, width, height } = png;

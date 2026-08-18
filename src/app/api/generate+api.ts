@@ -49,8 +49,11 @@ function buildConstraints(background: 'transparent' | 'filled', aspectRatio: str
   return (
     `${base} Render the subject centered on a SOLID, UNIFORM, PURE MAGENTA (#FF00FF) background ` +
     `that fills the entire frame edge to edge at a ${aspectRatio} aspect ratio, leaving a clear ` +
-    `magenta margin around the subject. The subject itself must contain NO magenta or pink hues, ` +
-    `and the background must be flat magenta — never a checkerboard or gradient.`
+    `magenta margin around the subject. The subject must be DIE-CUT style print artwork: no ` +
+    `background panel, card, frame or border of its own — magenta must be visible between and ` +
+    `around the subject's shapes (e.g. for a flag, render its elements as a graphic composition, ` +
+    `not a boxed rectangle). The subject itself must contain NO magenta or pink hues, and the ` +
+    `background must be flat magenta — never a checkerboard or gradient.`
   );
 }
 
@@ -209,11 +212,29 @@ export async function POST(req: Request) {
           // Host it on Cloudinary → return a small URL instead of a multi-MB data blob.
           let buffer: Buffer = Buffer.from(part.inlineData.data, 'base64');
           if (background === 'transparent') {
+            // QUALITY GATE (Joe, 2026-08-17 — the california-flag card): a transparent design must
+            // actually BE transparent, die-cut art. A failed key or a subject drawn on its own
+            // card used to ship silently; now it's a retry, and a hard refusal at the end.
+            let gated = false;
             try {
-              const { keyOutMagenta } = await import('@/lib/transparency');
-              buffer = (await keyOutMagenta(buffer)) as Buffer;
+              const { keyOutMagenta, looksBoxed } = await import('@/lib/transparency');
+              const keyed = (await keyOutMagenta(buffer)) as Buffer;
+              if (!isMeme && looksBoxed(keyed)) {
+                gated = true;
+                lastErr = 'boxed_design';
+              } else {
+                buffer = keyed;
+              }
             } catch {
-              // Keying failure shouldn't kill generation — ship the raw image.
+              gated = true; // keying itself failed — never ship a raw magenta tile
+              lastErr = 'keying_failed';
+            }
+            if (gated) {
+              // Harden the instruction for the remaining attempts and try again.
+              parts[0] = {
+                text: `${instruction}\n\nIMPORTANT: the previous attempt drew the subject on its own background card/panel or an unkeyable backdrop. Render ONLY the die-cut artwork elements over pure magenta — absolutely no rectangle, card, frame or border behind them.`,
+              };
+              continue;
             }
           }
           let image: string;
@@ -266,6 +287,12 @@ export async function POST(req: Request) {
   refund();
   // Exhausted retries. A genuine upstream/exception → 502; otherwise the model just kept declining
   // to return an image (no hard-refusal flag) → 422 with an actionable message, not a scary gateway error.
-  if (sawException) return Response.json({ error: lastErr }, { status: 502 });
+  if (lastErr === 'boxed_design' || lastErr === 'keying_failed') {
+    return Response.json(
+      { error: 'The design kept coming out as a boxed graphic with its own background — try describing the artwork elements themselves (no card or frame).', reason: 'boxed_design' },
+      { status: 422 },
+    );
+  }
+  if (sawException) return Response.json({ error: lastErr, reason: 'upstream' }, { status: 502 });
   return Response.json({ error: refusalMessage(undefined, modelText), reason: 'no_image' }, { status: 422 });
 }
