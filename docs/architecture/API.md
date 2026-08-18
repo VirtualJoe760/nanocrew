@@ -47,7 +47,7 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | GET | `/api/creator/margins` | bearer | Per-product retail / Printful cost / margin% + average. |
 | GET | `/api/blanks`, `/api/blank/:id/{variants,colors,placements,printareas}` | bearer | Printful catalogue data. |
 | GET/PATCH/DELETE | `/api/creator/stores/:slug` | bearer | Read / edit / **delete** a brand. DELETE is owner-only and cascades the store → catalogues/designs/products/variants/orders/posts/revisions (external Printful/GitHub/Vercel cleaned out of band). |
-| GET | `/api/creator/stats` | bearer | Per-store revenue, orders, 30-day views, OG + product images. |
+| GET | `/api/creator/stats` | bearer | Per-store revenue, orders, 30-day views, product images, and `bannerUrl` — the brand banner (site hero → OG card → read-time `buildOgImageUrl` for any logo'd brand), never a product photo. |
 | GET | `/api/creator/orders` | bearer | Recent orders across the creator's stores. |
 | POST | `/api/creator/orders/:id/refund` | bearer | Refund an order (`refundOrder`, branches on `payoutStatus` — see [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md)). |
 | GET | `/api/creator/returns` | bearer | The Studio **returns inbox** — every return claim across the creator's stores (`accessibleStoreIds`, owner + collaborators), newest first, joined with a small order summary. |

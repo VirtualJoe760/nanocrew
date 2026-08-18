@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { buildOgImageUrl } from '@/lib/og-image';
 import { accessibleStoreIds } from '@/lib/tenant';
 
 // GET /api/creator/stats — overview numbers for every store the creator owns:
@@ -18,6 +19,7 @@ export async function GET(req: Request) {
         deploymentUrl: schema.stores.deploymentUrl,
         ogImageUrl: schema.stores.ogImageUrl,
         logoUrl: schema.stores.logoUrl,
+        tagline: schema.stores.tagline,
         siteAssets: schema.stores.siteAssets,
         status: schema.stores.status,
         customDomain: schema.stores.customDomain,
@@ -68,10 +70,14 @@ export async function GET(req: Request) {
 
     return Response.json({
       stores: stores.map((s) => {
-        const { siteAssets, logoUrl, ...rest } = s;
+        const { siteAssets, logoUrl, tagline, ...rest } = s;
         const hero = (siteAssets as { hero?: { imageUrl?: string | null } } | null)?.hero?.imageUrl;
         return {
           ...rest,
+          // The brand BANNER — what represents the brand (deck cards etc.): the site hero, else the
+          // OG card, generated at read time for any logo'd brand missing one (same rule as /api/me:
+          // banners are generated, never hand-picked product photos).
+          bannerUrl: hero ?? s.ogImageUrl ?? (logoUrl ? buildOgImageUrl({ logoUrl, tagline }) : null),
           orders: orderAgg.find((o) => o.storeId === s.id)?.orders ?? 0,
           revenueCents: orderAgg.find((o) => o.storeId === s.id)?.revenueCents ?? 0,
           views30d: viewAgg.find((v) => v.storeId === s.id)?.views ?? 0,

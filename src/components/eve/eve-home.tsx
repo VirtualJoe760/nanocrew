@@ -30,6 +30,7 @@ import { apiUrl, readJson } from '@/lib/api';
 import { sendDesignCommand } from '@/lib/design-bus';
 import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
+import { registerEveSayListener } from '@/lib/eve-say-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
 import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
@@ -235,6 +236,9 @@ export function EveHome({
       }),
     [live.sendImage],
   );
+  // EVE'S CUE CARD — same overlay split as her eyes: the design surface asks, the session (here)
+  // speaks. prompt() sends a completed turn, so she voices it (sendContext never would).
+  useEffect(() => registerEveSayListener((instruction) => live.prompt(instruction)), [live.prompt]);
 
   useEffect(() => { setLine(live.venusText); }, [live.venusText]);
   useEffect(() => { setHeard(live.userText); }, [live.userText]);

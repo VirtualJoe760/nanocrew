@@ -29,7 +29,7 @@ const OPEN_MS = 320;
 const BACKDROP = 'rgba(6,8,12,0.9)'; // near-opaque so brand imagery reads; Eve still glows faintly through
 
 type Bounties = { product: boolean; hero: boolean; logo: boolean; cover: boolean };
-type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; ogImageUrl?: string | null; productImages?: string[]; bounties?: Bounties };
+type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; bannerUrl?: string | null; ogImageUrl?: string | null; productImages?: string[]; bounties?: Bounties };
 
 const BOUNTY_STEPS: { key: keyof Bounties; label: string; panel: 'products' | 'web'; slot?: 'hero' | 'cover' | 'logo' }[] = [
   { key: 'product', label: 'Add your first product', panel: 'products' },
@@ -79,21 +79,21 @@ export function BrandDeck({
     if (shown) void load();
   }, [shown, refreshKey, load]);
 
-  // ── Slide: parked above the top edge (-height), drops to 0 when shown. ──
-  const ty = useSharedValue(-height);
+  // ── Cross-dissolve: fades in over Eve, fades out on close (Joe, 2026-08-17 — was a slide). ──
+  const fade = useSharedValue(0);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     if (shown) {
       setMounted(true);
-      ty.value = withTiming(0, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
+      fade.value = withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
     } else {
-      ty.value = withTiming(-height, { duration: OPEN_MS, easing: Easing.in(Easing.cubic) }, (done) => {
+      fade.value = withTiming(0, { duration: OPEN_MS, easing: Easing.in(Easing.cubic) }, (done) => {
         if (done) runOnJS(setMounted)(false);
       });
     }
-  }, [shown, height, ty]);
+  }, [shown, fade]);
 
-  const slide = useAnimatedStyle(() => ({ transform: [{ translateY: ty.value }] }));
+  const dissolve = useAnimatedStyle(() => ({ opacity: fade.value }));
 
   // Swipe UP on the top handle dismisses (scoped to the handle so the horizontal pager keeps its
   // gestures). Distance OR velocity commits — mirrors the old overlay's dismiss thresholds.
@@ -110,11 +110,9 @@ export function BrandDeck({
   if (!mounted) return null;
 
   const pageCount = stores.length + 1; // brands + the "new brand" page
-  // Title + nav + checklist all live above the fold now, so the thumbnail gives up height for them.
-  const heroH = Math.round(height * 0.32);
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.root, slide]}>
+    <Animated.View style={[StyleSheet.absoluteFill, styles.root, dissolve]}>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: BACKDROP }]} pointerEvents="none" />
 
       {/* Top bar — just the ✕. Swipe-up on the bar still dismisses. */}
@@ -136,7 +134,8 @@ export function BrandDeck({
         scrollEventThrottle={16}
         style={styles.pager}>
         {stores.map((store) => {
-          const hero = store.productImages?.[0] ?? store.ogImageUrl ?? null;
+          // The brand BANNER (site hero / generated OG card) — never a random product photo (Joe).
+          const hero = store.bannerUrl ?? store.ogImageUrl ?? store.productImages?.[0] ?? null;
           const todo = store.bounties ? BOUNTY_STEPS.filter((b) => !store.bounties![b.key]) : [];
           return (
             <View key={store.slug} style={[styles.pageCol, { width }]}>
@@ -160,9 +159,9 @@ export function BrandDeck({
               {/* 3 — the thumbnail (tap opens the console). */}
               <Pressable onPress={() => onEditBrand(store.slug, store.name)} style={s.hero}>
                 {hero ? (
-                  <Image source={{ uri: hero }} style={{ width: '100%', height: heroH }} contentFit="cover" contentPosition="top" />
+                  <Image source={{ uri: hero }} style={styles.heroImg} contentFit="cover" />
                 ) : (
-                  <View style={[{ width: '100%', height: heroH }, s.heroFallback]}>
+                  <View style={[styles.heroImg, s.heroFallback]}>
                     <ThemedText type="title" style={{ color: p.ink }}>{store.name}</ThemedText>
                   </View>
                 )}
@@ -214,6 +213,8 @@ const styles = StyleSheet.create({
   pageCol: { paddingHorizontal: Spacing.four, gap: Spacing.four },
   newCol: { alignItems: 'center', justifyContent: 'center' },
   meta: { gap: Spacing.one },
+  // The banner renders at its own OG ratio (1200x630) so the artwork is never cropped.
+  heroImg: { width: '100%', aspectRatio: 1200 / 630 },
   dots: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
 });
 
