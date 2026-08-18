@@ -19,11 +19,11 @@ import { glow } from '@/constants/glow';
 import { apiUrl, readJson } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
-// THE BRAND DECK — the Eve tab's "swipe down from the top for the UI" surface (the reverse of the old
-// pull-down: Eve is the default now, and you pull the brand UI DOWN over her). A full-screen deck that
-// slides down, holding your brands as a horizontally-PAGED carousel (one brand per screen, swipe
-// left/right), the "+ new brand" page last. It paints its own dark scrim over the persistent Eve — no
-// second GL context. Dismiss: swipe UP on the top handle, or tap it.
+// THE BRAND DECK — the brands page, opened only by the wheel's BRANDS spoke. A full-screen deck that
+// slides down over Eve, holding your brands as a horizontally-PAGED carousel (one brand per screen,
+// swipe left/right), the "+ new brand" page last. It paints its own dark scrim over the persistent
+// Eve — no second GL context. Card order (Joe, 2026-08-17): title → console nav → thumbnail →
+// FINISH YOUR SITE. Dismiss: the ✕ top-right (swipe-up on the top bar still works).
 
 const OPEN_MS = 320;
 const BACKDROP = 'rgba(6,8,12,0.9)'; // near-opaque so brand imagery reads; Eve still glows faintly through
@@ -45,7 +45,6 @@ export function BrandDeck({
   onClose,
   onEditBrand,
   onNewBrand,
-  onOpenBilling,
   onBounty,
 }: {
   shown: boolean;
@@ -55,7 +54,6 @@ export function BrandDeck({
   onClose: () => void;
   onEditBrand: (slug: string, name: string, tab?: 'edit' | 'posts' | 'sell' | 'settings') => void;
   onNewBrand: () => void;
-  onOpenBilling?: () => void;
   onBounty?: (panel: 'products' | 'web', slot?: 'hero' | 'cover' | 'logo') => void;
 }) {
   const p = useStudioPalette();
@@ -64,23 +62,13 @@ export function BrandDeck({
   const s = makeStyles(p);
 
   const [stores, setStores] = useState<StoreRow[]>([]);
-  const [credits, setCredits] = useState<number | null>(null);
-  const [plan, setPlan] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, creditRes, subRes] = await Promise.all([
-        fetch(apiUrl('/api/creator/stats'), { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(apiUrl('/api/creator/credits'), { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(apiUrl('/api/creator/subscription'), { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+      const statsRes = await fetch(apiUrl('/api/creator/stats'), { headers: { Authorization: `Bearer ${token}` } });
       const d = await readJson<{ stores?: StoreRow[] }>(statsRes);
       setStores(d.stores ?? []);
-      const c = await readJson<{ balance?: number }>(creditRes);
-      if (typeof c.balance === 'number') setCredits(c.balance);
-      const sub = await readJson<{ entitlements?: { plan?: string; active?: boolean } }>(subRes);
-      if (sub.entitlements?.active && sub.entitlements.plan) setPlan(sub.entitlements.plan);
     } catch {
       /* keep prior */
     }
@@ -122,27 +110,20 @@ export function BrandDeck({
   if (!mounted) return null;
 
   const pageCount = stores.length + 1; // brands + the "new brand" page
-  const heroH = Math.round(height * 0.46);
+  // Title + nav + checklist all live above the fold now, so the thumbnail gives up height for them.
+  const heroH = Math.round(height * 0.32);
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.root, slide]}>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: BACKDROP }]} pointerEvents="none" />
 
-      {/* Top handle — grabber + label + credits chip; swipe up or tap to close. */}
+      {/* Top bar — just the ✕. Swipe-up on the bar still dismisses. */}
       <GestureDetector gesture={dismissPan}>
         <View style={[styles.handleBar, { paddingTop: insets.top + Spacing.two }]}>
-          <Pressable onPress={onClose} hitSlop={16} style={styles.grabberHit} accessibilityLabel="Close brands">
-            <View style={s.grabber} />
+          <View style={styles.flex} />
+          <Pressable onPress={onClose} hitSlop={14} accessibilityLabel="Close brands">
+            <ThemedText type="code" style={s.closeX}>✕</ThemedText>
           </Pressable>
-          <View style={styles.handleRow}>
-            <ThemedText type="code" style={s.sectionLabel}>YOUR BRANDS</ThemedText>
-            {credits !== null ? (
-              <Pressable style={s.creditChip} onPress={onOpenBilling} disabled={!onOpenBilling}>
-                {plan ? <ThemedText type="code" style={s.chipPlan}>{plan.toUpperCase()} · </ThemedText> : null}
-                <ThemedText type="code" style={s.chipCredits}>✦ {credits.toLocaleString()}</ThemedText>
-              </Pressable>
-            ) : null}
-          </View>
         </View>
       </GestureDetector>
 
@@ -159,19 +140,7 @@ export function BrandDeck({
           const todo = store.bounties ? BOUNTY_STEPS.filter((b) => !store.bounties![b.key]) : [];
           return (
             <View key={store.slug} style={[styles.pageCol, { width }]}>
-              <Pressable onPress={() => onEditBrand(store.slug, store.name)} style={s.hero}>
-                {hero ? (
-                  <Image source={{ uri: hero }} style={{ width: '100%', height: heroH }} contentFit="cover" contentPosition="top" />
-                ) : (
-                  <View style={[{ width: '100%', height: heroH }, s.heroFallback]}>
-                    <ThemedText type="title" style={{ color: p.ink }}>{store.name}</ThemedText>
-                  </View>
-                )}
-                <View style={s.editTag}>
-                  <ThemedText type="code" style={s.editTagText}>edit →</ThemedText>
-                </View>
-              </Pressable>
-
+              {/* 1 — the brand, named first. */}
               <View style={styles.meta}>
                 <ThemedText type="title" style={{ color: p.ink }}>{store.name}</ThemedText>
                 <ThemedText type="code" style={s.dim}>
@@ -179,8 +148,7 @@ export function BrandDeck({
                 </ThemedText>
               </View>
 
-              {/* Everything the console offers, one tap from the card — posts were invisible from
-                  here (the console has a full Posts tab nothing pointed at). */}
+              {/* 2 — the console nav (Edit site · Posts · Sell · Settings). */}
               <View style={s.quickRow}>
                 {([['edit', 'Edit site'], ['posts', 'Posts'], ['sell', 'Sell'], ['settings', 'Settings']] as const).map(([key, label]) => (
                   <Pressable key={key} style={s.quickPill} onPress={() => onEditBrand(store.slug, store.name, key)} hitSlop={4}>
@@ -189,6 +157,18 @@ export function BrandDeck({
                 ))}
               </View>
 
+              {/* 3 — the thumbnail (tap opens the console). */}
+              <Pressable onPress={() => onEditBrand(store.slug, store.name)} style={s.hero}>
+                {hero ? (
+                  <Image source={{ uri: hero }} style={{ width: '100%', height: heroH }} contentFit="cover" contentPosition="top" />
+                ) : (
+                  <View style={[{ width: '100%', height: heroH }, s.heroFallback]}>
+                    <ThemedText type="title" style={{ color: p.ink }}>{store.name}</ThemedText>
+                  </View>
+                )}
+              </Pressable>
+
+              {/* 4 — finish-your-site, right under the thumbnail. */}
               {todo.length && onBounty ? (
                 <View style={s.bountyBox}>
                   <ThemedText type="code" style={s.bountyHead}>FINISH YOUR SITE</ThemedText>
@@ -228,9 +208,8 @@ export function BrandDeck({
 
 const styles = StyleSheet.create({
   root: { zIndex: 50 },
-  handleBar: { paddingBottom: Spacing.three, paddingHorizontal: Spacing.four, gap: Spacing.three },
-  grabberHit: { alignSelf: 'center', paddingVertical: Spacing.two, paddingHorizontal: Spacing.six },
-  handleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  flex: { flex: 1 },
+  handleBar: { flexDirection: 'row', alignItems: 'center', paddingBottom: Spacing.three, paddingHorizontal: Spacing.four },
   pager: { flex: 1 },
   pageCol: { paddingHorizontal: Spacing.four, gap: Spacing.four },
   newCol: { alignItems: 'center', justifyContent: 'center' },
@@ -240,16 +219,10 @@ const styles = StyleSheet.create({
 
 function makeStyles(p: StudioPalette) {
   return StyleSheet.create({
-    grabber: { width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(207,232,243,0.4)' },
-    sectionLabel: { color: p.dim, letterSpacing: 2 },
+    closeX: { color: p.ink, fontSize: 17, padding: Spacing.one },
     dim: { color: p.dim },
-    creditChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.three, paddingVertical: Spacing.one + 2, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.7)' },
-    chipPlan: { color: p.dim, fontSize: 11, letterSpacing: 1 },
-    chipCredits: { color: p.ink, fontSize: 11, letterSpacing: 0.5 },
     hero: { borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(205,209,217,0.14)', backgroundColor: 'rgba(24,25,30,0.92)' },
     heroFallback: { alignItems: 'center', justifyContent: 'center' },
-    editTag: { position: 'absolute', right: Spacing.three, bottom: Spacing.three, backgroundColor: p.accent, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 5 },
-    editTagText: { color: p.onAccent, fontSize: 11, letterSpacing: 0.5 },
     quickRow: { flexDirection: 'row', gap: Spacing.two },
     quickPill: { flex: 1, alignItems: 'center', paddingVertical: Spacing.two, borderRadius: 999, borderWidth: 1, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.7)' },
     quickPillText: { color: p.ink, fontSize: 11, letterSpacing: 0.5 },

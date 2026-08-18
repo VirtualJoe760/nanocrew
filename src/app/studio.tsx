@@ -330,7 +330,6 @@ function StudioScreen() {
                   onClose={() => setDeckShown(false)}
                   onEditBrand={(slug, name, tab) => { setDeckShown(false); setConsoleBrand({ slug, name }); setConsoleTab(tab); setShowComposer(true); }}
                   onNewBrand={onNewBrand}
-                  onOpenBilling={() => setPaywall('manage')}
                   onBounty={(panel, slot) => { setDeckShown(false); router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`); }}
                 />
               </>
