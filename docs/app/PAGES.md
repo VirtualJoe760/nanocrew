@@ -248,8 +248,9 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   printed; dashed outline marks the print zone; drag/resize happens ON the garment and never yields
   to a scroll), and below it a FIXED TOOL TRAY — tab row **SIZE · COLOR · PLACE · ALIGN · EDGES ·
   PROOF** swapping ONE horizontal block rail at a time (Joe: no scrolling the page to reach
-  options). EDGES = in-editor feather (LIGHT/SOFT/HEAVY → `/api/creator/design-feather`, free,
-  persists to the design). PROOF = generate + view the real Printful mockups. Picking a non-default
+  options). EDGES = in-editor retouch: **✦ Remove background** (canned `/api/edit` custom instruction, 8 credits,
+  mints a NEW design and swaps the placement to it — the autosave persists the swap) and feather
+  (LIGHT/SOFT/HEAVY → `/api/creator/design-feather`, free, persists to the design). PROOF = generate + view the real Printful mockups. Picking a non-default
   colourway swaps the hero to that variant's catalog photo (real colour, approximate rect).
   Placements AUTOSAVE (debounced PATCH `/api/compositions/:id`) — no mockup render needed to
   persist. **FinalizeSheet** (also full-screen) sets

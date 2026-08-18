@@ -150,13 +150,15 @@ export function PlacementEditorBody({
   // see"): NO page scroll — the hero fills the measured stage and ONE tool rail shows at a time.
   const [tool, setTool] = useState<'size' | 'color' | 'place' | 'align' | 'edges' | 'proof'>('size');
   const [stageBox, setStageBox] = useState({ w: 0, h: 0 });
-  // Feather results override the prop-owned design urls (the server already persisted them).
-  const [feathered, setFeathered] = useState<Record<string, string>>({});
+  // Retouch results (feather / remove-bg) override the prop-owned design urls.
+  const [retouched, setRetouched] = useState<Record<string, string>>({});
   const [feathering, setFeathering] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0); // bump to re-run the hydrate after a failed load
+  const [catalogueId, setCatalogueId] = useState<string | null>(null); // for /api/edit (remove-bg)
+  const [removingBg, setRemovingBg] = useState(false);
 
   const designById = useMemo(() => new Map(designs.map((d) => [d.id, d])), [designs]);
 
@@ -174,6 +176,7 @@ export function PlacementEditorBody({
           composition?: {
             designId: string;
             placement: string;
+            catalogueId?: string | null;
             placements?: {
               placement: string;
               designId: string;
@@ -193,6 +196,7 @@ export function PlacementEditorBody({
           setVariantId(pa.variantId ?? null);
           const row = comp.composition;
           if (!row || !areaList.length) return;
+          setCatalogueId(row.catalogueId ?? null);
           const saved = row.placements?.length
             ? row.placements
             : [{ placement: row.placement, designId: row.designId, position: null }];
@@ -294,7 +298,7 @@ export function PlacementEditorBody({
   // Natural aspect ratio + pixel width per design (drives sizing + the DPI badge).
   useEffect(() => {
     for (const e of entries) {
-      const url = designById.get(e.designId)?.image;
+      const url = retouched[e.designId] ?? designById.get(e.designId)?.image;
       if (!url || aspects[e.designId]) continue;
       RNImage.getSize(
         url,
@@ -546,7 +550,7 @@ export function PlacementEditorBody({
 
   const availableToAdd = areas.filter((a) => !entries.some((e) => e.placement === a.placement));
   const designUrl = entry
-    ? (feathered[entry.designId] ?? designById.get(entry.designId)?.image)
+    ? (retouched[entry.designId] ?? designById.get(entry.designId)?.image)
     : undefined;
 
   // Edge feather (Photoshop-style) right in the editor — Joe, 2026-08-17: "we should have
@@ -565,10 +569,46 @@ export function PlacementEditorBody({
       .then(readJson<{ image?: string; error?: string }>)
       .then((d) => {
         if (d.error) throw new Error(d.error);
-        if (d.image) setFeathered((m) => ({ ...m, [entry.designId]: d.image! }));
+        if (d.image) setRetouched((m) => ({ ...m, [entry.designId]: d.image! }));
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Feather failed'))
       .finally(() => setFeathering(false));
+  };
+
+  // Strip a baked-in background panel/disc/field behind the art (Joe, 2026-08-18: "there is some
+  // black layer of background that is overlapping… we need to be able to remove background").
+  // Non-destructive: /api/edit mints a NEW design; the active placement swaps to it.
+  const removeBackground = () => {
+    if (!entry || !catalogueId || removingBg) return;
+    const prev = entry;
+    setRemovingBg(true);
+    setError(null);
+    apiFetch('/api/edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        designId: prev.designId,
+        catalogueId,
+        mode: 'custom',
+        background: 'transparent',
+        instruction:
+          'Remove the background COMPLETELY — keep ONLY the main subject artwork with clean edges. Delete any panel, disc, rectangle, colour field, texture or backdrop sitting behind the subject. Do not alter the subject itself.',
+      }),
+    })
+      .then(readJson<{ image?: string; id?: string; error?: string; needed?: number; balance?: number }>)
+      .then((d) => {
+        if (d.error === 'insufficient_credits') throw new Error(`Not enough credits — need ${d.needed ?? 8}, you have ${d.balance ?? 0}.`);
+        if (d.error) throw new Error(d.error);
+        if (!d.image || !d.id) throw new Error('Background removal failed');
+        const newId = d.id;
+        setRetouched((m) => ({ ...m, [newId]: d.image! }));
+        // Carry the known geometry so the box doesn't re-fit to a placeholder square.
+        setAspects((a) => (a[prev.designId] ? { ...a, [newId]: a[prev.designId] } : a));
+        setNaturals((n) => (n[prev.designId] ? { ...n, [newId]: n[prev.designId] } : n));
+        setEntries((list) => list.map((x) => (x.placement === prev.placement ? { ...x, designId: newId } : x)));
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : 'Background removal failed'))
+      .finally(() => setRemovingBg(false));
   };
 
   // Inch + DPI readout for the active design.
@@ -744,7 +784,7 @@ export function PlacementEditorBody({
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
                 {entries.map((e) => {
                   const on = active === e.placement;
-                  const img = feathered[e.designId] ?? designById.get(e.designId)?.image;
+                  const img = retouched[e.designId] ?? designById.get(e.designId)?.image;
                   return (
                     <Pressable
                       key={e.placement}
@@ -825,6 +865,17 @@ export function PlacementEditorBody({
 
           {tool === 'edges' && entry ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
+              <Pressable onPress={removeBackground} disabled={removingBg || feathering || !catalogueId}>
+                <ThemedView type="backgroundElement" style={[styles.alignTile, removingBg ? { opacity: 0.5 } : null]}>
+                  {removingBg ? (
+                    <ActivityIndicator size="small" color={theme.text} />
+                  ) : (
+                    <ThemedText type="code" themeColor="text" style={styles.blockLabel}>
+                      ✦ REMOVE BACKGROUND · 8
+                    </ThemedText>
+                  )}
+                </ThemedView>
+              </Pressable>
               {(
                 [
                   ['FEATHER · LIGHT', 0.05],
@@ -832,7 +883,7 @@ export function PlacementEditorBody({
                   ['FEATHER · HEAVY', 0.14],
                 ] as const
               ).map(([label, p]) => (
-                <Pressable key={label} onPress={() => featherActive(p)} disabled={feathering}>
+                <Pressable key={label} onPress={() => featherActive(p)} disabled={feathering || removingBg}>
                   <ThemedView type="backgroundElement" style={[styles.alignTile, feathering ? { opacity: 0.5 } : null]}>
                     <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
                       {label}
