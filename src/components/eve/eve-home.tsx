@@ -252,8 +252,18 @@ export function EveHome({
   useEffect(() => {
     publishEvePulse({ state: talking ? live.state : 'off', caption: live.venusText });
   }, [talking, live.state, live.venusText]);
+  const loggedTurns = useRef(0);
   useEffect(() => {
     publishTranscript(live.messages.map((m) => ({ role: m.role, text: m.text })));
+    // DEV: stream committed turns to Metro so the dev agent can read the conversation verbatim
+    // (Joe, 2026-08-17 — transcripts lived only in memory; debugging her behaviour needs them).
+    if (__DEV__) {
+      for (let i = loggedTurns.current; i < live.messages.length; i++) {
+        const m = live.messages[i];
+        console.log(`[transcript] ${m.role === 'user' ? 'JOE' : 'EVE'}: ${m.text}`);
+      }
+      loggedTurns.current = live.messages.length;
+    }
   }, [live.messages]);
   useEffect(() => { setLine(live.venusText); }, [live.venusText]);
   useEffect(() => { setHeard(live.userText); }, [live.userText]);
