@@ -6,7 +6,9 @@ import { guardRate } from '@/lib/rate-limit';
 // POST /api/voice-live-token — mint a short-lived Gemini EPHEMERAL token so the app can connect
 // DIRECTLY to the Gemini Live API (a WebSocket) without the real API key ever touching the client.
 // The token starts a session within 2 min and the session may run up to 30 min. See live-voice.ts.
-const LIVE_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
+// -latest alias (2026-08-18): the pinned 12-2025 preview began dropping sockets (1006 right
+// after setup) while still being listed; the alias tracks Google's current healthy revision.
+const LIVE_MODEL = 'gemini-2.5-flash-native-audio-latest';
 
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
