@@ -640,7 +640,8 @@ export function PlacementEditorBody({
 
   const TOOLS = [
     ['size', 'SIZE'],
-    ...(colorVariants.length ? [['color', 'COLOR'] as const] : []),
+    // A one-colour product (e.g. AOP blanks are white-only) gets no COLOR tab — nothing to choose.
+    ...(colorVariants.length > 1 ? [['color', 'COLOR'] as const] : []),
     ['place', 'PLACE'],
     ['align', 'ALIGN'],
     ['edges', 'EDGES'],
