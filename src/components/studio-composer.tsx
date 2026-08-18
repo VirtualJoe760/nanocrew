@@ -12,7 +12,6 @@ import { SitePreview } from '@/components/site-preview';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiUrl, readJson } from '@/lib/api';
-import { summonEve } from '@/lib/eve-bus';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
 // Eve's management surface for a returning creator: request site changes in plain
@@ -41,13 +40,13 @@ type OrderRow = { id: string; status: string; totalCents: number; createdAt: str
 // Order statuses a creator can still refund (matches the server's REFUNDABLE list).
 const REFUNDABLE_STATUSES = new Set(['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered', 'on_hold', 'returned']);
 
-type ConsoleTab = 'edit' | 'posts' | 'settings';
-const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', settings: 'Settings' };
+type ConsoleTab = 'posts' | 'settings';
+const TAB_LABEL: Record<ConsoleTab, string> = { posts: 'Posts', settings: 'Settings' };
 
 export function StudioComposer({ visible, onClose, token, onOpenBilling, onDeleted, onBrandRenamed, slug, brandName, initialTab, embedded }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; onDeleted?: () => void; onBrandRenamed?: (name: string) => void; slug?: string; brandName?: string; initialTab?: ConsoleTab; embedded?: boolean }) {
   const pal = useStudioPalette();
   const styles = useMemo(() => makeStyles(pal), [pal]);
-  const [tab, setTab] = useState<ConsoleTab>(initialTab ?? 'edit');
+  const [tab, setTab] = useState<ConsoleTab>(initialTab ?? 'posts');
   const [insights, setInsights] = useState<Insights | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -62,8 +61,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [approving, setApproving] = useState(false); // merging a reviewed change to production (Publish)
   const [reviewRev, setReviewRev] = useState<Revision | null>(null); // the revision being reviewed in the preview
   const [revisions, setRevisions] = useState<Revision[]>([]);
-  const [reviewDismissed, setReviewDismissed] = useState<Set<string>>(new Set()); // "keep editing" hides a ready review
-  const [credits, setCredits] = useState<number | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null); // order currently being refunded
   const [shortComposer, setShortComposer] = useState(false); // the "make a scene short" flow
   const [goLive, setGoLive] = useState(false); // the domain / go-live flow
@@ -74,34 +71,13 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [buildElapsed, setBuildElapsed] = useState(0); // seconds since we first saw this build running
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const activeStore = stores.find((s) => s.slug === active);
   const siteUrl = siteUrlFor(activeStore);
-  // The site card shows the BRAND BANNER (site hero first — same rule as the deck), not the OG card.
-  const ogImageUrl = activeStore?.bannerUrl ?? activeStore?.ogImageUrl ?? null;
   // Build status is derived from DURABLE signals (store status + the provision job row), not a
   // local flag — so reopening the console mid-build still shows "building", and the view flips to
   // the live site on its own when the forge worker finishes (we poll while building).
-  const provisionRev = revisions.find((r) => r.requestMd.includes('"kind":"provision"'));
-  // The forge edit awaiting the creator (building/ready/failed) — drives the in-Console review bar
-  // and is where a "Go to review" notification lands. Provision (initial build) is shown separately.
-  // A 'ready' revision MUST have a preview to be reviewable — without one there's nothing to review,
-  // so it must not render a bare "Publish" card (that was the stray second button after declining).
-  const pendingRev = revisions.find(
-    (r) =>
-      !r.requestMd.includes('"kind":"provision"') &&
-      !reviewDismissed.has(r.id) &&
-      (r.status === 'building' || r.status === 'failed' || (r.status === 'ready' && !!r.previewUrl)),
-  );
-  // Durable signals ONLY — a local flag can get stuck "building" forever if the server-side build
-  // fails before it ever flips the store status back. The store goes 'building' the instant
-  // build-site is called, and the forge worker flips it to 'ready' (+ deploymentUrl) or records a
-  // failed job — so this self-corrects on the next poll either way.
-  const building = !siteUrl && (activeStore?.status === 'building' || provisionRev?.status === 'building');
-  const buildFailed = !siteUrl && !building && provisionRev?.status === 'failed';
-
   // `silent` skips the full-screen spinner — used by the 6s build-status poll so it doesn't flash a
   // loader on every tick. Only the first/explicit load shows the spinner.
   const loadStores = useCallback(async (silent = false) => {
@@ -111,7 +87,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       const d = await readJson<{ stores?: StoreRow[] }>(r);
       setStores(d.stores ?? []);
       setActive((a) => slug ?? a ?? d.stores?.[0]?.slug ?? null);
-    } catch (e) {
+    } catch {
       setNote('Could not reach your store.');
     } finally {
       if (!silent) setLoading(false);
@@ -167,25 +143,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       });
       const d = await readJson<{ revisions?: Revision[] }>(r);
       setRevisions(d.revisions ?? []);
-      // Re-derive the hidden set from server truth: a genuine decline lands as status
-      // 'declined' (excluded by pendingRev's status filter), so clearing the optimistic
-      // local hide here means a decline whose server call FAILED correctly reappears for
-      // a retry instead of staying hidden forever.
-      setReviewDismissed(new Set());
     } catch {
       /* leave as-is */
     }
   }, [active, token]);
-
-  const loadCredits = useCallback(async () => {
-    try {
-      const r = await fetch(apiUrl('/api/creator/credits'), { headers: { Authorization: `Bearer ${token}` } });
-      const d = await readJson<{ balance?: number }>(r);
-      if (typeof d.balance === 'number') setCredits(d.balance);
-    } catch {
-      /* leave as-is */
-    }
-  }, [token]);
 
   useEffect(() => {
     if (slug) setActive(slug);
@@ -193,12 +154,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   useEffect(() => {
     if (visible) {
       // Land on the caller's tab when one was asked for (the deck's pills) — else Edit.
-      setTab(initialTab ?? 'edit');
+      setTab(initialTab ?? 'posts');
       setSiteAction('idle');
       void loadStores();
-      void loadCredits();
     }
-  }, [visible, initialTab, loadStores, loadCredits]);
+  }, [visible, initialTab, loadStores]);
   useEffect(() => {
     if (visible && active) {
       void loadPosts();
@@ -206,44 +166,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       void loadInsights();
     }
   }, [visible, active, loadPosts, loadRevisions, loadInsights]);
-
-  // While a site is building, poll the durable status so the view updates itself — when the forge
-  // worker finishes, `building` flips false (status→ready + deploymentUrl set) and the live site
-  // appears with no action from the creator. Also ticks an elapsed timer + an indeterminate sweep.
-  const revBuilding = pendingRev?.status === 'building';
-  useEffect(() => {
-    if (!visible || !active || !(building || revBuilding)) {
-      setBuildElapsed(0);
-      return;
-    }
-    // Elapsed is measured from the revision's server-side createdAt when we have it, so it survives
-    // polls/remounts and reflects the true build start — not a local timer that resets each render.
-    const rev = building ? provisionRev : pendingRev;
-    const startedAt = rev?.createdAt ? new Date(rev.createdAt).getTime() : Date.now();
-    const compute = () => setBuildElapsed(Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
-    compute();
-    const tick = setInterval(compute, 1000);
-    const poll = setInterval(() => {
-      void loadStores(true); // silent — no spinner flash on every poll tick
-      void loadRevisions();
-    }, 6000);
-    return () => {
-      clearInterval(tick);
-      clearInterval(poll);
-    };
-  }, [visible, active, building, revBuilding, provisionRev, pendingRev, loadStores, loadRevisions]);
-
-  // Honest time-based progress: the forge gives no real "percent done", so fill toward (never past)
-  // a typical duration and never claim 100% until the revision actually flips to `ready`.
-  const expectedSecs = building ? 300 : 180;
-  const buildFill = Math.min(buildElapsed / expectedSecs, 0.95);
-  const buildEta = (() => {
-    const left = expectedSecs - buildElapsed;
-    if (left > 75) return `about ${Math.ceil(left / 60)} min left`;
-    if (left > 20) return 'less than a minute left';
-    if (left > -45) return 'almost there…';
-    return 'taking a little longer than usual…';
-  })();
 
   // Self-heal when the console comes back to the foreground: once a revision is `ready` we stop
   // polling (above), so a build that finishes — or any server-side change to a revision — while the
@@ -347,34 +269,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     }
   };
 
-  const buildSite = async () => {
-    if (!active) return;
-    setSiteAction('building');
-    setNote(null);
-    try {
-      const res = await fetch(apiUrl('/api/creator/build-site'), { method: 'POST', headers, body: JSON.stringify({ storeSlug: active }) });
-      if (res.status === 402) {
-        setSiteAction('idle');
-        setNote('A website is a Pro feature — upgrade your plan to add one.');
-        return;
-      }
-      if (!res.ok) {
-        const d = (await res.json().catch(() => null)) as { error?: string } | null;
-        setSiteAction('idle');
-        setNote(
-          d?.error === 'no_design_system'
-            ? 'This brand has no design system yet, so there’s nothing to build a site from. Finish its setup with Eve first.'
-            : 'Could not start building your site.',
-        );
-        return;
-      }
-      setNote('Building your site — Eve will have it ready shortly. Check back in a few minutes.');
-      await loadStores(); // pick up status:'building' right away so the progress view shows with no gap
-    } catch {
-      setNote('Could not start building your site.');
-      setSiteAction('idle');
-    }
-  };
+
 
   const pickCover = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -395,43 +290,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     } finally {
       setUploading(false);
     }
-  };
-
-  const approve = async (rev: Revision): Promise<boolean> => {
-    setApproving(true);
-    setNote(null);
-    try {
-      const res = await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), { method: 'POST', headers });
-      if (!res.ok) throw new Error();
-      setNote('Published — your change is live.');
-      await loadRevisions();
-      return true;
-    } catch {
-      setNote('Couldn’t publish that change. Try again in a moment.');
-      return false;
-    } finally {
-      setApproving(false);
-    }
-  };
-
-  // "Approve edits" from the review preview → merge, then close the preview and land the creator on
-  // the brand Settings panel (go-live toggle / domain / marketplace / performance).
-  const approveFromReview = async (rev: Revision) => {
-    const ok = await approve(rev);
-    if (ok) {
-      setPreviewTarget(null);
-      setReviewRev(null);
-      setCritiquePreview(false);
-      setTab('settings');
-    }
-  };
-
-  // ✕ on the review card — the creator declined this preview. Tell the server to discard the change
-  // (it only ever lived on a working branch, never merged), then refresh so the card disappears.
-  const decline = async (rev: Revision) => {
-    setReviewDismissed((s) => new Set(s).add(rev.id)); // hide immediately; server confirms below
-    await fetch(apiUrl(`/api/creator/revisions/${rev.id}/decline`), { method: 'POST', headers }).catch(() => {});
-    await loadRevisions();
   };
 
   const savePost = async (publish: boolean) => {
@@ -462,6 +320,35 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       await loadPosts();
     } catch {
       setNote(method === 'DELETE' ? 'Could not delete the post.' : 'Could not update the post.');
+    }
+  };
+
+  const approve = async (rev: Revision): Promise<boolean> => {
+    setApproving(true);
+    setNote(null);
+    try {
+      const res = await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), { method: 'POST', headers });
+      if (!res.ok) throw new Error();
+      setNote('Published — your change is live.');
+      await loadRevisions();
+      return true;
+    } catch {
+      setNote('Couldn’t publish that change. Try again in a moment.');
+      return false;
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  // "Approve edits" from the review preview → merge, then close the preview and land the creator on
+  // the brand Settings panel (go-live toggle / domain / marketplace / performance).
+  const approveFromReview = async (rev: Revision) => {
+    const ok = await approve(rev);
+    if (ok) {
+      setPreviewTarget(null);
+      setReviewRev(null);
+      setCritiquePreview(false);
+      setTab('settings');
     }
   };
 
@@ -537,7 +424,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
 
               {embedded ? null : (
               <View style={styles.tabBar}>
-                {(['edit', 'posts', 'settings'] as const).map((t) => (
+                {(['posts', 'settings'] as const).map((t) => (
                   <Pressable key={t} onPress={() => setTab(t)} style={[styles.tabItem, tab === t && styles.tabItemOn]}>
                     <ThemedText type="code" style={tab === t ? styles.tabTextOn : styles.tabText}>{TAB_LABEL[t]}</ThemedText>
                   </Pressable>
@@ -545,119 +432,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               </View>
               )}
 
-              {tab === 'edit' ? (
-                <>
-              {/* Live site preview */}
-              {siteUrl ? (
-                <>
-                  <ThemedText type="code" style={styles.sectionLabel}>YOUR SITE</ThemedText>
-                  <Pressable
-                    onPress={() => {
-                      // Site editing is EVE's developing state now (VENUS_CENTRAL.md §2). Close the
-                      // composer first — a native Modal would sit above her overlay. Review & Approve
-                      // below deliberately keeps the old Modal (no Eve in review).
-                      if (active && siteUrl) {
-                        onClose();
-                        summonEve({ state: 'developing', payload: { slug: active, url: siteUrl, name: activeStore?.name ?? brandName } });
-                      }
-                    }}
-                    style={styles.previewFrame}>
-                    {ogImageUrl ? (
-                      <Image source={{ uri: ogImageUrl }} style={styles.previewImg} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.previewImg, styles.previewFallback]}>
-                        <ThemedText type="subtitle" style={styles.previewFallbackText} numberOfLines={2}>{activeStore?.name ?? brandName}</ThemedText>
-                      </View>
-                    )}
-                    <View style={styles.previewTap}>
-                      <ThemedText type="code" style={styles.previewTapText}>tap to explore your live site →</ThemedText>
-                    </View>
-                  </Pressable>
-                </>
-              ) : null}
-
-              {/* Edit the site by chatting with Eve — a brand can also sell on the shop with no site */}
-              {!siteUrl ? (
-                <View style={styles.noSite}>
-                  {building ? (
-                    <>
-                      <ThemedText type="code" style={styles.sectionLabel}>BUILDING YOUR SITE</ThemedText>
-                      <ThemedText type="small" style={styles.dim}>Eve is designing and deploying your storefront. It’ll appear here on its own when it’s ready — usually 3–5 minutes.</ThemedText>
-                      <View style={styles.progressTrack}>
-                        <View style={[styles.progressFill, { width: `${Math.round(buildFill * 100)}%` }]} />
-                      </View>
-                      <ThemedText type="code" style={styles.progressMeta}>
-                        {`${Math.floor(buildElapsed / 60)}:${String(buildElapsed % 60).padStart(2, '0')} elapsed · ${buildEta}`}
-                      </ThemedText>
-                    </>
-                  ) : buildFailed ? (
-                    <>
-                      <ThemedText type="code" style={styles.sectionLabel}>BUILD DIDN’T FINISH</ThemedText>
-                      <ThemedText type="small" style={styles.dim}>That build hit a snag before going live. You can start it again:</ThemedText>
-                      <Pressable onPress={buildSite} style={styles.primaryBtn}>
-                        <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Rebuild site</ThemedText>
-                      </Pressable>
-                    </>
-                  ) : (
-                    <>
-                      <ThemedText type="code" style={styles.sectionLabel}>NO WEBSITE YET</ThemedText>
-                      <ThemedText type="small" style={styles.dim}>This brand sells on the Nano Crew shop. Give it a storefront:</ThemedText>
-                      <Pressable onPress={buildSite} style={styles.primaryBtn}>
-                        <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Build site</ThemedText>
-                      </Pressable>
-                    </>
-                  )}
-                  {note && !draft ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
-                </View>
-              ) : (
-                <>
-                  {/* A pending forge edit. READY → a single "Review & Approve" button that opens the
-                      preview in REVIEW mode (Continue editing / Approve edits). BUILDING → progress.
-                      FAILED → a retry hint. */}
-                  {pendingRev?.status === 'ready' && pendingRev.previewUrl ? (
-                    <>
-                      <Pressable onPress={() => { setPreviewTarget(pendingRev.previewUrl); setReviewRev(pendingRev); setCritiquePreview(false); }} style={styles.primaryBtn}>
-                        <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Review &amp; Approve</ThemedText>
-                      </Pressable>
-                      <Pressable onPress={() => decline(pendingRev)} hitSlop={8} style={{ alignSelf: 'center' }}>
-                        <ThemedText type="code" style={styles.dim}>discard this change</ThemedText>
-                      </Pressable>
-                    </>
-                  ) : pendingRev?.status === 'building' ? (
-                    <View style={styles.reviewCard}>
-                      <Pressable onPress={() => decline(pendingRev)} hitSlop={10} style={styles.reviewClose}>
-                        <ThemedText type="code" style={styles.reviewCloseX}>✕</ThemedText>
-                      </Pressable>
-                      <View style={styles.reviewRow}>
-                        <ActivityIndicator size="small" color={pal.accent} />
-                        <ThemedText type="small" style={[styles.white, { flex: 1 }]}>Eve is building a preview…</ThemedText>
-                      </View>
-                      <View style={styles.progressTrack}>
-                        <View style={[styles.progressFill, { width: `${Math.round(buildFill * 100)}%` }]} />
-                      </View>
-                      <ThemedText type="code" style={styles.progressMeta}>
-                        {`${Math.floor(buildElapsed / 60)}:${String(buildElapsed % 60).padStart(2, '0')} elapsed · ${buildEta}`}
-                      </ThemedText>
-                    </View>
-                  ) : pendingRev?.status === 'failed' ? (
-                    <View style={styles.reviewCard}>
-                      <Pressable onPress={() => decline(pendingRev)} hitSlop={10} style={styles.reviewClose}>
-                        <ThemedText type="code" style={styles.reviewCloseX}>✕</ThemedText>
-                      </Pressable>
-                      <ThemedText type="small" style={styles.dim}>That change didn’t take — tap ✕ to dismiss, or talk to Eve to try again.</ThemedText>
-                    </View>
-                  ) : null}
-
-                  <Pressable onPress={() => setEditor(true)} style={styles.primaryBtn}>
-                    <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Site Options</ThemedText>
-                  </Pressable>
-                  <ThemedText type="code" style={styles.dim}>Exact edits, applied instantly. For a bigger redesign, tap your site above and talk to Eve.</ThemedText>
-                </>
-              )}
-                </>
-              ) : null}
-
-              {/* Sell — turn a product photo into a feed-ready voiceover ad */}
               {/* Posts — the brand journal */}
               {tab === 'posts' ? (
                 <>
@@ -839,7 +613,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
           onClose={() => setShortComposer(false)}
           token={token}
           slug={active}
-          onPublished={() => { void loadCredits(); }}
+          onPublished={() => {}}
         />
       ) : null}
       {goLive && active ? (

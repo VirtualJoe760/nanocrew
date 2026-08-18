@@ -14,6 +14,7 @@ import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SiteEditor } from '@/components/site-editor';
+import { SitePreview } from '@/components/site-preview';
 import { StudioComposer } from '@/components/studio-composer';
 import { summonEve } from '@/lib/eve-bus';
 import { ThemedText } from '@/components/themed-text';
@@ -32,6 +33,7 @@ const OPEN_MS = 320;
 const BACKDROP = 'rgba(6,8,12,0.9)'; // near-opaque so brand imagery reads; Eve still glows faintly through
 
 type Bounties = { product: boolean; hero: boolean; logo: boolean; cover: boolean };
+type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null; createdAt?: string };
 type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; bannerUrl?: string | null; logoUrl?: string | null; ogImageUrl?: string | null; deploymentUrl?: string | null; customDomain?: string | null; productImages?: string[]; bounties?: Bounties };
 
 /** The live site URL — custom domain first, else a real (non-placeholder) deployment. */
@@ -67,7 +69,7 @@ export function BrandDeck({
 }) {
   const p = useStudioPalette();
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const s = makeStyles(p);
 
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -76,6 +78,12 @@ export function BrandDeck({
   // a tab renders the embedded StudioComposer inline. One surface — no second panel ever opens.
   const [activeTab, setActiveTab] = useState<'posts' | 'settings' | null>(null);
   const [siteOptions, setSiteOptions] = useState(false); // the overview's ✦ Site Options → SiteEditor
+  // ── Forge-revision review, re-homed from the deleted Edit-site tab (task #6): the overview shows
+  // a status row for the VISIBLE brand — building → progress line; ready → Review; failed → dismiss.
+  const [revisions, setRevisions] = useState<Revision[]>([]);
+  const [reviewRev, setReviewRev] = useState<Revision | null>(null);
+  const [critique, setCritique] = useState(false);
+  const [approving, setApproving] = useState(false);
   const pagerRef = useRef<ScrollView>(null);
 
   // Deep-link landing (push → review, site submitted): jump to the brand's page + open its tab.
@@ -105,6 +113,51 @@ export function BrandDeck({
   useEffect(() => {
     if (shown) void load();
   }, [shown, refreshKey, load]);
+
+  const currentSlug = stores[page]?.slug ?? null;
+  const loadRevisions = useCallback(async () => {
+    if (!currentSlug) return;
+    try {
+      const r = await fetch(apiUrl(`/api/creator/revisions?storeSlug=${encodeURIComponent(currentSlug)}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await readJson<{ revisions?: Revision[] }>(r);
+      setRevisions(d.revisions ?? []);
+    } catch {
+      /* keep prior */
+    }
+  }, [currentSlug, token]);
+  // The edit awaiting the creator (never the initial provision — that's the card's own state).
+  const pendingRev = revisions.find(
+    (r) => !r.requestMd.includes('"kind":"provision"') &&
+      (r.status === 'building' || r.status === 'failed' || (r.status === 'ready' && !!r.previewUrl)),
+  );
+  useEffect(() => {
+    if (!shown || !currentSlug) return;
+    void loadRevisions();
+    // Poll only while a build is in flight — the row flips to Review on its own.
+    const t = setInterval(() => void loadRevisions(), 6000);
+    return () => clearInterval(t);
+  }, [shown, currentSlug, loadRevisions]);
+
+  const approveRev = async (rev: Revision) => {
+    if (approving) return;
+    setApproving(true);
+    try {
+      const res = await fetch(apiUrl(`/api/creator/revisions/${rev.id}/approve`), {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) { setReviewRev(null); setCritique(false); void loadRevisions(); }
+    } finally {
+      setApproving(false);
+    }
+  };
+  const declineRev = (rev: Revision) => {
+    setRevisions((rs) => rs.filter((r) => r.id !== rev.id)); // hide now; server confirms
+    void fetch(apiUrl(`/api/creator/revisions/${rev.id}/decline`), {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    }).finally(() => void loadRevisions());
+  };
 
   // ── Cross-dissolve: fades in over Eve, fades out on close (Joe, 2026-08-17 — was a slide). ──
   const fade = useSharedValue(0);
@@ -238,6 +291,29 @@ export function BrandDeck({
                     <ThemedText type="smallBold" style={{ color: p.onAccent }}>✦ Site Options</ThemedText>
                   </Pressable>
 
+                  {/* 3d — forge-revision status for THIS brand (re-homed from the old Edit tab). */}
+                  {pendingRev && i === page ? (
+                    <View style={s.revRow}>
+                      {pendingRev.status === 'building' ? (
+                        <ThemedText type="small" style={s.dim}>⟳  Eve&apos;s building your site change…</ThemedText>
+                      ) : pendingRev.status === 'failed' ? (
+                        <>
+                          <ThemedText type="small" style={s.dim}>That change didn&apos;t take.</ThemedText>
+                          <Pressable onPress={() => declineRev(pendingRev)} hitSlop={8}>
+                            <ThemedText type="code" style={s.dim}>✕</ThemedText>
+                          </Pressable>
+                        </>
+                      ) : (
+                        <>
+                          <ThemedText type="small" style={{ color: p.ink }}>Site changes ready</ThemedText>
+                          <Pressable onPress={() => setReviewRev(pendingRev)} hitSlop={8}>
+                            <ThemedText type="smallBold" style={{ color: p.accent }}>Review →</ThemedText>
+                          </Pressable>
+                        </>
+                      )}
+                    </View>
+                  ) : null}
+
                   {/* 4 — finish-your-site, right under the banner. */}
                   {todo.length && onBounty ? (
                     <View style={s.bountyBox}>
@@ -257,6 +333,17 @@ export function BrandDeck({
         })}
 
       </ScrollView>
+
+      {/* Review a ready revision — the same SitePreview review the old Edit tab used. */}
+      {reviewRev?.previewUrl && stores[page] ? (
+        <SitePreview
+          visible
+          url={reviewRev.previewUrl}
+          onClose={() => { setReviewRev(null); setCritique(false); }}
+          critique={critique ? { slug: stores[page].slug, token, onSent: () => { setReviewRev(null); setCritique(false); void loadRevisions(); } } : undefined}
+          review={!critique ? { onContinueEditing: () => setCritique(true), onApprove: () => void approveRev(reviewRev), approving } : undefined}
+        />
+      ) : null}
 
       {/* ✦ Site Options — the mini-CMS, hosted by the deck for the visible brand. */}
       {siteOptions && stores[page] ? (
@@ -313,6 +400,7 @@ function makeStyles(p: StudioPalette) {
     bountyHead: { color: p.accent, letterSpacing: 1.5 },
     bountyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     siteOptionsBtn: { alignItems: 'center', paddingVertical: Spacing.three, borderRadius: 999, backgroundColor: p.accent },
+    revRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, borderWidth: 1, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.6)', paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(205,209,217,0.3)' },
     dotOn: { backgroundColor: p.accent, width: 7, height: 7, borderRadius: 4 },
   });
