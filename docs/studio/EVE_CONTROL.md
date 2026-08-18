@@ -515,7 +515,7 @@ the render share one hit test.
 | **ASSETS** | Voice-first, like DESIGN (2026-08-18): she asks what to make and for which spot (hero / logo / social) → the answer routes as `site-asset{idea,slot}` → **EveAssets** (`eve-assets.tsx`, Eve state `assets`): enhance-or-as-is → generate with slot framing (hero/og 16:9 filled, logo transparent) → same review tools → "Set as …" → `/api/creator/site-assets` (direct write + revalidate). No Design-tab redirect. | brand-scoped |
 | **DIGEST** | `openDigest()` | brand-scoped; also briefs her with the real figures |
 | **BRAND** | asks Eve conversationally | no in-place editor yet (P3.1); edits still go through `buildBrandPatch()` |
-| **NEW** | `startVoice()` | NOT `enterInterview()` — startVoice carries the mic request + typing fallback |
+| **NEW** | `startVoice()` with a REINTRODUCTION greeting (she's Eve, idea → finished brand, then "what's the business all about?") | NOT `enterInterview()` — startVoice carries the mic request + typing fallback. The interview surface is voice-PURE (2026-08-18): no topics checklist / pause / ‹ tools / build pill — captions only; "okay, build it" spoken after her ready-cue triggers the build. |
 | **TYPE** | `setKeyboardMode(true)` | the path when the mic is denied |
 
 Brand-scoped sectors dim **only when we know** there are no brands: `storesKnown && !stores.length`.

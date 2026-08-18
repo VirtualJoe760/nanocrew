@@ -23,7 +23,10 @@ in `/api/say` was already "subtly robotic" and now matches the live personas.)
 **She never states her role.** "AI brand consultant" was hardcoded in four places, including an
 explicit instruction to introduce herself that way; all of it is gone. She's just Eve.
 
-**Openings are ONE sentence** (two for a first-timer). Joe, 2026-08-17: she opened with a paragraph.
+**Openings are ONE sentence** (two-three for a first-timer). The scripts are Joe's (2026-08-18):
+returning — "Hey {name} — what's on the agenda for today?"; first-timer / the NEW-brand spoke —
+she's Eve, she takes them from an idea to a FINISHED brand (products, store, live website), the
+first step is a quick brand chat, ending "what's your business all about?". Joe, 2026-08-17: she opened with a paragraph.
 Both spoken personas now hard-cap the first turn ("your ENTIRE opening turn is ONE short sentence …
 then STOP and listen"); digests/numbers only when asked. Needs a live spoken session to verify —
 prompt changes are not verifiable by reading them.
@@ -74,6 +77,14 @@ menu is not a proposal.
 She also states reads as half-sentences to be corrected ("so more stark than playful, yeah?"). A
 wrong read corrected in three words teaches more than a question they have to think about. And not
 every turn carries a question — roughly two in three.
+
+## The interview is voice-PURE (2026-08-18)
+
+The interview surface carries NO tool chrome — the topics checklist, pause/resume, the ‹ tools
+header and the "✓ Build my brand" pill are all gone (the wheel replaced the tools). When she has
+the essentials she SAYS she's ready and hands them the phrase; a spoken "okay, build it" (and kin)
+triggers the build (`eve-home.tsx` buildReady → voice trigger → `live.finalize`). The typed path
+(ChatInterview) keeps its button — deliberate-mode is allowed buttons.
 
 ## Read where they are before probing
 

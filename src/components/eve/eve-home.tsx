@@ -18,7 +18,6 @@ import { AudioModule } from 'expo-audio';
 import { BrandReview } from '@/components/brand-review';
 import { ChatInterview } from '@/components/chat-interview';
 import { setEveStage } from '@/lib/eve-stage-bus';
-import { InterviewTopics } from '@/components/interview-topics';
 import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
 import { usePalette } from '@/components/nc-screen';
@@ -304,8 +303,36 @@ export function EveHome({
     const userTurns = live.messages.filter((m) => m.role === 'user').length;
     const lastEve = [...live.messages].reverse().find((m) => m.role === 'assistant')?.text ?? '';
     const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we)\s+need|got everything|let'?s build|time to build|shall we build)\b/i;
-    if (userTurns >= 6 || (userTurns >= 3 && cue.test(lastEve))) setBuildReady(true);
+    if (userTurns >= 6 || (userTurns >= 3 && cue.test(lastEve))) {
+      buildHeardFrom.current = userTurns; // only turns spoken AFTER readiness can trigger the build
+      setBuildReady(true);
+    }
   }, [view, live.messages, buildReady]);
+
+  // NO build button (Joe, 2026-08-18): when she's ready she says so and hands them the phrase;
+  // "okay, build it" (or kin) spoken after that point IS the trigger.
+  const buildCueSent = useRef(false);
+  const buildHeardFrom = useRef(0);
+  useEffect(() => {
+    if (!buildReady) { buildCueSent.current = false; return; }
+    if (buildCueSent.current || view !== 'interview' || brand) return;
+    buildCueSent.current = true;
+    live.sendContext(
+      "(You now have everything you need. In ONE short sentence, tell them that whenever they say “build it”, you'll build the whole thing — the brand, the store and the website.)",
+    );
+  }, [buildReady, view, brand, live.sendContext]);
+  useEffect(() => {
+    if (!buildReady || view !== 'interview' || brand || live.finalizing) return;
+    const users = live.messages.filter((m) => m.role === 'user');
+    for (let i = buildHeardFrom.current; i < users.length; i++) {
+      if (/\b(build (it|her|them|my|the|this)|okay,? build|go ahead|let'?s (do it|go|build)|make it|launch it|do it|i'?m ready)\b/i.test(users[i].text)) {
+        buildHeardFrom.current = users.length;
+        void live.finalize();
+        return;
+      }
+    }
+    buildHeardFrom.current = users.length;
+  }, [buildReady, view, brand, live.messages, live.finalizing, live.finalize]);
 
   // The digest — Eve's proactive status report. Fetched lazily the first time it's opened.
   const [digest, setDigest] = useState<Digest | 'loading' | null>(null);
@@ -563,23 +590,7 @@ export function EveHome({
     setTalking(true);
   }, [talking, ensureMic]);
 
-  const togglePause = useCallback(() => {
-    setPaused((prev) => {
-      const next = !prev;
-      pausedRef.current = next;
-      setState('idle');
-      return next;
-    });
-  }, []);
 
-  const toggleKeyboard = useCallback(() => {
-    const entering = !keyboardMode;
-    setKeyboardMode(entering);
-    if (entering) {
-      setPaused(false); // pause is voice-only — the chat must always reply
-      pausedRef.current = false;
-    }
-  }, [keyboardMode]);
 
   // "Try again" from the mic-busy modal: they (hopefully) ended their call — reconnect.
   const retryAfterCall = useCallback(() => {
@@ -652,16 +663,6 @@ export function EveHome({
   }, [state]);
   useEffect(() => () => setEveStage('silence'), []); // rest when this surface unmounts
 
-  const hint =
-    state === 'listening'
-      ? '[ listening — just talk ]'
-      : state === 'thinking'
-        ? '[ thinking… ]'
-        : state === 'speaking'
-          ? `[ ${AI_NAME} is speaking — tap to pause ]`
-          : paused
-            ? '[ paused — tap to resume ]'
-            : '[ connecting… ]';
 
   // Surfaces that are read and typed into rather than glanced at — they get the deep scrim.
   const dense = !!brand || (view === 'interview' && !keyboardMode);
@@ -684,8 +685,11 @@ export function EveHome({
           return;
         case 'newbr':
           // startVoice, not enterInterview: it's the same fresh-interview reset PLUS the mic
-          // request and the fall-back-to-typing-on-denial that a first brand needs. The removed
-          // "Build your brand" button used this path; the spoke inherits it.
+          // request and the fall-back-to-typing-on-denial that a first brand needs. She opens by
+          // REINTRODUCING herself — from zero to a finished brand — then the interview begins
+          // (Joe, 2026-08-18: no tool chrome; the wheel replaced it, her voice carries the rest).
+          pendingGreeting.current =
+            "(They chose NEW BRAND on your wheel — a fresh brand from zero. Reintroduce yourself briefly: you're Eve, and you'll take them from an idea to a FINISHED brand — the designs, the products, the store and the live website. Two short sentences MAX, then ask: what's the business all about? Then stop and listen.)";
           void startVoice();
           return;
         case 'design': {
@@ -966,25 +970,8 @@ export function EveHome({
               </ThemedText>
             </Pressable>
           ) : null}
-          {view === 'interview' && !brand ? (
-            <View style={styles.headerIcons}>
-              <Pressable onPress={resetToGuide} hitSlop={10} accessibilityLabel="Back to Eve's tools">
-                <ThemedText type="code" style={{ color: p.dim, fontSize: 15 }}>‹ tools</ThemedText>
-              </Pressable>
-              {!keyboardMode ? (
-                <Pressable onPress={togglePause} hitSlop={10} accessibilityLabel={paused ? 'Resume' : 'Pause'}>
-                  <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 16 }}>
-                    {paused ? '▶' : '❚❚'}
-                  </ThemedText>
-                </Pressable>
-              ) : null}
-              {!keyboardMode ? (
-                <Pressable onPress={toggleKeyboard} hitSlop={10} accessibilityLabel="Type instead">
-                  <ThemedText type="code" style={{ color: p.dim, fontSize: 15 }}>⌨</ThemedText>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
+          {/* The interview tool icons (‹ tools / pause / type) are GONE (Joe, 2026-08-18) — the
+              wheel replaced them, and two of the glyphs were tofu boxes anyway. */}
         </View>
 
         {!session ? (
@@ -1059,35 +1046,10 @@ export function EveHome({
           </View>
           )
         ) : keyboardMode ? null : (
-          <>
-            {/* "What to talk about" — name, products, style, colors, logo, vibe; checks off as they go. */}
-            <InterviewTopics messages={live.messages} onAsk={live.sendText} p={p} />
-            <View pointerEvents="box-none" style={styles.entityArea}>
-              <ThemedText type="code" style={[styles.hint, { color: p.faint }]}>
-                {hint}
-              </ThemedText>
-              <Pressable onPress={togglePause} hitSlop={12} style={[styles.pausePill, { borderColor: paused ? p.accent : `${p.dim}66` }]}>
-                <ThemedText type="code" style={{ color: paused ? p.accent : p.dim, fontSize: 13, letterSpacing: 1 }}>
-                  {paused ? '▶  Resume' : '❚❚  Pause'}
-                </ThemedText>
-              </Pressable>
-              {/* Build only appears once Eve has gathered the essentials (buildReady). */}
-              {buildReady ? (
-                <Pressable
-                  onPress={live.finalize}
-                  disabled={live.finalizing}
-                  hitSlop={10}
-                  style={[styles.finalizePill, { backgroundColor: p.accent, opacity: live.finalizing ? 0.6 : 1 }]}>
-                  {live.finalizing ? (
-                    <ActivityIndicator color={BG} />
-                  ) : (
-                    <ThemedText type="smallBold" style={{ color: BG }}>✓ Build my brand</ThemedText>
-                  )}
-                </Pressable>
-              ) : null}
-            </View>
-            {/* SUBTITLES — always on, per Joe: what Eve hears, and what she's saying. */}
-            <View style={styles.captions}>
+          <View pointerEvents="box-none" style={styles.guideView}>
+            {/* Voice-pure interview (Joe, 2026-08-18): no topic checklist, no pause chrome — just
+                her words in the lower third, exactly like the guide view. The wheel is the tools. */}
+            <View style={styles.subsLower}>
               {heard ? (
                 <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
                   {'you > ' + heard}
@@ -1098,8 +1060,9 @@ export function EveHome({
                   {line}
                 </ThemedText>
               ) : null}
+              {live.finalizing ? <ActivityIndicator color={p.accent} style={{ marginTop: Spacing.two }} /> : null}
             </View>
-          </>
+          </View>
         )}
 
         {error ? (
