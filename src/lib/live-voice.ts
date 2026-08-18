@@ -17,6 +17,7 @@ import {
   Type,
 } from '@google/genai';
 import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode, AudioManager } from 'react-native-audio-api';
 
 // WEB AUDIO-OUT (2026-08-18: "Eve isn't talking, she is responding"): react-native-audio-api's
@@ -443,9 +444,14 @@ export class LiveVoiceSession {
     // voiceChat mode for echo cancellation so Venus doesn't hear her own voice. Without this,
     // recording forces the session into a mode where her playback is silent / earpiece-only.
     console.warn('[live] configuring audio session');
+    // SIMULATOR (2026-08-18): voiceChat mode runs the voice-processing IO unit, which is silent
+    // in the iOS Simulator — she "spoke" into the void on the dev rig. Plain default mode there;
+    // real devices keep voiceChat for echo cancellation. (The half-duplex playEndsAt gate still
+    // stops most self-hearing on the sim.)
+    const simulator = Platform.OS === 'ios' && !Device.isDevice;
     AudioManager.setAudioSessionOptions({
       iosCategory: 'playAndRecord',
-      iosMode: 'voiceChat',
+      iosMode: simulator ? 'default' : 'voiceChat',
       iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
     });
     await this.activateAudioSession();
