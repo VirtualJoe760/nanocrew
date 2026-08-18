@@ -140,12 +140,19 @@ export async function POST(req: Request) {
           if (part.inlineData?.data) {
             let buffer: Buffer = Buffer.from(part.inlineData.data, 'base64');
             if (transparent) {
+              // Same quality gate as /api/generate (2026-08-17): never ship a boxed card or an
+              // unkeyed magenta tile — retry instead, fail honestly at the end.
+              let gated = false;
               try {
-                const { keyOutMagenta } = await import('@/lib/transparency');
-                buffer = (await keyOutMagenta(buffer)) as Buffer;
+                const { keyOutMagenta, looksBoxed } = await import('@/lib/transparency');
+                const keyed = (await keyOutMagenta(buffer)) as Buffer;
+                if (looksBoxed(keyed)) { gated = true; lastErr = 'boxed_design'; }
+                else buffer = keyed;
               } catch {
-                // ship unkeyed rather than fail
+                gated = true;
+                lastErr = 'keying_failed';
               }
+              if (gated) continue;
             }
             let url: string;
             try {
