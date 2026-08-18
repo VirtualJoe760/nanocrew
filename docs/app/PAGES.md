@@ -269,7 +269,10 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   sections · **Images** (the free bucket — memes and anything else, no site slot). **Tap a tile**
   → the full-screen generator opens PRECONFIGURED for that asset (dimensions + background locked,
   per-asset best-practice guidelines appended to the prompt via `ASSET_TILE_DEFS`) with the CURRENT
-  asset pre-staged — "change it" reprompts/imprints it, Regenerate rerolls, and the approve CTA
+  asset pre-staged — "change it" reprompts/imprints it (**○ Mark area**: draw red marker strokes
+  on the image; they're baked into the reference server-side (`lib/annotate.ts`) and the model
+  edits ONLY the marked region, erasing the marks — `/api/generate` `marks` param), Regenerate
+  rerolls, and the approve CTA
   ("Set as hero" etc.) assigns straight to the slot. **Long-press a tile** drops its connect-target
   on the canvas (the drag-to-assign flow stays). Auto-generation (OG card, derived kit) is
   unchanged — these are creator overrides on top.

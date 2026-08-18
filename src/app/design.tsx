@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image as RNImage,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +14,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import Svg, { Polyline } from 'react-native-svg';
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { withScreenFade } from '@/components/screen-fade';
@@ -2911,6 +2914,59 @@ function GenerateModal({
   const [editText, setEditText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false); // advanced options (effort, aspect ratio) collapsed by default
+  // MARKER tool (Joe, 2026-08-18): circle a region on the staged image; the strokes are baked into
+  // the reference server-side and the model edits ONLY the marked region (then erases the marks).
+  const [marking, setMarking] = useState(false);
+  const [strokes, setStrokes] = useState<{ x: number; y: number }[][]>([]);
+  const strokesRef = useRef(strokes);
+  strokesRef.current = strokes;
+  const [paneBox, setPaneBox] = useState({ w: 0, h: 0 });
+  const [stagedAspect, setStagedAspect] = useState(1);
+  useEffect(() => {
+    if (!staged?.url) return;
+    let alive = true;
+    RNImage.getSize(staged.url, (w, h) => {
+      if (alive && w && h) setStagedAspect(w / h);
+    }, () => {});
+    return () => {
+      alive = false;
+    };
+  }, [staged?.url]);
+  // The image's displayed rect inside the contain-fit preview — strokes are normalized to IT.
+  let imgW = paneBox.w;
+  let imgH = imgW / stagedAspect;
+  if (paneBox.h && imgH > paneBox.h) {
+    imgH = paneBox.h;
+    imgW = imgH * stagedAspect;
+  }
+  const imgLeft = (paneBox.w - imgW) / 2;
+  const imgTop = (paneBox.h - imgH) / 2;
+  const imgWRef = useRef(1);
+  const imgHRef = useRef(1);
+  imgWRef.current = Math.max(1, imgW);
+  imgHRef.current = Math.max(1, imgH);
+  const markResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        const x = Math.min(1, Math.max(0, e.nativeEvent.locationX / imgWRef.current));
+        const y = Math.min(1, Math.max(0, e.nativeEvent.locationY / imgHRef.current));
+        setStrokes((list) => [...list, [{ x, y }]]);
+      },
+      onPanResponderMove: (e) => {
+        const x = Math.min(1, Math.max(0, e.nativeEvent.locationX / imgWRef.current));
+        const y = Math.min(1, Math.max(0, e.nativeEvent.locationY / imgHRef.current));
+        setStrokes((list) => {
+          if (!list.length) return list;
+          const next = list.slice();
+          next[next.length - 1] = [...next[next.length - 1], { x, y }];
+          return next;
+        });
+      },
+    }),
+  ).current;
   const canGo = prompt.trim().length > 0 || !!refImage;
 
   // Command-bus prefill lands when the modal opens (and only then — typing is never clobbered).
@@ -2936,6 +2992,8 @@ function GenerateModal({
     setStaged(null);
     setEditText('');
     setError(null);
+    setMarking(false);
+    setStrokes([]);
   };
   const close = () => {
     reset();
@@ -2984,7 +3042,7 @@ function GenerateModal({
 
   // Generate a PREVIEW (no persistence) and stage it for review. overridePrompt/overrideRef drive
   // the "change it / add text" re-roll from the staged image (a hosted url → used as a reference).
-  const runGenerate = async (overridePrompt?: string, overrideRef?: string) => {
+  const runGenerate = async (overridePrompt?: string, overrideRef?: string, withMarks?: boolean) => {
     if (busy) return;
     const isGraphics = modality === 'graphics';
     const base =
@@ -3009,14 +3067,17 @@ function GenerateModal({
       // out to a tidy rectangle); otherwise honor the creator's transparent/filled choice.
       const bg = isText || productMeme ? 'transparent' : background;
       const aspectRatio = isGraphics ? webRatio : ratio;
+      const marksPayload = withMarks && strokesRef.current.length ? strokesRef.current : undefined;
       const res = await apiFetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, image: ref, background: bg, aspectRatio, meme: productMeme }),
+        body: JSON.stringify({ prompt: text, image: ref, background: bg, aspectRatio, meme: productMeme, ...(marksPayload ? { marks: marksPayload } : {}) }),
       });
       const data = (await res.json().catch(() => ({}))) as { image?: string; error?: string };
       if (!res.ok || !data.image) throw new Error(data.error || 'Generation failed');
       setStaged({ url: data.image, prompt: text || 'Uploaded image' });
+      setStrokes([]);
+      setMarking(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Generation failed');
     } finally {
@@ -3038,7 +3099,7 @@ function GenerateModal({
     const instr = editText.trim();
     if (!instr || !staged || busy) return;
     setEditText('');
-    void runGenerate(`${instr}. Keep the overall composition and subject of the reference image.`, staged.url);
+    void runGenerate(`${instr}. Keep the overall composition and subject of the reference image.`, staged.url, true);
   };
 
   const approve = () => {
@@ -3057,7 +3118,9 @@ function GenerateModal({
               advantage of as much screen real estate as possible, the top should be a preview
               window of the image"). Empty → a quiet dashed frame; busy → progress; staged → the
               image, large. */}
-          <View style={[styles.previewPane, !staged && !busy && !refImage ? { borderColor: theme.backgroundSelected, borderWidth: 1, borderStyle: 'dashed', backgroundColor: 'transparent' } : null]}>
+          <View
+            onLayout={(e) => setPaneBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+            style={[styles.previewPane, !staged && !busy && !refImage ? { borderColor: theme.backgroundSelected, borderWidth: 1, borderStyle: 'dashed', backgroundColor: 'transparent' } : null]}>
             {busy ? (
               <View style={styles.previewCenter}>
                 <ActivityIndicator color={theme.text} />
@@ -3066,7 +3129,29 @@ function GenerateModal({
                 </ThemedText>
               </View>
             ) : staged ? (
-              <Image source={{ uri: staged.url }} style={styles.previewImg} contentFit="contain" />
+              <>
+                <Image source={{ uri: staged.url }} style={styles.previewImg} contentFit="contain" />
+                {/* Marker layer — sits exactly on the image's contain-rect so strokes map 1:1. */}
+                {(marking || strokes.length > 0) && imgW > 0 ? (
+                  <View
+                    {...(marking ? markResponder.panHandlers : {})}
+                    style={{ position: 'absolute', left: imgLeft, top: imgTop, width: imgW, height: imgH }}>
+                    <Svg width={imgW} height={imgH} pointerEvents="none">
+                      {strokes.map((stroke, i) => (
+                        <Polyline
+                          key={i}
+                          points={stroke.map((pt) => `${pt.x * imgW},${pt.y * imgH}`).join(' ')}
+                          fill="none"
+                          stroke="#ff2020"
+                          strokeWidth={4}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ))}
+                    </Svg>
+                  </View>
+                ) : null}
+              </>
             ) : refImage ? (
               <Image source={{ uri: refImage }} style={styles.previewImg} contentFit="contain" />
             ) : (
@@ -3109,11 +3194,33 @@ function GenerateModal({
               <TextInput
                 value={editText}
                 onChangeText={setEditText}
-                placeholder="Change it — e.g. add the text “SALE”, make it darker"
+                placeholder={
+                  strokes.length
+                    ? 'What should change in the circled area?'
+                    : marking
+                      ? 'Draw on the image — circle what to change'
+                      : 'Change it — e.g. add the text “SALE”, make it darker'
+                }
                 placeholderTextColor={theme.textSecondary}
                 style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
               />
               <View style={styles.optionRow}>
+                <Pressable onPress={() => setMarking((m) => !m)} disabled={busy}>
+                  <ThemedView type={marking ? 'backgroundSelected' : 'backgroundElement'} style={styles.chip}>
+                    <ThemedText type="small" themeColor={marking ? 'text' : 'textSecondary'}>
+                      ○ Mark area
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+                {strokes.length ? (
+                  <Pressable onPress={() => setStrokes([])} disabled={busy}>
+                    <ThemedView type="backgroundElement" style={styles.chip}>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Clear marks
+                      </ThemedText>
+                    </ThemedView>
+                  </Pressable>
+                ) : null}
                 <Pressable onPress={applyChange} disabled={!editText.trim() || busy}>
                   <ThemedView
                     type="backgroundElement"

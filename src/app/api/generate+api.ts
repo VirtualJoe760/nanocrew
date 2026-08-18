@@ -5,6 +5,7 @@ import { ContentSafetyError, IMAGE_SAFETY_SETTINGS, assertSafePrompt } from '@/l
 import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
 import { uploadImage } from '@/lib/cloudinary';
 import { guardRate } from '@/lib/rate-limit';
+import { MARKED_REGION_RULE, drawMarks, sanitizeMarks } from '@/lib/annotate';
 import { safeImageFetch } from '@/lib/safe-fetch';
 import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 
@@ -126,15 +127,31 @@ export async function POST(req: Request) {
     catalogueId?: string;
     purpose?: 'logo' | 'design';
     meme?: boolean;
+    // Marker annotations (normalized polylines) — baked as red strokes into the reference so the
+    // model can region-target the edit (Joe, 2026-08-18: "circle and edit it with a marker").
+    marks?: { x: number; y: number }[][];
   } | null;
   const prompt = body?.prompt?.trim();
   const catalogueId = body?.catalogueId;
   const background = body?.background === 'filled' ? 'filled' : 'transparent';
   const aspectRatio = body?.aspectRatio || '1:1';
   const isMeme = body?.meme === true;
-  const refImage = await resolveRef(body?.image);
+  let refImage = await resolveRef(body?.image);
   if (!prompt && !refImage) {
     return Response.json({ error: 'prompt or image is required' }, { status: 400 });
+  }
+  // Marker annotations: bake the creator's strokes into the reference image (red brush), and the
+  // constraint below tells the model to edit ONLY the marked region and erase the marks.
+  const marks = sanitizeMarks(body?.marks);
+  let markedRegion = false;
+  if (marks && refImage) {
+    try {
+      const annotated = drawMarks(Buffer.from(refImage.data, 'base64'), marks);
+      refImage = { mimeType: 'image/png', data: annotated.toString('base64') };
+      markedRegion = true;
+    } catch {
+      // annotation is best-effort — the un-marked reference still carries the edit
+    }
   }
 
   // Pre-screen only the narrow prohibited set — CSAM, pornographic acts, high-severity gore — before
@@ -184,7 +201,7 @@ export async function POST(req: Request) {
   // Instruction text + an optional user-supplied reference image.
   const constraints = buildConstraints(background, aspectRatio, isMeme);
   const instruction = refImage
-    ? `Design: ${prompt || 'a polished version of the reference image'}\n\nUse the provided image as a visual reference. ${constraints}`
+    ? `Design: ${prompt || 'a polished version of the reference image'}\n\nUse the provided image as a visual reference. ${markedRegion ? `${MARKED_REGION_RULE} ` : ''}${constraints}`
     : `Design: ${prompt}\n\n${constraints}`;
   const parts: InlinePart[] = [{ text: instruction }];
   if (refImage) {
