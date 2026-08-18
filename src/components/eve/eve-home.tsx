@@ -438,7 +438,7 @@ export function EveHome({
             }
             return;
           case 'site-asset': {
-            const dd = d as { idea?: string; slot?: 'hero' | 'logo' | 'mark' | 'og'; storeSlug?: string };
+            const dd = d as { idea?: string; slot?: 'hero' | 'logo' | 'mark' | 'favicon' | 'og'; storeSlug?: string };
             if (dd.idea) {
               onGo({
                 state: 'assets',

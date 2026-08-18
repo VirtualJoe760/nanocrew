@@ -487,6 +487,7 @@ function DesignScreen() {
           og?: string | null;
           logo?: string | null;
           logoKit?: { wordmark?: string | null; mark?: string | null; appTile?: string | null; favicon?: string | null } | null;
+          favicon?: string | null;
           sections?: Record<string, string>;
         };
       }>)
@@ -501,6 +502,8 @@ function DesignScreen() {
         if (wordmark) list.push({ slot: 'Wordmark', url: wordmark, fit: 'contain' });
         if (kit?.appTile) list.push({ slot: 'App icon', url: kit.appTile });
         else if (kit?.mark) list.push({ slot: 'App icon', url: kit.mark, fit: 'contain' });
+        const favicon = d.assets.favicon ?? kit?.favicon;
+        if (favicon) list.push({ slot: 'Favicon', url: favicon, fit: 'contain' });
         if (d.assets.og) list.push({ slot: 'Social', url: d.assets.og });
         for (const [k, url] of Object.entries(d.assets.sections ?? {})) list.push({ slot: k, url });
         setLiveAssets(list);
@@ -968,7 +971,7 @@ function DesignScreen() {
 
   // Assign a hosted graphic to a website slot (hero / collection cover / logo) — a direct DB write
   // that overrides the storefront placeholder, then revalidates the live site.
-  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo' | 'mark' | 'og') => {
+  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo' | 'mark' | 'favicon' | 'og') => {
     const catId = catalogueRef.current?.id;
     const slug = brandRef.current?.slug;
     if (!url || !url.startsWith('http')) return;
@@ -1000,7 +1003,9 @@ function DesignScreen() {
             ? 'Set as your wordmark — the full logo kit re-derived.'
             : slot === 'mark'
               ? 'Set as your app icon — favicon and app tile re-derived.'
-              : slot === 'og'
+              : slot === 'favicon'
+                ? 'Set as your favicon — the browser-tab icon.'
+                : slot === 'og'
               ? 'Set as your social-share image — used when your site is shared.'
               : 'Set as this collection’s cover.',
       );
@@ -1008,7 +1013,7 @@ function DesignScreen() {
       Alert.alert('Could not assign', e instanceof Error ? e.message : 'Try again.');
     }
   };
-  const assignDesign = (d: Design, slot: 'hero' | 'cover' | 'logo' | 'mark' | 'og') => void assignToSite(d.image, slot);
+  const assignDesign = (d: Design, slot: 'hero' | 'cover' | 'logo' | 'mark' | 'favicon' | 'og') => void assignToSite(d.image, slot);
 
   // Long-press a graphic → assign it to the website or remove it.
   const openDesignActions = (d: Design) => {
@@ -1025,6 +1030,7 @@ function DesignScreen() {
               ...(catalogueRef.current && !assetModeRef.current ? [{ text: 'Set as collection cover', onPress: () => void assignDesign(d, 'cover') }] : []),
               { text: 'Set as wordmark (logo)', onPress: () => void assignDesign(d, 'logo') },
               { text: 'Set as app icon', onPress: () => void assignDesign(d, 'mark') },
+              { text: 'Set as favicon', onPress: () => void assignDesign(d, 'favicon') },
               { text: 'Set as social image', onPress: () => void assignDesign(d, 'og') },
             ]
           : []),
@@ -1838,9 +1844,11 @@ function DesignScreen() {
                         ? liveAssets.find((a) => a.slot === 'Wordmark')
                         : n.refId === 'mark'
                           ? liveAssets.find((a) => a.slot === 'App icon')
-                          : n.refId === 'og'
-                            ? liveAssets.find((a) => a.slot === 'Social')
-                            : undefined;
+                          : n.refId === 'favicon'
+                            ? liveAssets.find((a) => a.slot === 'Favicon')
+                            : n.refId === 'og'
+                              ? liveAssets.find((a) => a.slot === 'Social')
+                              : undefined;
                   return live ? { ...n, previewUrl: live.url } : n;
                 })
               : nodes

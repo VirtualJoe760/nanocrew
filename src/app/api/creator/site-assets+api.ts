@@ -21,8 +21,8 @@ import { deriveKit, type LogoKit } from '@/lib/logo-kit';
 //                               template renders, e.g. 'section:about' — the data-nano-image contract)
 // 'logo' = the WORDMARK master; 'mark' = the square ICON master (app icon). Assigning either
 // re-derives the full LogoKit (mono variants, app tile, touch icon, favicon) — lib/logo-kit.ts.
-type Slot = 'hero' | 'heroVideo' | 'heroPoster' | 'logo' | 'mark' | 'cover' | 'og';
-const SLOTS: Slot[] = ['hero', 'heroVideo', 'heroPoster', 'logo', 'mark', 'cover', 'og'];
+type Slot = 'hero' | 'heroVideo' | 'heroPoster' | 'logo' | 'mark' | 'favicon' | 'cover' | 'og';
+const SLOTS: Slot[] = ['hero', 'heroVideo', 'heroPoster', 'logo', 'mark', 'favicon', 'cover', 'og'];
 const isSection = (s: string) => /^section:[a-z0-9_-]{1,40}$/i.test(s);
 
 // GET /api/creator/site-assets?storeSlug=… — the CURRENT live assets, so surfaces (the Design
@@ -42,6 +42,8 @@ export async function GET(req: Request) {
         logoKit: schema.stores.logoKit,
         designSystem: schema.stores.designSystem,
         siteAssets: schema.stores.siteAssets,
+        faviconUrl: schema.stores.faviconUrl,
+        ogImageUrl: schema.stores.ogImageUrl,
       })
       .from(schema.stores)
       .where(eq(schema.stores.id, owned.id))
@@ -63,8 +65,11 @@ export async function GET(req: Request) {
       assets: {
         hero: sa.hero?.imageUrl ?? null,
         heroVideo: sa.hero?.videoUrl ?? null,
-        og: sa.og ?? null,
+        // The live social card: the creator's override, else the GENERATED OG card — either way
+        // it's on the site, so it shows and can be replaced (Joe, 2026-08-18).
+        og: sa.og ?? store?.ogImageUrl ?? null,
         logo: store?.logoUrl ?? null,
+        favicon: store?.faviconUrl ?? kit?.favicon ?? null,
         // The identity set (lib/logo-kit.ts): the two editable MASTERS + the derived square faces.
         logoKit: kit
           ? { wordmark: kit.wordmark ?? null, mark: kit.mark ?? null, appTile: kit.appTile ?? null, favicon: kit.favicon ?? null }
@@ -117,7 +122,14 @@ export async function POST(req: Request) {
       .limit(1);
     if (!store) return Response.json({ error: 'not found' }, { status: 404 });
 
-    if (slot === 'logo' || slot === 'mark') {
+    if (slot === 'favicon') {
+      // Direct favicon override; a future mark assignment re-derives over it by design.
+      const kit = (store.logoKit ?? null) as Partial<LogoKit> | null;
+      await db
+        .update(schema.stores)
+        .set({ faviconUrl: url, ...(kit ? { logoKit: { ...kit, favicon: url } } : {}) })
+        .where(eq(schema.stores.id, storeId));
+    } else if (slot === 'logo' || slot === 'mark') {
       // A new MASTER re-derives the whole identity set (mono, app tile, touch icon, favicon) —
       // deterministic Cloudinary transforms, so the site's favicon/app icon follow automatically.
       const kit = (store.logoKit ?? {}) as Partial<LogoKit>;

@@ -358,7 +358,7 @@ function StudioScreen() {
           <EveAssets
             idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
             slot={
-              eve.payload?.slot === 'hero' || eve.payload?.slot === 'logo' || eve.payload?.slot === 'mark' || eve.payload?.slot === 'og'
+              eve.payload?.slot === 'hero' || eve.payload?.slot === 'logo' || eve.payload?.slot === 'mark' || eve.payload?.slot === 'favicon' || eve.payload?.slot === 'og'
                 ? eve.payload.slot
                 : undefined
             }

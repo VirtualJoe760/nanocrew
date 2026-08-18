@@ -270,7 +270,9 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   kit + `favicon_url`; pre-kit brands derive read-time from `logo_url`). Square tiles display the
   app tile; wordmarks render contain (cover-cropping mushed them). Canvas web-slot nodes PREVIEW the
   live site asset (icon placeholders are Ionicons — raw emoji drew missing-glyph "?" boxes, B17);
-  the dock's Site-assets strip FIRST shows what's LIVE on the site (hero / logo /
+  the dock's Site-assets strip is the FULL editable inventory of what's LIVE on the site — Hero,
+  Wordmark, App icon, Favicon (directly assignable), Social (override ?? the generated OG card),
+  sections — each with a matching slot card / canvas target / Eve voice slot; the strip FIRST shows what's LIVE on the site (hero / logo /
   social / sections via GET `/api/creator/site-assets`), then this session's generated graphics;
   drag a graphic onto a web-slot target → it "clicks together," assigns to the brand
   site (`/api/creator/site-assets` — a direct DB write to `stores.site_assets`), and the finished

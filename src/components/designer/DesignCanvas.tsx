@@ -27,6 +27,7 @@ export const WEB_SLOT_LABELS: Record<string, string> = {
   hero: 'Website hero',
   logo: 'Wordmark',
   mark: 'App icon',
+  favicon: 'Favicon',
   cover: 'Collection cover',
   og: 'Social image',
 };
@@ -300,7 +301,7 @@ function NodeView({
                 <Image
                   source={{ uri: node.previewUrl }}
                   style={styles.thumbFill}
-                  contentFit={node.refId === 'logo' || node.refId === 'mark' ? 'contain' : 'cover'}
+                  contentFit={node.refId === 'logo' || node.refId === 'mark' || node.refId === 'favicon' ? 'contain' : 'cover'}
                 />
               ) : (
                 <Ionicons name="globe-outline" size={44} color={theme.textSecondary} />
