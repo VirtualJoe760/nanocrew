@@ -7,10 +7,8 @@
 // Audio: react-native-audio-api (AudioRecorder for mic, AudioBufferQueueSourceNode for playback).
 
 import {
-  EndSensitivity,
   GoogleGenAI,
   Modality,
-  StartSensitivity,
   type LiveServerMessage,
   type Session,
   type FunctionDeclaration,
@@ -538,20 +536,11 @@ export class LiveVoiceSession {
         // speechConfig (it broke the session → no audio). The persona wording carries the British/
         // fashionable tone instead. Accent/voice is best locked via the voice sampler, not this field.
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } } },
-        // NOISY-ROOM VAD (Joe, 2026-08-17: wind kept ending his turns mid-sentence — she'd take a
-        // gust-masked pause as "done talking" and barge in). End detection at its least eager, a
-        // full second of actual silence before a turn commits, and enough required speech that a
-        // gust doesn't read as a new turn starting.
-        realtimeInputConfig: {
-          automaticActivityDetection: {
-            // Rebalanced same night: 1000ms + END_LOW meant a windy room NEVER reads as silent —
-            // she'd listen forever. 650ms is the compromise between cut-offs and dead air.
-            endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
-            startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
-            silenceDurationMs: 850, // 650 was too jumpy in a QUIET room; 1000 never settled in wind (Joe, 2026-08-18)
-            prefixPaddingMs: 100,
-          },
-        },
+        // VAD: API DEFAULTS — deliberately no realtimeInputConfig (Joe, 2026-08-18). The custom
+        // block's history: wind → LOW/LOW + 1000ms (fdce068) → never settled → 650ms → too jumpy
+        // in a quiet room → 850ms → START_SENSITIVITY_LOW stopped hearing him at all. Defaults
+        // heard fine in every normal room; a per-session "windy mode" toggle is the right future
+        // fix, not a hardcoded compromise.
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         ...(this.enableBrandTool ? { tools: [{ functionDeclarations: [SAVE_BRAND] }] } : {}),
