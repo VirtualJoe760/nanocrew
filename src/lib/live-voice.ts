@@ -7,8 +7,10 @@
 // Audio: react-native-audio-api (AudioRecorder for mic, AudioBufferQueueSourceNode for playback).
 
 import {
+  EndSensitivity,
   GoogleGenAI,
   Modality,
+  StartSensitivity,
   type LiveServerMessage,
   type Session,
   type FunctionDeclaration,
@@ -484,6 +486,18 @@ export class LiveVoiceSession {
         // speechConfig (it broke the session → no audio). The persona wording carries the British/
         // fashionable tone instead. Accent/voice is best locked via the voice sampler, not this field.
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.voiceName } } },
+        // NOISY-ROOM VAD (Joe, 2026-08-17: wind kept ending his turns mid-sentence — she'd take a
+        // gust-masked pause as "done talking" and barge in). End detection at its least eager, a
+        // full second of actual silence before a turn commits, and enough required speech that a
+        // gust doesn't read as a new turn starting.
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
+            startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+            silenceDurationMs: 1000,
+            prefixPaddingMs: 200,
+          },
+        },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         ...(this.enableBrandTool ? { tools: [{ functionDeclarations: [SAVE_BRAND] }] } : {}),
