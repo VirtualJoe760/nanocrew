@@ -43,7 +43,9 @@ export function buildOgImageUrl(opts: {
 
   const transformation: Record<string, unknown>[] = [
     { effect: 'trim' }, // crop away the logo's surrounding whitespace
-    { height: 190, crop: 'fit' }, // then constrain the trimmed logo to a short band
+    // Constrain WIDTH too — a wide wordmark used to span the full 1200 and touch the card's edges
+    // (Joe's rule, 2026-08-17: nothing runs full width; content always gets breathing room).
+    { width: 1000, height: 190, crop: 'fit' },
     // c_lpad pads WITHOUT enlarging (c_pad would scale the small logo up to fill).
     { width: 1200, height: 630, crop: 'lpad', background: `rgb:${bg}`, gravity: 'north', y: 150 },
   ];

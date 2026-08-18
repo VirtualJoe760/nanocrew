@@ -56,6 +56,12 @@ This shipped a broken OTA: three such wrappers sat above Eve's gesture surface, 
 press-and-hold wheel could never open **and tap-to-talk broke with it**. Neither TypeScript nor the
 bundler can catch it; it only shows when a finger (or a click) lands on empty space.
 
+## Breathing room — never full width (Joe, 2026-08-17)
+Content never runs edge-to-edge against a border or card boundary — no text or artwork touching
+the frame it sits in. This binds GENERATED imagery too: the OG-card transform constrains the
+wordmark's width so it can't span the full 1200px canvas (`src/lib/og-image.ts`). If a comp or a
+Cloudinary transform puts ink against an edge, it's wrong before the code is.
+
 ## Safe areas — never draw into the device chrome
 **Joe's rule, and it is a hard one:** nothing we draw may sit under the **Dynamic Island / notch** at
 the top or the **home indicator** at the bottom. A zero (or small fixed) top offset on a full-screen

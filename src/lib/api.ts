@@ -12,6 +12,13 @@ import { supabase } from '@/lib/supabase';
 // Without EXPO_PUBLIC_API_URL a native release build has no backend, so it must be set before `eas build`.
 export function apiUrl(path: string): string {
   if (Platform.OS === 'web') return path;
+  // DEV builds talk to the Metro host FIRST: the same `expo start` serves these API routes, so
+  // server-side changes apply live. With EXPO_PUBLIC_API_URL winning here, dev quietly hit
+  // production Cloud Run and every local API change was invisible (found 2026-08-17).
+  if (__DEV__) {
+    const host = Constants.expoConfig?.hostUri;
+    if (host) return `http://${host}${path}`;
+  }
   const base = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
   if (base) return `${base}${path}`;
   const host = Constants.expoConfig?.hostUri;
