@@ -32,7 +32,6 @@ function siteUrlFor(s: StoreRow | undefined): string | null {
 }
 type Post = { id: string; slug: string; title: string; excerpt: string | null; bodyMd: string; coverImageUrl?: string | null; isPublished: boolean };
 type Revision = { id: string; requestMd: string; status: 'building' | 'ready' | 'approved' | 'failed'; previewUrl: string | null; createdAt?: string };
-type Product = { id: string; name: string; imageUrl: string | null; videoUrl: string | null; modelShots?: string[] | null; modelVideos?: string[] | null; isPublished: boolean };
 type Draft = { id?: string; title: string; excerpt: string; bodyMd: string; coverImageUrl?: string | null };
 const EMPTY: Draft = { title: '', excerpt: '', bodyMd: '', coverImageUrl: null };
 
@@ -42,10 +41,10 @@ type OrderRow = { id: string; status: string; totalCents: number; createdAt: str
 // Order statuses a creator can still refund (matches the server's REFUNDABLE list).
 const REFUNDABLE_STATUSES = new Set(['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered', 'on_hold', 'returned']);
 
-type ConsoleTab = 'edit' | 'posts' | 'sell' | 'settings';
-const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', sell: 'Sell', settings: 'Settings' };
+type ConsoleTab = 'edit' | 'posts' | 'settings';
+const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', settings: 'Settings' };
 
-export function StudioComposer({ visible, onClose, token, onOpenBilling, onDeleted, onBrandRenamed, slug, brandName, initialTab }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; onDeleted?: () => void; onBrandRenamed?: (name: string) => void; slug?: string; brandName?: string; initialTab?: ConsoleTab }) {
+export function StudioComposer({ visible, onClose, token, onOpenBilling, onDeleted, onBrandRenamed, slug, brandName, initialTab, embedded }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; onDeleted?: () => void; onBrandRenamed?: (name: string) => void; slug?: string; brandName?: string; initialTab?: ConsoleTab; embedded?: boolean }) {
   const pal = useStudioPalette();
   const styles = useMemo(() => makeStyles(pal), [pal]);
   const [tab, setTab] = useState<ConsoleTab>(initialTab ?? 'edit');
@@ -64,11 +63,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const [reviewRev, setReviewRev] = useState<Revision | null>(null); // the revision being reviewed in the preview
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [reviewDismissed, setReviewDismissed] = useState<Set<string>>(new Set()); // "keep editing" hides a ready review
-  const [products, setProducts] = useState<Product[]>([]);
   const [credits, setCredits] = useState<number | null>(null);
-  const [voiceoverCost, setVoiceoverCost] = useState(25);
-  const [veoCost, setVeoCost] = useState(400);
-  const [genId, setGenId] = useState<string | null>(null); // product currently generating an ad
   const [refundingId, setRefundingId] = useState<string | null>(null); // order currently being refunded
   const [shortComposer, setShortComposer] = useState(false); // the "make a scene short" flow
   const [goLive, setGoLive] = useState(false); // the domain / go-live flow
@@ -115,7 +110,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       const d = await readJson<{ stores?: StoreRow[] }>(r);
       setStores(d.stores ?? []);
       setActive((a) => slug ?? a ?? d.stores?.[0]?.slug ?? null);
-    } catch {
+    } catch (e) {
       setNote('Could not reach your store.');
     } finally {
       if (!silent) setLoading(false);
@@ -181,156 +176,22 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     }
   }, [active, token]);
 
-  const loadProducts = useCallback(async () => {
-    if (!active) return;
-    try {
-      const r = await fetch(apiUrl(`/api/creator/products?storeSlug=${encodeURIComponent(active)}`), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const d = await readJson<{ products?: Product[] }>(r);
-      setProducts(d.products ?? []);
-    } catch {
-      /* leave as-is */
-    }
-  }, [active, token]);
-
   const loadCredits = useCallback(async () => {
     try {
       const r = await fetch(apiUrl('/api/creator/credits'), { headers: { Authorization: `Bearer ${token}` } });
-      const d = await readJson<{ balance?: number; costs?: { video_voiceover?: number; video_veo?: number } }>(r);
+      const d = await readJson<{ balance?: number }>(r);
       if (typeof d.balance === 'number') setCredits(d.balance);
-      if (typeof d.costs?.video_voiceover === 'number') setVoiceoverCost(d.costs.video_voiceover);
-      if (typeof d.costs?.video_veo === 'number') setVeoCost(d.costs.video_veo);
     } catch {
       /* leave as-is */
     }
   }, [token]);
-
-  const makeVideoAd = async (p: Product) => {
-    if (genId) return;
-    if (credits !== null && credits < voiceoverCost) {
-      setNote(`You need ${voiceoverCost} credits for a video ad — you have ${credits}.`);
-      return;
-    }
-    setGenId(p.id);
-    setNote(null);
-    try {
-      const res = await fetch(apiUrl('/api/video'), {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ productId: p.id, mode: 'voiceover', force: !!p.videoUrl }),
-      });
-      const d = (await res.json()) as { videoUrl?: string; error?: string; needed?: number; balance?: number };
-      if (res.status === 402) {
-        setCredits(d.balance ?? credits);
-        setNote(`Not enough credits — a video ad costs ${d.needed ?? voiceoverCost}.`);
-        return;
-      }
-      if (!res.ok || !d.videoUrl) throw new Error(d.error ?? 'failed');
-      await Promise.all([loadProducts(), loadCredits()]);
-    } catch {
-      setNote('Could not create the video ad — your credits were not charged.');
-    } finally {
-      setGenId(null);
-    }
-  };
-
-  const makeModelShots = async (p: Product) => {
-    if (genId) return;
-    setGenId(p.id);
-    setNote(null);
-    try {
-      const res = await fetch(apiUrl('/api/creator/model-shots'), {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ productId: p.id }),
-      });
-      const d = (await res.json()) as { modelShots?: string[]; error?: string; needed?: number; balance?: number };
-      if (res.status === 402) {
-        setCredits(d.balance ?? credits);
-        setNote(`Not enough credits — on-model shots cost ${d.needed ?? 20}.`);
-        return;
-      }
-      if (!res.ok || !d.modelShots?.length) throw new Error(d.error ?? 'failed');
-      await Promise.all([loadProducts(), loadCredits()]);
-    } catch {
-      setNote('Could not make on-model shots — your credits were not charged.');
-    } finally {
-      setGenId(null);
-    }
-  };
-
-  const makeModelVideo = async (p: Product) => {
-    if (genId) return;
-    if (credits !== null && credits < veoCost) {
-      setNote(`You need ${veoCost} credits for an on-model video — you have ${credits}.`);
-      return;
-    }
-    setGenId(p.id);
-    setNote('Filming your on-model video — this takes a few minutes.');
-    try {
-      const res = await fetch(apiUrl('/api/creator/model-videos'), {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ productId: p.id }),
-      });
-      const d = (await res.json()) as { modelVideos?: string[]; error?: string; needed?: number; balance?: number };
-      if (res.status === 402) {
-        setCredits(d.balance ?? credits);
-        setNote(`Not enough credits — an on-model video costs ${d.needed ?? veoCost}.`);
-        return;
-      }
-      if (res.status === 429) {
-        setNote('Slow down a moment — on-model videos are rate-limited. Try again shortly.');
-        return;
-      }
-      if (!res.ok || !d.modelVideos?.length) throw new Error(d.error ?? 'failed');
-      setNote(null);
-      await Promise.all([loadProducts(), loadCredits()]);
-    } catch {
-      setNote('Could not make the on-model video — your credits were not charged.');
-    } finally {
-      setGenId(null);
-    }
-  };
-
-  // Delete a product everywhere: our catalog, the storefront website (it refreshes within
-  // ~5 min via ISR), and the Printful store. Cannot be undone.
-  const deleteProduct = (p: Product) => {
-    Alert.alert(
-      'Delete product?',
-      `"${p.name}" will be removed from your store, your storefront website, and Printful. This can't be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const r = await fetch(apiUrl(`/api/creator/products/${p.id}`), {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (!r.ok) {
-                const e = (await r.json().catch(() => ({}))) as { error?: string };
-                throw new Error(e.error ?? 'Failed to delete');
-              }
-              setProducts((prev) => prev.filter((x) => x.id !== p.id));
-            } catch (e) {
-              Alert.alert('Could not delete', e instanceof Error ? e.message : 'Please try again.');
-            }
-          },
-        },
-      ],
-    );
-  };
 
   useEffect(() => {
     if (slug) setActive(slug);
   }, [slug]);
   useEffect(() => {
     if (visible) {
-      // Land on the caller's tab when one was asked for (the deck's quick pills) — else Edit.
+      // Land on the caller's tab when one was asked for (the deck's pills) — else Edit.
       setTab(initialTab ?? 'edit');
       setSiteAction('idle');
       void loadStores();
@@ -341,10 +202,9 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     if (visible && active) {
       void loadPosts();
       void loadRevisions();
-      void loadProducts();
       void loadInsights();
     }
-  }, [visible, active, loadPosts, loadRevisions, loadProducts, loadInsights]);
+  }, [visible, active, loadPosts, loadRevisions, loadInsights]);
 
   // While a site is building, poll the durable status so the view updates itself — when the forge
   // worker finishes, `building` flips false (status→ready + deploymentUrl set) and the live site
@@ -404,11 +264,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([loadStores(true), active ? loadRevisions() : Promise.resolve(), active ? loadProducts() : Promise.resolve()]);
+      await Promise.all([loadStores(true), active ? loadRevisions() : Promise.resolve()]);
     } finally {
       setRefreshing(false);
     }
-  }, [active, loadStores, loadRevisions, loadProducts]);
+  }, [active, loadStores, loadRevisions]);
 
   const refundOrder = async (id: string) => {
     if (refundingId) return;
@@ -431,6 +291,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
       { text: 'Cancel', style: 'cancel' },
       { text: 'Refund', style: 'destructive', onPress: () => void refundOrder(id) },
     ]);
+
 
   // Permanently delete this brand — its store, products, designs, posts, orders, and site records.
   const deleteBrand = async () => {
@@ -603,10 +464,12 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     }
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-        <View style={styles.sheet}>
+  // EMBEDDED (inside the BrandDeck): no Modal shell, no own header/tab bar — the deck names the
+  // brand and drives `tab` via initialTab. The overlays (site preview, short composer) are RN
+  // Modals, which render fine from any parent. Standalone keeps the original sheet.
+  const body = (
+    <>
+          {!embedded || draft ? (
           <View style={styles.headerRow}>
             <ThemedText type="subtitle" style={styles.consoleTitle} numberOfLines={1}>
               {draft ? 'Write a post' : (stores.find((s) => s.slug === active)?.name ?? brandName ?? 'Brand console')}
@@ -618,6 +481,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               </ThemedText>
             </Pressable>
           </View>
+          ) : null}
 
           {loading ? (
             <ActivityIndicator style={styles.center} color={pal.accent} />
@@ -670,13 +534,15 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                 </View>
               ) : null}
 
+              {embedded ? null : (
               <View style={styles.tabBar}>
-                {(['edit', 'posts', 'sell', 'settings'] as const).map((t) => (
+                {(['edit', 'posts', 'settings'] as const).map((t) => (
                   <Pressable key={t} onPress={() => setTab(t)} style={[styles.tabItem, tab === t && styles.tabItemOn]}>
                     <ThemedText type="code" style={tab === t ? styles.tabTextOn : styles.tabText}>{TAB_LABEL[t]}</ThemedText>
                   </Pressable>
                 ))}
               </View>
+              )}
 
               {tab === 'edit' ? (
                 <>
@@ -791,72 +657,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               ) : null}
 
               {/* Sell — turn a product photo into a feed-ready voiceover ad */}
-              {tab === 'sell' ? (
-                products.length ? (
-                <>
-                  <View style={[styles.sectionRow, { marginTop: Spacing.five }]}>
-                    <ThemedText type="code" style={styles.sectionLabel}>VIDEO ADS</ThemedText>
-                    {credits !== null ? (
-                      <Pressable onPress={onOpenBilling} disabled={!onOpenBilling} hitSlop={6}>
-                        <ThemedText type="code" style={styles.green}>{credits} credits{onOpenBilling ? ' +' : ''}</ThemedText>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  <ThemedText type="small" style={styles.dim}>Eve turns a product into a feed video ad ({voiceoverCost}), on-model shots (20), or an on-model film for your website ({veoCost}).</ThemedText>
-                  {/* Scene shorts are PAUSED for now — greyed + non-interactive until the video pipeline
-                      + its content-safety guard ship. Re-enable by restoring the Pressable. */}
-                  <View style={[styles.primaryBtn, { opacity: 0.4 }]} pointerEvents="none">
-                    <ThemedText type="smallBold" style={{ color: pal.onAccent }}>✦ Make a scene short</ThemedText>
-                  </View>
-                  <ThemedText type="code" style={[styles.dim, { textAlign: 'center', marginTop: 4 }]}>
-                    Coming in a later update
-                  </ThemedText>
-                  <ThemedText type="code" style={styles.dim}>Put a model in a real scene — skateboarding, on a beach — and pick the quality: Wan, Seedance or Veo 3.</ThemedText>
-                  {note && !draft ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
-                  {note && !draft && onOpenBilling && credits !== null && credits < voiceoverCost ? (
-                    <Pressable onPress={onOpenBilling} style={styles.primaryBtn}>
-                      <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Top up credits</ThemedText>
-                    </Pressable>
-                  ) : null}
-                  {products.map((p) => (
-                    <View key={p.id} style={styles.adRow}>
-                      {p.imageUrl ? (
-                        <Image source={{ uri: p.imageUrl }} style={styles.adThumb} contentFit="cover" />
-                      ) : (
-                        <View style={[styles.adThumb, styles.adThumbEmpty]} />
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <ThemedText type="small" style={styles.white} numberOfLines={1}>{p.name}</ThemedText>
-                        <ThemedText type="code" style={styles.dim}>
-                          {p.videoUrl ? 'video ad ✓' : 'no video'} · {p.modelShots?.length ? `${p.modelShots.length} shots ✓` : 'no shots'} · {p.modelVideos?.length ? `${p.modelVideos.length} films ✓` : 'no film'}
-                        </ThemedText>
-                      </View>
-                      {genId === p.id ? (
-                        <ActivityIndicator size="small" color={pal.accent} />
-                      ) : (
-                        <View style={styles.adActions}>
-                          <Pressable onPress={() => makeModelShots(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
-                            <ThemedText type="code" style={styles.adBtnText}>{p.modelShots?.length ? 'shots ↻' : 'shots · 20'}</ThemedText>
-                          </Pressable>
-                          <Pressable onPress={() => makeModelVideo(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
-                            <ThemedText type="code" style={styles.adBtnText}>{p.modelVideos?.length ? `film ↻ · ${veoCost}` : `film · ${veoCost}`}</ThemedText>
-                          </Pressable>
-                          <Pressable onPress={() => makeVideoAd(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
-                            <ThemedText type="code" style={styles.adBtnText}>{p.videoUrl ? 'video ↻' : `video · ${voiceoverCost}`}</ThemedText>
-                          </Pressable>
-                          <Pressable onPress={() => deleteProduct(p)} disabled={!!genId} hitSlop={6} style={styles.adBtn}>
-                            <ThemedText type="code" style={styles.adBtnDanger}>delete</ThemedText>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-                  ))}
-                </>
-                ) : (
-                  <ThemedText type="small" style={styles.dim}>No products yet — create a drop in the Design tab to make video ads.</ThemedText>
-                )
-              ) : null}
-
               {/* Posts — the brand journal */}
               {tab === 'posts' ? (
                 <>
@@ -1018,8 +818,11 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
               ) : null}
             </ScrollView>
           )}
-        </View>
-      </SafeAreaView>
+    </>
+  );
+
+  const overlays = (
+    <>
       {previewTarget ? (
         <SitePreview
           visible={!!previewTarget}
@@ -1035,7 +838,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
           onClose={() => setShortComposer(false)}
           token={token}
           slug={active}
-          onPublished={() => { void loadProducts(); void loadCredits(); }}
+          onPublished={() => { void loadCredits(); }}
         />
       ) : null}
       {goLive && active ? (
@@ -1067,6 +870,23 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
           }}
         />
       ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <View style={styles.embedFill}>
+        {body}
+        {overlays}
+      </View>
+    );
+  }
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+        <View style={styles.sheet}>{body}</View>
+      </SafeAreaView>
+      {overlays}
     </Modal>
   );
 }
@@ -1074,6 +894,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
 function makeStyles(pal: StudioPalette) {
   const onAccentInk = pal.onAccent;
   return StyleSheet.create({
+    embedFill: { flex: 1 },
     fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
     sheet: { flex: 1, marginTop: Spacing.six, backgroundColor: pal.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: pal.line, overflow: 'hidden' },
     headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.four, paddingVertical: Spacing.four },

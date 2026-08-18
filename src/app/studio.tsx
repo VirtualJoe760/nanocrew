@@ -17,7 +17,6 @@ import { EveDesign } from '@/components/eve/eve-design';
 import { EveDeveloping } from '@/components/eve/eve-developing';
 import { EveGlyph } from '@/components/eve/eve-glyph';
 import { EveHome } from '@/components/eve/eve-home';
-import { StudioComposer } from '@/components/studio-composer';
 import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -54,9 +53,8 @@ function StudioScreen() {
   const { session, loading } = useAuth();
 
   const [voiceResolved, setVoiceResolved] = useState(false); // /api/me landing check done
-  const [showComposer, setShowComposer] = useState(false);
-  const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
-  const [consoleTab, setConsoleTab] = useState<'edit' | 'posts' | 'sell' | 'settings' | undefined>(undefined);
+  // Deep-link landing for the deck's embedded console (push → review, site submitted).
+  const [deckFocus, setDeckFocus] = useState<{ slug: string; tab: 'edit' | 'posts' | 'settings' } | null>(null);
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
   const [hasStore, setHasStore] = useState(false);
 
@@ -86,8 +84,8 @@ function StudioScreen() {
     const slug = reviewParams.reviewSlug;
     if (slug && reviewHandled.current !== slug) {
       reviewHandled.current = slug;
-      setConsoleBrand({ slug, name: reviewParams.reviewName || slug });
-      setShowComposer(true);
+      setDeckFocus({ slug, tab: 'edit' });
+      setDeckShown(true);
     }
   }, [reviewParams.reviewSlug, reviewParams.reviewName]);
   // Legacy ?mode=interview deep link → straight into the voice surface.
@@ -221,10 +219,10 @@ function StudioScreen() {
         <Welcome onChoose={handleChoose} topInset={insets.top} bottomInset={insets.bottom} />
       </Modal>
 
-      {/* The composer + paywall stay mounted for a signed-in creator (both gated by `visible`). */}
+      {/* The paywall stays mounted for a signed-in creator (gated by `visible`). The old standalone
+          console Modal is GONE — the deck embeds the console now (the merge, 2026-08-17). */}
       {session ? (
         <>
-          <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} onDeleted={() => { setShowComposer(false); setConsoleBrand(null); setDashKey((k) => k + 1); }} onBrandRenamed={(name) => { setConsoleBrand((b) => (b ? { ...b, name } : b)); setDashKey((k) => k + 1); }} slug={consoleBrand?.slug} brandName={consoleBrand?.name} initialTab={consoleTab} />
           <Paywall
             visible={!!paywall}
             onClose={() => {
@@ -255,8 +253,8 @@ function StudioScreen() {
           onExit={() => setEve(null)}
           onSubmitted={(slug) => {
             setEve(null);
-            setConsoleBrand({ slug, name: slug });
-            setShowComposer(true);
+            setDeckFocus({ slug, tab: 'edit' });
+            setDeckShown(true);
           }}
         />
       ) : !deep ? (
@@ -315,7 +313,7 @@ function StudioScreen() {
                 narrate; her own are not among them. */}
             <EveHome
               open={focused}
-              covered={deckShown || showComposer || !!paywall || welcomeVisible}
+              covered={deckShown || !!paywall || welcomeVisible}
               hidden={!!eve}
               onRequestClose={() => setEve(null)}
               onGo={setEve}
@@ -325,10 +323,10 @@ function StudioScreen() {
               <>
                 <BrandDeck
                   shown={deckShown}
+                  focus={deckFocus}
                   token={session.access_token}
                   refreshKey={dashKey}
-                  onClose={() => setDeckShown(false)}
-                  onEditBrand={(slug, name, tab) => { setDeckShown(false); setConsoleBrand({ slug, name }); setConsoleTab(tab); setShowComposer(true); }}
+                  onClose={() => { setDeckShown(false); setDeckFocus(null); }}
                   onNewBrand={onNewBrand}
                   onBounty={(panel, slot) => { setDeckShown(false); router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`); }}
                 />

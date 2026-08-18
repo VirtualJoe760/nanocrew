@@ -78,6 +78,7 @@ export async function GET(req: Request) {
           // OG card, generated at read time for any logo'd brand missing one (same rule as /api/me:
           // banners are generated, never hand-picked product photos).
           bannerUrl: hero ?? s.ogImageUrl ?? (logoUrl ? buildOgImageUrl({ logoUrl, tagline }) : null),
+          logoUrl, // the wordmark — overlaid bottom-left on the deck banner
           orders: orderAgg.find((o) => o.storeId === s.id)?.orders ?? 0,
           revenueCents: orderAgg.find((o) => o.storeId === s.id)?.revenueCents ?? 0,
           views30d: viewAgg.find((v) => v.storeId === s.id)?.views ?? 0,

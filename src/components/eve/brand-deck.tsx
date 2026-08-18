@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -13,6 +13,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { StudioComposer } from '@/components/studio-composer';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { glow } from '@/constants/glow';
@@ -29,7 +30,7 @@ const OPEN_MS = 320;
 const BACKDROP = 'rgba(6,8,12,0.9)'; // near-opaque so brand imagery reads; Eve still glows faintly through
 
 type Bounties = { product: boolean; hero: boolean; logo: boolean; cover: boolean };
-type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; bannerUrl?: string | null; ogImageUrl?: string | null; productImages?: string[]; bounties?: Bounties };
+type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; bannerUrl?: string | null; logoUrl?: string | null; ogImageUrl?: string | null; productImages?: string[]; bounties?: Bounties };
 
 const BOUNTY_STEPS: { key: keyof Bounties; label: string; panel: 'products' | 'web'; slot?: 'hero' | 'cover' | 'logo' }[] = [
   { key: 'product', label: 'Add your first product', panel: 'products' },
@@ -43,18 +44,19 @@ export function BrandDeck({
   token,
   refreshKey,
   onClose,
-  onEditBrand,
   onNewBrand,
   onBounty,
+  focus,
 }: {
   shown: boolean;
   token: string;
   /** Bump to force a refetch (e.g. after a brand is created). */
   refreshKey?: number;
   onClose: () => void;
-  onEditBrand: (slug: string, name: string, tab?: 'edit' | 'posts' | 'sell' | 'settings') => void;
   onNewBrand: () => void;
   onBounty?: (panel: 'products' | 'web', slot?: 'hero' | 'cover' | 'logo') => void;
+  /** Deep-link landing: open ON this brand with this tab active (push → review, post-submit). */
+  focus?: { slug: string; tab: 'edit' | 'posts' | 'settings' } | null;
 }) {
   const p = useStudioPalette();
   const insets = useSafeAreaInsets();
@@ -63,6 +65,26 @@ export function BrandDeck({
 
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [page, setPage] = useState(0);
+  // THE MERGE (Joe, 2026-08-17): the deck IS the console now. null = overview (banner + checklist);
+  // a tab renders the embedded StudioComposer inline. One surface — no second panel ever opens.
+  const [activeTab, setActiveTab] = useState<'edit' | 'posts' | 'settings' | null>(null);
+  const pagerRef = useRef<ScrollView>(null);
+
+  // Deep-link landing (push → review, site submitted): jump to the brand's page + open its tab.
+  useEffect(() => {
+    if (!shown || !focus || !stores.length) return;
+    const i = stores.findIndex((st) => st.slug === focus.slug);
+    if (i >= 0) {
+      pagerRef.current?.scrollTo({ x: i * width, animated: false });
+      setPage(i);
+      setActiveTab(focus.tab);
+    }
+  }, [shown, focus, stores, width]);
+
+  // Fresh open without a deep link starts at the overview.
+  useEffect(() => {
+    if (shown && !focus) setActiveTab(null);
+  }, [shown, focus]);
 
   const load = useCallback(async () => {
     try {
@@ -127,13 +149,14 @@ export function BrandDeck({
 
       {/* Horizontally-paged brands — one per screen; the last page builds a new brand. */}
       <ScrollView
+        ref={pagerRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
         style={styles.pager}>
-        {stores.map((store) => {
+        {stores.map((store, i) => {
           // The brand BANNER (site hero / generated OG card) — never a random product photo (Joe).
           const hero = store.bannerUrl ?? store.ogImageUrl ?? store.productImages?.[0] ?? null;
           const todo = store.bounties ? BOUNTY_STEPS.filter((b) => !store.bounties![b.key]) : [];
@@ -147,38 +170,69 @@ export function BrandDeck({
                 </ThemedText>
               </View>
 
-              {/* 2 — the console nav (Edit site · Posts · Sell · Settings). */}
+              {/* 2 — the console nav. Tap toggles the tab inline; tapping the active one returns
+                  to the overview. (Sell is gone — rebuilt later, Joe.) */}
               <View style={s.quickRow}>
-                {([['edit', 'Edit site'], ['posts', 'Posts'], ['sell', 'Sell'], ['settings', 'Settings']] as const).map(([key, label]) => (
-                  <Pressable key={key} style={s.quickPill} onPress={() => onEditBrand(store.slug, store.name, key)} hitSlop={4}>
-                    <ThemedText type="code" style={s.quickPillText}>{label}</ThemedText>
+                {([['edit', 'Edit site'], ['posts', 'Posts'], ['settings', 'Settings']] as const).map(([key, label]) => (
+                  <Pressable
+                    key={key}
+                    style={[s.quickPill, activeTab === key && s.quickPillOn]}
+                    onPress={() => setActiveTab((cur) => (cur === key ? null : key))}
+                    hitSlop={4}>
+                    <ThemedText type="code" style={[s.quickPillText, activeTab === key && s.quickPillTextOn]}>{label}</ThemedText>
                   </Pressable>
                 ))}
               </View>
 
-              {/* 3 — the thumbnail (tap opens the console). */}
-              <Pressable onPress={() => onEditBrand(store.slug, store.name)} style={s.hero}>
-                {hero ? (
-                  <Image source={{ uri: hero }} style={styles.heroImg} contentFit="cover" />
-                ) : (
-                  <View style={[styles.heroImg, s.heroFallback]}>
-                    <ThemedText type="title" style={{ color: p.ink }}>{store.name}</ThemedText>
-                  </View>
-                )}
-              </Pressable>
-
-              {/* 4 — finish-your-site, right under the thumbnail. */}
-              {todo.length && onBounty ? (
-                <View style={s.bountyBox}>
-                  <ThemedText type="code" style={s.bountyHead}>FINISH YOUR SITE</ThemedText>
-                  {todo.map((b) => (
-                    <Pressable key={b.key} style={s.bountyRow} onPress={() => onBounty(b.panel, b.slot)}>
-                      <ThemedText type="small" style={{ color: p.ink }}>○  {b.label}</ThemedText>
-                      <ThemedText type="small" style={{ color: p.accent }}>→</ThemedText>
-                    </Pressable>
-                  ))}
+              {activeTab && i === page ? (
+                /* 3b — the console, INLINE (the merge): only on the visible page so we never mount
+                   one fetching console per brand. */
+                <View style={styles.consoleFill}>
+                  <StudioComposer
+                    embedded
+                    visible={shown}
+                    token={token}
+                    slug={store.slug}
+                    brandName={store.name}
+                    initialTab={activeTab}
+                    onClose={() => setActiveTab(null)}
+                    onDeleted={() => { setActiveTab(null); void load(); }}
+                    onBrandRenamed={() => void load()}
+                  />
                 </View>
-              ) : null}
+              ) : (
+                <>
+                  {/* 3 — the banner (tap → Edit site). Wordmark bottom-left, edit tag bottom-right. */}
+                  <Pressable onPress={() => setActiveTab('edit')} style={s.hero}>
+                    {hero ? (
+                      <Image source={{ uri: hero }} style={styles.heroImg} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.heroImg, s.heroFallback]}>
+                        <ThemedText type="title" style={{ color: p.ink }}>{store.name}</ThemedText>
+                      </View>
+                    )}
+                    {store.logoUrl ? (
+                      <Image source={{ uri: store.logoUrl }} style={s.heroWordmark} contentFit="contain" contentPosition="left bottom" />
+                    ) : null}
+                    <View style={s.editTag}>
+                      <ThemedText type="code" style={s.editTagText}>edit →</ThemedText>
+                    </View>
+                  </Pressable>
+
+                  {/* 4 — finish-your-site, right under the banner. */}
+                  {todo.length && onBounty ? (
+                    <View style={s.bountyBox}>
+                      <ThemedText type="code" style={s.bountyHead}>FINISH YOUR SITE</ThemedText>
+                      {todo.map((b) => (
+                        <Pressable key={b.key} style={s.bountyRow} onPress={() => onBounty(b.panel, b.slot)}>
+                          <ThemedText type="small" style={{ color: p.ink }}>○  {b.label}</ThemedText>
+                          <ThemedText type="small" style={{ color: p.accent }}>→</ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </>
+              )}
             </View>
           );
         })}
@@ -210,9 +264,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   handleBar: { flexDirection: 'row', alignItems: 'center', paddingBottom: Spacing.three, paddingHorizontal: Spacing.four },
   pager: { flex: 1 },
-  pageCol: { paddingHorizontal: Spacing.four, gap: Spacing.four },
+  pageCol: { height: '100%', paddingHorizontal: Spacing.four, gap: Spacing.four },
   newCol: { alignItems: 'center', justifyContent: 'center' },
   meta: { gap: Spacing.one },
+  consoleFill: { flex: 1 },
   // The banner renders at its own OG ratio (1200x630) so the artwork is never cropped.
   heroImg: { width: '100%', aspectRatio: 1200 / 630 },
   dots: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
@@ -226,7 +281,12 @@ function makeStyles(p: StudioPalette) {
     heroFallback: { alignItems: 'center', justifyContent: 'center' },
     quickRow: { flexDirection: 'row', gap: Spacing.two },
     quickPill: { flex: 1, alignItems: 'center', paddingVertical: Spacing.two, borderRadius: 999, borderWidth: 1, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.7)' },
+    quickPillOn: { backgroundColor: p.accent, borderColor: p.accent },
     quickPillText: { color: p.ink, fontSize: 11, letterSpacing: 0.5 },
+    quickPillTextOn: { color: p.onAccent },
+    heroWordmark: { position: 'absolute', left: Spacing.three, bottom: Spacing.three, width: '45%', height: 30 },
+    editTag: { position: 'absolute', right: Spacing.three, bottom: Spacing.three, backgroundColor: p.accent, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 5 },
+    editTagText: { color: p.onAccent, fontSize: 11, letterSpacing: 0.5 },
     bountyBox: { borderRadius: 14, borderWidth: 1, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.6)', padding: Spacing.four, gap: Spacing.three },
     bountyHead: { color: p.accent, letterSpacing: 1.5 },
     bountyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
