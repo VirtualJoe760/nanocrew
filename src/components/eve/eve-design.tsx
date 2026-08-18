@@ -1,59 +1,60 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
+import { PlacementEditor } from '@/components/designer/PlacementEditor';
+import { ProductPicker } from '@/components/designer/ProductPicker';
 import { VenusBubble } from '@/components/venus-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { usePalette } from '@/components/nc-screen';
 import { glow } from '@/constants/glow';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
-import { apiUrl } from '@/lib/api';
-import { sendDesignCommand } from '@/lib/design-bus';
+import { apiFetch, apiUrl, readJson } from '@/lib/api';
+import { sayEve } from '@/lib/eve-say-bus';
 import { showEve } from '@/lib/eve-vision-bus';
+import type { CatalogBlank } from '@/lib/printful';
 
-// EVE'S DESIGN STATE — her hands-free create surface (docs/studio/EVE_CONTROL.md, Phase C3).
-// The first deep, non-nav flow the tree drives end-to-end: resolve a collection, generate from an
-// idea (POST /api/generate), show it large with Eve beside it, iterate by instruction (POST /api/edit,
-// non-destructive), then hand off — open it in the Design tab to hand-edit, or keep it on the canvas.
+// EVE'S DESIGN PIPELINE — voice-first, product-first, START to FINISH inside her tab (Joe's
+// california-flag-tee walkthrough, 2026-08-17):
+//   idea (spoken, routed here) → ProductPicker modal (pick the actual product) → she asks
+//   "enhance or as-is?" → generate a print-ready graphic → approve → PlacementEditor →
+//   FinalizeSheet (pricing) → PUBLISHED to the catalogue + live site. No redirects, ever —
+//   the Design tab is one tap away for hand-editing; Eve finishes what she starts.
 //
-// The SAME endpoints the Design tab uses, so behaviour is identical; this is just Eve's immersive,
-// conversational entry into them. Voice-driven iteration (spoken turns → a design-turn distiller)
-// lands next (C3b) — this slice drives it by typed instruction, which is fully verifiable and carries
-// no risk of a misheard word spending credits.
+// She stays LIVE underneath (the overlay renders over EveHome): her cues go out on the say-bus
+// (she ASKS at each fork) and every settled image goes to her eyes on the vision bus.
 
 const BG = '#08080a';
-const EDIT_COST = 8; // display mirror of CREDIT_COSTS.design_edit (server is source of truth)
 const GENERATE_COST = 8; // display mirror of CREDIT_COSTS.design_generate (server is source of truth)
 
+type Step = 'loading' | 'pick' | 'style' | 'busy' | 'review' | 'place' | 'finalize' | 'done' | 'error';
 type Design = { id: string; url: string; prompt: string };
-type Phase = 'resolving' | 'idle' | 'busy' | 'ready' | 'error';
 
 export function EveDesign({
   idea,
   onExit,
-  onHandoff,
 }: {
-  /** The concept to generate on entry (from a spoken/typed intent). Absent → Eve asks. */
+  /** The concept to make (from the routed spoken intent). */
   idea?: string;
   /** Back to Eve's home state. */
   onExit: () => void;
-  /** Leave the overlay for the Design tab (a queued design-bus command lands there on mount). */
-  onHandoff: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const p = usePalette();
   const { session } = useAuth();
   const token = session?.access_token;
 
-  const [phase, setPhase] = useState<Phase>('resolving');
-  const [current, setCurrent] = useState<Design | null>(null);
-  const [line, setLine] = useState(idea ? 'Working on it…' : 'What shall I make?');
+  const [step, setStep] = useState<Step>('loading');
+  const [blanks, setBlanks] = useState<CatalogBlank[]>([]);
+  const [blanksError, setBlanksError] = useState(false);
+  const [blank, setBlank] = useState<CatalogBlank | null>(null);
+  const [design, setDesign] = useState<Design | null>(null);
+  const [compositionId, setCompositionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [input, setInput] = useState('');
   const catalogueRef = useRef<string | null>(null);
-  const stackRef = useRef<Design[]>([]); // history for "undo" back to the prior iteration
 
   const authHeaders = useCallback(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
@@ -79,6 +80,28 @@ export function EveDesign({
     }
   }, [authHeaders]);
 
+  const loadBlanks = useCallback(() => {
+    setBlanksError(false);
+    return apiFetch('/api/blanks')
+      .then(readJson<{ blanks?: CatalogBlank[] }>)
+      .then((d) => {
+        if (d.blanks?.length) { setBlanks(d.blanks); setStep('pick'); }
+        else setBlanksError(true);
+      })
+      .catch(() => setBlanksError(true));
+  }, []);
+
+  // Open: catalogue + the product catalogue, straight into the picker. She narrates the fork.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void resolveCatalogue();
+    void loadBlanks();
+    sayEve('(Their design surface just opened with the product catalogue — in ONE short sentence, tell them to pick the product this goes on.)');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const failFrom = (status: number, d: { error?: string; needed?: number }): string => {
     if (status === 402) return `Not enough credits${d.needed ? ` — need ${d.needed}` : ''}. Top up in Account.`;
     if (status === 401) return 'Sign in to create designs.';
@@ -87,209 +110,217 @@ export function EveDesign({
 
   const generate = useCallback(
     async (prompt: string) => {
-      if (!token) { setError('Sign in to create designs.'); setPhase('error'); return; }
-      setPhase('busy');
+      if (!token) { setError('Sign in to create designs.'); setStep('error'); return; }
+      setStep('busy');
       setError(null);
-      setLine('Working on it…');
       const catalogueId = await resolveCatalogue();
       try {
         const r = await fetch(apiUrl('/api/generate'), {
           method: 'POST',
           headers: authHeaders(),
-          // 'transparent' = the Design tab's product default: the chroma-key pipeline renders the
-          // idea as a standalone print graphic (cutout on magenta → real alpha). 'filled' asked for
-          // full-bleed ARTWORK OF the thing described — "a tee" came back as a photo of a tee.
+          // 'transparent' = the chroma-key pipeline: a print-ready cutout graphic, never a photo
+          // OF the product (the Design tab's product default).
           body: JSON.stringify({ prompt, catalogueId, background: 'transparent', aspectRatio: '1:1' }),
         });
         const d = (await r.json().catch(() => ({}))) as { image?: string; id?: string; error?: string; needed?: number };
         if (!r.ok || !d.image || !d.id) throw new Error(failFrom(r.status, d));
-        const design = { id: d.id, url: d.image, prompt };
-        stackRef.current = [design];
-        setCurrent(design);
-        setPhase('ready');
-        setLine('Here you go. Tell me a tweak, or open it up to edit yourself.');
-        // Let her actually LOOK at it — she's live underneath this overlay. Only on a SETTLED
-        // design (never mid-generation), so it costs one image (~$0.004), not a stream.
+        const made = { id: d.id, url: d.image, prompt };
+        setDesign(made);
+        setStep('review');
         showEve({
-          url: design.url,
-          note: `(This is the design you just made for them, from: "${prompt}". You can SEE it — react in one short sentence: what works, and one thing you'd change. Then ask if they want it on a product.)`,
+          url: made.url,
+          note: `(This is the design you just made from: "${prompt}". You can SEE it — react in one short sentence, then ask if they want it placed on the ${blank?.name ?? 'product'} or another take.)`,
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Generation failed');
-        setPhase(current ? 'ready' : 'error');
+        setStep(design ? 'review' : 'error');
       }
     },
-    [token, authHeaders, resolveCatalogue, current],
+    [token, authHeaders, resolveCatalogue, blank?.name, design],
   );
 
-  const edit = useCallback(
-    async (instruction: string) => {
-      if (!current || !token) return;
-      const catalogueId = catalogueRef.current;
-      if (!catalogueId) return;
-      setPhase('busy');
-      setError(null);
-      setLine('On it…');
-      try {
-        const r = await fetch(apiUrl('/api/edit'), {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({ designId: current.id, catalogueId, instruction, mode: 'custom', background: 'transparent' }),
-        });
-        const d = (await r.json().catch(() => ({}))) as { image?: string; id?: string; prompt?: string; error?: string; needed?: number };
-        if (!r.ok || !d.image || !d.id) throw new Error(failFrom(r.status, d));
-        const design = { id: d.id, url: d.image, prompt: d.prompt ?? `Edit — ${instruction.slice(0, 60)}` };
-        stackRef.current = [...stackRef.current, design];
-        setCurrent(design);
-        setPhase('ready');
-        setLine('Done. Another tweak, or keep it?');
-        showEve({
-          url: design.url,
-          note: `(They asked for: "${instruction}". This is the RESULT — you can see it. Say in one short sentence whether that landed, then invite the next tweak or offer to put it on a product.)`,
-        });
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Edit failed');
-        setPhase('ready');
-      }
-    },
-    [current, token, authHeaders],
-  );
+  // "Enhance" = enrich the idea in the brand voice first (free, rate-limited), then generate.
+  const enhanceAndGenerate = useCallback(async () => {
+    if (!idea) return;
+    setStep('busy');
+    try {
+      const r = await fetch(apiUrl('/api/enhance'), {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ prompt: idea }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { enhanced?: string };
+      await generate(d.enhanced?.trim() || idea);
+    } catch {
+      await generate(idea);
+    }
+  }, [idea, authHeaders, generate]);
 
-  // Generate the opening idea once (if one arrived with the intent).
-  const started = useRef(false);
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    (async () => {
-      await resolveCatalogue();
-      if (idea?.trim()) void generate(idea.trim());
-      else setPhase('idle');
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Approve → a composition on the chosen blank (front placement; the editor refines it).
+  const toPlacement = useCallback(async () => {
+    if (!design || !blank) return;
+    setStep('busy');
+    try {
+      const r = await fetch(apiUrl('/api/compositions'), {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          catalogueId: catalogueRef.current,
+          designId: design.id,
+          templateKey: String(blank.id),
+          placement: 'front',
+        }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { composition?: { id: string }; id?: string; error?: string };
+      const id = d.composition?.id ?? d.id;
+      if (!r.ok || !id) throw new Error(d.error ?? 'Could not stage the product');
+      setCompositionId(id);
+      setStep('place');
+      sayEve('(The placement editor just opened — one short sentence: they can size and position the print, then hit Done.)');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not stage the product');
+      setStep('review');
+    }
+  }, [design, blank, authHeaders]);
 
-  const submit = () => {
-    const t = input.trim();
-    if (!t || phase === 'busy') return;
-    setInput('');
-    if (current) void edit(t);
-    else void generate(t);
-  };
-
-  // Undo the last iteration (revert to the prior design in the local stack).
-  const undo = () => {
-    if (stackRef.current.length < 2) return;
-    stackRef.current = stackRef.current.slice(0, -1);
-    const prior = stackRef.current[stackRef.current.length - 1];
-    setCurrent(prior);
-    setLine('Reverted. What next?');
-    // Re-point her eyes too — otherwise she keeps reacting to the discarded iteration.
-    showEve({
-      url: prior.url,
-      note: '(They reverted to this earlier version — the one you saw last is discarded. This is what\'s on the canvas now; react to it, and don\'t mention the old one.)',
-    });
-  };
-
-  const openInDesign = () => {
-    if (!current) return;
-    sendDesignCommand({ kind: 'open-editor', designId: current.id });
-    onHandoff();
-  };
-  const keepOnCanvas = () => {
-    if (!current) return;
-    sendDesignCommand({ kind: 'show-design', designId: current.id });
-    onHandoff();
-  };
-
-  const busy = phase === 'busy';
-  const canAct = phase === 'ready' && !!current;
+  const designOpts = design ? [{ id: design.id, prompt: design.prompt, image: design.url }] : [];
+  const defaultName = (idea ?? design?.prompt ?? 'New drop').replace(/^make (me )?(a |an )?/i, '').slice(0, 60);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.fill, { paddingTop: insets.top + Spacing.four, paddingBottom: insets.bottom + Spacing.three }]}>
+    <View style={[styles.fill, { paddingTop: insets.top + Spacing.four, paddingBottom: insets.bottom + Spacing.three }]}>
       <View style={styles.headerRow}>
         <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>EVE · DESIGN</ThemedText>
-        <View style={{ flex: 1 }} />
-        {canAct && stackRef.current.length > 1 ? (
-          <Pressable onPress={undo} hitSlop={10} accessibilityLabel="Undo last edit">
-            <ThemedText type="code" style={{ color: p.dim, fontSize: 14 }}>↶ undo</ThemedText>
-          </Pressable>
-        ) : null}
+        <View style={styles.flex} />
         <Pressable onPress={onExit} hitSlop={10} accessibilityLabel="Back to Eve">
-          <ThemedText type="code" style={{ color: p.dim, fontSize: 14, marginLeft: Spacing.three }}>‹ back</ThemedText>
+          <ThemedText type="code" style={{ color: p.dim, fontSize: 14 }}>‹ back</ThemedText>
         </Pressable>
       </View>
 
-      {/* The design, center stage. */}
-      <View style={styles.stage}>
-        {current ? (
-          <Image source={{ uri: current.url }} style={styles.image} contentFit="contain" />
-        ) : (
-          <VenusBubble active speaking={busy} size={120} />
-        )}
-        {busy ? (
-          <View style={styles.busyVeil}>
-            <ActivityIndicator color="#dff4ff" />
-          </View>
-        ) : null}
-      </View>
-
-      {/* Eve's line + her presence. */}
-      <View style={styles.captionRow}>
-        {current ? <VenusBubble active speaking={busy} size={44} /> : null}
-        <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={2}>{line}</ThemedText>
-      </View>
-      {error ? (
-        <ThemedText type="code" style={styles.error} numberOfLines={2}>{error}</ThemedText>
+      {/* 1 — pick the product (the catalogue modal, single pick). */}
+      {step === 'pick' || step === 'loading' ? (
+        <ProductPicker
+          visible
+          blanks={blanks}
+          loading={step === 'loading' && !blanksError}
+          error={blanksError}
+          onRetry={() => void loadBlanks()}
+          onClose={onExit}
+          onAdd={(sel) => {
+            const chosen = sel[0];
+            if (!chosen) return;
+            setBlank(chosen);
+            setStep('style');
+            sayEve(`(They picked the ${chosen.name}. Ask ONE short question: should you enhance the idea first, or print it as-is?)`);
+          }}
+        />
       ) : null}
 
-      {/* Keep / open-in-Design when there's a design to act on. */}
-      {canAct ? (
-        <View style={styles.actions}>
-          <Pressable onPress={keepOnCanvas} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
-            <ThemedText type="code" style={{ color: p.dim }}>✓ Keep</ThemedText>
-          </Pressable>
-          <Pressable onPress={openInDesign} style={[styles.action, styles.actionPrimary, glow(p.accent, 12, 0.4)]} hitSlop={6}>
-            <ThemedText type="smallBold" style={{ color: BG }}>Open in Design ›</ThemedText>
+      {/* 2 — enhance or as-is (she asks aloud; these are the answer). */}
+      {step === 'style' ? (
+        <View style={styles.stage}>
+          <VenusBubble active speaking={false} size={96} />
+          <ThemedText style={[styles.line, { color: p.ink }]}>“{idea}”</ThemedText>
+          <ThemedText type="small" style={{ color: p.dim }}>on the {blank?.name}</ThemedText>
+          <View style={styles.actions}>
+            <Pressable onPress={() => void enhanceAndGenerate()} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
+              <ThemedText type="smallBold" style={{ color: BG }}>✦ Enhance it</ThemedText>
+            </Pressable>
+            <Pressable onPress={() => idea && void generate(idea)} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
+              <ThemedText type="code" style={{ color: p.ink }}>Print as-is</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {/* 3 — generating. */}
+      {step === 'busy' ? (
+        <View style={styles.stage}>
+          <VenusBubble active speaking size={120} />
+          <ActivityIndicator color="#dff4ff" />
+        </View>
+      ) : null}
+
+      {/* 4 — the design, approve or retake. */}
+      {step === 'review' && design ? (
+        <>
+          <View style={styles.stage}>
+            <Image source={{ uri: design.url }} style={styles.image} contentFit="contain" />
+          </View>
+          {error ? <ThemedText type="code" style={styles.error} numberOfLines={2}>{error}</ThemedText> : null}
+          <View style={styles.actions}>
+            <Pressable onPress={() => void toPlacement()} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
+              <ThemedText type="smallBold" style={{ color: BG }}>Put it on the {blank?.type?.replace(/s$/, '') ?? 'product'} ›</ThemedText>
+            </Pressable>
+            <Pressable onPress={() => design && void generate(design.prompt)} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
+              <ThemedText type="code" style={{ color: p.dim }}>↻ Another take · ✦{GENERATE_COST}</ThemedText>
+            </Pressable>
+          </View>
+        </>
+      ) : null}
+
+      {/* 5 — size & placement (the design center's editor, reused as-is). */}
+      {step === 'place' && compositionId && blank ? (
+        <PlacementEditor
+          compositionId={compositionId}
+          templateKey={String(blank.id)}
+          designs={designOpts}
+          onClose={() => {
+            setStep('finalize');
+            sayEve('(Placement is set — one short sentence: name and price look good on this sheet, then it goes live.)');
+          }}
+          onPreview={() => {}}
+        />
+      ) : null}
+
+      {/* 6 — price + publish (the design center's finalize sheet, reused as-is). */}
+      {step === 'finalize' && compositionId && blank ? (
+        <FinalizeSheet
+          compositionId={compositionId}
+          templateKey={String(blank.id)}
+          defaultName={defaultName}
+          designs={designOpts}
+          onClose={() => setStep('review')}
+          onPublished={() => {
+            setStep('done');
+            sayEve('(It published! One warm sentence: the product is in their catalogue and live on their site — model photos are rendering now.)');
+          }}
+        />
+      ) : null}
+
+      {/* 7 — done. */}
+      {step === 'done' ? (
+        <View style={styles.stage}>
+          {design ? <Image source={{ uri: design.url }} style={styles.doneImage} contentFit="contain" /> : null}
+          <ThemedText style={[styles.line, { color: p.ink }]}>It’s live — in your catalogue and on your site.</ThemedText>
+          <Pressable onPress={onExit} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
+            <ThemedText type="smallBold" style={{ color: BG }}>Done</ThemedText>
           </Pressable>
         </View>
       ) : null}
 
-      {/* The instruction line — the idea (idle) or the next tweak (ready). */}
-      <View style={styles.inputRow}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={submit}
-          editable={!busy}
-          placeholder={current ? 'Describe a tweak — “bigger type, night sky”' : 'Describe the design — “a chrome skull tee”'}
-          placeholderTextColor={`${p.dim}99`}
-          returnKeyType="send"
-          style={[styles.input, { color: p.ink, backgroundColor: 'rgba(12,18,26,0.7)', borderColor: `${p.dim}44` }]}
-        />
-        <Pressable onPress={submit} disabled={busy || !input.trim()} style={[styles.send, { backgroundColor: p.accent, opacity: busy || !input.trim() ? 0.5 : 1 }]}>
-          <ThemedText type="smallBold" style={{ color: BG }}>{current ? `✦ ${EDIT_COST}` : `✦ ${GENERATE_COST}`}</ThemedText>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+      {step === 'error' ? (
+        <View style={styles.stage}>
+          <ThemedText type="code" style={styles.error} numberOfLines={3}>{error ?? 'Something went wrong.'}</ThemedText>
+          <Pressable onPress={onExit} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
+            <ThemedText type="code" style={{ color: p.dim }}>‹ Back to Eve</ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1, paddingHorizontal: Spacing.four },
+  flex: { flex: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center' },
   eyebrow: { letterSpacing: 3 },
-  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', marginVertical: Spacing.three },
-  image: { width: '100%', height: '100%' },
-  busyVeil: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(5,7,11,0.4)' },
-  captionRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, minHeight: 48 },
-  line: { flex: 1, fontSize: 15, lineHeight: 21, fontFamily: 'Jost-Regular' },
-  error: { color: '#ff8a8a', marginTop: 4 },
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, marginVertical: Spacing.three },
+  image: { width: '100%', height: '78%' },
+  doneImage: { width: '60%', height: '50%' },
+  line: { fontSize: 16, lineHeight: 22, fontFamily: 'Jost-Regular', textAlign: 'center' },
+  error: { color: '#ff8a8a', marginTop: 4, textAlign: 'center' },
   actions: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
-  action: { flex: 1, borderWidth: 1, borderRadius: 999, paddingVertical: Spacing.three, alignItems: 'center' },
+  action: { flex: 1, borderWidth: 1, borderRadius: 999, paddingVertical: Spacing.three, alignItems: 'center', justifyContent: 'center' },
   actionPrimary: { borderWidth: 0 },
-  inputRow: { flexDirection: 'row', gap: Spacing.two, alignItems: 'center', marginTop: Spacing.three },
-  input: { flex: 1, minHeight: 46, borderRadius: 14, borderWidth: 1, paddingHorizontal: Spacing.three, fontFamily: 'Jost-Regular' },
-  send: { width: 56, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

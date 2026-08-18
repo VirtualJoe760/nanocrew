@@ -345,10 +345,6 @@ function StudioScreen() {
           <EveDesign
             idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
             onExit={() => setEve(null)}
-            onHandoff={() => {
-              setEve(null);
-              router.push('/design');
-            }}
           />
         </View>
       ) : null}

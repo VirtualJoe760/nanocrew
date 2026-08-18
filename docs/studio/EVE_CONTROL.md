@@ -458,11 +458,13 @@ down.** No session-lifting needed.
 1. "make me a stay gold graphic" → `new-design` intent → `onGo({state:'design'})` opens the
    TRANSLUCENT popup over EveHome (**shipped**, `110c11a` — `design` is excluded from `deep`, so her
    session survives).
-2. Generate in place — `POST /api/generate`; iterate by typed instruction via `POST /api/edit`
-   (**shipped**; spoken-turn iteration is C3b, open). Both calls send `background: 'transparent'`
-   (2026-08-17) — the Design tab's product default, so her output is a print-ready cutout graphic;
-   `'filled'` rendered artwork OF the thing described ("a tee" → a photo of a tee). The router's
-   `idea` is likewise the ARTWORK concept, never the garment (route+api.ts system prompt).
+2. **SUPERSEDED by the full pipeline (2026-08-17, Joe's california-flag walkthrough):** EveDesign
+   is now product-first and finishes IN her tab — routed idea → `ProductPicker` (reused, modal) →
+   she asks enhance-or-as-is (say-bus) → `POST /api/generate` (`background:'transparent'`, a
+   print-ready cutout) → approve → `POST /api/compositions` → `PlacementEditor` (reused) →
+   `FinalizeSheet` (reused; prices + `POST /api/publish`, which auto-generates on-model shots) →
+   live in the catalogue + site. NO redirects — the old "Open in Design ›"/meme `router.push`
+   handoffs are gone. The router's `idea` is the ARTWORK concept, never the garment.
 3. She SEES it — `eve-vision-bus` (`showEve` in EveDesign → `imageForEve` → `live.sendImage` in
    EveHome) fires on every settled generation/edit, and she reacts to the actual image (**shipped**).
 4. "put it on a hoodie" → she offers options from `GET /api/blanks` (**open** — endpoint exists,

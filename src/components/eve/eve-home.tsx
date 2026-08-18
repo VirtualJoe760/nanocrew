@@ -27,7 +27,6 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
-import { sendDesignCommand } from '@/lib/design-bus';
 import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { registerEveSayListener } from '@/lib/eve-say-bus';
@@ -144,12 +143,16 @@ export function EveHome({
       // One retry: Cloud Run cold starts are the common failure here, and a single blip used to
       // leave the creator's brands invisible for the whole session.
       for (let attempt = 0; attempt < 2; attempt++) {
+        // Timed out rather than open-ended: a hung /api/me would otherwise leave her surface
+        // degraded forever. Manual AbortController — AbortSignal.timeout does NOT exist in Hermes,
+        // and using it here threw on EVERY call, so she treated every creator as a first-timer
+        // with routing dead (found 2026-08-17; the sim's me-debug trace).
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
         try {
-          // Timed out rather than open-ended: a hung /api/me would otherwise leave her surface
-          // degraded forever — the fallbacks below resolve her to a safe greeting instead.
           const r = await fetch(apiUrl('/api/me'), {
             headers: { Authorization: `Bearer ${session.access_token}` },
-            signal: AbortSignal.timeout(8000),
+            signal: ctrl.signal,
           });
           if (!r.ok) throw new Error(String(r.status)); // a 500 is NOT "you have no brands"
           const d = (await r.json()) as {
@@ -169,6 +172,8 @@ export function EveHome({
           // Still failing: storesKnown stays false, so brand-scoped spokes stay LIT rather than
           // claiming the creator has nothing. Trying one and finding nothing beats being told a
           // lie about your own account.
+        } finally {
+          clearTimeout(timer);
         }
       }
       if (alive) setMeResolved(true);
@@ -372,11 +377,7 @@ export function EveHome({
             if (viewRef.current === 'guide') enterInterview();
             return;
           case 'new-design':
-            if (/\bmeme\b/i.test(turn)) {
-              onRequestClose();
-              sendDesignCommand({ kind: 'open-generate', prompt: d.idea, meme: true });
-              router.push('/design');
-            } else if (d.idea) {
+            if (d.idea) {
               // Into Eve's design state with the spoken idea — she generates it in her own surface.
               onGo({ state: 'design', payload: { idea: d.idea } });
             } else {
