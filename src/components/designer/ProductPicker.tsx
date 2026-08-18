@@ -42,6 +42,8 @@ export function ProductPicker({
   onClose,
   onEditContext,
   onAdd,
+  badge,
+  captions,
 }: {
   visible: boolean;
   blanks: CatalogBlank[];
@@ -56,6 +58,10 @@ export function ProductPicker({
   onEditContext?: () => void;
   /** Confirmed selection — every chosen blank, dropped onto the canvas as a product. */
   onAdd: (blanks: CatalogBlank[]) => void;
+  /** Optional header ornament — Eve's flow shows her listening badge here (EveEar). */
+  badge?: React.ReactNode;
+  /** Optional absolute overlay — Eve's flow pins her subtitles here (EveCaptions). */
+  captions?: React.ReactNode;
 }) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -239,6 +245,7 @@ export function ProductPicker({
               {gender ? <Crumb label={GENDERS.find((g) => g.key === gender)?.label ?? ''} onPress={() => setCategory(null)} active={!category} /> : null}
               {category ? <Crumb label={category} onPress={() => {}} active /> : null}
             </ScrollView>
+            {badge}
             <Pressable onPress={close} hitSlop={10} style={styles.close}>
               <ThemedText type="small" themeColor="textSecondary">
                 Close
@@ -351,6 +358,7 @@ export function ProductPicker({
           </View>
           </SafeAreaView>
         </ThemedView>
+        {captions}
       </SafeAreaProvider>
     </Modal>
   );

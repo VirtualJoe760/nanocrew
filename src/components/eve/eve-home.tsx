@@ -31,6 +31,7 @@ import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/li
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { registerEveSayListener } from '@/lib/eve-say-bus';
 import { consumeNextTurn } from '@/lib/eve-edit-bus';
+import { publishEvePulse } from '@/lib/eve-live-state-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
 import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
@@ -246,6 +247,10 @@ export function EveHome({
   // speaks. prompt() sends a completed turn, so she voices it (sendContext never would).
   useEffect(() => registerEveSayListener((instruction) => live.prompt(instruction)), [live.prompt]);
 
+  // Her pulse (state + caption), for badges/subtitles riding inside popups layered over her.
+  useEffect(() => {
+    publishEvePulse({ state: talking ? live.state : 'off', caption: live.venusText });
+  }, [talking, live.state, live.venusText]);
   useEffect(() => { setLine(live.venusText); }, [live.venusText]);
   useEffect(() => { setHeard(live.userText); }, [live.userText]);
   useEffect(() => { if (live.error) setError(live.error); }, [live.error]);

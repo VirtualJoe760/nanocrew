@@ -36,6 +36,8 @@ export function FinalizeSheet({
   onClose,
   onPublished,
   onPreview,
+  badge,
+  captions,
 }: {
   compositionId: string;
   templateKey: string;
@@ -44,6 +46,10 @@ export function FinalizeSheet({
   onClose: () => void;
   onPublished: (printfulSyncProductId: string) => void;
   onPreview?: (previewUrl: string) => void;
+  /** Optional header ornament — Eve's flow shows her listening badge here (EveEar). */
+  badge?: React.ReactNode;
+  /** Optional absolute overlay — Eve's flow pins her subtitles here (EveCaptions). */
+  captions?: React.ReactNode;
 }) {
   const theme = useTheme();
   // Placement stays fully adjustable right up to publish — the same WYSIWYG editor
@@ -205,6 +211,7 @@ export function FinalizeSheet({
         <ThemedView type="background" style={styles.sheet}>
           <View style={styles.header}>
             <ThemedText type="smallBold">Review & finalize</ThemedText>
+            {badge}
             <Pressable onPress={onClose} hitSlop={10}>
               <ThemedText type="small" themeColor="textSecondary">
                 Close
@@ -401,6 +408,7 @@ export function FinalizeSheet({
           )}
         </ThemedView>
       </KeyboardAvoidingView>
+      {captions}
     </Modal>
   );
 }

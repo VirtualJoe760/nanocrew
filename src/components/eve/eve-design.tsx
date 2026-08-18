@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
 import { ProductPicker } from '@/components/designer/ProductPicker';
+import { EveCaptions, EveEar } from '@/components/eve/eve-ear';
 import { VenusBubble } from '@/components/venus-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { usePalette } from '@/components/nc-screen';
@@ -241,6 +242,7 @@ export function EveDesign({
       <View style={styles.headerRow}>
         <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>EVE · DESIGN</ThemedText>
         <View style={styles.flex} />
+        <EveEar />
         <Pressable onPress={onExit} hitSlop={10} accessibilityLabel="Back to Eve">
           <ThemedText type="code" style={{ color: p.dim, fontSize: 14 }}>‹ back</ThemedText>
         </Pressable>
@@ -255,6 +257,8 @@ export function EveDesign({
           error={blanksError}
           onRetry={() => void loadBlanks()}
           onClose={onExit}
+          badge={<EveEar />}
+          captions={<EveCaptions />}
           onAdd={(sel) => {
             const chosen = sel[0];
             if (!chosen) return;
@@ -323,6 +327,8 @@ export function EveDesign({
           compositionId={compositionId}
           templateKey={String(blank.id)}
           designs={designOpts}
+          badge={<EveEar />}
+          captions={<EveCaptions />}
           onClose={() => {
             setStep('finalize');
             sayEve('(Placement is set — one short sentence: name and price look good on this sheet, then it goes live.)');
@@ -338,6 +344,8 @@ export function EveDesign({
           templateKey={String(blank.id)}
           defaultName={defaultName}
           designs={designOpts}
+          badge={<EveEar />}
+          captions={<EveCaptions />}
           onClose={() => setStep('review')}
           onPublished={() => {
             setStep('done');
@@ -356,6 +364,8 @@ export function EveDesign({
           </Pressable>
         </View>
       ) : null}
+
+      <EveCaptions />
 
       {step === 'error' ? (
         <View style={styles.stage}>

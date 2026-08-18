@@ -697,6 +697,8 @@ export function PlacementEditor({
   addDesignId,
   onClose,
   onPreview,
+  badge,
+  captions,
 }: {
   compositionId: string;
   templateKey: string;
@@ -704,6 +706,10 @@ export function PlacementEditor({
   addDesignId?: string;
   onClose: () => void;
   onPreview: (previewUrl: string) => void;
+  /** Optional header ornament — Eve's flow shows her listening badge here (EveEar). */
+  badge?: React.ReactNode;
+  /** Optional absolute overlay — Eve's flow pins her subtitles here (EveCaptions). */
+  captions?: React.ReactNode;
 }) {
   // The sheet caps at 90% height, which on a Dynamic Island phone leaves too little room at the
   // top — the header (and its Done button) ended up under the island. Reserve the inset here.
@@ -714,6 +720,7 @@ export function PlacementEditor({
         <ThemedView type="background" style={styles.sheet}>
           <View style={styles.header}>
             <ThemedText type="smallBold">Size & placement</ThemedText>
+            {badge}
             <Pressable onPress={onClose} hitSlop={10}>
               <ThemedText type="small" themeColor="textSecondary">
                 Done
@@ -729,6 +736,7 @@ export function PlacementEditor({
           />
         </ThemedView>
       </View>
+      {captions}
     </Modal>
   );
 }
