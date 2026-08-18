@@ -65,6 +65,8 @@ function liveSystemInstruction(userName?: string, firstTime?: boolean): string {
 
 ${opening} Keep the open to a sentence or two — don't dump questions. Then have a real CONVERSATION — it must never feel like an interview.
 
+YOU NEVER TALK OVER THEM. If they're still speaking — even a pause mid-thought — you wait. Let them finish the whole thought before you say a word.
+
 WHY, THEN HOW, THEN WHAT (Sinek's golden circle). People don't buy what you make, they buy why you make it. Spend most of the talk on WHY — what they're into, who it's for, what bugs them about what already exists. Then HOW it's different. WHAT they sell comes last and is the easy bit.
 
 YOU DERIVE, YOU DON'T ASK. Never ask "bold or minimal?", "what colors?", "what's the vibe?", "who's your audience?" — those are OUTPUTS, and asking makes people guess. Work them out from how they talk about their why: "I hate how loud everything is" already told you minimal and monochrome. State your reads as half-sentences and let them correct you — "so it's more stark than playful, yeah?" — never as a menu.
@@ -115,6 +117,8 @@ NOT EVERY TURN IS A QUESTION. Roughly two in three. When they're rolling, just r
 WHAT YOU CAN DO — the app changes surfaces for you, so never send them hunting through menus:
 · HOW THEIR BUSINESS IS DOING — when they ask about sales, orders, views, revenue, or how a brand is performing, their digest comes up on screen. Give them the headline in a sentence, then your read on it — what it means and what you'd do next. If they ask for detail you don't have, say so plainly rather than inventing numbers.
 PRODUCTS ARE THEIRS TO PICK, NOT YOURS TO CHOOSE. Never decide what it goes on. When it's time to choose a product the app puts the picker on screen — the whole catalogue, theirs to browse. You may offer ONE suggestion before it opens ("a heavyweight tee'd suit this, but have a look") and then it's their call. While their picker or editor is on screen you are STILL live and listening — answer questions and react naturally (briefly; don't narrate the UI or read options aloud).
+
+YOU NEVER TALK OVER THEM. If they are still speaking — even a pause mid-thought — you wait. Let them finish the whole thought before you say a word; a held remark said late is always better than a good one said over them.
 
 WHEN A PICKER OR MODAL IS ON SCREEN, YOU SAY NOTHING. Not a nudge, not a description of what they're looking at, not "let me know when you've decided". They're reading. Speak only if they ask you something. When they've chosen, react to what they actually picked and carry on.
 
@@ -176,6 +180,8 @@ export const LIVE_VOICE = 'Kore';
 
 const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
 const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
+const VOICE_RMS = 0.015; // mic frame loudness that counts as "they're talking"
+const QUIET_SETTLE_MS = 700; // silence after their last word before any queued cue may speak
 /** Backstop for an announcement session (speakOnly) — it closes on turnComplete, but never lives
  *  longer than this even if that signal is lost. One spoken line is a few seconds. */
 const ANNOUNCE_MAX_MS = 25_000;
@@ -308,6 +314,12 @@ export class LiveVoiceSession {
   private curUser = '';
   private curVenus = '';
   private userTurnActive = false;
+  // NEVER TALK OVER THEM (Joe, 2026-08-18: "she should really never cut anybody off"). The server's
+  // inputTranscription lags the mic by ~0.3–0.8s, so `userTurnActive` alone leaves a window where a
+  // surface cue (picker opening, design ready) fires while they're mid-sentence. These track speech
+  // LOCALLY, off the mic buffer itself, so the gate closes the instant they start talking.
+  private lastUserVoiceAt = 0;
+  private promptTimer: ReturnType<typeof setTimeout> | null = null;
   private transcript: { role: 'user' | 'assistant'; text: string }[] = [];
 
   /** The full conversation so far — used to extract the brand (native audio won't call the tool). */
@@ -581,7 +593,9 @@ export class LiveVoiceSession {
     proc.onaudioprocess = (ev) => {
       if (!this.session || this.muted) return;
       if (Date.now() < this.playEndsAt + 250) return; // half-duplex, same as native
-      const data = float32ToPcm16Base64(ev.inputBuffer.getChannelData(0));
+      const ch = ev.inputBuffer.getChannelData(0);
+      this.noteUserVoice(ch);
+      const data = float32ToPcm16Base64(ch);
       try {
         this.session.sendRealtimeInput({ audio: { data, mimeType: `audio/pcm;rate=${IN_RATE}` } });
       } catch { /* socket closing */ }
@@ -613,6 +627,7 @@ export class LiveVoiceSession {
       // herself. She finishes, then the mic opens for your turn.
       if (Date.now() < this.playEndsAt + 250) return;
       const ch = ev.buffer.getChannelData(0);
+      this.noteUserVoice(ch);
       const data = float32ToPcm16Base64(ch);
       try {
         this.session.sendRealtimeInput({ audio: { data, mimeType: `audio/pcm;rate=${IN_RATE}` } });
@@ -712,14 +727,7 @@ export class LiveVoiceSession {
       this.curVenus += sc.outputTranscription.text;
       this.cb.onVenusTranscript?.(this.curVenus);
     }
-    if (sc?.turnComplete && this.pendingPrompt) {
-      const t = this.pendingPrompt;
-      this.pendingPrompt = null;
-      try {
-        this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
-        this.cb.onState?.('thinking');
-      } catch { /* best-effort */ }
-    }
+    if (sc?.turnComplete && this.pendingPrompt) this.flushPrompt();
     if (sc?.turnComplete) {
       if (this.curVenus.trim()) {
         this.transcript.push({ role: 'assistant', text: this.curVenus.trim() });
@@ -778,16 +786,41 @@ export class LiveVoiceSession {
    *  (below) can never voice anything, which is exactly why it exists and why this also must. */
   private pendingPrompt: string | null = null;
   private reconnects = 0;
+
+  /** Mic frame → is there speech in it? RMS over the raw float buffer; called only OUTSIDE her own
+   *  playback window, so her voice coming back through the speaker never reads as the creator. */
+  private noteUserVoice(frame: Float32Array) {
+    let sum = 0;
+    for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
+    if (Math.sqrt(sum / frame.length) > VOICE_RMS) this.lastUserVoiceAt = Date.now();
+  }
+
+  /** True while the creator holds the floor: a server-confirmed turn, or mic energy inside the
+   *  settle window (covers the transcription lag AND their thinking pauses mid-sentence). */
+  private creatorHasFloor(): boolean {
+    return this.userTurnActive || Date.now() - this.lastUserVoiceAt < QUIET_SETTLE_MS;
+  }
+
   prompt(text: string) {
     const t = text.trim();
     if (!t) return;
-    // NEVER barge in while the creator is mid-sentence: a completed turn sent during their speech
-    // commits/cancels their in-flight utterance (the "she died when the picker opened" bug —
-    // 2026-08-17, Joe was mid-sentence when a surface cue fired). Defer to their turn's end.
-    if (this.userTurnActive) {
-      this.pendingPrompt = t;
+    // NEVER barge in: a completed turn sent during their speech commits/cancels their in-flight
+    // utterance (2026-08-17: "she died when the picker opened"; 2026-08-18: she talked over him
+    // as the catalogue opened). Queue it and wait for actual quiet — however long that takes.
+    this.pendingPrompt = t;
+    this.flushPrompt();
+  }
+
+  /** Send the queued cue the moment the creator is done — re-arming until they are. */
+  private flushPrompt() {
+    if (this.promptTimer) { clearTimeout(this.promptTimer); this.promptTimer = null; }
+    if (!this.pendingPrompt) return;
+    if (this.creatorHasFloor()) {
+      this.promptTimer = setTimeout(() => { this.promptTimer = null; this.flushPrompt(); }, 200);
       return;
     }
+    const t = this.pendingPrompt;
+    this.pendingPrompt = null;
     try {
       this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
       this.cb.onState?.('thinking');
@@ -862,6 +895,8 @@ export class LiveVoiceSession {
     if (this.announceCap) { clearTimeout(this.announceCap); this.announceCap = null; }
     resetSpeechLevel(); // no more audio → the avatar's mouth rests
 
+    if (this.promptTimer) { clearTimeout(this.promptTimer); this.promptTimer = null; }
+    this.pendingPrompt = null;
     try {
       this.recorder?.stop();
       this.webMicStop?.();

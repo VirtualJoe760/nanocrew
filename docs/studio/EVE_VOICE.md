@@ -86,6 +86,15 @@ the essentials she SAYS she's ready and hands them the phrase; a spoken "okay, b
 triggers the build (`eve-home.tsx` buildReady → voice trigger → `live.finalize`). The typed path
 (ChatInterview) keeps its button — deliberate-mode is allowed buttons.
 
+## She never talks over you (Joe, 2026-08-18)
+
+The hard rule, enforced in BOTH the prompt and the transport. Every surface cue (picker opening,
+design ready, spoke asks) goes through `prompt()`, which now queues until the creator has actually
+stopped: `userTurnActive` (server transcription) **OR** local mic RMS inside a 700 ms settle window
+— the server's transcript lags the mic by ~0.3–0.8 s, which is exactly the gap she used to talk
+into. The queued line waits as long as it takes, then speaks. Her own playback never counts as
+speech (the half-duplex gate runs first).
+
 ## Read where they are before probing
 
 Probing is for someone who **doesn't know** what they want. It is the wrong move for someone who does.
