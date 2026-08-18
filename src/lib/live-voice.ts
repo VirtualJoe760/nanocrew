@@ -16,7 +16,37 @@ import {
   type FunctionDeclaration,
   Type,
 } from '@google/genai';
+import { Platform } from 'react-native';
 import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode, AudioManager } from 'react-native-audio-api';
+
+// WEB AUDIO-OUT (2026-08-18: "Eve isn't talking, she is responding"): react-native-audio-api's
+// buffer-queue source is a NATIVE-only extension, so browsers had no player and her PCM chunks
+// were dropped — captions only. This shim speaks the same surface (enqueueBuffer/clearBuffers/
+// connect/start/stop) over the browser's standard Web Audio API: each chunk becomes an
+// AudioBufferSourceNode scheduled on a running playhead, which is gapless enough for speech.
+class WebAudioQueue {
+  private playhead = 0;
+  private sources = new Set<globalThis.AudioBufferSourceNode>();
+  constructor(private ctx: globalThis.AudioContext) {}
+  connect(_dest: unknown) {}
+  start(_when: number, _offset: number) {}
+  enqueueBuffer(buf: globalThis.AudioBuffer) {
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.ctx.destination);
+    const at = Math.max(this.playhead, this.ctx.currentTime + 0.03);
+    src.start(at);
+    this.playhead = at + buf.duration;
+    this.sources.add(src);
+    src.onended = () => this.sources.delete(src);
+  }
+  clearBuffers() {
+    for (const s of this.sources) { try { s.stop(); } catch { /* already ended */ } }
+    this.sources.clear();
+    this.playhead = 0;
+  }
+  stop() { this.clearBuffers(); }
+}
 
 import { apiUrl } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
@@ -422,7 +452,11 @@ export class LiveVoiceSession {
     if (this.closed) return; // stopped during the audio-session backoff — don't build a dead graph
 
     console.warn('[live] A: new AudioContext');
-    this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
+    // WEB: the browser's own AudioContext (created inside the tap's gesture chain, so autoplay
+    // policy allows it) — the library's web context has no queue source to drive it anyway.
+    this.outCtx = Platform.OS === 'web'
+      ? (new (globalThis.AudioContext)({ sampleRate: OUT_RATE }) as unknown as AudioContext)
+      : new AudioContext({ sampleRate: OUT_RATE });
     // resume() can hang on a contended iOS audio session (e.g. one leaked by a previous JS reload).
     // RN audio contexts usually start 'running', so resume is a formality — don't let it wedge us.
     await Promise.race([
@@ -442,8 +476,13 @@ export class LiveVoiceSession {
       this.queue.start(0, 0); // both when AND offset must be finite numbers, not undefined
       console.warn('[live] E: audio graph ready → connecting…');
     } catch (e) {
-      this.queue = null;
-      console.warn('[live] no audio-out on this platform — captions only:', e instanceof Error ? e.message : e);
+      if (Platform.OS === 'web') {
+        this.queue = new WebAudioQueue(this.outCtx as unknown as globalThis.AudioContext) as unknown as AudioBufferQueueSourceNode;
+        console.warn('[live] web audio-out shim active — she speaks through the browser');
+      } else {
+        this.queue = null;
+        console.warn('[live] no audio-out on this platform — captions only:', e instanceof Error ? e.message : e);
+      }
     }
 
     // 3. connect to Gemini Live with the ephemeral token (client → Gemini directly)
@@ -533,7 +572,43 @@ export class LiveVoiceSession {
     }
   }
 
+  private webMicStop: (() => void) | null = null;
+
+  /** WEB mic: getUserMedia + ScriptProcessor → PCM16 → the same realtime input path. Browsers
+   *  that deny the mic fall through to typed turns exactly like before (2026-08-18). */
+  private async startWebMic() {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, sampleRate: IN_RATE, echoCancellation: true, noiseSuppression: true },
+    });
+    const ctx = new globalThis.AudioContext({ sampleRate: IN_RATE });
+    const src = ctx.createMediaStreamSource(stream);
+    const proc = ctx.createScriptProcessor(2048, 1, 1);
+    proc.onaudioprocess = (ev) => {
+      if (!this.session || this.muted) return;
+      if (Date.now() < this.playEndsAt + 250) return; // half-duplex, same as native
+      const data = float32ToPcm16Base64(ev.inputBuffer.getChannelData(0));
+      try {
+        this.session.sendRealtimeInput({ audio: { data, mimeType: `audio/pcm;rate=${IN_RATE}` } });
+      } catch { /* socket closing */ }
+    };
+    src.connect(proc);
+    proc.connect(ctx.destination);
+    this.webMicStop = () => {
+      try { proc.disconnect(); src.disconnect(); } catch { /* torn down */ }
+      for (const t of stream.getTracks()) t.stop();
+      void ctx.close().catch(() => {});
+      this.webMicStop = null;
+    };
+    console.warn('[live] web mic active — she hears through the browser');
+  }
+
   private startRecorder() {
+    if (Platform.OS === 'web') {
+      void this.startWebMic().catch((e) => {
+        console.warn('[live] mic unavailable — typed turns only:', e instanceof Error ? e.message : e);
+      });
+      return;
+    }
     this.recorder = new AudioRecorder();
     this.recorder.onAudioReady({ sampleRate: IN_RATE, bufferLength: 1600, channelCount: 1 }, (ev) => {
       if (!this.session) return;
@@ -794,6 +869,7 @@ export class LiveVoiceSession {
 
     try {
       this.recorder?.stop();
+      this.webMicStop?.();
     } catch {}
     try {
       this.queue?.stop();
