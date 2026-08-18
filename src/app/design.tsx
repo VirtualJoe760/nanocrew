@@ -606,9 +606,15 @@ function DesignScreen() {
           siteAssets: s.siteAssets,
         }));
         setBrands(list);
-        setCatSheetOpen(true);
-        if (list.length === 1) chooseBrand(list[0]);
-        else setSetupStep('brand');
+        if (list.length === 1) {
+          // ONE brand: there is nothing to choose — resolve silently instead of flashing the
+          // picker Modal open-and-shut (Joe, 2026-08-17). chooseBrand opens the sheet itself
+          // only if it genuinely needs a manual collection pick.
+          chooseBrand(list[0]);
+        } else {
+          setCatSheetOpen(true);
+          setSetupStep('brand');
+        }
       })
       .catch((e) => {
         // Don't fail silently — open the picker on the brand step so the user can retry,
@@ -1488,6 +1494,9 @@ function DesignScreen() {
           }
         }
         if (def) switchCatalogue(def);
+        // No default resolvable → they MUST pick by hand; make sure the sheet is visible (the
+        // silent single-brand path skips opening it).
+        else setCatSheetOpen(true);
       })
       .catch(() => {});
   };
