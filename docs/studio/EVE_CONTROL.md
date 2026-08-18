@@ -3,7 +3,8 @@
 > Companion to `VENUS_CENTRAL.md`. This is the plan for the *greater vision*: Eve as the app's
 > central, morphing control surface, grounded against a full codebase inventory (2026-07-05).
 > Current state: **Eve lives on her own tab** — `/studio` hosts EveHome as the default surface (the
-> pull-down overlay is retired, see "The overlay retirement"; brands are the swipe-down BrandDeck),
+> pull-down overlay is retired, see "The overlay retirement"; brands are the BrandDeck, opened ONLY
+> by the wheel's BRANDS spoke — the top-edge summon pill/pull-down was removed 2026-08-17),
 > plus the `developing` site-edit state and the intent router (`/api/eve/route`). `design` is a
 > translucent popup over EveHome (P3′ steps 1–3 + 6 shipped; 4–5 open — see the loop below).
 

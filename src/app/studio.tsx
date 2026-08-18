@@ -7,8 +7,6 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePalette } from '@/components/nc-screen';
 import { EVE_SCRIM, withScreenFade } from '@/components/screen-fade';
@@ -30,8 +28,8 @@ import { Welcome, type OnboardChoice } from '@/components/welcome';
 import { addEveEventListener, registerEveSummonListener, type EveSummon } from '@/lib/eve-bus';
 
 // THE EVE TAB — her page. DEFAULT is the talk-to-Eve experience (EveHome, over the persistent root
-// Eve). SWIPE DOWN from the top reveals the BrandDeck — a full-screen, swipe-between-brands UI (the
-// reverse of the old pull-down: Eve is the default, you pull the UI down over her). `developing`
+// Eve). The BrandDeck (full-screen, swipe-between-brands) opens ONLY from the wheel's BRANDS spoke —
+// the old top-edge pull-down/handle is gone (one summon, the wheel; Joe 2026-08-17). `developing`
 // (site edits) and `design` are deep voice surfaces that swap in full-screen. Eve's live mic is
 // gated on tab focus + the deck being closed, so she only listens when you're actually on her tab.
 // summonEve() still works app-wide — the listener registers here and queued summons flush on mount.
@@ -77,12 +75,9 @@ function StudioScreen() {
   // KEEPS LISTENING while you talk about the design. Swapping it in (the old behaviour) unmounted
   // EveHome, and useLiveVoice's cleanup killed the mic — she was mute on her own "voice" surface.
   const deep = eve?.state === 'developing';
-  // Top-edge pull-down (or tap the handle) opens the deck.
-  const summonPan = Gesture.Pan()
-    .activeOffsetY(12)
-    .onEnd((e) => {
-      if (e.translationY > 30 || e.velocityY > 500) runOnJS(setDeckShown)(true);
-    });
+  // The top-edge pull-down/handle is GONE (Joe, decided with the wheel, landed 2026-08-17): the
+  // wheel's BRANDS spoke is the one way the deck opens. Two summons for one surface made the
+  // wheel look optional and the handle haunted the top edge of every screenshot.
 
   // Deep-link from a tapped "changes ready" push → open that store's Console on the Edit tab (review).
   const reviewParams = useLocalSearchParams<{ reviewSlug?: string; reviewName?: string; mode?: string }>();
@@ -328,18 +323,6 @@ function StudioScreen() {
             />
             {hasStore ? (
               <>
-                {!deckShown ? (
-                  <GestureDetector gesture={summonPan}>
-                    <View style={[styles.summonZone, { height: insets.top + 26 }]}>
-                      <Pressable
-                        accessibilityLabel="Show your brands"
-                        hitSlop={{ top: 8, bottom: 16, left: 40, right: 40 }}
-                        onPress={() => setDeckShown(true)}
-                        style={[styles.summonPill, { top: insets.top + 8 }]}
-                      />
-                    </View>
-                  </GestureDetector>
-                ) : null}
                 <BrandDeck
                   shown={deckShown}
                   token={session.access_token}
@@ -395,6 +378,4 @@ const styles = StyleSheet.create({
   designScrim: { backgroundColor: 'rgba(6,8,15,0.78)' },
 
   // The always-armed top-edge zone that reveals the brand deck (pull down or tap the pill).
-  summonZone: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 40, alignItems: 'center' },
-  summonPill: { position: 'absolute', width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(207,232,243,0.32)' },
 });
