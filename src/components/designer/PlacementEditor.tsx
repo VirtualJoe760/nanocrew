@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 
@@ -29,8 +30,6 @@ import { apiFetch, readJson } from '@/lib/api';
 // clamped to the print area; "Generate Printful mockup" renders the truth via Printful.
 // Printful's API has NO rotation, so the editor is move + scale + precise sizing + bleed.
 
-const STAGE_MAX_W = 300;
-const STAGE_MAX_H = 360;
 const MIN_W = 40;
 const PRINT_DPI = 150; // Printful DTG printfiles run ~150 DPI; inch readouts are approximate.
 const BLEED_FACTOR = 1.5; // how far past the print area art may extend when bleed is on
@@ -280,15 +279,13 @@ export function PlacementEditorBody({
   const aspect = entry ? (aspects[entry.designId] ?? 1) : 1;
   const previewVariant = colorVariants.find((c) => c.color === previewColor) ?? colorVariants[0] ?? null;
 
-  // Fit the print area into the stage, preserving its aspect.
-  const areaAspect = area ? area.areaWidth / area.areaHeight : 1;
-  let frameW = STAGE_MAX_W;
-  let frameH = STAGE_MAX_W / areaAspect;
-  if (frameH > STAGE_MAX_H) {
-    frameH = STAGE_MAX_H;
-    frameW = STAGE_MAX_H * areaAspect;
-  }
-  const scale = area ? frameW / area.areaWidth : 1;
+  // ONE direct-manipulation hero (Joe's redesign, 2026-08-17): the design is dragged/resized ON
+  // the garment mockup itself — no second abstract canvas. The hero is SQUARE (Printful template
+  // images are square), so PrintRect fractions of the container line up with the image.
+  const heroW = Math.min(Dimensions.get('window').width - Spacing.four * 2, 420);
+  const pa: PrintRect = tmpl ?? PRINT_AREA_ON_GARMENT;
+  const scaleX = area ? (pa.w * heroW) / area.areaWidth : 1;
+  const scaleY = area ? (pa.h * heroW) / area.areaHeight : 1;
 
   // --- gesture plumbing (refs so the once-created responders read live values) ---
   const dragRef = useRef<{ box: Box } | null>(null);
@@ -298,8 +295,10 @@ export function PlacementEditorBody({
   areaRef.current = area;
   const aspectRef = useRef(aspect);
   aspectRef.current = aspect;
-  const scaleRef = useRef(scale);
-  scaleRef.current = scale;
+  const scaleXRef = useRef(scaleX);
+  scaleXRef.current = scaleX;
+  const scaleYRef = useRef(scaleY);
+  scaleYRef.current = scaleY;
 
   const applyBox = (next: Box) => {
     const a = areaRef.current;
@@ -324,8 +323,7 @@ export function PlacementEditorBody({
       onPanResponderMove: (_e, g) => {
         const d = dragRef.current;
         if (!d) return;
-        const s = scaleRef.current;
-        applyBox({ ...d.box, left: d.box.left + g.dx / s, top: d.box.top + g.dy / s });
+        applyBox({ ...d.box, left: d.box.left + g.dx / scaleXRef.current, top: d.box.top + g.dy / scaleYRef.current });
       },
       onPanResponderRelease: () => {
         dragRef.current = null;
@@ -345,7 +343,7 @@ export function PlacementEditorBody({
           onPanResponderMove: (_e, g) => {
             const d = dragRef.current;
             if (!d) return;
-            const dx = g.dx / scaleRef.current;
+            const dx = g.dx / scaleXRef.current;
             const asp = aspectRef.current;
             const right = corner === 'tr' || corner === 'br';
             const bottom = corner === 'bl' || corner === 'br';
@@ -468,64 +466,55 @@ export function PlacementEditorBody({
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.three, paddingBottom: Spacing.six }}>
-      {/* On-product reference + interactive print area */}
+      {/* ONE hero: the design is dragged/resized directly ON the garment (Joe, 2026-08-17).
+          GarmentMockup multiply-blends the art so it reads as printed; a transparent ghost box
+          with corner handles sits at the same spot for direct manipulation, and a dashed outline
+          marks the real Printful print area. */}
       {entry && area ? (
         <View style={styles.editorWrap}>
-          {previewVariant ? (
-            <View style={styles.previewWrap}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.previewLabel}>
-                Printed preview · {previewVariant.color}
-              </ThemedText>
-              {/* OUR supplier-agnostic mockup: the design multiply-blended onto the real garment photo
-                  so it reads as PRINTED (fabric folds/shadows show through), not slapped on. Updates
-                  live as you move/resize below. The provider's own mockup is finalized at approve. */}
-              <GarmentMockup
-                garmentUri={tmpl?.imageUrl ?? previewVariant.image}
-                designUri={designUrl ?? null}
-                rect={(() => {
-                  const pa = tmpl ?? PRINT_AREA_ON_GARMENT;
-                  return {
-                    x: pa.x + (entry.box.left / area.areaWidth) * pa.w,
-                    y: pa.y + (entry.box.top / area.areaHeight) * pa.h,
-                    w: (entry.box.width / area.areaWidth) * pa.w,
-                    h: (entry.box.height / area.areaHeight) * pa.h,
-                  };
-                })()}
-                style={styles.printedPreview}
-              />
-            </View>
-          ) : null}
-          <View
-            style={[
-              styles.area,
-              {
-                width: frameW,
-                height: frameH,
-                backgroundColor: previewVariant?.colorCode ?? theme.backgroundElement,
-                borderColor: theme.backgroundSelected,
-              },
-            ]}>
+          <View style={[styles.hero, { width: heroW, height: heroW, borderColor: theme.backgroundSelected }]}>
+            <GarmentMockup
+              garmentUri={tmpl?.imageUrl ?? previewVariant?.image ?? ''}
+              designUri={designUrl ?? null}
+              rect={{
+                x: pa.x + (entry.box.left / area.areaWidth) * pa.w,
+                y: pa.y + (entry.box.top / area.areaHeight) * pa.h,
+                w: (entry.box.width / area.areaWidth) * pa.w,
+                h: (entry.box.height / area.areaHeight) * pa.h,
+              }}
+              style={{ position: 'absolute', top: 0, left: 0, width: heroW, height: heroW }}
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.printZone,
+                {
+                  left: pa.x * heroW,
+                  top: pa.y * heroW,
+                  width: pa.w * heroW,
+                  height: pa.h * heroW,
+                  borderColor: theme.textSecondary,
+                },
+              ]}
+            />
             <View
               {...moveResponder.panHandlers}
               style={[
                 styles.designBox,
                 {
-                  left: entry.box.left * scale,
-                  top: entry.box.top * scale,
-                  width: entry.box.width * scale,
-                  height: entry.box.height * scale,
+                  left: pa.x * heroW + entry.box.left * scaleX,
+                  top: pa.y * heroW + entry.box.top * scaleY,
+                  width: entry.box.width * scaleX,
+                  height: entry.box.height * scaleY,
                 },
               ]}>
-              {/* contain (NOT fill) — never stretch the art; the box is kept at the design's true aspect
-                  by clampBox + the re-fit effect, so the print preview matches what's actually printed. */}
-              {designUrl ? <Image source={{ uri: designUrl }} style={styles.designFill} contentFit="contain" /> : null}
               {(['tl', 'tr', 'bl', 'br'] as Corner[]).map((c) => (
                 <View key={c} {...cornerResponders[c].panHandlers} hitSlop={14} style={[styles.handle, HANDLE_POS[c]]} />
               ))}
             </View>
           </View>
           <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-            Drag to move · drag any corner to resize
+            Drag to move · corners to resize{previewVariant ? ` · ${previewVariant.color}` : ''}
           </ThemedText>
         </View>
       ) : null}
@@ -786,12 +775,9 @@ const styles = StyleSheet.create({
   editorWrap: { alignItems: 'center', gap: Spacing.two },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, alignSelf: 'stretch' },
   previewThumb: { width: 40, height: 40, borderRadius: Spacing.one },
-  previewWrap: { alignSelf: 'stretch', alignItems: 'center', gap: Spacing.one },
-  previewLabel: { alignSelf: 'center' },
-  printedPreview: { width: 200, height: 230 },
-  area: { borderRadius: Spacing.two, borderWidth: 1.5, borderStyle: 'dashed' },
+  hero: { alignSelf: 'center', borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  printZone: { position: 'absolute', borderWidth: 1, borderStyle: 'dashed', borderRadius: 4, opacity: 0.45 },
   designBox: { position: 'absolute', borderWidth: 1.5, borderColor: '#3b82f6' },
-  designFill: { width: '100%', height: '100%' },
   handle: {
     position: 'absolute',
     width: 18,

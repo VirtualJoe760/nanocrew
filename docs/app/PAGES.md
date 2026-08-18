@@ -242,7 +242,11 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   lettering is force-transparent), effort → `/api/generate` (Nano Banana; magenta chroma-key for
   transparency).
 - **Compose:** drag a design onto a blank → `/api/compositions` → `/api/composite`; **PlacementEditor**
-  sizes/positions it and renders **real Printful mockups** (`/api/mockup`); **FinalizeSheet** sets
+  is ONE square direct-manipulation hero (2026-08-17 redesign): the design is dragged/resized directly
+  on the garment mockup (Printful template image + real print-area geometry via `/api/blank/:id/template`,
+  multiply-blended so it reads as printed; dashed outline marks the print zone), options below —
+  size slider, alignment chips, placement chips, colourways — and renders **real Printful mockups**
+  (`/api/mockup`); **FinalizeSheet** sets
   name/collection/sizes/colors and publishes (`/api/publish`, with the cost+$5 price floor enforced).
 - **Blend / Combine:** merge two designs (`/api/merge`) or pick placements for a design+product.
 - **Catalogues/drops:** create with season presets, scoped to the chosen brand (`/api/catalogues`).
