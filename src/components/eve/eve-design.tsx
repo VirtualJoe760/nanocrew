@@ -167,6 +167,26 @@ export function EveDesign({
     [design, token, authHeaders],
   );
 
+  // ◐ Feather — deterministic edge soften (no AI, no credits); the design updates in place.
+  const feather = useCallback(async () => {
+    if (!design || !token) return;
+    setStep('busy');
+    try {
+      const r = await fetch(apiUrl('/api/creator/design-feather'), {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ designId: design.id }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { image?: string; error?: string };
+      if (!r.ok || !d.image) throw new Error(d.error ?? 'Feather failed');
+      setDesign({ ...design, url: d.image });
+      setStep('review');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Feather failed');
+      setStep('review');
+    }
+  }, [design, token, authHeaders]);
+
   // ✦ Clean up — the canned refinement pass (stray lines, ragged edges, artifacts).
   const CLEANUP =
     'Clean up and refine this print graphic: remove stray lines, specks and artifacts, smooth ragged or noisy outlines, sharpen intended edges, and improve colour separation. Do NOT change the composition, elements, style or any text.';
@@ -316,6 +336,11 @@ export function EveDesign({
             </Pressable>
             <Pressable onPress={() => design && void generate(design.prompt)} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
               <ThemedText type="code" style={{ color: p.dim }}>↻ Redo</ThemedText>
+            </Pressable>
+          </View>
+          <View style={styles.actions}>
+            <Pressable onPress={() => void feather()} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
+              <ThemedText type="code" style={{ color: p.ink }}>◐ Feather edges</ThemedText>
             </Pressable>
           </View>
           <View style={styles.actions}>

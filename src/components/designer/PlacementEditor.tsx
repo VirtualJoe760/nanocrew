@@ -131,6 +131,9 @@ export function PlacementEditorBody({
 }) {
   const theme = useTheme();
   const [areas, setAreas] = useState<Area[]>([]);
+  // REAL print-area geometry from Printful's mockup template (Joe, 2026-08-17: the hardcoded
+  // rectangle landed the preview on the model's trousers for full-body catalog photos).
+  const [tmpl, setTmpl] = useState<{ imageUrl: string; x: number; y: number; w: number; h: number } | null>(null);
   const [variantId, setVariantId] = useState<number | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [active, setActive] = useState<string | null>(null);
@@ -211,6 +214,10 @@ export function PlacementEditorBody({
   // Garment colourways (for the on-product colour preview).
   useEffect(() => {
     let alive = true;
+    apiFetch(`/api/blank/${templateKey}/template?placement=${encodeURIComponent(active ?? 'front')}`)
+      .then(readJson<{ template?: { imageUrl: string; x: number; y: number; w: number; h: number } | null }>)
+      .then((d) => setTmpl(d.template ?? null))
+      .catch(() => setTmpl(null));
     apiFetch(`/api/blank/${templateKey}/variants`)
       .then(readJson<{ variants?: { color: string; colorCode: string; image: string }[] }>)
       .then((d) => {
@@ -473,14 +480,17 @@ export function PlacementEditorBody({
                   so it reads as PRINTED (fabric folds/shadows show through), not slapped on. Updates
                   live as you move/resize below. The provider's own mockup is finalized at approve. */}
               <GarmentMockup
-                garmentUri={previewVariant.image}
+                garmentUri={tmpl?.imageUrl ?? previewVariant.image}
                 designUri={designUrl ?? null}
-                rect={{
-                  x: PRINT_AREA_ON_GARMENT.x + (entry.box.left / area.areaWidth) * PRINT_AREA_ON_GARMENT.w,
-                  y: PRINT_AREA_ON_GARMENT.y + (entry.box.top / area.areaHeight) * PRINT_AREA_ON_GARMENT.h,
-                  w: (entry.box.width / area.areaWidth) * PRINT_AREA_ON_GARMENT.w,
-                  h: (entry.box.height / area.areaHeight) * PRINT_AREA_ON_GARMENT.h,
-                }}
+                rect={(() => {
+                  const pa = tmpl ?? PRINT_AREA_ON_GARMENT;
+                  return {
+                    x: pa.x + (entry.box.left / area.areaWidth) * pa.w,
+                    y: pa.y + (entry.box.top / area.areaHeight) * pa.h,
+                    w: (entry.box.width / area.areaWidth) * pa.w,
+                    h: (entry.box.height / area.areaHeight) * pa.h,
+                  };
+                })()}
                 style={styles.printedPreview}
               />
             </View>

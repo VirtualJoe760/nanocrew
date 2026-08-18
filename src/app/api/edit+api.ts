@@ -144,10 +144,13 @@ export async function POST(req: Request) {
               // unkeyed magenta tile — retry instead, fail honestly at the end.
               let gated = false;
               try {
-                const { keyOutMagenta, looksBoxed } = await import('@/lib/transparency');
-                const keyed = (await keyOutMagenta(buffer)) as Buffer;
-                if (looksBoxed(keyed)) { gated = true; lastErr = 'boxed_design'; }
-                else buffer = keyed;
+                const { keyOutMagenta, looksBoxed, featherEdges } = await import('@/lib/transparency');
+                let keyed = (await keyOutMagenta(buffer)) as Buffer;
+                // Boxed → default edge feather, not a refusal (same policy as /api/generate).
+                if (looksBoxed(keyed)) {
+                  try { keyed = featherEdges(keyed); } catch { /* best-effort */ }
+                }
+                buffer = keyed;
               } catch {
                 gated = true;
                 lastErr = 'keying_failed';

@@ -62,6 +62,54 @@ export async function getBlankColors(
   return { colors, allOver };
 }
 
+/** REAL print-area geometry on a Printful mockup template (Joe, 2026-08-17: the printed preview
+ *  blended onto a hardcoded rectangle, which landed on the model's TROUSERS for full-body catalog
+ *  shots). /mockup-generator/templates gives the flat template image + exact print-area box. */
+export interface MockupTemplateGeom {
+  imageUrl: string;
+  /** Print area as FRACTIONS of the template image. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export async function getMockupTemplate(
+  id: number | string,
+  placement: string,
+): Promise<MockupTemplateGeom | null> {
+  const result = await pfRequest<{
+    templates?: {
+      template_id: number;
+      image_url: string;
+      template_width: number;
+      template_height: number;
+      print_area_width: number;
+      print_area_height: number;
+      print_area_top: number;
+      print_area_left: number;
+    }[];
+    variant_mapping?: { variant_id: number; templates: { placement: string; template_id: number }[] }[];
+  }>(`/mockup-generator/templates/${id}`);
+  const mapping = result.variant_mapping?.[0]?.templates ?? [];
+  const templateId =
+    mapping.find((t) => t.placement === placement)?.template_id ??
+    mapping.find((t) => t.placement.includes(placement))?.template_id ??
+    null;
+  const t =
+    (templateId != null ? result.templates?.find((x) => x.template_id === templateId) : null) ??
+    result.templates?.[0] ??
+    null;
+  if (!t || !t.image_url || !t.template_width || !t.template_height) return null;
+  return {
+    imageUrl: t.image_url,
+    x: t.print_area_left / t.template_width,
+    y: t.print_area_top / t.template_height,
+    w: t.print_area_width / t.template_width,
+    h: t.print_area_height / t.template_height,
+  };
+}
+
 export interface BlankPlacement {
   key: string;
   label: string;

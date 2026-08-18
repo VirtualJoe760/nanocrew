@@ -163,6 +163,28 @@ export function looksBoxed(input: Buffer): boolean {
   }
 }
 
+/** FEATHER (Joe, 2026-08-17, the skateboarding-bulldog): full-canvas art shouldn't hard-crop at
+ *  its rectangle. Alpha fades over `radius`px approaching each canvas edge — a Photoshop-style
+ *  edge feather. Die-cut art is untouched where it's already transparent (multiplied alpha). */
+export function featherEdges(input: Buffer, radius?: number): Buffer {
+  const png = PNG.sync.read(input);
+  const { width, height, data } = png;
+  // 5% read as 'didn't work' at phone scale (Joe) — 9% with a 24px floor is a visible feather.
+  const r = Math.max(24, Math.round(radius ?? Math.min(width, height) * 0.09));
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const d = Math.min(x, y, width - 1 - x, height - 1 - y);
+      if (d >= r) continue;
+      const i = (y * width + x) * 4 + 3;
+      // Smoothstep for a soft shoulder rather than a linear ramp.
+      const t = d / r;
+      const f = t * t * (3 - 2 * t);
+      data[i] = Math.round(data[i] * f);
+    }
+  }
+  return PNG.sync.write(png);
+}
+
 export function isTransparent(input: Buffer): boolean {
   const png = PNG.sync.read(input);
   const { data, width, height } = png;
