@@ -67,6 +67,8 @@ export async function getBlankColors(
  *  shots). /mockup-generator/templates gives the flat template image + exact print-area box. */
 export interface MockupTemplateGeom {
   imageUrl: string;
+  /** template image width/height — sizes the editor hero without a client-side getSize round-trip */
+  aspect: number;
   /** Print area as FRACTIONS of the template image. */
   x: number;
   y: number;
@@ -103,6 +105,7 @@ export async function getMockupTemplate(
   if (!t || !t.image_url || !t.template_width || !t.template_height) return null;
   return {
     imageUrl: t.image_url,
+    aspect: t.template_width / t.template_height,
     x: t.print_area_left / t.template_width,
     y: t.print_area_top / t.template_height,
     w: t.print_area_width / t.template_width,

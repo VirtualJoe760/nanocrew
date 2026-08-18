@@ -39,7 +39,9 @@ export function GarmentMockup({
             top: `${rect.y * 100}%`,
             width: `${rect.w * 100}%`,
             height: `${rect.h * 100}%`,
-            objectFit: 'contain',
+            // fill, not contain — the rect IS the design's aspect-locked box; contain letterboxed
+            // the art inside its own outline whenever the screen mapping is anisotropic.
+            objectFit: 'fill',
             mixBlendMode: blend === 'multiply' ? 'multiply' : 'normal',
           }}
         />

@@ -43,7 +43,7 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | POST | `/api/designs` | bearer | Persist an uploaded image as a design. |
 | DELETE | `/api/designs/:id` | bearer | Delete a design. |
 | POST | `/api/compositions` | bearer | Create a design-on-garment composition row. |
-| GET/PATCH/DELETE | `/api/compositions/:id` | bearer | Read / update / delete a composition. |
+| GET/PATCH/DELETE | `/api/compositions/:id` | bearer | Read / update / delete a composition. PATCH also accepts `placements[]` — the PlacementEditor autosaves (debounced) as the creator drags, server-clamped and design-ownership-scoped, so publish never falls back to the default placement. |
 | GET | `/api/creator/margins` | bearer | Per-product retail / Printful cost / margin% + average. |
 | GET | `/api/blanks`, `/api/blank/:id/{variants,colors,placements,printareas}` | bearer | Printful catalogue data. |
 | GET/PATCH/DELETE | `/api/creator/stores/:slug` | bearer | Read / edit / **delete** a brand. DELETE is owner-only and cascades the store → catalogues/designs/products/variants/orders/posts/revisions (external Printful/GitHub/Vercel cleaned out of band). |

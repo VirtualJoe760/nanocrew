@@ -199,16 +199,15 @@ export function FinalizeSheet({
       .finally(() => setShotsBusy(false));
   };
 
-  // The sheet caps at 88% height; reserve the top inset so its header/Close never sits under the
-  // Dynamic Island (same fix as PlacementEditor and the design.tsx sheets).
+  // Full screen (Joe, 2026-08-17) — manual insets; the header never sits under the Dynamic Island.
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.backdrop, { paddingTop: insets.top }]}>
-        <ThemedView type="background" style={styles.sheet}>
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <ThemedView
+        type="background"
+        style={[styles.screen, { paddingTop: insets.top + Spacing.two, paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kav}>
           {captions}
           <View style={styles.header}>
             <ThemedText type="smallBold">Review & finalize</ThemedText>
@@ -248,12 +247,14 @@ export function FinalizeSheet({
 
           {step === 'placement' && !publishedId ? (
             <>
-              <PlacementEditorBody
-                compositionId={compositionId}
-                templateKey={templateKey}
-                designs={designs}
-                onPreview={(url) => onPreview?.(url)}
-              />
+              <View style={styles.bodyFill}>
+                <PlacementEditorBody
+                  compositionId={compositionId}
+                  templateKey={templateKey}
+                  designs={designs}
+                  onPreview={(url) => onPreview?.(url)}
+                />
+              </View>
               <Pressable onPress={() => setStep('pricing')}>
                 <View style={[styles.publish, { backgroundColor: theme.text }]}>
                   <ThemedText type="smallBold" style={{ color: theme.background }}>
@@ -265,7 +266,7 @@ export function FinalizeSheet({
           ) : loading ? (
             <ActivityIndicator style={{ marginVertical: Spacing.six }} />
           ) : publishedId ? (
-            <View style={styles.doneWrap}>
+            <ScrollView style={styles.bodyFill} showsVerticalScrollIndicator={false} contentContainerStyle={styles.doneWrap}>
               {/* The brand font ships no COLOR EMOJI, so 🎉 drew as a missing-glyph box (B17).
                   ✓ is in the face — the same glyph the shots hint below already uses. */}
               <ThemedText type="title" style={styles.doneTitle}>
@@ -339,9 +340,10 @@ export function FinalizeSheet({
                   </ThemedText>
                 </View>
               </Pressable>
-            </View>
+            </ScrollView>
           ) : (
             <ScrollView
+              style={styles.bodyFill}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ gap: Spacing.three }}>
@@ -407,22 +409,16 @@ export function FinalizeSheet({
               </Pressable>
             </ScrollView>
           )}
-        </ThemedView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </ThemedView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six,
-    borderTopLeftRadius: Spacing.four,
-    borderTopRightRadius: Spacing.four,
-    gap: Spacing.three,
-    maxHeight: '88%',
-  },
+  screen: { flex: 1, paddingHorizontal: Spacing.four },
+  kav: { flex: 1, gap: Spacing.three },
+  bodyFill: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   stepRow: { flexDirection: 'row', gap: Spacing.two },
   stepBtn: { flex: 1 },

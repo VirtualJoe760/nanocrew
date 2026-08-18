@@ -35,7 +35,7 @@ export function GarmentMockup({
           {garment ? <SkiaImage image={garment} x={0} y={0} width={w} height={h} fit="contain" /> : null}
           {design ? (
             <Group blendMode={blend === 'multiply' ? 'multiply' : 'srcOver'}>
-              <SkiaImage image={design} x={rect.x * w} y={rect.y * h} width={rect.w * w} height={rect.h * h} fit="contain" />
+              <SkiaImage image={design} x={rect.x * w} y={rect.y * h} width={rect.w * w} height={rect.h * h} fit="fill" />
             </Group>
           ) : null}
         </Canvas>

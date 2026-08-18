@@ -242,11 +242,15 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   lettering is force-transparent), effort → `/api/generate` (Nano Banana; magenta chroma-key for
   transparency).
 - **Compose:** drag a design onto a blank → `/api/compositions` → `/api/composite`; **PlacementEditor**
-  is ONE square direct-manipulation hero (2026-08-17 redesign): the design is dragged/resized directly
-  on the garment mockup (Printful template image + real print-area geometry via `/api/blank/:id/template`,
-  multiply-blended so it reads as printed; dashed outline marks the print zone), options below —
-  size slider, alignment chips, placement chips, colourways — and renders **real Printful mockups**
-  (`/api/mockup`); **FinalizeSheet** sets
+  (2026-08-17 redesign, v2 same day) is a FULL-SCREEN editor: one direct-manipulation hero sized to
+  the garment photo's true aspect (Printful template image + real print-area geometry via
+  `/api/blank/:id/template`, per-placement; multiply-blended so it reads as printed; dashed outline
+  marks the print zone; drag/resize happens ON the garment and never yields to the page scroll),
+  with a BLOCK TRAY below — titled horizontal rails (SIZE slider+DPI readout, COLOR swatch blocks,
+  PLACEMENT design-thumb blocks with ＋ add, ALIGN blocks, Printful-mockup proof strip). Picking a
+  non-default colourway swaps the hero to that variant's catalog photo (real colour, approximate
+  rect). Placements AUTOSAVE (debounced PATCH `/api/compositions/:id`) — no mockup render needed to
+  persist. **FinalizeSheet** (also full-screen) sets
   name/collection/sizes/colors and publishes (`/api/publish`, with the cost+$5 price floor enforced).
 - **Blend / Combine:** merge two designs (`/api/merge`) or pick placements for a design+product.
 - **Catalogues/drops:** create with season presets, scoped to the chosen brand (`/api/catalogues`).

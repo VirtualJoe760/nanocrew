@@ -86,18 +86,20 @@ function SizeSlider({
 }) {
   const theme = useTheme();
   const trackW = useRef(1);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-  const handle = (x: number) => {
+  // Route through a ref so the once-created responder always sees the LATEST min/max/onChange
+  // (bleed toggles max 100 ⇄ 150; a mount-time closure froze it at 100).
+  const handleRef = useRef((_x: number) => {});
+  handleRef.current = (x: number) => {
     const frac = Math.min(1, Math.max(0, x / trackW.current));
-    onChangeRef.current(Math.round(min + frac * (max - min)));
+    onChange(Math.round(min + frac * (max - min)));
   };
   const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => handle(e.nativeEvent.locationX),
-      onPanResponderMove: (e) => handle(e.nativeEvent.locationX),
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => handleRef.current(e.nativeEvent.locationX),
+      onPanResponderMove: (e) => handleRef.current(e.nativeEvent.locationX),
     }),
   ).current;
   const frac = `${((Math.min(max, Math.max(min, value)) - min) / (max - min)) * 100}%` as `${number}%`;
@@ -107,8 +109,25 @@ function SizeSlider({
       onLayout={(e) => (trackW.current = e.nativeEvent.layout.width)}
       style={[styles.sliderTrack, { backgroundColor: theme.backgroundSelected }]}
       hitSlop={10}>
-      <View style={[styles.sliderFill, { width: frac, backgroundColor: theme.text }]} />
-      <View style={[styles.sliderThumb, { left: frac, backgroundColor: theme.text }]} />
+      {/* pointerEvents=none — locationX is TARGET-relative; a touch landing on the thumb
+          would otherwise report x within the thumb's own 18px frame and snap to min. */}
+      <View pointerEvents="none" style={[styles.sliderFill, { width: frac, backgroundColor: theme.text }]} />
+      <View pointerEvents="none" style={[styles.sliderThumb, { left: frac, backgroundColor: theme.text }]} />
+    </View>
+  );
+}
+
+// A titled horizontal rail of choice blocks — the tray's building unit (Joe, 2026-08-17:
+// "block style ui instead of stacking pills… scroll through our choices horizontally").
+function Blocks({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <ThemedText type="code" themeColor="textSecondary" style={styles.sectionLabel}>
+        {label}
+      </ThemedText>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
+        {children}
+      </ScrollView>
     </View>
   );
 }
@@ -132,7 +151,7 @@ export function PlacementEditorBody({
   const [areas, setAreas] = useState<Area[]>([]);
   // REAL print-area geometry from Printful's mockup template (Joe, 2026-08-17: the hardcoded
   // rectangle landed the preview on the model's trousers for full-body catalog photos).
-  const [tmpl, setTmpl] = useState<{ imageUrl: string; x: number; y: number; w: number; h: number } | null>(null);
+  const [tmpl, setTmpl] = useState<{ imageUrl: string; aspect?: number; x: number; y: number; w: number; h: number } | null>(null);
   const [variantId, setVariantId] = useState<number | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [active, setActive] = useState<string | null>(null);
@@ -189,6 +208,7 @@ export function PlacementEditorBody({
           const list: Entry[] = [];
           for (const p of saved) {
             const area = areaList.find((a) => a.placement === p.placement) ?? areaList[0];
+            if (list.some((e) => e.placement === area.placement)) continue;
             list.push({
               placement: area.placement,
               designId: p.designId,
@@ -210,13 +230,26 @@ export function PlacementEditorBody({
      
   }, [compositionId, templateKey, reloadKey]);
 
-  // Garment colourways (for the on-product colour preview).
+  // REAL template geometry for the ACTIVE placement — re-keyed on `active` (review 2026-08-17:
+  // switching to back/sleeve kept the FRONT photo and rect, mis-mapping every gesture).
   useEffect(() => {
     let alive = true;
     apiFetch(`/api/blank/${templateKey}/template?placement=${encodeURIComponent(active ?? 'front')}`)
-      .then(readJson<{ template?: { imageUrl: string; x: number; y: number; w: number; h: number } | null }>)
-      .then((d) => setTmpl(d.template ?? null))
-      .catch(() => setTmpl(null));
+      .then(readJson<{ template?: { imageUrl: string; aspect?: number; x: number; y: number; w: number; h: number } | null }>)
+      .then((d) => {
+        if (alive) setTmpl(d.template ?? null);
+      })
+      .catch(() => {
+        if (alive) setTmpl(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [templateKey, active]);
+
+  // Garment colourways (for the on-product colour preview).
+  useEffect(() => {
+    let alive = true;
     apiFetch(`/api/blank/${templateKey}/variants`)
       .then(readJson<{ variants?: { color: string; colorCode: string; image: string }[] }>)
       .then((d) => {
@@ -236,6 +269,36 @@ export function PlacementEditorBody({
       alive = false;
     };
   }, [templateKey]);
+
+  // The template photo is one fixed colour, so picking a non-default colourway swaps the hero to
+  // that variant's catalog photo (real colour, approximate rect) — otherwise the COLOR rail was
+  // inert whenever template geometry existed (review 2026-08-17).
+  const defaultColor = colorVariants[0]?.color ?? null;
+  const onDefaultColor = previewColor == null || previewColor === defaultColor;
+
+  // The hero is sized to the garment photo's TRUE aspect so print-area fractions of the
+  // container are exactly fractions of the image (contain-fit letterboxing broke the mapping
+  // and drew a huge dead white card — Joe, 2026-08-17 "the ui is wayyy too big"). The template
+  // serves its aspect; only the catalog-photo fallback needs a getSize round-trip.
+  const [garmentAspect, setGarmentAspect] = useState(1);
+  useEffect(() => {
+    if (tmpl?.aspect && onDefaultColor) {
+      setGarmentAspect(tmpl.aspect);
+      return;
+    }
+    const uri =
+      colorVariants.find((c) => c.color === previewColor)?.image ??
+      colorVariants[0]?.image ??
+      (onDefaultColor ? (tmpl?.imageUrl ?? '') : '');
+    if (!uri) return;
+    let alive = true;
+    RNImage.getSize(uri, (w, h) => {
+      if (alive && w && h) setGarmentAspect(w / h);
+    }, () => {});
+    return () => {
+      alive = false;
+    };
+  }, [tmpl, colorVariants, previewColor, onDefaultColor]);
 
   // Natural aspect ratio + pixel width per design (drives sizing + the DPI badge).
   useEffect(() => {
@@ -280,12 +343,20 @@ export function PlacementEditorBody({
   const previewVariant = colorVariants.find((c) => c.color === previewColor) ?? colorVariants[0] ?? null;
 
   // ONE direct-manipulation hero (Joe's redesign, 2026-08-17): the design is dragged/resized ON
-  // the garment mockup itself — no second abstract canvas. The hero is SQUARE (Printful template
-  // images are square), so PrintRect fractions of the container line up with the image.
-  const heroW = Math.min(Dimensions.get('window').width - Spacing.four * 2, 420);
-  const pa: PrintRect = tmpl ?? PRINT_AREA_ON_GARMENT;
+  // the garment mockup itself — no second abstract canvas. The hero matches the garment photo's
+  // aspect exactly, so PrintRect fractions of the container ARE fractions of the image.
+  const win = Dimensions.get('window');
+  let heroW = win.width - Spacing.four * 2;
+  let heroH = heroW / garmentAspect;
+  const heroMaxH = win.height * 0.5;
+  if (heroH > heroMaxH) {
+    heroH = heroMaxH;
+    heroW = heroH * garmentAspect;
+  }
+  const useTmplPhoto = !!tmpl && onDefaultColor;
+  const pa: PrintRect = useTmplPhoto && tmpl ? tmpl : PRINT_AREA_ON_GARMENT;
   const scaleX = area ? (pa.w * heroW) / area.areaWidth : 1;
-  const scaleY = area ? (pa.h * heroW) / area.areaHeight : 1;
+  const scaleY = area ? (pa.h * heroH) / area.areaHeight : 1;
 
   // --- gesture plumbing (refs so the once-created responders read live values) ---
   const dragRef = useRef<{ box: Box } | null>(null);
@@ -317,6 +388,8 @@ export function PlacementEditorBody({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      // The hero lives inside a vertical ScrollView — never surrender a design drag to it.
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
         if (entryRef.current) dragRef.current = { box: { ...entryRef.current.box } };
       },
@@ -337,6 +410,7 @@ export function PlacementEditorBody({
         acc[corner] = PanResponder.create({
           onStartShouldSetPanResponder: () => true,
           onMoveShouldSetPanResponder: () => true,
+          onPanResponderTerminationRequest: () => false,
           onPanResponderGrant: () => {
             if (entryRef.current) dragRef.current = { box: { ...entryRef.current.box } };
           },
@@ -376,8 +450,14 @@ export function PlacementEditorBody({
     applyBox(fn(entry.box, area));
   };
   const toggleBleed = () => {
-    if (!entry) return;
-    setEntries((list) => list.map((x) => (x.placement === entry.placement ? { ...x, bleed: !x.bleed } : x)));
+    if (!entry || !area) return;
+    setEntries((list) =>
+      list.map((x) => {
+        if (x.placement !== entry.placement) return x;
+        const bleed = !x.bleed;
+        return { ...x, bleed, box: clampBox(x.box, area.areaWidth, area.areaHeight, aspectRef.current, bleed) };
+      }),
+    );
   };
 
   const addEntry = (placement: string, designId: string) => {
@@ -434,6 +514,45 @@ export function PlacementEditorBody({
       .finally(() => setRendering(false));
   };
 
+  // AUTOSAVE (review 2026-08-17): edits lived only in local state — without a "Generate
+  // Printful mockup" tap nothing persisted, and publish used the default placement. Debounced
+  // PATCH; the server re-clamps and scopes designIds.
+  const entriesForSave = useRef(entries);
+  entriesForSave.current = entries;
+  const areasForSave = useRef(areas);
+  areasForSave.current = areas;
+  useEffect(() => {
+    if (loading || !entries.length) return;
+    const t = setTimeout(() => {
+      const payload = entriesForSave.current
+        .map((e) => {
+          const a = areasForSave.current.find((x) => x.placement === e.placement);
+          if (!a) return null;
+          return {
+            placement: e.placement,
+            designId: e.designId,
+            position: {
+              areaWidth: a.areaWidth,
+              areaHeight: a.areaHeight,
+              width: e.box.width,
+              height: e.box.height,
+              top: e.box.top,
+              left: e.box.left,
+              limitToPrintArea: !e.bleed,
+            },
+          };
+        })
+        .filter(Boolean);
+      if (!payload.length) return;
+      apiFetch(`/api/compositions/${compositionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placements: payload }),
+      }).catch(() => {});
+    }, 700);
+    return () => clearTimeout(t);
+  }, [entries, loading, compositionId]);
+
   const availableToAdd = areas.filter((a) => !entries.some((e) => e.placement === a.placement));
   const designUrl = entry ? designById.get(entry.designId)?.image : undefined;
 
@@ -465,16 +584,16 @@ export function PlacementEditorBody({
     );
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.three, paddingBottom: Spacing.six }}>
+    <ScrollView style={styles.fill} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
       {/* ONE hero: the design is dragged/resized directly ON the garment (Joe, 2026-08-17).
           GarmentMockup multiply-blends the art so it reads as printed; a transparent ghost box
           with corner handles sits at the same spot for direct manipulation, and a dashed outline
           marks the real Printful print area. */}
       {entry && area ? (
         <View style={styles.editorWrap}>
-          <View style={[styles.hero, { width: heroW, height: heroW, borderColor: theme.backgroundSelected }]}>
+          <View style={[styles.hero, { width: heroW, height: heroH, borderColor: theme.backgroundSelected }]}>
             <GarmentMockup
-              garmentUri={tmpl?.imageUrl ?? previewVariant?.image ?? ''}
+              garmentUri={useTmplPhoto && tmpl ? tmpl.imageUrl : (previewVariant?.image ?? '')}
               designUri={designUrl ?? null}
               rect={{
                 x: pa.x + (entry.box.left / area.areaWidth) * pa.w,
@@ -482,7 +601,7 @@ export function PlacementEditorBody({
                 w: (entry.box.width / area.areaWidth) * pa.w,
                 h: (entry.box.height / area.areaHeight) * pa.h,
               }}
-              style={{ position: 'absolute', top: 0, left: 0, width: heroW, height: heroW }}
+              style={{ position: 'absolute', top: 0, left: 0, width: heroW, height: heroH }}
             />
             <View
               pointerEvents="none"
@@ -490,9 +609,9 @@ export function PlacementEditorBody({
                 styles.printZone,
                 {
                   left: pa.x * heroW,
-                  top: pa.y * heroW,
+                  top: pa.y * heroH,
                   width: pa.w * heroW,
-                  height: pa.h * heroW,
+                  height: pa.h * heroH,
                   borderColor: theme.textSecondary,
                 },
               ]}
@@ -503,7 +622,7 @@ export function PlacementEditorBody({
                 styles.designBox,
                 {
                   left: pa.x * heroW + entry.box.left * scaleX,
-                  top: pa.y * heroW + entry.box.top * scaleY,
+                  top: pa.y * heroH + entry.box.top * scaleY,
                   width: entry.box.width * scaleX,
                   height: entry.box.height * scaleY,
                 },
@@ -513,91 +632,25 @@ export function PlacementEditorBody({
               ))}
             </View>
           </View>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-            Drag to move · corners to resize{previewVariant ? ` · ${previewVariant.color}` : ''}
+          <ThemedText type="code" themeColor="textSecondary" style={styles.hint}>
+            DRAG TO MOVE · CORNERS TO RESIZE
           </ThemedText>
         </View>
       ) : null}
 
-      {/* Colourway preview chips */}
-      {colorVariants.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          {colorVariants.map((c) => (
-            <Pressable key={c.color} onPress={() => setPreviewColor(c.color)}>
-              <ThemedView
-                type={previewColor === c.color ? 'backgroundSelected' : 'backgroundElement'}
-                style={styles.colorChip}>
-                <View style={[styles.swatch, { backgroundColor: c.colorCode }]} />
-                <ThemedText type="small" themeColor={previewColor === c.color ? 'text' : 'textSecondary'}>
-                  {c.color}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
-
-      {/* Placement chips */}
-      <View style={styles.chipRow}>
-        {entries.map((e) => (
-          <Pressable key={e.placement} onPress={() => setActive(e.placement)} onLongPress={() => removeEntry(e.placement)}>
-            <ThemedView
-              type={active === e.placement ? 'backgroundSelected' : 'backgroundElement'}
-              style={styles.chip}>
-              <ThemedText type="small" themeColor={active === e.placement ? 'text' : 'textSecondary'}>
-                {areas.find((a) => a.placement === e.placement)?.label ?? e.placement}
-                {entries.length > 1 ? '  ×' : ''}
-              </ThemedText>
-            </ThemedView>
-          </Pressable>
-        ))}
-        {availableToAdd.length ? (
-          <Pressable onPress={() => setAddStep('placement')}>
-            <ThemedView type="backgroundElement" style={styles.chip}>
-              <ThemedText type="small" themeColor="textSecondary">
-                ＋ Add design
-              </ThemedText>
-            </ThemedView>
-          </Pressable>
-        ) : null}
-      </View>
-
-      {/* Two-step add: placement → design */}
-      {addStep === 'placement' ? (
-        <View style={styles.chipRow}>
-          {availableToAdd.map((a) => (
-            <Pressable
-              key={a.placement}
-              onPress={() => {
-                setPendingPlacement(a.placement);
-                if (addDesignId) addEntry(a.placement, addDesignId);
-                else setAddStep('design');
-              }}>
-              <ThemedView type="backgroundElement" style={styles.chip}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {a.label}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-      {addStep === 'design' && pendingPlacement ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.designRow}>
-          {designs
-            .filter((d) => d.image && !d.image.startsWith('data:'))
-            .map((d) => (
-              <Pressable key={d.id} onPress={() => addEntry(pendingPlacement, d.id)}>
-                <Image source={{ uri: d.image }} style={styles.designThumb} contentFit="cover" />
-              </Pressable>
-            ))}
-        </ScrollView>
-      ) : null}
-
-
-      {/* Size: continuous slider + readout */}
+      {/* Size: readout strip + continuous slider */}
       {entry && area ? (
-        <>
+        <View style={styles.section}>
+          <View style={styles.readoutRow}>
+            <ThemedText type="code" themeColor="textSecondary" style={styles.sectionLabel}>
+              SIZE · {pct}% · {widthIn.toFixed(1)}″ × {heightIn.toFixed(1)}″
+            </ThemedText>
+            {dpi ? (
+              <ThemedText type="code" style={[styles.sectionLabel, { color: quality.color }]}>
+                ● {dpi} DPI · {quality.label.toUpperCase()}
+              </ThemedText>
+            ) : null}
+          </View>
           <View style={styles.sizeRow}>
             <Pressable onPress={() => setScalePct(Math.max(5, pct - 2))} hitSlop={8}>
               <ThemedView type="backgroundElement" style={styles.stepBtn}>
@@ -611,61 +664,131 @@ export function PlacementEditorBody({
               </ThemedView>
             </Pressable>
           </View>
-          <View style={styles.readoutRow}>
-            <ThemedText type="small" themeColor="textSecondary">
-              {pct}% · ~{widthIn.toFixed(1)}″ × {heightIn.toFixed(1)}″
-            </ThemedText>
-            {dpi ? (
-              <ThemedText type="small" style={{ color: quality.color }}>
-                ● {dpi} DPI · {quality.label}
-              </ThemedText>
-            ) : null}
-          </View>
+        </View>
+      ) : null}
 
-          {/* Alignment + fit + bleed */}
-          <View style={styles.chipRow}>
-            {(
-              [
-                ['Fit', (b: Box, a: Area) => clampBox({ ...b, left: 0, top: 0, width: a.areaWidth }, a.areaWidth, a.areaHeight, aspect, false)],
-                ['Fill width', (b: Box, a: Area) => ({ ...b, left: 0, width: a.areaWidth, height: a.areaWidth / aspect })],
-                ['Center', (b: Box, a: Area) => ({ ...b, left: (a.areaWidth - b.width) / 2, top: (a.areaHeight - b.height) / 2 })],
-                ['Top', (b: Box) => ({ ...b, top: 0 })],
-                ['Bottom', (b: Box, a: Area) => ({ ...b, top: a.areaHeight - b.height })],
-                ['Left', (b: Box) => ({ ...b, left: 0 })],
-                ['Right', (b: Box, a: Area) => ({ ...b, left: a.areaWidth - b.width })],
-              ] as const
-            ).map(([label, fn]) => (
-              <Pressable key={label} onPress={() => align(fn)}>
-                <ThemedView type="backgroundElement" style={styles.chip}>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {label}
-                  </ThemedText>
-                </ThemedView>
+      {/* Colourway blocks */}
+      {colorVariants.length ? (
+        <Blocks label="COLOR">
+          {colorVariants.map((c) => {
+            const on = previewColor === c.color;
+            return (
+              <Pressable key={c.color} onPress={() => setPreviewColor(c.color)} style={styles.block}>
+                <View style={[styles.swatchBig, { backgroundColor: c.colorCode }, on ? { borderColor: theme.text, borderWidth: 2 } : null]} />
+                <ThemedText type="code" themeColor={on ? 'text' : 'textSecondary'} style={styles.blockLabel} numberOfLines={1}>
+                  {c.color.toUpperCase()}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </Blocks>
+      ) : null}
+
+      {/* Placement blocks (design thumb per placement; long-press removes; ＋ adds) */}
+      <Blocks label="PLACEMENT">
+        {entries.map((e) => {
+          const on = active === e.placement;
+          const img = designById.get(e.designId)?.image;
+          return (
+            <Pressable
+              key={e.placement}
+              onPress={() => setActive(e.placement)}
+              onLongPress={() => removeEntry(e.placement)}
+              style={styles.block}>
+              <View style={[styles.blockTile, { backgroundColor: theme.backgroundElement }, on ? { borderColor: theme.text, borderWidth: 1.5 } : null]}>
+                {img ? <Image source={{ uri: img }} style={styles.blockTileImg} contentFit="contain" /> : null}
+              </View>
+              <ThemedText type="code" themeColor={on ? 'text' : 'textSecondary'} style={styles.blockLabel} numberOfLines={1}>
+                {(areas.find((a) => a.placement === e.placement)?.label ?? e.placement).toUpperCase()}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
+        {addStep === 'placement'
+          ? availableToAdd.map((a) => (
+              <Pressable
+                key={a.placement}
+                onPress={() => {
+                  setPendingPlacement(a.placement);
+                  if (addDesignId) addEntry(a.placement, addDesignId);
+                  else setAddStep('design');
+                }}
+                style={styles.block}>
+                <View style={[styles.blockTile, styles.blockTileDashed, { borderColor: theme.textSecondary }]}>
+                  <ThemedText type="small" themeColor="textSecondary">＋</ThemedText>
+                </View>
+                <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel} numberOfLines={1}>
+                  {a.label.toUpperCase()}
+                </ThemedText>
+              </Pressable>
+            ))
+          : availableToAdd.length ? (
+              <Pressable onPress={() => setAddStep('placement')} style={styles.block}>
+                <View style={[styles.blockTile, styles.blockTileDashed, { borderColor: theme.backgroundSelected }]}>
+                  <ThemedText type="small" themeColor="textSecondary">＋</ThemedText>
+                </View>
+                <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+                  ADD
+                </ThemedText>
+              </Pressable>
+            ) : null}
+      </Blocks>
+      {addStep === 'design' && pendingPlacement ? (
+        <Blocks label="PICK A DESIGN">
+          {designs
+            .filter((d) => d.image && !d.image.startsWith('data:'))
+            .map((d) => (
+              <Pressable key={d.id} onPress={() => addEntry(pendingPlacement, d.id)} style={styles.block}>
+                <Image source={{ uri: d.image }} style={styles.blockTile} contentFit="cover" />
               </Pressable>
             ))}
-            <Pressable onPress={toggleBleed}>
-              <ThemedView type={entry.bleed ? 'backgroundSelected' : 'backgroundElement'} style={styles.chip}>
-                <ThemedText type="small" themeColor={entry.bleed ? 'text' : 'textSecondary'}>
-                  Bleed {entry.bleed ? 'on' : 'off'}
+        </Blocks>
+      ) : null}
+
+      {/* Alignment blocks */}
+      {entry && area ? (
+        <Blocks label="ALIGN">
+          {(
+            [
+              ['Fit', (b: Box, a: Area) => clampBox({ ...b, left: 0, top: 0, width: a.areaWidth }, a.areaWidth, a.areaHeight, aspect, false)],
+              ['Fill width', (b: Box, a: Area) => ({ ...b, left: 0, width: a.areaWidth, height: a.areaWidth / aspect })],
+              ['Center', (b: Box, a: Area) => ({ ...b, left: (a.areaWidth - b.width) / 2, top: (a.areaHeight - b.height) / 2 })],
+              ['Top', (b: Box) => ({ ...b, top: 0 })],
+              ['Bottom', (b: Box, a: Area) => ({ ...b, top: a.areaHeight - b.height })],
+              ['Left', (b: Box) => ({ ...b, left: 0 })],
+              ['Right', (b: Box, a: Area) => ({ ...b, left: a.areaWidth - b.width })],
+            ] as const
+          ).map(([label, fn]) => (
+            <Pressable key={label} onPress={() => align(fn)}>
+              <ThemedView type="backgroundElement" style={styles.alignTile}>
+                <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+                  {label.toUpperCase()}
                 </ThemedText>
               </ThemedView>
             </Pressable>
-          </View>
-        </>
+          ))}
+          <Pressable onPress={toggleBleed}>
+            <ThemedView type={entry.bleed ? 'backgroundSelected' : 'backgroundElement'} style={styles.alignTile}>
+              <ThemedText type="code" themeColor={entry.bleed ? 'text' : 'textSecondary'} style={styles.blockLabel}>
+                BLEED {entry.bleed ? 'ON' : 'OFF'}
+              </ThemedText>
+            </ThemedView>
+          </Pressable>
+        </Blocks>
       ) : null}
 
-      {/* Mockup result */}
+      {/* Printful's own render of the truth */}
       {mockups ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.designRow}>
+        <Blocks label="PRINTFUL MOCKUP">
           {Object.entries(mockups).map(([k, url]) => (
             <View key={k} style={styles.mockupItem}>
               <Image source={{ uri: url }} style={styles.mockupImg} contentFit="contain" />
-              <ThemedText type="small" themeColor="textSecondary">
-                {k}
+              <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+                {k.toUpperCase()}
               </ThemedText>
             </View>
           ))}
-        </ScrollView>
+        </Blocks>
       ) : null}
       {error ? (
         <ThemedText type="small" style={{ color: '#e24b4a' }}>
@@ -673,16 +796,17 @@ export function PlacementEditorBody({
         </ThemedText>
       ) : null}
 
-      <Pressable onPress={generateMockup} disabled={rendering || !variantId}>
-        <View style={[styles.generate, { backgroundColor: theme.text, opacity: rendering ? 0.5 : 1 }]}>
-          {rendering ? (
-            <ActivityIndicator color={theme.background} />
-          ) : (
-            <ThemedText type="smallBold" style={{ color: theme.background }}>
-              Generate Printful mockup
-            </ThemedText>
-          )}
-        </View>
+      <Pressable
+        onPress={generateMockup}
+        disabled={rendering || !variantId}
+        style={[styles.generate, { borderColor: theme.backgroundSelected, opacity: rendering ? 0.5 : 1 }]}>
+        {rendering ? (
+          <ActivityIndicator size="small" color={theme.text} />
+        ) : (
+          <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+            GENERATE PRINTFUL MOCKUP
+          </ThemedText>
+        )}
       </Pressable>
     </ScrollView>
   );
@@ -710,97 +834,90 @@ export function PlacementEditor({
   /** Optional absolute overlay — Eve's flow pins her subtitles here (EveCaptions). */
   captions?: React.ReactNode;
 }) {
-  // The sheet caps at 90% height, which on a Dynamic Island phone leaves too little room at the
-  // top — the header (and its Done button) ended up under the island. Reserve the inset here.
+  // Full screen (Joe, 2026-08-17: "make it full screen, we have so much space that isnt being
+  // utilized"). Manual insets — the header must never sit under the Dynamic Island.
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.backdrop, { paddingTop: insets.top }]}>
-        <ThemedView type="background" style={styles.sheet}>
-          {captions}
-          <View style={styles.header}>
-            <ThemedText type="smallBold">Size & placement</ThemedText>
-            {badge}
-            <Pressable onPress={onClose} hitSlop={10}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Done
-              </ThemedText>
-            </Pressable>
-          </View>
-          <PlacementEditorBody
-            compositionId={compositionId}
-            templateKey={templateKey}
-            designs={designs}
-            addDesignId={addDesignId}
-            onPreview={onPreview}
-          />
-        </ThemedView>
-      </View>
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <ThemedView
+        type="background"
+        style={[styles.screen, { paddingTop: insets.top + Spacing.two, paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
+        {captions}
+        <View style={styles.header}>
+          <ThemedText type="smallBold">Size & placement</ThemedText>
+          {badge}
+          <Pressable onPress={onClose} hitSlop={10}>
+            <ThemedText type="small" themeColor="textSecondary">
+              Done
+            </ThemedText>
+          </Pressable>
+        </View>
+        <PlacementEditorBody
+          compositionId={compositionId}
+          templateKey={templateKey}
+          designs={designs}
+          addDesignId={addDesignId}
+          onPreview={onPreview}
+        />
+      </ThemedView>
     </Modal>
   );
 }
 
 const HANDLE_POS: Record<Corner, { left?: number; right?: number; top?: number; bottom?: number }> = {
-  tl: { left: -9, top: -9 },
-  tr: { right: -9, top: -9 },
-  bl: { left: -9, bottom: -9 },
-  br: { right: -9, bottom: -9 },
+  tl: { left: -7, top: -7 },
+  tr: { right: -7, top: -7 },
+  bl: { left: -7, bottom: -7 },
+  br: { right: -7, bottom: -7 },
 };
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six,
-    borderTopLeftRadius: Spacing.four,
-    borderTopRightRadius: Spacing.four,
-    gap: Spacing.three,
-    maxHeight: '90%',
-  },
+  screen: { flex: 1, paddingHorizontal: Spacing.four, gap: Spacing.three },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  flex: { flex: 1 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, alignItems: 'center' },
-  chip: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
-  colorChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: 999,
-  },
-  swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.5)' },
-  designRow: { gap: Spacing.two, paddingVertical: Spacing.one },
-  designThumb: { width: 56, height: 56, borderRadius: Spacing.two },
-  editorWrap: { alignItems: 'center', gap: Spacing.two },
-  previewRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, alignSelf: 'stretch' },
-  previewThumb: { width: 40, height: 40, borderRadius: Spacing.one },
+  fill: { flex: 1 },
+  bodyContent: { gap: Spacing.three, paddingBottom: Spacing.four },
+  // Block tray — titled horizontal rails of choices.
+  section: { gap: 6 },
+  sectionLabel: { fontSize: 9, letterSpacing: 1.2 },
+  blockRow: { gap: Spacing.two, alignItems: 'flex-start', paddingRight: Spacing.four },
+  block: { width: 60, alignItems: 'center', gap: 4 },
+  blockLabel: { fontSize: 9, letterSpacing: 0.8 },
+  blockTile: { width: 56, height: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  blockTileImg: { width: '100%', height: '100%' },
+  blockTileDashed: { borderWidth: 1, borderStyle: 'dashed' },
+  alignTile: { paddingHorizontal: Spacing.three, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  swatchBig: { width: 34, height: 34, borderRadius: 17, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.5)' },
+  // Hero
+  editorWrap: { alignItems: 'center', gap: Spacing.one },
   hero: { alignSelf: 'center', borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   printZone: { position: 'absolute', borderWidth: 1, borderStyle: 'dashed', borderRadius: 4, opacity: 0.45 },
-  designBox: { position: 'absolute', borderWidth: 1.5, borderColor: '#3b82f6' },
+  designBox: { position: 'absolute', borderWidth: 1, borderColor: '#3b82f6' },
   handle: {
     position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: '#3b82f6',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#fff',
   },
-  hint: { textAlign: 'center' },
+  hint: { fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
+  // Size
   sizeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  stepBtn: { width: 34, height: 30, borderRadius: Spacing.two, alignItems: 'center', justifyContent: 'center' },
+  stepBtn: { width: 34, height: 28, borderRadius: Spacing.two, alignItems: 'center', justifyContent: 'center' },
   sliderTrack: { flex: 1, height: 6, borderRadius: 3, justifyContent: 'center' },
   sliderFill: { position: 'absolute', left: 0, height: 6, borderRadius: 3 },
   sliderThumb: { position: 'absolute', width: 18, height: 18, borderRadius: 9, marginLeft: -9, top: -6 },
   readoutRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  mockupItem: { alignItems: 'center', gap: 2 },
-  mockupImg: { width: 130, height: 150, borderRadius: Spacing.two },
+  // Mockups + generate
+  mockupItem: { alignItems: 'center', gap: 4 },
+  mockupImg: { width: 120, height: 140, borderRadius: 10 },
   generate: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.three,
-    borderRadius: 999,
-    minHeight: 44,
+    paddingVertical: Spacing.two,
+    borderRadius: 10,
+    borderWidth: 1,
+    minHeight: 40,
   },
 });
