@@ -235,7 +235,7 @@ export async function POST(req: Request) {
           return;
         }
         try {
-          const shots = await generateModelShots(mockupUrl, 3);
+          const shots = await generateModelShots(mockupUrl, 6); // 3 posed + 3 action/environment (Joe)
           if (shots.length) {
             await db.update(schema.products).set({ modelShots: shots }).where(eq(schema.products.id, product.id));
             void revalidateStorefront(store?.slug);

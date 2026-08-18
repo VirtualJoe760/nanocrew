@@ -14,13 +14,27 @@ const SHOT_RATIO = '3:4';
 // Framing contract appended to every prompt: these shots sell the product AND the person — a crop
 // that loses the face reads like a mannequin. Head-to-mid-thigh keeps both readable at card size.
 const FRAMING =
-  'Portrait orientation, framed from just above the head to mid-thigh — the model’s face and ' +
-  'the product must BOTH be clearly visible in frame.';
+  'Portrait orientation. In posed shots, frame from just above the head to mid-thigh; in action ' +
+  'shots full body is fine — but the model’s face and the product must BOTH be clearly visible.';
 
+// PRINT REALISM (Joe, 2026-08-17): shots were reading as "a picture stuck on an actor" — sharp
+// sticker edges, no fabric interaction. This contract rides every prompt: the artwork must behave
+// like ink in cloth, not an overlay.
+const PRINT_REALISM =
+  'The graphic is SCREEN-PRINTED INTO the fabric: the ink follows every fold, wrinkle, stretch ' +
+  'and drape of the garment; it curves with the body, breaks slightly over seams, and carries ' +
+  'the fabric’s weave texture through it. Matte ink, softly integrated edges — NEVER a sharp, ' +
+  'glossy, perfectly-flat sticker or digital overlay. Scene lighting and shadows fall across the ' +
+  'print exactly as they fall across the cloth around it.';
+
+// Posed studio/editorial looks + ACTION shots in real environments — the mix a real lookbook has.
 const POSES = [
   'a clean studio fashion photo, model facing forward, neutral seamless background, soft even lighting',
   'a three-quarter editorial photo, model turned slightly, natural daylight, minimal background',
   'a candid lifestyle photo, model in an urban setting at golden hour, shallow depth of field',
+  'an action photo, model mid-stride crossing a city street, motion in the scene, print clearly readable',
+  'an action photo, model skateboarding or leaning off a rail in a skatepark at dusk, dynamic angle',
+  'an outdoor action photo, model jogging or stretching on a coastal trail in morning light',
 ];
 
 interface InlinePart {
@@ -54,7 +68,8 @@ export async function generateModelShots(productImageUrl: string, count = 3): Pr
       `Using the provided image as the EXACT product (keep its print, graphic, colour and ` +
       `shape faithful), render ${POSES[i]}. The model wears, carries or uses this product as ` +
       `appropriate for its type (worn if apparel, carried or in use if a bag or accessory). ` +
-      `${FRAMING} Photorealistic, high-resolution fashion photography. No text or watermark.`;
+      `${PRINT_REALISM} ${FRAMING} Photorealistic, high-resolution fashion photography. ` +
+      `No text or watermark.`;
     try {
       const res = (await ai.models.generateContent({
         model: MODEL,
@@ -130,7 +145,7 @@ export async function generateModelShotsFromMockup(
       `carrying or using this exact product as appropriate for its type (worn if apparel, carried ` +
       `or in use if a bag or accessory). Reproduce the product and its print EXACTLY as shown — same artwork, same ` +
       `position, same size, same colours; do NOT add, move, duplicate or restyle the print. ` +
-      `${angleFor(spec.placement)} ${spec.scene} ${FRAMING} No text or watermark.`;
+      `${PRINT_REALISM} ${angleFor(spec.placement)} ${spec.scene} ${FRAMING} No text or watermark.`;
     try {
       const res = (await ai.models.generateContent({
         model: MODEL,
@@ -183,8 +198,8 @@ export async function generateDesignOnModelShots(
       `shown in the FIRST image, as appropriate for its type (worn if apparel, carried or in use if a ` +
       `bag or accessory). The artwork shown in the SECOND image is printed on the ${spec.label} of that ` +
       `product — keep the artwork’s colours, shapes and details faithful, sized and placed naturally ` +
-      `for a ${spec.label} print. ${angleFor(spec.placement)} ${spec.scene} ${FRAMING} No text, no ` +
-      `watermark, and no graphics other than the provided artwork.`;
+      `for a ${spec.label} print. ${PRINT_REALISM} ${angleFor(spec.placement)} ${spec.scene} ${FRAMING} ` +
+      `No text, no watermark, and no graphics other than the provided artwork.`;
     try {
       const res = (await ai.models.generateContent({
         model: MODEL,
