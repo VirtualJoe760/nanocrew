@@ -264,6 +264,15 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
 - **Dock (3 panels):** **Products** (the full Printful catalogue — `/api/blanks`, `/api/blank/:id/*`;
   browsed as large product cards — gender → type → product — with full, 2-line names so blanks read
   clearly), **Web assets** (the site's slots: hero / cover / logo), **Content**.
+- **Web assets — ASSET TILES (2026-08-18):** the text slot cards are GONE. One visual strip is
+  both the live inventory and the entry points: Hero · Wordmark · App icon · Favicon · Social ·
+  sections · **Images** (the free bucket — memes and anything else, no site slot). **Tap a tile**
+  → the full-screen generator opens PRECONFIGURED for that asset (dimensions + background locked,
+  per-asset best-practice guidelines appended to the prompt via `ASSET_TILE_DEFS`) with the CURRENT
+  asset pre-staged — "change it" reprompts/imprints it, Regenerate rerolls, and the approve CTA
+  ("Set as hero" etc.) assigns straight to the slot. **Long-press a tile** drops its connect-target
+  on the canvas (the drag-to-assign flow stays). Auto-generation (OG card, derived kit) is
+  unchanged — these are creator overrides on top.
 - **Web assets:** the LOGO surface is the **LogoKit** (`src/lib/logo-kit.ts`): two editable MASTERS —
   the wide **Wordmark** (slot `logo`) and the square **App icon** mark (slot `mark`) — with the mono
   variants, 1024² app tile, touch icon and favicon DERIVED on assignment (a new master re-derives the

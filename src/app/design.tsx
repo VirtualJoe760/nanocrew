@@ -40,7 +40,6 @@ import { ProductDetailSheet } from '@/components/designer/ProductDetailSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
 import { DOCK_TAB_CLEARANCE } from '@/components/designer/TemplatesDock';
 import { ProductPicker } from '@/components/designer/ProductPicker';
-import { WebAssetsDock } from '@/components/designer/WebAssetsDock';
 import { GlowButton } from '@/components/glow-button';
 import { GlowInput } from '@/components/glow-input';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -469,10 +468,17 @@ function DesignScreen() {
   const [assetMode, setAssetMode] = useState(false);
   const assetModeRef = useRef(false);
   assetModeRef.current = assetMode;
+  // ASSET TILES (Joe, 2026-08-18): the text slot cards are gone — ONE strip of visual tiles is
+  // both the live inventory and the entry points. Tapping a tile opens the full-screen generator
+  // PRECONFIGURED for that asset: dimensions, background, and best-practice guidelines applied,
+  // with the current asset pre-staged so it can be reprompted/imprinted. 'images' is the free
+  // bucket — memes and anything else, no site slot.
+  //
   // The site's CURRENT assets (hero / logo / social / sections) — shown in the Site-assets dock
   // so it reflects what's LIVE, not just this session's generations (Joe, 2026-08-18: the dock
   // said "No graphics yet" while the site plainly had graphics).
   const [liveAssets, setLiveAssets] = useState<{ slot: string; url: string; fit?: 'contain' | 'cover' }[]>([]);
+  const [generatePreset, setGeneratePreset] = useState<AssetPreset | null>(null);
   useEffect(() => {
     const slug = brand?.slug;
     if (!assetMode || !slug) {
@@ -971,7 +977,7 @@ function DesignScreen() {
 
   // Assign a hosted graphic to a website slot (hero / collection cover / logo) — a direct DB write
   // that overrides the storefront placeholder, then revalidates the live site.
-  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo' | 'mark' | 'favicon' | 'og') => {
+  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo' | 'mark' | 'favicon' | 'og' | `section:${string}`) => {
     const catId = catalogueRef.current?.id;
     const slug = brandRef.current?.slug;
     if (!url || !url.startsWith('http')) return;
@@ -1007,7 +1013,9 @@ function DesignScreen() {
                 ? 'Set as your favicon — the browser-tab icon.'
                 : slot === 'og'
               ? 'Set as your social-share image — used when your site is shared.'
-              : 'Set as this collection’s cover.',
+              : slot.startsWith('section:')
+                ? 'Set — that section of your site is updating.'
+                : 'Set as this collection’s cover.',
       );
     } catch (e) {
       Alert.alert('Could not assign', e instanceof Error ? e.message : 'Try again.');
@@ -1952,25 +1960,74 @@ function DesignScreen() {
               )}
             </View>
 
-            {/* What's LIVE on the site right now — always visible in asset mode. */}
-            {assetMode && liveAssets.length ? (
+            {/* THE ASSET TILES (Joe, 2026-08-18): one strip = the live inventory AND the entry
+                points. Tap → the full-screen generator, preconfigured for that asset (dimensions +
+                best practices, current asset pre-staged for reprompting). Long-press a site tile →
+                drop its connect-target on the canvas. 'Images' = free bucket (memes & anything). */}
+            {assetMode ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dockStrip}>
-                {liveAssets.map((a) => (
-                  <View key={`${a.slot}:${a.url}`} style={styles.liveAssetItem}>
-                    <Image source={{ uri: a.url }} style={[styles.designThumb, { backgroundColor: theme.backgroundElement }]} contentFit={a.fit ?? 'cover'} />
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.liveAssetLabel} numberOfLines={1}>
-                      ● {a.slot}
-                    </ThemedText>
-                  </View>
-                ))}
+                {ASSET_TILE_DEFS.map((def) => {
+                  const live = def.live ? liveAssets.find((a) => a.slot === def.live) : undefined;
+                  return (
+                    <Pressable
+                      key={def.key}
+                      onPress={() => {
+                        setGeneratePreset({
+                          slot: def.key,
+                          label: def.label,
+                          ratio: def.ratio,
+                          background: def.background,
+                          guideline: def.guideline,
+                          currentUrl: live?.url ?? null,
+                        });
+                        setGenerateOpen(true);
+                      }}
+                      onLongPress={() => def.key !== 'images' && addNode('webslot', def.key)}
+                      style={styles.liveAssetItem}>
+                      {live ? (
+                        <Image source={{ uri: live.url }} style={[styles.designThumb, { backgroundColor: theme.backgroundElement }]} contentFit={def.fit ?? 'cover'} />
+                      ) : (
+                        <View style={[styles.designThumb, styles.assetTileEmpty, { borderColor: theme.backgroundSelected }]}>
+                          <Ionicons name={def.icon} size={26} color={theme.textSecondary} />
+                        </View>
+                      )}
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.liveAssetLabel} numberOfLines={1}>
+                        {live ? '● ' : '＋ '}{def.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+                {liveAssets
+                  .filter((a) => !ASSET_TILE_DEFS.some((d) => d.live === a.slot))
+                  .map((a) => (
+                    <Pressable
+                      key={`section:${a.slot}`}
+                      onPress={() => {
+                        setGeneratePreset({
+                          slot: `section:${a.slot}`,
+                          label: a.slot,
+                          ratio: '16:9',
+                          background: 'filled',
+                          guideline: 'In-page website section image: full-bleed, cohesive with the brand, no text baked in.',
+                          currentUrl: a.url,
+                        });
+                        setGenerateOpen(true);
+                      }}
+                      style={styles.liveAssetItem}>
+                      <Image source={{ uri: a.url }} style={[styles.designThumb, { backgroundColor: theme.backgroundElement }]} contentFit={a.fit ?? 'cover'} />
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.liveAssetLabel} numberOfLines={1}>
+                        ● {a.slot}
+                      </ThemedText>
+                    </Pressable>
+                  ))}
               </ScrollView>
             ) : null}
 
             {/* The designs strip — tap to drop on a product, long-press to assign to the site / delete. */}
             {designs.length === 0 ? (
-              assetMode && liveAssets.length ? null : (
+              assetMode ? null : (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.dockHint}>
-                  {assetMode ? 'No graphics yet — tap Generate' : 'No designs yet — tap Generate'}
+                  No designs yet — tap Generate
                 </ThemedText>
               )
             ) : (
@@ -2002,7 +2059,10 @@ function DesignScreen() {
             {/* This panel is purely the collection's DESIGNS — products are added from the top strip
                 (or the chip). Site-assets mode shows the website slots to publish graphics to. */}
             {assetMode ? (
-              <WebAssetsDock hideCover onAddSlot={(slot) => addNode('webslot', slot)} />
+              <ThemedText type="small" themeColor="textSecondary" style={styles.dockHint}>
+                Tap an asset tile in Site assets to generate for that spot — long-press one to drop
+                its connect-target on the canvas.
+              </ThemedText>
             ) : null}
           </View>
         )}
@@ -2064,14 +2124,22 @@ function DesignScreen() {
         webMode={assetMode}
         initialPrompt={generatePrefill?.prompt}
         initialMeme={generatePrefill?.meme}
+        preset={generatePreset}
         onClose={() => {
           setGenerateOpen(false);
           setGeneratePrefill(null);
+          setGeneratePreset(null);
         }}
-        onCommit={(staged) => {
+        onCommit={(staged, slot) => {
           void commitDesign(staged);
+          // A tile-driven session assigns straight to its site slot ('images' just lands in the
+          // collection — the free bucket).
+          if (slot && slot !== 'images' && staged.url.startsWith('http')) {
+            void assignToSite(staged.url, slot as Parameters<typeof assignToSite>[1]);
+          }
           setGenerateOpen(false);
           setGeneratePrefill(null);
+          setGeneratePreset(null);
         }}
       />
 
@@ -2714,6 +2782,90 @@ function EffortSlider({ value, onChange }: { value: Effort; onChange: (e: Effort
   );
 }
 
+// Per-asset generation presets: dimensions + best practices baked into the prompt (Joe,
+// 2026-08-18: "dimensions and best practices already applied to the generation guidelines").
+export type AssetPreset = {
+  slot: 'hero' | 'logo' | 'mark' | 'favicon' | 'og' | 'images' | `section:${string}`;
+  label: string;
+  ratio: string;
+  background: 'transparent' | 'filled';
+  guideline: string;
+  currentUrl?: string | null;
+};
+
+export const ASSET_TILE_DEFS: {
+  key: 'hero' | 'logo' | 'mark' | 'favicon' | 'og' | 'images';
+  label: string;
+  live?: string; // liveAssets slot name
+  icon: keyof typeof Ionicons.glyphMap;
+  ratio: string;
+  background: 'transparent' | 'filled';
+  fit?: 'contain' | 'cover';
+  guideline: string;
+}[] = [
+  {
+    key: 'hero',
+    label: 'Hero',
+    live: 'Hero',
+    icon: 'image-outline',
+    ratio: '16:9',
+    background: 'filled',
+    guideline:
+      'Website hero banner best practices: cinematic full-bleed composition, one clear focal subject placed off-centre, generous negative space for a headline overlay, NO text baked into the image, rich but cohesive palette.',
+  },
+  {
+    key: 'logo',
+    label: 'Wordmark',
+    live: 'Wordmark',
+    icon: 'text-outline',
+    ratio: '16:9',
+    background: 'transparent',
+    fit: 'contain',
+    guideline:
+      'Wordmark best practices: the brand NAME as clean typographic lettering in a wide lockup, flat vector-style shapes, transparent cutout, no background scene, crisp edges that survive small sizes.',
+  },
+  {
+    key: 'mark',
+    label: 'App icon',
+    live: 'App icon',
+    icon: 'apps-outline',
+    ratio: '1:1',
+    background: 'transparent',
+    fit: 'contain',
+    guideline:
+      'App-icon mark best practices: ONE bold simple symbol, centred, flat vector-style, high contrast, no text, no fine detail — it must read clearly at 48 pixels.',
+  },
+  {
+    key: 'favicon',
+    label: 'Favicon',
+    live: 'Favicon',
+    icon: 'globe-outline',
+    ratio: '1:1',
+    background: 'transparent',
+    fit: 'contain',
+    guideline:
+      'Favicon best practices: an ultra-simple glyph — one shape, at most two colours, no text, no detail — it must stay legible at 16 pixels in a browser tab.',
+  },
+  {
+    key: 'og',
+    label: 'Social',
+    live: 'Social',
+    icon: 'share-social-outline',
+    ratio: '16:9',
+    background: 'filled',
+    guideline:
+      'Social share card best practices: full-bleed 1200×630 composition, one bold central subject, safe margins (nothing important near the edges), strong contrast so it pops in a feed.',
+  },
+  {
+    key: 'images',
+    label: 'Images',
+    icon: 'images-outline',
+    ratio: '1:1',
+    background: 'filled',
+    guideline: '',
+  },
+];
+
 function GenerateModal({
   open,
   onClose,
@@ -2721,11 +2873,13 @@ function GenerateModal({
   webMode,
   initialPrompt,
   initialMeme,
+  preset,
 }: {
   open: boolean;
   onClose: () => void;
-  // Called when the creator APPROVES a staged graphic — the parent lands it on the canvas + persists.
-  onCommit: (staged: { url: string; prompt: string }) => void;
+  // Called when the creator APPROVES a staged graphic — the parent lands it on the canvas + persists
+  // (and, when a site-slot preset drove the session, assigns it to that slot).
+  onCommit: (staged: { url: string; prompt: string }, slot?: AssetPreset['slot']) => void;
   // True when the active collection is "Site assets" → generate web graphics; else product designs.
   // Replaces the old Design/Web-assets/Video tab picker: the brand+collection screen decides this.
   webMode: boolean;
@@ -2733,6 +2887,9 @@ function GenerateModal({
   // reviews/edits before generating — external actors suggest, the user decides.
   initialPrompt?: string;
   initialMeme?: boolean;
+  // Asset-tile preset: dimensions/background/guidelines pre-applied; the current asset pre-staged
+  // for reprompting (Joe, 2026-08-18).
+  preset?: AssetPreset | null;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets(); // sheets cap at 94% — reserve the top inset or they slide under the island
@@ -2761,6 +2918,14 @@ function GenerateModal({
     if (!open) return;
     if (initialPrompt != null) setPrompt(initialPrompt);
     if (initialMeme != null) setMeme(initialMeme);
+    if (preset) {
+      // The tile picked the best-practice setup — dimensions + background locked in, and the
+      // CURRENT asset staged so "change it" reprompts/imprints it directly.
+      setBackground(preset.background);
+      setWebRatio(preset.ratio);
+      setRatio(preset.ratio);
+      if (preset.currentUrl) setStaged({ url: preset.currentUrl, prompt: `Current ${preset.label.toLowerCase()}` });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -2831,9 +2996,10 @@ function GenerateModal({
     // initial generation, not a "change it" re-roll (overridePrompt) — that edits the staged meme.
     // A meme for a PRODUCT (not a web/graphics asset) uses the magenta-bordered PANEL prompt so it
     // chroma-keys into a clean printable rectangle instead of an opaque full-bleed block.
+    const guided = preset?.guideline && !overridePrompt && base.trim() ? `${base.trim()}. ${preset.guideline}` : base;
     const memeNow = meme && !overridePrompt && !!base.trim();
     const productMeme = memeNow && !isGraphics;
-    const text = memeNow ? (isGraphics ? buildMemePrompt(base) : buildMemePromptForProduct(base)) : base.trim();
+    const text = memeNow ? (isGraphics ? buildMemePrompt(base) : buildMemePromptForProduct(base)) : guided.trim();
     const ref = overrideRef ?? refImage ?? undefined;
     if (!text && !ref) return;
     setBusy(true);
@@ -2877,7 +3043,7 @@ function GenerateModal({
 
   const approve = () => {
     if (!staged) return;
-    onCommit(staged);
+    onCommit(staged, preset?.slot);
     reset();
   };
 
@@ -2917,7 +3083,7 @@ function GenerateModal({
 
           <View style={styles.sheetHeader}>
             <ThemedText type="code" themeColor="textSecondary">
-              {staged ? 'Review' : modality === 'graphics' ? 'Generate a web graphic' : 'Generate a design'}
+              {staged ? (preset ? `Review · ${preset.label}` : 'Review') : preset ? `New ${preset.label}` : modality === 'graphics' ? 'Generate a web graphic' : 'Generate a design'}
             </ThemedText>
             <Pressable onPress={close}>
               <ThemedText type="small" themeColor="textSecondary">
@@ -3103,7 +3269,9 @@ function GenerateModal({
           {staged ? (
             <Pressable onPress={approve} disabled={busy}>
               <View style={[styles.generate, { backgroundColor: theme.text, opacity: busy ? 0.4 : 1 }]}>
-                <ThemedText type="smallBold" style={{ color: theme.background }}>Use this</ThemedText>
+                <ThemedText type="smallBold" style={{ color: theme.background }}>
+                  {preset && preset.slot !== 'images' ? `Set as ${preset.label.toLowerCase()}` : 'Use this'}
+                </ThemedText>
               </View>
             </Pressable>
           ) : (
@@ -3310,6 +3478,7 @@ const styles = StyleSheet.create({
   dockHint: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   designThumb: { width: 78, height: 78, borderRadius: Spacing.three },
   liveAssetItem: { alignItems: 'center', gap: 2 },
+  assetTileEmpty: { borderWidth: 1, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   liveAssetLabel: { fontSize: 10, maxWidth: 78 },
   designThumbPending: { alignItems: 'center', justifyContent: 'center' },
   emptyBrand: { gap: Spacing.three, paddingVertical: Spacing.three },
