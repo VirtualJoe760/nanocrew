@@ -243,9 +243,9 @@ export function EveDesign({
     <View style={[styles.fill, { paddingTop: insets.top + Spacing.four, paddingBottom: insets.bottom + Spacing.three }]}>
       <EveCaptions />
       <View style={styles.headerRow}>
-        <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>EVE · DESIGN</ThemedText>
-        <View style={styles.flex} />
+        {/* Her presence IS the header — no surface label needed (Joe, 2026-08-17). */}
         <EveEar />
+        <View style={styles.flex} />
         <Pressable onPress={onExit} hitSlop={10} accessibilityLabel="Back to Eve">
           <ThemedText type="code" style={{ color: p.dim, fontSize: 14 }}>‹ back</ThemedText>
         </Pressable>
@@ -386,7 +386,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1, paddingHorizontal: Spacing.four },
   flex: { flex: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center' },
-  eyebrow: { letterSpacing: 3 },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, marginVertical: Spacing.three },
   // A see-through window where her real avatar (root GL, behind the overlay) reads as the subject.
   avatarWindow: { width: 200, height: 200 },
