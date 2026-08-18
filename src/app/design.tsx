@@ -211,7 +211,7 @@ export default withScreenFade(DesignScreen, { eveThrough: true });
 function DesignScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets(); // sheet backdrops reserve this so headers clear the Dynamic Island
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const { width, height } = useWindowDimensions();
 
   const [designs, setDesigns] = useState<Design[]>([]);
@@ -1661,6 +1661,11 @@ function DesignScreen() {
   };
 
   if (!session) {
+    // While the stored session is still RESTORING, show nothing — flashing the create-account
+    // gate at an authenticated creator for a frame read as a bug (Joe, 2026-08-17).
+    if (authLoading) {
+      return <ThemedView style={[styles.container, { backgroundColor: 'transparent' }]} />;
+    }
     return (
       // Transparent so the dot-field (rendered OUTSIDE the fade by withScreenFade, like the other
       // tabs) shows through. The signed-in canvas below is opaque (covers it → no dots there).
