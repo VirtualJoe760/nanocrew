@@ -53,7 +53,7 @@ does). This is Google's recommended client-to-server pattern.
 
 ## Live session config (the contract)
 
-- **Model:** `gemini-2.5-flash-native-audio-preview-12-2025` (native audio). Alt: `gemini-3.1-flash-live-preview`.
+- **Model:** `gemini-2.5-flash-native-audio-latest` (native audio; 2026-08-18 — the pinned `-preview-12-2025` began dropping sockets 1006 after setup while still listed in /models; pin to the alias). Alt: `gemini-3.1-flash-live-preview`.
 - **Audio:** input raw **16kHz** LE PCM16 mono (`audio/pcm;rate=16000`); output **24kHz** PCM16.
 - **VAD:** automatic (open-mic). Tune `realtimeInputConfig.automaticActivityDetection.silenceDurationMs`
   ≈ 600–800ms so Eve doesn't cut the creator off mid-thought.
