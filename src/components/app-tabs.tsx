@@ -8,8 +8,10 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Nano Crew tab bar — a JS (expo-router/ui) bar drawn to MIMIC the native iOS UITabBar: opaque,
-// mode-aware background; thin outline glyphs; platinum-silver selected tint with the rest dimmed.
+// Nano Crew tab bar — a JS (expo-router/ui) bar drawn to MIMIC the native iOS UITabBar:
+// TRANSLUCENT frosted glass FLOATING over the content (Joe, 2026-08-18 — the old in-flow bar had
+// nothing behind it, so its blur read as opaque); thin outline glyphs; platinum-silver selected
+// tint with the rest dimmed. Screens clear it via BottomTabInset (constants/theme).
 //
 // THE PIVOT (docs/studio/EVE_CONTROL.md): Eve is the living background of the whole app, and these
 // four tabs are how you navigate her — each a different facet you zoom to. EVE leads (the merged
@@ -47,9 +49,13 @@ export default function AppTabs() {
           style={StyleSheet.flatten([
             styles.bar,
             // Native UITabBar metrics: a tight icon+label cluster sitting ON the home-indicator
-            // inset — labels tuck a few points INTO it, like UIKit's. (The old bar padded a full
-            // Spacing.four below the inset — a ~50pt dead lip.)
-            { borderTopColor: c.backgroundSelected, paddingBottom: Math.max(insets.bottom - 6, 6) },
+            // inset — labels tuck a few points INTO it, like UIKit's. The slight tint over the
+            // blur is what makes it read as glass instead of a smear.
+            {
+              borderTopColor: c.backgroundSelected,
+              paddingBottom: Math.max(insets.bottom - 6, 6),
+              backgroundColor: dark ? 'rgba(9,11,15,0.58)' : 'rgba(250,250,252,0.6)',
+            },
           ])}>
           {/* Frosted-glass blur behind the bar — the native translucent iOS bar look (web uses backdrop-filter). */}
           <TabBarBlur dark={dark} />
@@ -85,6 +91,10 @@ function TabButton({ tab, tint, isFocused, style: triggerStyle, ...props }: TabT
 const styles = StyleSheet.create({
   slot: { flex: 1 },
   bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 6, // native UITabBar: icon sits ~6pt under the hairline

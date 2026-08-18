@@ -51,7 +51,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch, readJson } from '@/lib/api';
@@ -1956,7 +1956,8 @@ function DesignScreen() {
             borderTopColor: theme.backgroundElement,
             // Collapsed, the handle must still clear the bottom tab bar (the expanded
             // product list carries this clearance inside its own scroll content).
-            paddingBottom: dockCollapsed ? DOCK_TAB_CLEARANCE : 0,
+            // The floating tab bar overlays the bottom — the dock clears it (+ home indicator).
+            paddingBottom: (dockCollapsed ? DOCK_TAB_CLEARANCE : 0) + BottomTabInset + insets.bottom,
           },
         ]}
         onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}>

@@ -20,7 +20,7 @@ import { EveGlyph } from '@/components/eve/eve-glyph';
 import { EveHome } from '@/components/eve/eve-home';
 import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiUrl, readJson } from '@/lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -196,10 +196,9 @@ function StudioScreen() {
 
   // Native tab bar sits above the home indicator; reserve its height + the inset + a
   // comfortable gap so the last row of the dashboard never dips under it.
-  // Just a breathing gap above the in-flow tab bar (it sits below this screen and pads its own
-  // home-indicator inset — reserving BottomTabInset + insets.bottom here left a big dead zone that
-  // shrank the content area and pushed the centered gate up).
-  const bottomPad = Spacing.four;
+  // The tab bar FLOATS now (frosted glass) — reserve its height + the home indicator so the
+  // dashboard's last row never hides beneath it.
+  const bottomPad = BottomTabInset + insets.bottom + Spacing.two;
 
   // First-launch welcome: a full-screen Modal presented ABOVE the tab bar so it owns its own swipe
   // gestures (no tab-navigator conflict) and hides the bottom bar during onboarding.

@@ -22,7 +22,7 @@ import { Paywall } from '@/components/paywall';
 import { ThemedText } from '@/components/themed-text';
 import { usePalette } from '@/components/nc-screen';
 import { glow } from '@/constants/glow';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
@@ -689,7 +689,7 @@ export function EveHome({
           // REINTRODUCING herself — from zero to a finished brand — then the interview begins
           // (Joe, 2026-08-18: no tool chrome; the wheel replaced it, her voice carries the rest).
           pendingGreeting.current =
-            "(They chose NEW BRAND on your wheel — a fresh brand from zero. Reintroduce yourself briefly: you're Eve, and you'll take them from an idea to a FINISHED brand — the designs, the products, the store and the live website. Two short sentences MAX, then ask: what's the business all about? Then stop and listen.)";
+            "(They chose NEW BRAND on your wheel — a brand-new brand from zero, and that is genuinely EXCITING. Reintroduce yourself warmly: you're Eve, and you'll walk them through every step yourself — a short chat about the idea, then you handle the designs, the products, the store and the live website; they just talk. Let real delight show, reassure them there are no wrong answers, and ask what the new brand is about. Three short sentences MAX, then stop and listen.)";
           void startVoice();
           return;
         case 'design': {
@@ -864,7 +864,8 @@ export function EveHome({
 
   // Hosted inside the tab slot — the tab bar sits BELOW this surface, so no home-indicator
   // clearance is needed; just breathing room above the bar.
-  const bottomPad = Spacing.five;
+  // The floating tab bar overlays the bottom — her captions sit just above it.
+  const bottomPad = BottomTabInset + insets.bottom + Spacing.two;
 
   if (hidden) return null;
 

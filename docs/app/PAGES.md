@@ -2,7 +2,9 @@
 
 Reference for every user-facing screen and major section. The app chrome follows the brand system —
 cool monochrome (paper / near-black) + platinum silver, no gold (see [ARCHITECTURE.md](../architecture/ARCHITECTURE.md)).
-The tab bar uses a platinum-silver tint with thin outline glyphs and an opaque (mode-aware) background.
+The tab bar is FROSTED GLASS (2026-08-18): a floating translucent bar — expo-blur + a slight
+mode-aware tint — with content scrolling beneath it; platinum-silver tint, thin outline glyphs.
+Screens clear it with `BottomTabInset` (+ their own safe-area inset).
 **Individual brand storefronts keep their OWN palette** — only the app chrome is monochrome.
 
 **Tab bar (v1, in order): `Eve` · `Design` · `Market` · `Account`** (`src/components/app-tabs.tsx`;

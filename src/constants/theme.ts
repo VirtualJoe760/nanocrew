@@ -78,5 +78,7 @@ export const Spacing = {
 // FLEX COLUMN below the screen slot, NOT a floating/native UITabBar. So a screen sits entirely
 // ABOVE it and reserves NOTHING for it (the bar pads its own home-indicator inset). This is 0; the
 // named constant stays as the single knob at every call site in case the bar ever goes floating.
-export const BottomTabInset = 0;
+// The floating tab bar's CONTENT height (icon+label cluster + paddings, EXCLUDING the safe-area
+// inset — screens add insets.bottom themselves). 0 while the bar was in-flow; the bar floats now.
+export const BottomTabInset = 52;
 export const MaxContentWidth = 800;
