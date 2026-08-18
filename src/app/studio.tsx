@@ -54,7 +54,7 @@ function StudioScreen() {
 
   const [voiceResolved, setVoiceResolved] = useState(false); // /api/me landing check done
   // Deep-link landing for the deck's embedded console (push → review, site submitted).
-  const [deckFocus, setDeckFocus] = useState<{ slug: string; tab: 'edit' | 'posts' | 'settings' } | null>(null);
+  const [deckFocus, setDeckFocus] = useState<{ slug: string; tab?: 'posts' | 'settings' } | null>(null);
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
   const [hasStore, setHasStore] = useState(false);
 
@@ -84,7 +84,7 @@ function StudioScreen() {
     const slug = reviewParams.reviewSlug;
     if (slug && reviewHandled.current !== slug) {
       reviewHandled.current = slug;
-      setDeckFocus({ slug, tab: 'edit' });
+      setDeckFocus({ slug });
       setDeckShown(true);
     }
   }, [reviewParams.reviewSlug, reviewParams.reviewName]);
@@ -253,7 +253,7 @@ function StudioScreen() {
           onExit={() => setEve(null)}
           onSubmitted={(slug) => {
             setEve(null);
-            setDeckFocus({ slug, tab: 'edit' });
+            setDeckFocus({ slug });
             setDeckShown(true);
           }}
         />
@@ -327,7 +327,6 @@ function StudioScreen() {
                   token={session.access_token}
                   refreshKey={dashKey}
                   onClose={() => { setDeckShown(false); setDeckFocus(null); }}
-                  onNewBrand={onNewBrand}
                   onBounty={(panel, slot) => { setDeckShown(false); router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`); }}
                 />
               </>

@@ -13,7 +13,9 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SiteEditor } from '@/components/site-editor';
 import { StudioComposer } from '@/components/studio-composer';
+import { summonEve } from '@/lib/eve-bus';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { glow } from '@/constants/glow';
@@ -30,7 +32,14 @@ const OPEN_MS = 320;
 const BACKDROP = 'rgba(6,8,12,0.9)'; // near-opaque so brand imagery reads; Eve still glows faintly through
 
 type Bounties = { product: boolean; hero: boolean; logo: boolean; cover: boolean };
-type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; bannerUrl?: string | null; logoUrl?: string | null; ogImageUrl?: string | null; productImages?: string[]; bounties?: Bounties };
+type StoreRow = { slug: string; name: string; revenueCents: number; orders: number; bannerUrl?: string | null; logoUrl?: string | null; ogImageUrl?: string | null; deploymentUrl?: string | null; customDomain?: string | null; productImages?: string[]; bounties?: Bounties };
+
+/** The live site URL — custom domain first, else a real (non-placeholder) deployment. */
+function siteUrlFor(st: StoreRow): string | null {
+  if (st.customDomain) return `https://${st.customDomain}`;
+  if (st.deploymentUrl && !st.deploymentUrl.includes('github.com')) return st.deploymentUrl;
+  return null;
+}
 
 const BOUNTY_STEPS: { key: keyof Bounties; label: string; panel: 'products' | 'web'; slot?: 'hero' | 'cover' | 'logo' }[] = [
   { key: 'product', label: 'Add your first product', panel: 'products' },
@@ -44,7 +53,6 @@ export function BrandDeck({
   token,
   refreshKey,
   onClose,
-  onNewBrand,
   onBounty,
   focus,
 }: {
@@ -53,10 +61,9 @@ export function BrandDeck({
   /** Bump to force a refetch (e.g. after a brand is created). */
   refreshKey?: number;
   onClose: () => void;
-  onNewBrand: () => void;
   onBounty?: (panel: 'products' | 'web', slot?: 'hero' | 'cover' | 'logo') => void;
   /** Deep-link landing: open ON this brand with this tab active (push → review, post-submit). */
-  focus?: { slug: string; tab: 'edit' | 'posts' | 'settings' } | null;
+  focus?: { slug: string; tab?: 'posts' | 'settings' } | null;
 }) {
   const p = useStudioPalette();
   const insets = useSafeAreaInsets();
@@ -67,7 +74,8 @@ export function BrandDeck({
   const [page, setPage] = useState(0);
   // THE MERGE (Joe, 2026-08-17): the deck IS the console now. null = overview (banner + checklist);
   // a tab renders the embedded StudioComposer inline. One surface — no second panel ever opens.
-  const [activeTab, setActiveTab] = useState<'edit' | 'posts' | 'settings' | null>(null);
+  const [activeTab, setActiveTab] = useState<'posts' | 'settings' | null>(null);
+  const [siteOptions, setSiteOptions] = useState(false); // the overview's ✦ Site Options → SiteEditor
   const pagerRef = useRef<ScrollView>(null);
 
   // Deep-link landing (push → review, site submitted): jump to the brand's page + open its tab.
@@ -77,7 +85,7 @@ export function BrandDeck({
     if (i >= 0) {
       pagerRef.current?.scrollTo({ x: i * width, animated: false });
       setPage(i);
-      setActiveTab(focus.tab);
+      setActiveTab(focus.tab ?? null);
     }
   }, [shown, focus, stores, width]);
 
@@ -131,7 +139,7 @@ export function BrandDeck({
 
   if (!mounted) return null;
 
-  const pageCount = stores.length + 1; // brands + the "new brand" page
+  const pageCount = stores.length; // one page per brand — building a NEW one is Eve's job (her wheel), not a deck page
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.root, dissolve]}>
@@ -173,7 +181,7 @@ export function BrandDeck({
               {/* 2 — the console nav. Tap toggles the tab inline; tapping the active one returns
                   to the overview. (Sell is gone — rebuilt later, Joe.) */}
               <View style={s.quickRow}>
-                {([['edit', 'Edit site'], ['posts', 'Posts'], ['settings', 'Settings']] as const).map(([key, label]) => (
+                {([['posts', 'Posts'], ['settings', 'Settings']] as const).map(([key, label]) => (
                   <Pressable
                     key={key}
                     style={[s.quickPill, activeTab === key && s.quickPillOn]}
@@ -203,7 +211,12 @@ export function BrandDeck({
               ) : (
                 <>
                   {/* 3 — the banner (tap → Edit site). Wordmark bottom-left, edit tag bottom-right. */}
-                  <Pressable onPress={() => setActiveTab('edit')} style={s.hero}>
+                  <Pressable
+                    onPress={() => {
+                      const url = siteUrlFor(store);
+                      if (url) { onClose(); summonEve({ state: 'developing', payload: { slug: store.slug, url, name: store.name } }); }
+                    }}
+                    style={s.hero}>
                     {hero ? (
                       <Image source={{ uri: hero }} style={styles.heroImg} contentFit="cover" />
                     ) : (
@@ -217,6 +230,12 @@ export function BrandDeck({
                     <View style={s.editTag}>
                       <ThemedText type="code" style={s.editTagText}>edit →</ThemedText>
                     </View>
+                  </Pressable>
+
+                  {/* 3c — exact site edits, right here (the old Edit-site tab collapsed into the
+                      overview — it was a twin of this page; Joe 2026-08-17). */}
+                  <Pressable onPress={() => setSiteOptions(true)} style={[s.siteOptionsBtn, glow(p.accent, 12, 0.35)]}>
+                    <ThemedText type="smallBold" style={{ color: p.onAccent }}>✦ Site Options</ThemedText>
                   </Pressable>
 
                   {/* 4 — finish-your-site, right under the banner. */}
@@ -237,15 +256,19 @@ export function BrandDeck({
           );
         })}
 
-        {/* New-brand page. */}
-        <View style={[styles.pageCol, styles.newCol, { width }]}>
-          <Pressable onPress={onNewBrand} style={({ pressed }) => [s.newBrand, glow(p.accent, 16, pressed ? 0.3 : 0.5)]}>
-            <ThemedText type="code" style={[s.plus, { color: p.accent }]}>+</ThemedText>
-            <ThemedText type="smallBold" style={{ color: p.accent }}>Build a new brand</ThemedText>
-            <ThemedText type="code" style={s.dim}>Start another brand with Eve.</ThemedText>
-          </Pressable>
-        </View>
       </ScrollView>
+
+      {/* ✦ Site Options — the mini-CMS, hosted by the deck for the visible brand. */}
+      {siteOptions && stores[page] ? (
+        <SiteEditor
+          visible={siteOptions}
+          onClose={() => setSiteOptions(false)}
+          token={token}
+          slug={stores[page].slug}
+          brandName={stores[page].name}
+          onSaved={() => void load()}
+        />
+      ) : null}
 
       {/* Paging dots. */}
       {pageCount > 1 ? (
@@ -265,7 +288,6 @@ const styles = StyleSheet.create({
   handleBar: { flexDirection: 'row', alignItems: 'center', paddingBottom: Spacing.three, paddingHorizontal: Spacing.four },
   pager: { flex: 1 },
   pageCol: { height: '100%', paddingHorizontal: Spacing.four, gap: Spacing.four },
-  newCol: { alignItems: 'center', justifyContent: 'center' },
   meta: { gap: Spacing.one },
   consoleFill: { flex: 1 },
   // The banner renders at its own OG ratio (1200x630) so the artwork is never cropped.
@@ -290,8 +312,7 @@ function makeStyles(p: StudioPalette) {
     bountyBox: { borderRadius: 14, borderWidth: 1, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.6)', padding: Spacing.four, gap: Spacing.three },
     bountyHead: { color: p.accent, letterSpacing: 1.5 },
     bountyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    newBrand: { alignItems: 'center', gap: Spacing.two, borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: p.line, paddingVertical: Spacing.six, paddingHorizontal: Spacing.six, backgroundColor: 'rgba(22,22,25,0.5)' },
-    plus: { fontSize: 32 },
+    siteOptionsBtn: { alignItems: 'center', paddingVertical: Spacing.three, borderRadius: 999, backgroundColor: p.accent },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(205,209,217,0.3)' },
     dotOn: { backgroundColor: p.accent, width: 7, height: 7, borderRadius: 4 },
   });
