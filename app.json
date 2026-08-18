@@ -15,7 +15,7 @@
         "NSPhotoLibraryUsageDescription": "Nano Crew uses your photos for virtual try-on and to set your brand's post and product images.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "54"
+      "buildNumber": "55"
     },
     "android": {
       "package": "com.nanocrew.app",

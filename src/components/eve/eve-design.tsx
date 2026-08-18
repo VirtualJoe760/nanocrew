@@ -287,7 +287,9 @@ export function EveDesign({
             if (!chosen) return;
             setBlank(chosen);
             setStep('style');
-            sayEve(`(They picked the ${chosen.name}. Ask ONE short question: should you enhance the idea first, or print it as-is?)`);
+            sayEve(
+              `(They picked the ${chosen.name}. Now RIFF on the idea with them — react in one short sentence with ONE build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; do NOT mention the enhance/as-is buttons until they say they're done — then one line: ✦ Enhance folds this whole conversation in, as-is stays literal.)`,
+            );
           }}
         />
       ) : null}

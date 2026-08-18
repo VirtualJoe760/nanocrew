@@ -100,7 +100,7 @@ export function EveAssets({
     void resolveHomes();
     sayEve(
       slotProp
-        ? `(Their site-graphic surface just opened for the ${SLOTS[slotProp].label.toLowerCase()} — in ONE short sentence, ask if you should enhance the idea first or make it exactly as said.)`
+        ? `(Their site-graphic surface just opened for the ${SLOTS[slotProp].label.toLowerCase()} — RIFF on the idea: react in one short sentence with ONE build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; only when they say they're done, one line: ✦ Enhance folds the conversation in, as-is stays literal.)`
         : '(Their site-graphic surface just opened — in ONE short sentence, ask which spot this is for: the hero banner, the wordmark, the app icon, or the social card.)',
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,7 +260,9 @@ export function EveAssets({
                 onPress={() => {
                   setSlot(k);
                   setStep('style');
-                  sayEve(`(They picked the ${SLOTS[k].label.toLowerCase()}. Ask ONE short question: enhance the idea first, or make it exactly as said?)`);
+                  sayEve(
+                  `(They picked the ${SLOTS[k].label.toLowerCase()}. RIFF on the idea: one build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; when they're done, one line: ✦ Enhance folds the conversation in, as-is stays literal.)`,
+                );
                 }}
                 style={[styles.slotCard, { borderColor: `${p.dim}55` }]}
                 hitSlop={4}>
