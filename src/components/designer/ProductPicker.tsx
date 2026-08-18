@@ -235,6 +235,7 @@ export function ProductPicker({
       <SafeAreaProvider>
         <ThemedView style={styles.fill}>
           <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+          {captions}
           {/* Header: breadcrumb (Supplier › Type › Gender › Category) + close. */}
           <View style={styles.header}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.crumbs}>
@@ -358,7 +359,6 @@ export function ProductPicker({
           </View>
           </SafeAreaView>
         </ThemedView>
-        {captions}
       </SafeAreaProvider>
     </Modal>
   );

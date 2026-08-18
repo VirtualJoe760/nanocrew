@@ -209,6 +209,7 @@ export function FinalizeSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.backdrop, { paddingTop: insets.top }]}>
         <ThemedView type="background" style={styles.sheet}>
+          {captions}
           <View style={styles.header}>
             <ThemedText type="smallBold">Review & finalize</ThemedText>
             {badge}
@@ -408,7 +409,6 @@ export function FinalizeSheet({
           )}
         </ThemedView>
       </KeyboardAvoidingView>
-      {captions}
     </Modal>
   );
 }

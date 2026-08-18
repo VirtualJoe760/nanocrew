@@ -718,6 +718,7 @@ export function PlacementEditor({
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={[styles.backdrop, { paddingTop: insets.top }]}>
         <ThemedView type="background" style={styles.sheet}>
+          {captions}
           <View style={styles.header}>
             <ThemedText type="smallBold">Size & placement</ThemedText>
             {badge}
@@ -736,7 +737,6 @@ export function PlacementEditor({
           />
         </ThemedView>
       </View>
-      {captions}
     </Modal>
   );
 }

@@ -7,7 +7,6 @@ import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
 import { ProductPicker } from '@/components/designer/ProductPicker';
 import { EveCaptions, EveEar } from '@/components/eve/eve-ear';
-import { VenusBubble } from '@/components/venus-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { usePalette } from '@/components/nc-screen';
 import { glow } from '@/constants/glow';
@@ -15,6 +14,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiFetch, apiUrl, readJson } from '@/lib/api';
 import { armNextTurn } from '@/lib/eve-edit-bus';
+import { recentTranscript } from '@/lib/eve-transcript-bus';
 import { sayEve } from '@/lib/eve-say-bus';
 import { showEve } from '@/lib/eve-vision-bus';
 import type { CatalogBlank } from '@/lib/printful';
@@ -198,7 +198,9 @@ export function EveDesign({
       const r = await fetch(apiUrl('/api/enhance'), {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ prompt: idea }),
+        // Fold in the conversation: her riffs ("I'd do neon sunglasses") become part of the
+        // design when they hit ✦ Enhance (Joe, 2026-08-17 — as-is stays literal on purpose).
+        body: JSON.stringify({ prompt: idea, context: recentTranscript() }),
       });
       const d = (await r.json().catch(() => ({}))) as { enhanced?: string };
       await generate(d.enhanced?.trim() || idea);
@@ -239,6 +241,7 @@ export function EveDesign({
 
   return (
     <View style={[styles.fill, { paddingTop: insets.top + Spacing.four, paddingBottom: insets.bottom + Spacing.three }]}>
+      <EveCaptions />
       <View style={styles.headerRow}>
         <ThemedText type="code" style={[styles.eyebrow, { color: p.dim }]}>EVE · DESIGN</ThemedText>
         <View style={styles.flex} />
@@ -272,7 +275,8 @@ export function EveDesign({
       {/* 2 — enhance or as-is (she asks aloud; these are the answer). */}
       {step === 'style' ? (
         <View style={styles.stage}>
-          <VenusBubble active speaking={false} size={96} />
+          {/* The REAL Eve glows through from the root behind this overlay — no stand-in orb. */}
+          <View style={styles.avatarWindow} />
           <ThemedText style={[styles.line, { color: p.ink }]}>“{idea}”</ThemedText>
           <ThemedText type="small" style={{ color: p.dim }}>on the {blank?.name}</ThemedText>
           <View style={styles.actions}>
@@ -289,7 +293,8 @@ export function EveDesign({
       {/* 3 — generating. */}
       {step === 'busy' ? (
         <View style={styles.stage}>
-          <VenusBubble active speaking size={120} />
+          {/* She's visible through the overlay; just the working indicator down here. */}
+          <View style={styles.avatarWindow} />
           <ActivityIndicator color="#dff4ff" />
         </View>
       ) : null}
@@ -365,8 +370,6 @@ export function EveDesign({
         </View>
       ) : null}
 
-      <EveCaptions />
-
       {step === 'error' ? (
         <View style={styles.stage}>
           <ThemedText type="code" style={styles.error} numberOfLines={3}>{error ?? 'Something went wrong.'}</ThemedText>
@@ -385,6 +388,8 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center' },
   eyebrow: { letterSpacing: 3 },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, marginVertical: Spacing.three },
+  // A see-through window where her real avatar (root GL, behind the overlay) reads as the subject.
+  avatarWindow: { width: 200, height: 200 },
   image: { width: '100%', height: '78%' },
   doneImage: { width: '60%', height: '50%' },
   line: { fontSize: 16, lineHeight: 22, fontFamily: 'Jost-Regular', textAlign: 'center' },

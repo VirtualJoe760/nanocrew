@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { subscribeEvePulse, type EvePulse } from '@/lib/eve-live-state-bus';
@@ -33,17 +32,20 @@ export function EveEar() {
   );
 }
 
-/** Her subtitles, pinned above the bottom edge. Absolute — mount it LAST inside a modal's root. */
+/** Her subtitles as a TOP BAND (Joe, 2026-08-17: bottom captions crowded the UI). The band
+ *  RESERVES its height whenever she's live — content below shifts down once and stays put, so
+ *  her words are always readable and never overlap controls. Mount FIRST in a surface's column. */
 export function EveCaptions() {
-  const insets = useSafeAreaInsets();
   const [pulse, setPulse] = useState<EvePulse>({ state: 'off', caption: '' });
   useEffect(() => subscribeEvePulse(setPulse), []);
-  if (pulse.state === 'off' || !pulse.caption.trim()) return null;
+  if ((pulse?.state ?? 'off') === 'off') return null; // she's not live — no band, no dead space
   return (
-    <View pointerEvents="none" style={[styles.captions, { bottom: insets.bottom + 12 }]}>
-      <ThemedText type="small" style={styles.captionText} numberOfLines={2}>
-        {pulse.caption}
-      </ThemedText>
+    <View pointerEvents="none" style={styles.captionBand}>
+      {pulse.caption.trim() ? (
+        <ThemedText type="small" style={styles.captionText} numberOfLines={2}>
+          {pulse.caption}
+        </ThemedText>
+      ) : null}
     </View>
   );
 }
@@ -52,6 +54,6 @@ const styles = StyleSheet.create({
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(12,16,22,0.85)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(124,199,223,0.4)' },
   dot: { width: 6, height: 6, borderRadius: 3 },
   text: { fontSize: 10, letterSpacing: 1 },
-  captions: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
-  captionText: { color: '#e8eef4', textAlign: 'center', backgroundColor: 'rgba(8,10,14,0.82)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, overflow: 'hidden' },
+  captionBand: { minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 4 },
+  captionText: { color: '#e8eef4', textAlign: 'center' },
 });

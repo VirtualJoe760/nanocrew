@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   const limited = await guardRate(`ai:${user.id}`, 60, 60);
   if (limited) return limited;
-  const body = (await req.json().catch(() => null)) as { prompt?: string; effort?: number } | null;
+  const body = (await req.json().catch(() => null)) as { prompt?: string; effort?: number; context?: { role?: string; text?: string }[] } | null;
   const prompt = body?.prompt?.trim();
   if (!prompt) return Response.json({ error: 'prompt required' }, { status: 400 });
   try {
@@ -25,6 +25,11 @@ export async function POST(req: Request) {
     throw e;
   }
   const effort = clampEffort(body?.effort);
+  // Recent spoken conversation (Eve + creator) — her accepted riffs become part of the design.
+  const context = (body?.context ?? [])
+    .slice(-10)
+    .map((m) => `${m.role === 'user' ? 'Creator' : 'Eve'}: ${String(m.text ?? '').slice(0, 240)}`)
+    .join('\n');
 
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });
@@ -40,7 +45,10 @@ export async function POST(req: Request) {
             {
               text:
                 `Expand this terse clothing-design idea into an image-generation prompt: ` +
-                `"${prompt}". Keep the same subject and intent where possible. ${enhanceGuidance(effort)} ` +
+                `"${prompt}". Keep the same subject and intent where possible. ` +
+                (context
+                  ? `They just talked it over with Eve — fold in the SPECIFIC creative directions from this conversation (details Eve suggested that the creator liked or didn't reject), not generic embellishment:\n${context}\n` : '') +
+                `${enhanceGuidance(effort)} ` +
                 `${GENERATABLE_GUIDANCE} ` +
                 'Reply with ONLY the enhanced prompt — no quotes, no preamble.',
             },
