@@ -237,10 +237,11 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
 - **Canvas:** node kinds — `design`, `template` (blank garment), `composition` (design-on-garment),
   `webslot` (a website-asset target), `group`. Pan/zoom, tap, box-select, blend. Auto-saves to
   `/api/canvas/:catalogueId`.
-- **Generate (FAB):** prompt or image, aspect ratio, **transparent/filled** (offered for BOTH
-  Design and Graphics modalities — a transparent PNG logo vs a filled hero/banner; only `Aa Text`
-  lettering is force-transparent), effort → `/api/generate` (Nano Banana; magenta chroma-key for
-  transparency).
+- **Generate (FAB):** a FULL-SCREEN panel (2026-08-18) — the top is a permanent PREVIEW window
+  (dashed placeholder → progress → the staged image / reference, large), the form below: prompt,
+  tool tiles, aspect ratio, **transparent/filled** (offered for BOTH Design and Graphics
+  modalities — a transparent PNG logo vs a filled hero/banner; only `Aa Text` lettering is
+  force-transparent), effort → `/api/generate` (Nano Banana; magenta chroma-key for transparency).
 - **Compose:** drag a design onto a blank → `/api/compositions` → `/api/composite`; **PlacementEditor**
   (2026-08-17 redesign, v3 same day) is a FULL-SCREEN, NO-SCROLL editor: one direct-manipulation
   hero fills the measured stage at the garment photo's true aspect (Printful template image + real
@@ -263,7 +264,9 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
 - **Dock (3 panels):** **Products** (the full Printful catalogue — `/api/blanks`, `/api/blank/:id/*`;
   browsed as large product cards — gender → type → product — with full, 2-line names so blanks read
   clearly), **Web assets** (the site's slots: hero / cover / logo), **Content**.
-- **Web assets:** the dock's Site-assets strip FIRST shows what's LIVE on the site (hero / logo /
+- **Web assets:** canvas web-slot nodes PREVIEW the live site asset (the hero slot shows the real
+  hero; icon placeholders are Ionicons — raw emoji drew missing-glyph "?" boxes, B17); the dock's
+  Site-assets strip FIRST shows what's LIVE on the site (hero / logo /
   social / sections via GET `/api/creator/site-assets`), then this session's generated graphics;
   drag a graphic onto a web-slot target → it "clicks together," assigns to the brand
   site (`/api/creator/site-assets` — a direct DB write to `stores.site_assets`), and the finished

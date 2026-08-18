@@ -1810,7 +1810,22 @@ function DesignScreen() {
       {/* Middle: the canvas */}
       <View style={styles.canvasWrap}>
         <DesignCanvas
-          nodes={nodes}
+          nodes={
+            liveAssets.length
+              ? nodes.map((n) => {
+                  if (n.kind !== 'webslot' || n.previewUrl) return n;
+                  const live =
+                    n.refId === 'hero'
+                      ? liveAssets.find((a) => a.slot === 'Hero')
+                      : n.refId === 'logo'
+                        ? liveAssets.find((a) => a.slot === 'Logo')
+                        : n.refId === 'og'
+                          ? liveAssets.find((a) => a.slot === 'Social')
+                          : undefined;
+                  return live ? { ...n, previewUrl: live.url } : n;
+                })
+              : nodes
+          }
           designs={designLookup}
           blanks={blankLookup}
           tool={tool}
@@ -2840,27 +2855,38 @@ function GenerateModal({
   };
 
   return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={close}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.modalBackdrop, { paddingTop: insets.top }]}>
-        <ThemedView type="background" style={styles.sheet}>
-          {/* Preview appears ONLY while generating / reviewing — no dead placeholder eating space
-              before there's anything to show, so the form gets the room and never needs scrolling. */}
-          {busy ? (
-            <View style={styles.previewPane}>
+    <Modal visible={open} animationType="slide" onRequestClose={close}>
+      <ThemedView
+        type="background"
+        style={[styles.genScreen, { paddingTop: insets.top + Spacing.two, paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.genKav}>
+          {/* FULL SCREEN with the top as a PERMANENT preview window (Joe, 2026-08-18: "take
+              advantage of as much screen real estate as possible, the top should be a preview
+              window of the image"). Empty → a quiet dashed frame; busy → progress; staged → the
+              image, large. */}
+          <View style={[styles.previewPane, !staged && !busy && !refImage ? { borderColor: theme.backgroundSelected, borderWidth: 1, borderStyle: 'dashed', backgroundColor: 'transparent' } : null]}>
+            {busy ? (
               <View style={styles.previewCenter}>
                 <ActivityIndicator color={theme.text} />
                 <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
                   Generating…
                 </ThemedText>
               </View>
-            </View>
-          ) : staged ? (
-            <View style={styles.previewPane}>
+            ) : staged ? (
               <Image source={{ uri: staged.url }} style={styles.previewImg} contentFit="contain" />
-            </View>
-          ) : null}
+            ) : refImage ? (
+              <Image source={{ uri: refImage }} style={styles.previewImg} contentFit="contain" />
+            ) : (
+              <View style={styles.previewCenter}>
+                <ThemedText type="code" themeColor="textSecondary" style={styles.previewEmpty}>
+                  PREVIEW
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.previewHint}>
+                  Your graphic appears here
+                </ThemedText>
+              </View>
+            )}
+          </View>
 
           <View style={styles.sheetHeader}>
             <ThemedText type="code" themeColor="textSecondary">
@@ -2945,9 +2971,8 @@ function GenerateModal({
 
               {refImage ? (
                 <View style={styles.refRow}>
-                  <Image source={{ uri: refImage }} style={styles.refThumb} contentFit="cover" />
                   <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-                    {prompt.trim() ? 'Used as a reference for your prompt.' : 'Will be added as-is.'}
+                    {prompt.trim() ? 'Reference image loaded (shown above).' : 'Will be added as-is (shown above).'}
                   </ThemedText>
                   <Pressable onPress={() => setRefImage(null)}>
                     <ThemedText type="small" themeColor="textSecondary">
@@ -3063,8 +3088,8 @@ function GenerateModal({
               </View>
             </Pressable>
           )}
-        </ThemedView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </ThemedView>
     </Modal>
   );
 }
@@ -3185,7 +3210,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   // The controls scroll independently so the Generate button is always reachable above the keyboard.
-  sheetScroll: { flexShrink: 1 },
+  sheetScroll: { flexGrow: 0, flexShrink: 1 },
   sheetScrollContent: { gap: Spacing.three, paddingBottom: Spacing.three },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   catChip: { paddingVertical: 2, paddingRight: Spacing.two },
@@ -3243,7 +3268,10 @@ const styles = StyleSheet.create({
   iconTile: { width: 66, height: 62, borderRadius: 14, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 4 },
   tileEmoji: { fontSize: 22, lineHeight: 24 },
   tileLabel: { fontSize: 9, letterSpacing: 0.2 },
-  previewPane: { height: 190, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.18)' },
+  genScreen: { flex: 1, paddingHorizontal: Spacing.four },
+  genKav: { flex: 1, gap: Spacing.three },
+  previewPane: { flex: 1, minHeight: 150, borderRadius: 14, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.18)' },
+  previewEmpty: { fontSize: 10, letterSpacing: 2 },
   previewCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
   previewImg: { flex: 1, width: '100%' },
   previewHint: { textAlign: 'center', marginTop: Spacing.two },

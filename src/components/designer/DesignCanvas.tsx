@@ -12,6 +12,7 @@ import Animated, {
   ZoomIn,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Pattern, Rect } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 
 import { DesignTile } from '@/components/design-tile';
 import { ThemedText } from '@/components/themed-text';
@@ -284,7 +285,7 @@ function NodeView({
               ) : blank?.image ? (
                 <Image source={{ uri: blank.image }} style={styles.thumbFill} contentFit="contain" />
               ) : (
-                <Text style={styles.glyph}>👕</Text>
+                <Ionicons name="shirt-outline" size={44} color={theme.textSecondary} />
               )}
             </View>
             <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
@@ -297,7 +298,7 @@ function NodeView({
               {node.previewUrl ? (
                 <Image source={{ uri: node.previewUrl }} style={styles.thumbFill} contentFit="cover" />
               ) : (
-                <Text style={styles.glyph}>🌐</Text>
+                <Ionicons name="globe-outline" size={44} color={theme.textSecondary} />
               )}
             </View>
             <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
@@ -314,7 +315,7 @@ function NodeView({
                   contentFit="contain"
                 />
               ) : (
-                <Text style={styles.glyph}>👕</Text>
+                <Ionicons name="shirt-outline" size={44} color={theme.textSecondary} />
               )}
             </View>
             <ThemedText
@@ -831,7 +832,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   thumbFill: { width: '100%', height: '100%' },
-  glyph: { fontSize: 60 },
   renderingWrap: { alignItems: 'center', gap: Spacing.one },
   removeBadge: {
     position: 'absolute',
