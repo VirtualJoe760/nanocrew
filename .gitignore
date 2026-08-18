@@ -47,3 +47,4 @@ example
 # studio-flow rendered prompts (local review only)
 scripts/studio-flow/out/
 .vercel
+local-logs/

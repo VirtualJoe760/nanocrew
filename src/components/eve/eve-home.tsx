@@ -253,8 +253,28 @@ export function EveHome({
     publishEvePulse({ state: talking ? live.state : 'off', caption: live.venusText });
   }, [talking, live.state, live.venusText]);
   const loggedTurns = useRef(0);
+  const convoSession = useRef<{ id: string; startedAt: string } | null>(null);
+  useEffect(() => {
+    if (talking && !convoSession.current) {
+      convoSession.current = { id: Math.random().toString(36).slice(2, 10), startedAt: new Date().toISOString() };
+    }
+    if (!talking) convoSession.current = null;
+  }, [talking]);
   useEffect(() => {
     publishTranscript(live.messages.map((m) => ({ role: m.role, text: m.text })));
+    // DEV: persist the whole conversation as JSON (local-logs/conversation_NNNN.json) so the dev
+    // agent can read it verbatim and tune her responses (Joe, 2026-08-17).
+    if (__DEV__ && convoSession.current && live.messages.length) {
+      void fetch(apiUrl('/api/dev/log-conversation'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: convoSession.current.id,
+          startedAt: convoSession.current.startedAt,
+          messages: live.messages.map((m) => ({ role: m.role, text: m.text })),
+        }),
+      }).catch(() => {});
+    }
     // DEV: stream committed turns to Metro so the dev agent can read the conversation verbatim
     // (Joe, 2026-08-17 — transcripts lived only in memory; debugging her behaviour needs them).
     if (__DEV__) {

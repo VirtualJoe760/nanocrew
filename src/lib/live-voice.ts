@@ -463,7 +463,18 @@ export class LiveVoiceSession {
         },
         onclose: (e: CloseEvent) => {
           console.warn('[live] ws close', e?.code, e?.reason);
-          if (!this.closed) this.cb.onState?.('idle');
+          if (this.closed) return;
+          // She must not silently die mid-conversation (Joe, 2026-08-17): one automatic
+          // reconnect, no re-greeting, transcript intact. Repeated failures surface as idle.
+          if (this.reconnects < 1) {
+            this.reconnects++;
+            console.warn('[live] unexpected close → reconnecting');
+            this.session = null;
+            this.greetOnOpen = false;
+            void this.start().catch(() => this.cb.onState?.('idle'));
+            return;
+          }
+          this.cb.onState?.('idle');
         },
       },
       config: {
@@ -607,6 +618,14 @@ export class LiveVoiceSession {
       this.curVenus += sc.outputTranscription.text;
       this.cb.onVenusTranscript?.(this.curVenus);
     }
+    if (sc?.turnComplete && this.pendingPrompt) {
+      const t = this.pendingPrompt;
+      this.pendingPrompt = null;
+      try {
+        this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
+        this.cb.onState?.('thinking');
+      } catch { /* best-effort */ }
+    }
     if (sc?.turnComplete) {
       if (this.curVenus.trim()) {
         this.transcript.push({ role: 'assistant', text: this.curVenus.trim() });
@@ -663,9 +682,18 @@ export class LiveVoiceSession {
    *  Unlike sendText it leaves no trace in the visible transcript — the creator hears her ask,
    *  they never see the stage direction. This is what the wheel's ask-spokes use; sendContext
    *  (below) can never voice anything, which is exactly why it exists and why this also must. */
+  private pendingPrompt: string | null = null;
+  private reconnects = 0;
   prompt(text: string) {
     const t = text.trim();
     if (!t) return;
+    // NEVER barge in while the creator is mid-sentence: a completed turn sent during their speech
+    // commits/cancels their in-flight utterance (the "she died when the picker opened" bug —
+    // 2026-08-17, Joe was mid-sentence when a surface cue fired). Defer to their turn's end.
+    if (this.userTurnActive) {
+      this.pendingPrompt = t;
+      return;
+    }
     try {
       this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
       this.cb.onState?.('thinking');
