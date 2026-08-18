@@ -612,14 +612,15 @@ export class LiveVoiceSession {
         console.warn('[live] audio enqueue failed', e instanceof Error ? e.message : e);
       }
     }
-    // Your speech: first fragment of a NEW user turn clears the old exchange (her last reply + your
-    // last line); subsequent fragments accumulate within the turn. Emit the full current utterance.
+    // Your speech: first fragment of a NEW user turn resets the accumulators, but her LAST LINE
+    // STAYS ON SCREEN (Joe, 2026-08-18: mic noise/echo fired this instantly, so subtitles vanished
+    // before they could be read — the "you >" line carries the user's words; her caption is only
+    // replaced when her NEXT reply starts streaming).
     if (sc?.inputTranscription?.text) {
       if (!this.userTurnActive) {
         this.userTurnActive = true;
         this.curUser = '';
         this.curVenus = '';
-        this.cb.onVenusTranscript?.('');
       }
       this.curUser += sc.inputTranscription.text;
       this.cb.onUserTranscript?.(this.curUser);

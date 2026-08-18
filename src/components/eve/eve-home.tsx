@@ -57,7 +57,7 @@ const AI_NAME = 'Eve';
 
 // How far Eve is dimmed behind each kind of surface. She is the app's background, so the only
 // question is how much reading the thing in front of her demands.
-const REST_SCRIM = 'rgba(6,8,12,0.30)'; // captions over her — she still reads as the page
+const REST_SCRIM = 'rgba(6,8,12,0.14)'; // barely-there — she's never dim (Joe, 2026-08-18)
 const READ_SCRIM = 'rgba(6,8,12,0.82)'; // forms + long copy (brand review) — her net must not compete
 
 type StoreLite = { name: string; slug: string; status: string; deploymentUrl?: string | null; customDomain?: string | null };
@@ -576,6 +576,9 @@ export function EveHome({
       setTalking(false);
       setPaused(false);
       pausedRef.current = false;
+      // A brandless interview that just ended returns to the guide — the NEW spoke re-arms it
+      // deliberately; nothing else should stay stuck in interview state (Joe, 2026-08-18: dim).
+      if (view === 'interview' && !brand) setView('guide');
       return;
     }
     const granted = await ensureMic();
@@ -665,7 +668,7 @@ export function EveHome({
 
 
   // Surfaces that are read and typed into rather than glanced at — they get the deep scrim.
-  const dense = !!brand || (view === 'interview' && !keyboardMode);
+  const dense = !!brand || keyboardMode;
 
   // The state pill — the one place her state is always legible. Silent is the resting state and
   // reads as such; everything else is a live session doing something.
@@ -899,6 +902,38 @@ export function EveHome({
         </GestureDetector>
       ) : null}
 
+      {/* SUBTITLES — one absolute overlay pinned above the tab bar (guide + voice interview).
+          Explicit colours; nothing in the flex column can squeeze or hide it. */}
+      {session && !brand && !keyboardMode && (view === 'guide' || view === 'interview') ? (
+        <View
+          pointerEvents="none"
+          style={[styles.subsOverlay, { bottom: BottomTabInset + insets.bottom + Spacing.four }]}>
+          {talking || line ? (
+            <>
+              {heard ? (
+                <ThemedText type="code" style={styles.subsHeard} numberOfLines={2}>
+                  {'you > ' + heard}
+                </ThemedText>
+              ) : null}
+              {line ? (
+                <ThemedText style={styles.subsLine} numberOfLines={4}>
+                  {line}
+                </ThemedText>
+              ) : null}
+            </>
+          ) : view === 'guide' && meResolved ? (
+            <>
+              <ThemedText style={styles.subsLine} numberOfLines={2}>
+                {micOk === false ? `${AI_NAME} can’t hear you` : `Tap to talk to ${AI_NAME}`}
+              </ThemedText>
+              <ThemedText type="code" style={styles.subsRest}>
+                {micOk === false ? 'TYPE INSTEAD, OR ENABLE THE MIC IN SETTINGS' : 'SHE STAYS QUIET UNTIL YOU DO'}
+              </ThemedText>
+            </>
+          ) : null}
+        </View>
+      ) : null}
+
       {/* THE WHEEL — above her and the scrim, below the modals. Purely presentational: the gesture
           owns the selection, this draws it. */}
       {wheel ? (
@@ -1011,58 +1046,13 @@ export function EveHome({
           // thumb, not tucked under the status bar (D-23 is P1, this is the half of it the new
           // silent copy needs). A CTA sits below it.
           <View pointerEvents="box-none" style={styles.guideView}>
-            <View style={styles.subsLower}>
-              {talking ? (
-                <>
-                  {heard ? (
-                    <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
-                      {'you > ' + heard}
-                    </ThemedText>
-                  ) : null}
-                  {/* ONLY her actual words (Joe, 2026-08-17). `line` mirrors live.venusText — the
-                      real transcript — and it used to fall back to guidance.greeting or an ellipsis
-                      while the socket was still connecting, so the caption showed a canned line she
-                      never said. Nothing is a truer caption than nothing; the state pill already
-                      says CONNECTING / THINKING, so the surface isn't silent about what's going on. */}
-                  {line ? (
-                    <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
-                      {line}
-                    </ThemedText>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={2}>
-                    {micOk === false ? `${AI_NAME} can’t hear you` : `Tap to talk to ${AI_NAME}`}
-                  </ThemedText>
-                  <ThemedText type="code" style={[styles.restSub, { color: p.faint }]}>
-                    {micOk === false ? 'TYPE INSTEAD, OR ENABLE THE MIC IN SETTINGS' : 'SHE STAYS QUIET UNTIL YOU DO'}
-                  </ThemedText>
-                </>
-              )}
-            </View>
-            {/* Both CTAs are gone (Joe, 2026-08-17). "Build your brand" did exactly what tapping
-                her does, and the digest button was the badly-placed one he flagged on day one —
-                both are wheel spokes now, so the surface under her stays clear. */}
+            {/* Captions moved to the ABSOLUTE overlay at the root (2026-08-18): the in-flow lower
+                third proved fragile — state updated, pixels didn't. The overlay can't be squeezed. */}
           </View>
           )
         ) : keyboardMode ? null : (
           <View pointerEvents="box-none" style={styles.guideView}>
-            {/* Voice-pure interview (Joe, 2026-08-18): no topic checklist, no pause chrome — just
-                her words in the lower third, exactly like the guide view. The wheel is the tools. */}
-            <View style={styles.subsLower}>
-              {heard ? (
-                <ThemedText type="code" style={[styles.heard, { color: p.dim }]} numberOfLines={2}>
-                  {'you > ' + heard}
-                </ThemedText>
-              ) : null}
-              {line ? (
-                <ThemedText style={[styles.line, { color: p.ink }]} numberOfLines={3}>
-                  {line}
-                </ThemedText>
-              ) : null}
-              {live.finalizing ? <ActivityIndicator color={p.accent} style={{ marginTop: Spacing.two }} /> : null}
-            </View>
+            {live.finalizing ? <ActivityIndicator color={p.accent} style={{ marginTop: Spacing.two, alignSelf: 'center' }} /> : null}
           </View>
         )}
 
@@ -1151,6 +1141,10 @@ const styles = StyleSheet.create({
   // lines stream in.
   guideView: { flex: 1, justifyContent: 'flex-end' },
   subsLower: { alignItems: 'center', gap: Spacing.two, minHeight: 96, justifyContent: 'flex-end', marginBottom: Spacing.five },
+  subsOverlay: { position: 'absolute', left: Spacing.four, right: Spacing.four, alignItems: 'center', gap: Spacing.two, zIndex: 40 },
+  subsHeard: { color: '#8a8f99', fontSize: 12, textAlign: 'center' },
+  subsLine: { color: '#f2f4f8', textAlign: 'center', fontSize: 16, lineHeight: 23, fontFamily: 'Jost-Regular' },
+  subsRest: { color: '#6b6f78', fontSize: 10.5, letterSpacing: 1.6, textAlign: 'center' },
   restSub: { fontSize: 10.5, letterSpacing: 1.4, textAlign: 'center' },
 
   entityArea: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.four },
