@@ -8,8 +8,9 @@
 //   home       — her steady state: full-screen orb, greeting + tools, the brand interview
 //   developing — site-editing UI (Phase B)
 //   design     — hands-free design view/edit (Phase C)
+//   assets     — hands-free WEBSITE-graphic flow (the ASSETS spoke; hero/logo/social)
 
-export type EveState = 'hidden' | 'home' | 'developing' | 'design';
+export type EveState = 'hidden' | 'home' | 'developing' | 'design' | 'assets';
 
 export type EveSummon = {
   state: Exclude<EveState, 'hidden'>;

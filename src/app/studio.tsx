@@ -13,6 +13,7 @@ import { EVE_SCRIM, withScreenFade } from '@/components/screen-fade';
 import { glow } from '@/constants/glow';
 
 import { BrandDeck } from '@/components/eve/brand-deck';
+import { EveAssets } from '@/components/eve/eve-assets';
 import { EveDesign } from '@/components/eve/eve-design';
 import { EveDeveloping } from '@/components/eve/eve-developing';
 import { EveGlyph } from '@/components/eve/eve-glyph';
@@ -344,6 +345,24 @@ function StudioScreen() {
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.designScrim]} />
           <EveDesign
             idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
+            onExit={() => setEve(null)}
+          />
+        </View>
+      ) : null}
+
+      {/* SITE ASSETS — the ASSETS spoke's surface, same shape as DESIGN: she spawns it over
+          herself, stays live underneath, and the graphic lands straight on the website. */}
+      {session && eve?.state === 'assets' ? (
+        <View style={StyleSheet.absoluteFill}>
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.designScrim]} />
+          <EveAssets
+            idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
+            slot={
+              eve.payload?.slot === 'hero' || eve.payload?.slot === 'logo' || eve.payload?.slot === 'og'
+                ? eve.payload.slot
+                : undefined
+            }
+            storeSlug={typeof eve.payload?.storeSlug === 'string' ? eve.payload.storeSlug : undefined}
             onExit={() => setEve(null)}
           />
         </View>

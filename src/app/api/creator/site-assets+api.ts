@@ -22,6 +22,42 @@ type Slot = 'hero' | 'heroVideo' | 'heroPoster' | 'logo' | 'cover' | 'og';
 const SLOTS: Slot[] = ['hero', 'heroVideo', 'heroPoster', 'logo', 'cover', 'og'];
 const isSection = (s: string) => /^section:[a-z0-9_-]{1,40}$/i.test(s);
 
+// GET /api/creator/site-assets?storeSlug=… — the CURRENT live assets, so surfaces (the Design
+// tab's Site-assets dock, Eve's asset flow) can SHOW what's on the site (Joe, 2026-08-18: the
+// dock said "No graphics yet" while the site plainly had a hero and logo).
+export async function GET(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const slug = new URL(req.url).searchParams.get('storeSlug');
+  if (!slug) return Response.json({ error: 'storeSlug required' }, { status: 400 });
+  try {
+    const owned = await storeForMember(slug, user.id);
+    if (!owned) return Response.json({ error: 'not found' }, { status: 404 });
+    const [store] = await db
+      .select({ logoUrl: schema.stores.logoUrl, siteAssets: schema.stores.siteAssets })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, owned.id))
+      .limit(1);
+    const sa = (store?.siteAssets ?? {}) as {
+      hero?: { imageUrl?: string | null; videoUrl?: string | null; poster?: string | null };
+      og?: string;
+      sections?: Record<string, string>;
+    };
+    return Response.json({
+      assets: {
+        hero: sa.hero?.imageUrl ?? null,
+        heroVideo: sa.hero?.videoUrl ?? null,
+        og: sa.og ?? null,
+        logo: store?.logoUrl ?? null,
+        sections: sa.sections ?? {},
+      },
+    });
+  } catch (e) {
+    const status = e instanceof TenantError ? e.status : 500;
+    return Response.json({ error: e instanceof Error ? e.message : 'Failed' }, { status });
+  }
+}
+
 export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });

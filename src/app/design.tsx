@@ -469,6 +469,33 @@ function DesignScreen() {
   const [assetMode, setAssetMode] = useState(false);
   const assetModeRef = useRef(false);
   assetModeRef.current = assetMode;
+  // The site's CURRENT assets (hero / logo / social / sections) — shown in the Site-assets dock
+  // so it reflects what's LIVE, not just this session's generations (Joe, 2026-08-18: the dock
+  // said "No graphics yet" while the site plainly had graphics).
+  const [liveAssets, setLiveAssets] = useState<{ slot: string; url: string }[]>([]);
+  useEffect(() => {
+    const slug = brand?.slug;
+    if (!assetMode || !slug) {
+      setLiveAssets([]);
+      return;
+    }
+    let alive = true;
+    apiFetch(`/api/creator/site-assets?storeSlug=${encodeURIComponent(slug)}`)
+      .then(readJson<{ assets?: { hero?: string | null; og?: string | null; logo?: string | null; sections?: Record<string, string> } }>)
+      .then((d) => {
+        if (!alive || !d.assets) return;
+        const list: { slot: string; url: string }[] = [];
+        if (d.assets.hero) list.push({ slot: 'Hero', url: d.assets.hero });
+        if (d.assets.logo) list.push({ slot: 'Logo', url: d.assets.logo });
+        if (d.assets.og) list.push({ slot: 'Social', url: d.assets.og });
+        for (const [k, url] of Object.entries(d.assets.sections ?? {})) list.push({ slot: k, url });
+        setLiveAssets(list);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [assetMode, brand?.slug]);
   const [blanks, setBlanks] = useState<CatalogBlank[]>([]);
   const [blanksLoading, setBlanksLoading] = useState(true);
   const [blanksError, setBlanksError] = useState(false); // catalogue failed to load (vs. genuinely empty)
@@ -1883,11 +1910,27 @@ function DesignScreen() {
               )}
             </View>
 
+            {/* What's LIVE on the site right now — always visible in asset mode. */}
+            {assetMode && liveAssets.length ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dockStrip}>
+                {liveAssets.map((a) => (
+                  <View key={`${a.slot}:${a.url}`} style={styles.liveAssetItem}>
+                    <Image source={{ uri: a.url }} style={[styles.designThumb, { backgroundColor: theme.backgroundElement }]} contentFit="cover" />
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.liveAssetLabel} numberOfLines={1}>
+                      ● {a.slot}
+                    </ThemedText>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+
             {/* The designs strip — tap to drop on a product, long-press to assign to the site / delete. */}
             {designs.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.dockHint}>
-                {assetMode ? 'No graphics yet — tap Generate' : 'No designs yet — tap Generate'}
-              </ThemedText>
+              assetMode && liveAssets.length ? null : (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.dockHint}>
+                  {assetMode ? 'No graphics yet — tap Generate' : 'No designs yet — tap Generate'}
+                </ThemedText>
+              )
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dockStrip}>
                 {designs.map((d) =>
@@ -3211,6 +3254,8 @@ const styles = StyleSheet.create({
   dockStrip: { gap: Spacing.two, alignItems: 'center', paddingHorizontal: Spacing.three },
   dockHint: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   designThumb: { width: 78, height: 78, borderRadius: Spacing.three },
+  liveAssetItem: { alignItems: 'center', gap: 2 },
+  liveAssetLabel: { fontSize: 10, maxWidth: 78 },
   designThumbPending: { alignItems: 'center', justifyContent: 'center' },
   emptyBrand: { gap: Spacing.three, paddingVertical: Spacing.three },
   // Setup sheet (brand / collection)

@@ -263,7 +263,9 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
 - **Dock (3 panels):** **Products** (the full Printful catalogue — `/api/blanks`, `/api/blank/:id/*`;
   browsed as large product cards — gender → type → product — with full, 2-line names so blanks read
   clearly), **Web assets** (the site's slots: hero / cover / logo), **Content**.
-- **Web assets:** drag a graphic onto a web-slot target → it "clicks together," assigns to the brand
+- **Web assets:** the dock's Site-assets strip FIRST shows what's LIVE on the site (hero / logo /
+  social / sections via GET `/api/creator/site-assets`), then this session's generated graphics;
+  drag a graphic onto a web-slot target → it "clicks together," assigns to the brand
   site (`/api/creator/site-assets` — a direct DB write to `stores.site_assets`), and the finished
   group then **clears off the canvas** (the asset is saved; nothing lingers). Slots that haven't been
   filled stay; finished ones are also stripped on load.

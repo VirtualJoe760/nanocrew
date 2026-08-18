@@ -43,6 +43,7 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | POST | `/api/designs` | bearer | Persist an uploaded image as a design. |
 | DELETE | `/api/designs/:id` | bearer | Delete a design. |
 | POST | `/api/compositions` | bearer | Create a design-on-garment composition row. |
+| GET | `/api/creator/site-assets?storeSlug=` | bearer | The CURRENT live site assets ({hero, heroVideo, og, logo, sections}) — read by the Design tab's Site-assets dock and Eve's asset flow. |
 | POST | `/api/creator/color-mockups` | bearer | Per-COLOUR Printful mockup shots for the pricing page — one generator task, one variant per colourway, preferring the product's photographed on-model style (`Men's`/`Women's`) over flat. Free (Printful generator, not paid AI). |
 | GET/PATCH/DELETE | `/api/compositions/:id` | bearer | Read / update / delete a composition. PATCH also accepts `placements[]` — the PlacementEditor autosaves (debounced) as the creator drags, server-clamped and design-ownership-scoped, so publish never falls back to the default placement. |
 | GET | `/api/creator/margins` | bearer | Per-product retail / Printful cost / margin% + average. |

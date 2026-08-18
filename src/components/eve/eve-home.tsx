@@ -335,6 +335,7 @@ export function EveHome({
 
   /** Eve just asked what they'd like designed — the next user turn is (probably) the idea. */
   const awaitDesignIdea = useRef(false);
+  const awaitAssetIdea = useRef(false);
   /** One-shot greeting override for the NEXT session open (a spoke that wants her first line to be
    *  its own ask — e.g. DESIGN — instead of the general hello). Consumed by the gate effect. */
   const pendingGreeting = useRef<string | undefined>(undefined);
@@ -369,6 +370,8 @@ export function EveHome({
       // dropped by the router's precision bias. Consumed here whatever the router decides.
       const awaiting = awaitDesignIdea.current;
       awaitDesignIdea.current = false;
+      const awaitingAsset = awaitAssetIdea.current;
+      awaitAssetIdea.current = false;
       try {
         const r = await fetch(apiUrl('/api/eve/route'), {
           method: 'POST',
@@ -379,6 +382,7 @@ export function EveHome({
             stores: stores.map((s) => ({ name: s.name, slug: s.slug, hasSite: !!siteUrlFor(s) })),
             interviewActive: viewRef.current === 'interview',
             awaitingDesignIdea: awaiting,
+            awaitingAssetIdea: awaitingAsset,
           }),
         });
         const d = (await r.json().catch(() => ({}))) as {
@@ -433,6 +437,21 @@ export function EveHome({
               );
             }
             return;
+          case 'site-asset': {
+            const dd = d as { idea?: string; slot?: 'hero' | 'logo' | 'og'; storeSlug?: string };
+            if (dd.idea) {
+              onGo({
+                state: 'assets',
+                payload: { idea: dd.idea, slot: dd.slot, storeSlug: dd.storeSlug ?? stores[0]?.slug },
+              });
+            } else {
+              awaitAssetIdea.current = true;
+              live.prompt(
+                "(They want a website graphic but haven't said what — in one short sentence, ask what it should be and for which spot: hero, logo, or social card.)",
+              );
+            }
+            return;
+          }
           case 'write-post':
             live.sendContext(
               '(Writing posts by voice lands soon — in one sentence, tell them they can write posts from the Studio composer for now.)',
@@ -690,9 +709,20 @@ export function EveHome({
         case 'digest':
           void openDigest();
           return;
-        case 'assets':
-          router.push('/design?panel=web');
+        case 'assets': {
+          // Voice-first like DESIGN (Joe, 2026-08-18): she stays home and ASKS; the answer routes
+          // back as site-asset{idea,slot} → EveAssets opens generating. No Design-tab redirect.
+          const askAssets =
+            "(They picked SITE ASSETS on your wheel — they want a graphic for their website. In ONE short sentence, ask what to make and for which spot: the hero banner, the logo, or the social card. Nothing else.)";
+          awaitAssetIdea.current = true;
+          if (talking) {
+            live.prompt(askAssets);
+          } else {
+            pendingGreeting.current = askAssets;
+            void toggleTalk();
+          }
           return;
+        }
         case 'site': {
           // The Your-Brands deck (Joe, 2026-08-17): pick the brand FIRST, then its Console
           // (Edit site · Posts · Sell · Settings) via the deck's edit action — not Eve's voice-edit
