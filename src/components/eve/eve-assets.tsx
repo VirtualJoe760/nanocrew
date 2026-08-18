@@ -23,10 +23,11 @@ import { showEve } from '@/lib/eve-vision-bus';
 
 const BG = '#08080a';
 
-type SlotKey = 'hero' | 'logo' | 'og';
+type SlotKey = 'hero' | 'logo' | 'mark' | 'og';
 const SLOTS: Record<SlotKey, { label: string; desc: string; aspectRatio: string; background: 'transparent' | 'filled' }> = {
   hero: { label: 'Website hero', desc: 'the big image at the top of the site', aspectRatio: '16:9', background: 'filled' },
-  logo: { label: 'Logo', desc: 'the brand mark (header + footer)', aspectRatio: '1:1', background: 'transparent' },
+  logo: { label: 'Wordmark', desc: 'the wide logo (header + footer)', aspectRatio: '16:9', background: 'transparent' },
+  mark: { label: 'App icon', desc: 'the square mark — favicon, app tile, avatar', aspectRatio: '1:1', background: 'transparent' },
   og: { label: 'Social card', desc: 'the preview card when the site is shared', aspectRatio: '16:9', background: 'filled' },
 };
 
@@ -99,7 +100,7 @@ export function EveAssets({
     sayEve(
       slotProp
         ? `(Their site-graphic surface just opened for the ${SLOTS[slotProp].label.toLowerCase()} — in ONE short sentence, ask if you should enhance the idea first or make it exactly as said.)`
-        : '(Their site-graphic surface just opened — in ONE short sentence, ask which spot this is for: the hero banner, the logo, or the social card.)',
+        : '(Their site-graphic surface just opened — in ONE short sentence, ask which spot this is for: the hero banner, the wordmark, the app icon, or the social card.)',
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

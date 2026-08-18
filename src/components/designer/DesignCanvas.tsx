@@ -25,7 +25,8 @@ const IS_WEB = Platform.OS === 'web';
 // Website-slot target nodes (drop a design on one to set it as that site asset).
 export const WEB_SLOT_LABELS: Record<string, string> = {
   hero: 'Website hero',
-  logo: 'Logo',
+  logo: 'Wordmark',
+  mark: 'App icon',
   cover: 'Collection cover',
   og: 'Social image',
 };
@@ -296,7 +297,11 @@ function NodeView({
           <>
             <View style={[styles.thumb, { backgroundColor: theme.backgroundElement }]}>
               {node.previewUrl ? (
-                <Image source={{ uri: node.previewUrl }} style={styles.thumbFill} contentFit="cover" />
+                <Image
+                  source={{ uri: node.previewUrl }}
+                  style={styles.thumbFill}
+                  contentFit={node.refId === 'logo' || node.refId === 'mark' ? 'contain' : 'cover'}
+                />
               ) : (
                 <Ionicons name="globe-outline" size={44} color={theme.textSecondary} />
               )}

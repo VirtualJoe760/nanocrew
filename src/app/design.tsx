@@ -472,7 +472,7 @@ function DesignScreen() {
   // The site's CURRENT assets (hero / logo / social / sections) — shown in the Site-assets dock
   // so it reflects what's LIVE, not just this session's generations (Joe, 2026-08-18: the dock
   // said "No graphics yet" while the site plainly had graphics).
-  const [liveAssets, setLiveAssets] = useState<{ slot: string; url: string }[]>([]);
+  const [liveAssets, setLiveAssets] = useState<{ slot: string; url: string; fit?: 'contain' | 'cover' }[]>([]);
   useEffect(() => {
     const slug = brand?.slug;
     if (!assetMode || !slug) {
@@ -481,12 +481,26 @@ function DesignScreen() {
     }
     let alive = true;
     apiFetch(`/api/creator/site-assets?storeSlug=${encodeURIComponent(slug)}`)
-      .then(readJson<{ assets?: { hero?: string | null; og?: string | null; logo?: string | null; sections?: Record<string, string> } }>)
+      .then(readJson<{
+        assets?: {
+          hero?: string | null;
+          og?: string | null;
+          logo?: string | null;
+          logoKit?: { wordmark?: string | null; mark?: string | null; appTile?: string | null; favicon?: string | null } | null;
+          sections?: Record<string, string>;
+        };
+      }>)
       .then((d) => {
         if (!alive || !d.assets) return;
-        const list: { slot: string; url: string }[] = [];
+        const kit = d.assets.logoKit;
+        const list: { slot: string; url: string; fit?: 'contain' | 'cover' }[] = [];
         if (d.assets.hero) list.push({ slot: 'Hero', url: d.assets.hero });
-        if (d.assets.logo) list.push({ slot: 'Logo', url: d.assets.logo });
+        // The identity set: the wide wordmark (contain — cover-cropping mushed it) and the SQUARE
+        // faces, led by the app tile (Joe, 2026-08-18: "the logo icon should use the app icon").
+        const wordmark = kit?.wordmark ?? d.assets.logo;
+        if (wordmark) list.push({ slot: 'Wordmark', url: wordmark, fit: 'contain' });
+        if (kit?.appTile) list.push({ slot: 'App icon', url: kit.appTile });
+        else if (kit?.mark) list.push({ slot: 'App icon', url: kit.mark, fit: 'contain' });
         if (d.assets.og) list.push({ slot: 'Social', url: d.assets.og });
         for (const [k, url] of Object.entries(d.assets.sections ?? {})) list.push({ slot: k, url });
         setLiveAssets(list);
@@ -954,7 +968,7 @@ function DesignScreen() {
 
   // Assign a hosted graphic to a website slot (hero / collection cover / logo) — a direct DB write
   // that overrides the storefront placeholder, then revalidates the live site.
-  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo' | 'og') => {
+  const assignToSite = async (url: string | undefined, slot: 'hero' | 'cover' | 'logo' | 'mark' | 'og') => {
     const catId = catalogueRef.current?.id;
     const slug = brandRef.current?.slug;
     if (!url || !url.startsWith('http')) return;
@@ -983,8 +997,10 @@ function DesignScreen() {
         slot === 'hero'
           ? 'Set as your website hero — your site is updating.'
           : slot === 'logo'
-            ? 'Set as your brand logo.'
-            : slot === 'og'
+            ? 'Set as your wordmark — the full logo kit re-derived.'
+            : slot === 'mark'
+              ? 'Set as your app icon — favicon and app tile re-derived.'
+              : slot === 'og'
               ? 'Set as your social-share image — used when your site is shared.'
               : 'Set as this collection’s cover.',
       );
@@ -992,7 +1008,7 @@ function DesignScreen() {
       Alert.alert('Could not assign', e instanceof Error ? e.message : 'Try again.');
     }
   };
-  const assignDesign = (d: Design, slot: 'hero' | 'cover' | 'logo' | 'og') => void assignToSite(d.image, slot);
+  const assignDesign = (d: Design, slot: 'hero' | 'cover' | 'logo' | 'mark' | 'og') => void assignToSite(d.image, slot);
 
   // Long-press a graphic → assign it to the website or remove it.
   const openDesignActions = (d: Design) => {
@@ -1007,7 +1023,8 @@ function DesignScreen() {
               { text: 'Set as website hero', onPress: () => void assignDesign(d, 'hero') },
               // Cover belongs to a product collection — only offer it in a real collection (not Site assets).
               ...(catalogueRef.current && !assetModeRef.current ? [{ text: 'Set as collection cover', onPress: () => void assignDesign(d, 'cover') }] : []),
-              { text: 'Set as logo', onPress: () => void assignDesign(d, 'logo') },
+              { text: 'Set as wordmark (logo)', onPress: () => void assignDesign(d, 'logo') },
+              { text: 'Set as app icon', onPress: () => void assignDesign(d, 'mark') },
               { text: 'Set as social image', onPress: () => void assignDesign(d, 'og') },
             ]
           : []),
@@ -1818,10 +1835,12 @@ function DesignScreen() {
                     n.refId === 'hero'
                       ? liveAssets.find((a) => a.slot === 'Hero')
                       : n.refId === 'logo'
-                        ? liveAssets.find((a) => a.slot === 'Logo')
-                        : n.refId === 'og'
-                          ? liveAssets.find((a) => a.slot === 'Social')
-                          : undefined;
+                        ? liveAssets.find((a) => a.slot === 'Wordmark')
+                        : n.refId === 'mark'
+                          ? liveAssets.find((a) => a.slot === 'App icon')
+                          : n.refId === 'og'
+                            ? liveAssets.find((a) => a.slot === 'Social')
+                            : undefined;
                   return live ? { ...n, previewUrl: live.url } : n;
                 })
               : nodes
@@ -1930,7 +1949,7 @@ function DesignScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dockStrip}>
                 {liveAssets.map((a) => (
                   <View key={`${a.slot}:${a.url}`} style={styles.liveAssetItem}>
-                    <Image source={{ uri: a.url }} style={[styles.designThumb, { backgroundColor: theme.backgroundElement }]} contentFit="cover" />
+                    <Image source={{ uri: a.url }} style={[styles.designThumb, { backgroundColor: theme.backgroundElement }]} contentFit={a.fit ?? 'cover'} />
                     <ThemedText type="small" themeColor="textSecondary" style={styles.liveAssetLabel} numberOfLines={1}>
                       ● {a.slot}
                     </ThemedText>

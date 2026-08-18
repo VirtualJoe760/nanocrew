@@ -5,14 +5,15 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { DOCK_TAB_CLEARANCE } from '@/components/designer/TemplatesDock';
 
-export type WebSlot = 'hero' | 'logo' | 'cover' | 'og';
+export type WebSlot = 'hero' | 'logo' | 'mark' | 'cover' | 'og';
 
 // The website spots that can hold a creator-generated graphic. These map 1:1 to the
 // /api/creator/site-assets slots; connecting a design to one overrides the template placeholder.
 // (Hero video lives under Content; section slots come later.)
 const SLOTS: { slot: WebSlot; label: string; hint: string }[] = [
   { slot: 'hero', label: 'Website hero', hint: 'The big image at the top of your site' },
-  { slot: 'logo', label: 'Logo', hint: 'Your brand mark (header + footer)' },
+  { slot: 'logo', label: 'Wordmark', hint: 'Your wide logo (header + footer)' },
+  { slot: 'mark', label: 'App icon', hint: 'The square mark — favicon, app tile, avatar' },
   { slot: 'cover', label: 'Collection cover', hint: 'The cover for the current collection' },
   { slot: 'og', label: 'Social image', hint: 'The card shown when your site is shared (1200×630)' },
 ];

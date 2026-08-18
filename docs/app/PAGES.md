@@ -264,9 +264,13 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
 - **Dock (3 panels):** **Products** (the full Printful catalogue — `/api/blanks`, `/api/blank/:id/*`;
   browsed as large product cards — gender → type → product — with full, 2-line names so blanks read
   clearly), **Web assets** (the site's slots: hero / cover / logo), **Content**.
-- **Web assets:** canvas web-slot nodes PREVIEW the live site asset (the hero slot shows the real
-  hero; icon placeholders are Ionicons — raw emoji drew missing-glyph "?" boxes, B17); the dock's
-  Site-assets strip FIRST shows what's LIVE on the site (hero / logo /
+- **Web assets:** the LOGO surface is the **LogoKit** (`src/lib/logo-kit.ts`): two editable MASTERS —
+  the wide **Wordmark** (slot `logo`) and the square **App icon** mark (slot `mark`) — with the mono
+  variants, 1024² app tile, touch icon and favicon DERIVED on assignment (a new master re-derives the
+  kit + `favicon_url`; pre-kit brands derive read-time from `logo_url`). Square tiles display the
+  app tile; wordmarks render contain (cover-cropping mushed them). Canvas web-slot nodes PREVIEW the
+  live site asset (icon placeholders are Ionicons — raw emoji drew missing-glyph "?" boxes, B17);
+  the dock's Site-assets strip FIRST shows what's LIVE on the site (hero / logo /
   social / sections via GET `/api/creator/site-assets`), then this session's generated graphics;
   drag a graphic onto a web-slot target → it "clicks together," assigns to the brand
   site (`/api/creator/site-assets` — a direct DB write to `stores.site_assets`), and the finished

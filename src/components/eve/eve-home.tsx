@@ -438,7 +438,7 @@ export function EveHome({
             }
             return;
           case 'site-asset': {
-            const dd = d as { idea?: string; slot?: 'hero' | 'logo' | 'og'; storeSlug?: string };
+            const dd = d as { idea?: string; slot?: 'hero' | 'logo' | 'mark' | 'og'; storeSlug?: string };
             if (dd.idea) {
               onGo({
                 state: 'assets',
@@ -447,7 +447,7 @@ export function EveHome({
             } else {
               awaitAssetIdea.current = true;
               live.prompt(
-                "(They want a website graphic but haven't said what — in one short sentence, ask what it should be and for which spot: hero, logo, or social card.)",
+                "(They want a website graphic but haven't said what — in one short sentence, ask what it should be and for which spot: hero, wordmark, app icon, or social card.)",
               );
             }
             return;
@@ -713,7 +713,7 @@ export function EveHome({
           // Voice-first like DESIGN (Joe, 2026-08-18): she stays home and ASKS; the answer routes
           // back as site-asset{idea,slot} → EveAssets opens generating. No Design-tab redirect.
           const askAssets =
-            "(They picked SITE ASSETS on your wheel — they want a graphic for their website. In ONE short sentence, ask what to make and for which spot: the hero banner, the logo, or the social card. Nothing else.)";
+            "(They picked SITE ASSETS on your wheel — they want a graphic for their website. In ONE short sentence, ask what to make and for which spot: the hero banner, the wordmark, the app icon, or the social card. Nothing else.)";
           awaitAssetIdea.current = true;
           if (talking) {
             live.prompt(askAssets);
