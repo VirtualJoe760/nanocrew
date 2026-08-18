@@ -30,6 +30,7 @@ import { apiUrl, readJson } from '@/lib/api';
 import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { registerEveSayListener } from '@/lib/eve-say-bus';
+import { consumeNextTurn } from '@/lib/eve-edit-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
 import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
@@ -423,7 +424,9 @@ export function EveHome({
     if (!hasStore || brand) { routedUsers.current = said.length; return; }
     for (let i = routedUsers.current; i < said.length; i++) {
       const t = said[i].text.trim();
-      if (t) void routeTurn(t);
+      // An armed surface (EveDesign's "Tell Eve" edit) captures the next turn whole — the
+      // utterance IS the instruction, not an intent to classify.
+      if (t && !consumeNextTurn(t)) void routeTurn(t);
     }
     routedUsers.current = said.length;
   }, [live.messages, hasStore, brand, routeTurn]);

@@ -460,7 +460,66 @@ export function PlacementEditorBody({
     );
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.three }}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.three, paddingBottom: Spacing.six }}>
+      {/* On-product reference + interactive print area */}
+      {entry && area ? (
+        <View style={styles.editorWrap}>
+          {previewVariant ? (
+            <View style={styles.previewWrap}>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.previewLabel}>
+                Printed preview · {previewVariant.color}
+              </ThemedText>
+              {/* OUR supplier-agnostic mockup: the design multiply-blended onto the real garment photo
+                  so it reads as PRINTED (fabric folds/shadows show through), not slapped on. Updates
+                  live as you move/resize below. The provider's own mockup is finalized at approve. */}
+              <GarmentMockup
+                garmentUri={previewVariant.image}
+                designUri={designUrl ?? null}
+                rect={{
+                  x: PRINT_AREA_ON_GARMENT.x + (entry.box.left / area.areaWidth) * PRINT_AREA_ON_GARMENT.w,
+                  y: PRINT_AREA_ON_GARMENT.y + (entry.box.top / area.areaHeight) * PRINT_AREA_ON_GARMENT.h,
+                  w: (entry.box.width / area.areaWidth) * PRINT_AREA_ON_GARMENT.w,
+                  h: (entry.box.height / area.areaHeight) * PRINT_AREA_ON_GARMENT.h,
+                }}
+                style={styles.printedPreview}
+              />
+            </View>
+          ) : null}
+          <View
+            style={[
+              styles.area,
+              {
+                width: frameW,
+                height: frameH,
+                backgroundColor: previewVariant?.colorCode ?? theme.backgroundElement,
+                borderColor: theme.backgroundSelected,
+              },
+            ]}>
+            <View
+              {...moveResponder.panHandlers}
+              style={[
+                styles.designBox,
+                {
+                  left: entry.box.left * scale,
+                  top: entry.box.top * scale,
+                  width: entry.box.width * scale,
+                  height: entry.box.height * scale,
+                },
+              ]}>
+              {/* contain (NOT fill) — never stretch the art; the box is kept at the design's true aspect
+                  by clampBox + the re-fit effect, so the print preview matches what's actually printed. */}
+              {designUrl ? <Image source={{ uri: designUrl }} style={styles.designFill} contentFit="contain" /> : null}
+              {(['tl', 'tr', 'bl', 'br'] as Corner[]).map((c) => (
+                <View key={c} {...cornerResponders[c].panHandlers} hitSlop={14} style={[styles.handle, HANDLE_POS[c]]} />
+              ))}
+            </View>
+          </View>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+            Drag to move · drag any corner to resize
+          </ThemedText>
+        </View>
+      ) : null}
+
       {/* Colourway preview chips */}
       {colorVariants.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
@@ -536,64 +595,6 @@ export function PlacementEditorBody({
         </ScrollView>
       ) : null}
 
-      {/* On-product reference + interactive print area */}
-      {entry && area ? (
-        <View style={styles.editorWrap}>
-          {previewVariant ? (
-            <View style={styles.previewWrap}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.previewLabel}>
-                Printed preview · {previewVariant.color}
-              </ThemedText>
-              {/* OUR supplier-agnostic mockup: the design multiply-blended onto the real garment photo
-                  so it reads as PRINTED (fabric folds/shadows show through), not slapped on. Updates
-                  live as you move/resize below. The provider's own mockup is finalized at approve. */}
-              <GarmentMockup
-                garmentUri={previewVariant.image}
-                designUri={designUrl ?? null}
-                rect={{
-                  x: PRINT_AREA_ON_GARMENT.x + (entry.box.left / area.areaWidth) * PRINT_AREA_ON_GARMENT.w,
-                  y: PRINT_AREA_ON_GARMENT.y + (entry.box.top / area.areaHeight) * PRINT_AREA_ON_GARMENT.h,
-                  w: (entry.box.width / area.areaWidth) * PRINT_AREA_ON_GARMENT.w,
-                  h: (entry.box.height / area.areaHeight) * PRINT_AREA_ON_GARMENT.h,
-                }}
-                style={styles.printedPreview}
-              />
-            </View>
-          ) : null}
-          <View
-            style={[
-              styles.area,
-              {
-                width: frameW,
-                height: frameH,
-                backgroundColor: previewVariant?.colorCode ?? theme.backgroundElement,
-                borderColor: theme.backgroundSelected,
-              },
-            ]}>
-            <View
-              {...moveResponder.panHandlers}
-              style={[
-                styles.designBox,
-                {
-                  left: entry.box.left * scale,
-                  top: entry.box.top * scale,
-                  width: entry.box.width * scale,
-                  height: entry.box.height * scale,
-                },
-              ]}>
-              {/* contain (NOT fill) — never stretch the art; the box is kept at the design's true aspect
-                  by clampBox + the re-fit effect, so the print preview matches what's actually printed. */}
-              {designUrl ? <Image source={{ uri: designUrl }} style={styles.designFill} contentFit="contain" /> : null}
-              {(['tl', 'tr', 'bl', 'br'] as Corner[]).map((c) => (
-                <View key={c} {...cornerResponders[c].panHandlers} hitSlop={14} style={[styles.handle, HANDLE_POS[c]]} />
-              ))}
-            </View>
-          </View>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-            Drag to move · drag any corner to resize
-          </ThemedText>
-        </View>
-      ) : null}
 
       {/* Size: continuous slider + readout */}
       {entry && area ? (

@@ -13,6 +13,7 @@ import { glow } from '@/constants/glow';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiFetch, apiUrl, readJson } from '@/lib/api';
+import { armNextTurn } from '@/lib/eve-edit-bus';
 import { sayEve } from '@/lib/eve-say-bus';
 import { showEve } from '@/lib/eve-vision-bus';
 import type { CatalogBlank } from '@/lib/printful';
@@ -139,6 +140,55 @@ export function EveDesign({
     [token, authHeaders, resolveCatalogue, blank?.name, design],
   );
 
+  /** Apply an edit instruction to the CURRENT design via /api/edit (custom mode, die-cut gated). */
+  const applyEdit = useCallback(
+    async (instruction: string) => {
+      if (!design || !token) return;
+      setStep('busy');
+      setError(null);
+      try {
+        const r = await fetch(apiUrl('/api/edit'), {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ designId: design.id, catalogueId: catalogueRef.current, instruction, mode: 'custom', background: 'transparent' }),
+        });
+        const d = (await r.json().catch(() => ({}))) as { image?: string; id?: string; error?: string; needed?: number };
+        if (!r.ok || !d.image || !d.id) throw new Error(failFrom(r.status, d));
+        const made = { id: d.id, url: d.image, prompt: design.prompt };
+        setDesign(made);
+        setStep('review');
+        showEve({ url: made.url, note: `(They asked for: "${instruction}". This is the RESULT — react in one short sentence.)` });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Edit failed');
+        setStep('review');
+      }
+    },
+    [design, token, authHeaders],
+  );
+
+  // ✦ Clean up — the canned refinement pass (stray lines, ragged edges, artifacts).
+  const CLEANUP =
+    'Clean up and refine this print graphic: remove stray lines, specks and artifacts, smooth ragged or noisy outlines, sharpen intended edges, and improve colour separation. Do NOT change the composition, elements, style or any text.';
+
+  // 🎙 Tell Eve — the NEXT thing they say is the edit. She acknowledges aloud; the utterance
+  // routes here instead of the intent router (eve-edit-bus).
+  const [listeningForEdit, setListeningForEdit] = useState(false);
+  const disarmRef = useRef<(() => void) | null>(null);
+  const tellEve = useCallback(() => {
+    if (listeningForEdit) {
+      disarmRef.current?.();
+      setListeningForEdit(false);
+      return;
+    }
+    setListeningForEdit(true);
+    sayEve('(They tapped "Tell Eve" on their design — in a few words, ask what to change. Their NEXT sentence is applied to the artwork directly.)');
+    disarmRef.current = armNextTurn((turn) => {
+      setListeningForEdit(false);
+      void applyEdit(turn);
+    });
+  }, [listeningForEdit, applyEdit]);
+  useEffect(() => () => disarmRef.current?.(), []);
+
   // "Enhance" = enrich the idea in the brand voice first (free, rate-limited), then generate.
   const enhanceAndGenerate = useCallback(async () => {
     if (!idea) return;
@@ -247,12 +297,21 @@ export function EveDesign({
             <Image source={{ uri: design.url }} style={styles.image} contentFit="contain" />
           </View>
           {error ? <ThemedText type="code" style={styles.error} numberOfLines={2}>{error}</ThemedText> : null}
+          {/* Editor tools — the design-center's engine (/api/edit), Eve-flavoured. */}
+          <View style={styles.actions}>
+            <Pressable onPress={() => void applyEdit(CLEANUP)} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
+              <ThemedText type="code" style={{ color: p.ink }}>✦ Clean up</ThemedText>
+            </Pressable>
+            <Pressable onPress={tellEve} style={[styles.action, listeningForEdit ? { borderColor: p.accent, backgroundColor: `${p.accent}22` } : { borderColor: `${p.dim}66` }]} hitSlop={6}>
+              <ThemedText type="code" style={{ color: listeningForEdit ? p.accent : p.ink }}>{listeningForEdit ? '🎙 Listening…' : '🎙 Tell Eve'}</ThemedText>
+            </Pressable>
+            <Pressable onPress={() => design && void generate(design.prompt)} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
+              <ThemedText type="code" style={{ color: p.dim }}>↻ Redo</ThemedText>
+            </Pressable>
+          </View>
           <View style={styles.actions}>
             <Pressable onPress={() => void toPlacement()} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
               <ThemedText type="smallBold" style={{ color: BG }}>Put it on the {blank?.type?.replace(/s$/, '') ?? 'product'} ›</ThemedText>
-            </Pressable>
-            <Pressable onPress={() => design && void generate(design.prompt)} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
-              <ThemedText type="code" style={{ color: p.dim }}>↻ Another take · ✦{GENERATE_COST}</ThemedText>
             </Pressable>
           </View>
         </>

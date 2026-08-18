@@ -24,7 +24,9 @@ const GEMINI_RATIOS = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9'
 function buildConstraints(background: 'transparent' | 'filled', aspectRatio: string, meme = false): string {
   const base =
     'Depict the subject exactly as described, faithfully. ' +
-    'Do not add any text or watermark that was not requested.';
+    'Do not add any text or watermark that was not requested — but text that is PART of the ' +
+    'requested subject (a flag\'s lettering, a logo\'s name, a slogan) MUST be included, ' +
+    'complete and correctly spelled.';
   if (background === 'filled') {
     return (
       `${base} Render it as full-bleed artwork with a complete background filling the ` +
