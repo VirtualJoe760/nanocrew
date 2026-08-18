@@ -19,7 +19,7 @@ import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 // words (→ forge revision) and write journal posts. Calls the same creator endpoints
 // the brand-site /admin uses. Opens from the Studio header. Theme-aware.
 
-type StoreRow = { slug: string; name: string; deploymentUrl?: string | null; ogImageUrl?: string | null; status?: string; customDomain?: string | null };
+type StoreRow = { slug: string; name: string; deploymentUrl?: string | null; bannerUrl?: string | null; ogImageUrl?: string | null; status?: string; customDomain?: string | null };
 
 /** The public storefront URL — only when a real site is deployed. A brand can live on
  *  the Nano Crew shop with no website, so we never fabricate a URL that would 404. Prefer the
@@ -79,7 +79,8 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const activeStore = stores.find((s) => s.slug === active);
   const siteUrl = siteUrlFor(activeStore);
-  const ogImageUrl = activeStore?.ogImageUrl ?? null;
+  // The site card shows the BRAND BANNER (site hero first — same rule as the deck), not the OG card.
+  const ogImageUrl = activeStore?.bannerUrl ?? activeStore?.ogImageUrl ?? null;
   // Build status is derived from DURABLE signals (store status + the provision job row), not a
   // local flag — so reopening the console mid-build still shows "building", and the view flips to
   // the live site on its own when the forge worker finishes (we poll while building).

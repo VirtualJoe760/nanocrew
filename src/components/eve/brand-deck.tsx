@@ -81,10 +81,7 @@ export function BrandDeck({
     }
   }, [shown, focus, stores, width]);
 
-  // Fresh open without a deep link starts at the overview.
-  useEffect(() => {
-    if (shown && !focus) setActiveTab(null);
-  }, [shown, focus]);
+
 
   const load = useCallback(async () => {
     try {
@@ -109,6 +106,9 @@ export function BrandDeck({
       setMounted(true);
       fade.value = withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
     } else {
+      // Closing returns the deck to the overview for its next open (a deep-link focus re-applies
+      // its tab on top). Done here, not in a dep-watching effect — that raced the pill taps.
+      setActiveTab(null);
       fade.value = withTiming(0, { duration: OPEN_MS, easing: Easing.in(Easing.cubic) }, (done) => {
         if (done) runOnJS(setMounted)(false);
       });
@@ -178,7 +178,7 @@ export function BrandDeck({
                     key={key}
                     style={[s.quickPill, activeTab === key && s.quickPillOn]}
                     onPress={() => setActiveTab((cur) => (cur === key ? null : key))}
-                    hitSlop={4}>
+                    hitSlop={10}>
                     <ThemedText type="code" style={[s.quickPillText, activeTab === key && s.quickPillTextOn]}>{label}</ThemedText>
                   </Pressable>
                 ))}
