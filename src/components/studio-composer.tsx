@@ -45,10 +45,10 @@ const REFUNDABLE_STATUSES = new Set(['paid', 'submitted_to_printful', 'in_produc
 type ConsoleTab = 'edit' | 'posts' | 'sell' | 'settings';
 const TAB_LABEL: Record<ConsoleTab, string> = { edit: 'Edit site', posts: 'Posts', sell: 'Sell', settings: 'Settings' };
 
-export function StudioComposer({ visible, onClose, token, onOpenBilling, onDeleted, onBrandRenamed, slug, brandName }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; onDeleted?: () => void; onBrandRenamed?: (name: string) => void; slug?: string; brandName?: string }) {
+export function StudioComposer({ visible, onClose, token, onOpenBilling, onDeleted, onBrandRenamed, slug, brandName, initialTab }: { visible: boolean; onClose: () => void; token: string; onOpenBilling?: () => void; onDeleted?: () => void; onBrandRenamed?: (name: string) => void; slug?: string; brandName?: string; initialTab?: ConsoleTab }) {
   const pal = useStudioPalette();
   const styles = useMemo(() => makeStyles(pal), [pal]);
-  const [tab, setTab] = useState<ConsoleTab>('edit');
+  const [tab, setTab] = useState<ConsoleTab>(initialTab ?? 'edit');
   const [insights, setInsights] = useState<Insights | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -330,12 +330,13 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   }, [slug]);
   useEffect(() => {
     if (visible) {
-      setTab('edit');
+      // Land on the caller's tab when one was asked for (the deck's quick pills) — else Edit.
+      setTab(initialTab ?? 'edit');
       setSiteAction('idle');
       void loadStores();
       void loadCredits();
     }
-  }, [visible, loadStores, loadCredits]);
+  }, [visible, initialTab, loadStores, loadCredits]);
   useEffect(() => {
     if (visible && active) {
       void loadPosts();
@@ -626,7 +627,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
                 No store yet
               </ThemedText>
               <ThemedText type="small" style={styles.dim}>
-                Build one with your consultant first.
+                Talk to Eve and she&apos;ll build one with you.
               </ThemedText>
             </View>
           ) : draft ? (

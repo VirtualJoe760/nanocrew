@@ -53,7 +53,7 @@ export function BrandDeck({
   /** Bump to force a refetch (e.g. after a brand is created). */
   refreshKey?: number;
   onClose: () => void;
-  onEditBrand: (slug: string, name: string) => void;
+  onEditBrand: (slug: string, name: string, tab?: 'edit' | 'posts' | 'sell' | 'settings') => void;
   onNewBrand: () => void;
   onOpenBilling?: () => void;
   onBounty?: (panel: 'products' | 'web', slot?: 'hero' | 'cover' | 'logo') => void;
@@ -179,6 +179,16 @@ export function BrandDeck({
                 </ThemedText>
               </View>
 
+              {/* Everything the console offers, one tap from the card — posts were invisible from
+                  here (the console has a full Posts tab nothing pointed at). */}
+              <View style={s.quickRow}>
+                {([['edit', 'Edit site'], ['posts', 'Posts'], ['sell', 'Sell'], ['settings', 'Settings']] as const).map(([key, label]) => (
+                  <Pressable key={key} style={s.quickPill} onPress={() => onEditBrand(store.slug, store.name, key)} hitSlop={4}>
+                    <ThemedText type="code" style={s.quickPillText}>{label}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+
               {todo.length && onBounty ? (
                 <View style={s.bountyBox}>
                   <ThemedText type="code" style={s.bountyHead}>FINISH YOUR SITE</ThemedText>
@@ -240,6 +250,9 @@ function makeStyles(p: StudioPalette) {
     heroFallback: { alignItems: 'center', justifyContent: 'center' },
     editTag: { position: 'absolute', right: Spacing.three, bottom: Spacing.three, backgroundColor: p.accent, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 5 },
     editTagText: { color: p.onAccent, fontSize: 11, letterSpacing: 0.5 },
+    quickRow: { flexDirection: 'row', gap: Spacing.two },
+    quickPill: { flex: 1, alignItems: 'center', paddingVertical: Spacing.two, borderRadius: 999, borderWidth: 1, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.7)' },
+    quickPillText: { color: p.ink, fontSize: 11, letterSpacing: 0.5 },
     bountyBox: { borderRadius: 14, borderWidth: 1, borderColor: p.line, backgroundColor: 'rgba(22,22,25,0.6)', padding: Spacing.four, gap: Spacing.three },
     bountyHead: { color: p.accent, letterSpacing: 1.5 },
     bountyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

@@ -58,6 +58,7 @@ function StudioScreen() {
   const [voiceResolved, setVoiceResolved] = useState(false); // /api/me landing check done
   const [showComposer, setShowComposer] = useState(false);
   const [consoleBrand, setConsoleBrand] = useState<{ slug: string; name: string } | null>(null);
+  const [consoleTab, setConsoleTab] = useState<'edit' | 'posts' | 'sell' | 'settings' | undefined>(undefined);
   const [dashKey, setDashKey] = useState(0); // bump to refetch the dashboard (e.g. after deleting a brand)
   const [hasStore, setHasStore] = useState(false);
 
@@ -228,7 +229,7 @@ function StudioScreen() {
       {/* The composer + paywall stay mounted for a signed-in creator (both gated by `visible`). */}
       {session ? (
         <>
-          <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} onDeleted={() => { setShowComposer(false); setConsoleBrand(null); setDashKey((k) => k + 1); }} onBrandRenamed={(name) => { setConsoleBrand((b) => (b ? { ...b, name } : b)); setDashKey((k) => k + 1); }} slug={consoleBrand?.slug} brandName={consoleBrand?.name} />
+          <StudioComposer visible={showComposer} onClose={() => setShowComposer(false)} token={session.access_token} onOpenBilling={() => setPaywall('manage')} onDeleted={() => { setShowComposer(false); setConsoleBrand(null); setDashKey((k) => k + 1); }} onBrandRenamed={(name) => { setConsoleBrand((b) => (b ? { ...b, name } : b)); setDashKey((k) => k + 1); }} slug={consoleBrand?.slug} brandName={consoleBrand?.name} initialTab={consoleTab} />
           <Paywall
             visible={!!paywall}
             onClose={() => {
@@ -344,7 +345,7 @@ function StudioScreen() {
                   token={session.access_token}
                   refreshKey={dashKey}
                   onClose={() => setDeckShown(false)}
-                  onEditBrand={(slug, name) => { setDeckShown(false); setConsoleBrand({ slug, name }); setShowComposer(true); }}
+                  onEditBrand={(slug, name, tab) => { setDeckShown(false); setConsoleBrand({ slug, name }); setConsoleTab(tab); setShowComposer(true); }}
                   onNewBrand={onNewBrand}
                   onOpenBilling={() => setPaywall('manage')}
                   onBounty={(panel, slot) => { setDeckShown(false); router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`); }}

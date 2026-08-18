@@ -66,18 +66,21 @@ export async function POST(req: Request) {
   let recent: { role: string; text: string }[];
   let stores: { name: string; slug: string; hasSite: boolean }[];
   let interviewActive: boolean;
+  let awaitingDesignIdea: boolean;
   try {
     const body = (await req.json()) as {
       turn?: string;
       recent?: { role: string; text: string }[];
       stores?: { name: string; slug: string; hasSite?: boolean }[];
       interviewActive?: boolean;
+      awaitingDesignIdea?: boolean;
     };
     turn = (body.turn ?? '').trim().slice(0, 600);
     if (!turn) throw new Error();
     recent = (body.recent ?? []).slice(-6).map((m) => ({ role: m.role === 'user' ? 'Creator' : 'Eve', text: String(m.text).slice(0, 300) }));
     stores = (body.stores ?? []).slice(0, 12).map((s) => ({ name: String(s.name).slice(0, 80), slug: String(s.slug).slice(0, 80), hasSite: !!s.hasSite }));
     interviewActive = !!body.interviewActive;
+    awaitingDesignIdea = !!body.awaitingDesignIdea;
   } catch {
     return Response.json({ error: 'invalid body' }, { status: 400 });
   }
@@ -87,6 +90,12 @@ export async function POST(req: Request) {
     const brief = [
       `Stores: ${stores.length ? stores.map((s) => `"${s.name}" (slug: ${s.slug}${s.hasSite ? ', has a live site' : ', NO site yet'})`).join('; ') : 'none'}`,
       `interviewActive: ${interviewActive}`,
+      // The one exception to precision-bias: Eve JUST asked what they'd like designed, so a bare
+      // subject ("a chrome skull", "something with wolves") IS the answer — new-design with that
+      // concept as idea. Refusals, deflections, and other topics still classify normally.
+      awaitingDesignIdea
+        ? 'awaitingDesignIdea: true — Eve just asked what design/artwork they want made. If this utterance names a subject or concept (even a bare noun phrase), classify it as "new-design" with idea = that concept as printable artwork. If they decline or change the subject, classify normally.'
+        : '',
       recent.length ? `Recent conversation:\n${recent.map((m) => `${m.role}: ${m.text}`).join('\n')}` : '',
       `Utterance: "${turn}"`,
       'Return the JSON.',

@@ -20,8 +20,10 @@ export interface UseLiveVoice {
   dismissAudioBusy: () => void;
   /** Extracting the brand from the transcript (the "build my brand" step). */
   finalizing: boolean;
-  /** Open the session. `greet` false re-opens under an ongoing conversation without re-introducing. */
-  start: (greet?: boolean) => void;
+  /** Open the session. `greet` false re-opens under an ongoing conversation without re-introducing.
+   *  `greeting` overrides her opening line's instruction for THIS open only (e.g. the DESIGN spoke:
+   *  she asks what to make instead of the general hello). */
+  start: (greet?: boolean, greeting?: string) => void;
   stop: () => void;
   /** Go quiet WITHOUT tearing down: mute in both directions and hold the socket for a grace period,
    *  so glancing at another surface and coming back is instant, free, and keeps the transcript.
@@ -33,6 +35,9 @@ export interface UseLiveVoice {
   /** Is a live socket currently held (open or suspended)? */
   isLive: () => boolean;
   sendText: (text: string) => void;
+  /** Make her SPEAK now — a stage direction sent as a completed turn (she replies out loud, no
+   *  transcript trace). sendContext can never voice anything; this is the ask-spokes' channel. */
+  prompt: (text: string) => void;
   /** Push silent context into the session (no reply) — e.g. which site section was just circled. */
   sendContext: (text: string) => void;
   /** Let her SEE something — a settled design, a product shot. Base64 + mime, optional note. */
@@ -166,7 +171,7 @@ export function useLiveVoice(opts: {
     if (pendingContext.current.length > 4) pendingContext.current.shift();
   }, []);
 
-  const start = useCallback((greet = true) => {
+  const start = useCallback((greet = true, greeting?: string) => {
     if (sessionRef.current || !opts.accessToken) return;
     clearGrace();
     mutedBySuspend.current = false;
@@ -181,7 +186,7 @@ export function useLiveVoice(opts: {
       firstTime: opts.firstTime,
       voiceName: opts.voiceName,
       instruction: opts.instruction,
-      greeting: opts.greeting,
+      greeting: greeting ?? opts.greeting,
       enableBrandTool: opts.enableBrandTool,
       greetOnOpen: greet,
       callbacks: {
@@ -210,6 +215,10 @@ export function useLiveVoice(opts: {
 
   const sendText = useCallback((text: string) => {
     sessionRef.current?.sendText(text);
+  }, []);
+
+  const prompt = useCallback((text: string) => {
+    sessionRef.current?.prompt(text);
   }, []);
 
 
@@ -257,5 +266,5 @@ export function useLiveVoice(opts: {
   // fire against a dead session.
   useEffect(() => () => { clearGrace(); sessionRef.current?.stop(); sessionRef.current = null; }, [clearGrace]);
 
-  return { state, venusText, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, suspend, resume, isLive, sendText, sendContext, sendImage, mute, finalize };
+  return { state, venusText, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, suspend, resume, isLive, sendText, prompt, sendContext, sendImage, mute, finalize };
 }

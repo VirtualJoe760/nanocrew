@@ -38,7 +38,7 @@ type Spoke = {
 const SPOKES: Spoke[] = [
   { id: 'toggle', label: 'Talk to Eve', short: 'TALK', deg: -90, icon: 'M -5 -6 L 7 0 L -5 6 Z' },
   { id: 'design', label: 'New design', short: 'DESIGN', deg: -45, icon: 'M -6 6 L 2 -6 L 6 0' },
-  { id: 'site', label: 'Edit site', short: 'SITE', deg: 0, icon: 'M -7 -5 h 14 v 10 h -14 z M -7 -1 h 14', needsBrand: true },
+  { id: 'site', label: 'Your brands', short: 'BRANDS', deg: 0, icon: 'M -7 -5 h 14 v 10 h -14 z M -7 -1 h 14', needsBrand: true },
   { id: 'assets', label: 'Site assets', short: 'ASSETS', deg: 45, icon: 'M -7 -6 h 14 v 12 h -14 z M -7 4 L -1 -3 L 3 2 L 7 -2', needsBrand: true },
   { id: 'digest', label: 'Digest', short: 'DIGEST', deg: 90, icon: 'M -6 5 v -6 M 0 5 v -10 M 6 5 v -3', needsBrand: true },
   { id: 'brand', label: 'Brand info', short: 'BRAND', deg: 135, icon: 'M 0 -7 L 6 -3 v 8 L 0 8 L -6 5 v -8 Z', needsBrand: true },

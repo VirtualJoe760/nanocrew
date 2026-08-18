@@ -281,6 +281,12 @@ export function EveHome({
     }
   }, [digest, session]);
 
+  /** Eve just asked what they'd like designed — the next user turn is (probably) the idea. */
+  const awaitDesignIdea = useRef(false);
+  /** One-shot greeting override for the NEXT session open (a spoke that wants her first line to be
+   *  its own ask — e.g. DESIGN — instead of the general hello). Consumed by the gate effect. */
+  const pendingGreeting = useRef<string | undefined>(undefined);
+
   // ---- VOICE-INTENT ROUTING (VENUS_CENTRAL.md §3): distill-then-execute, per committed turn ----
   // Native-audio Live can't tool-call, so each new user utterance goes to /api/eve/route (~300ms
   // flash, non-blocking, fail-open to 'none'). Returning creators only — a first-brand creator is
@@ -306,6 +312,11 @@ export function EveHome({
   const routeTurn = useCallback(
     async (turn: string) => {
       if (!session) return;
+      // One-shot: Eve just asked what to design (the DESIGN spoke, or a no-idea new-design), so
+      // the NEXT turn's bare answer ("a chrome skull") must classify as the idea instead of being
+      // dropped by the router's precision bias. Consumed here whatever the router decides.
+      const awaiting = awaitDesignIdea.current;
+      awaitDesignIdea.current = false;
       try {
         const r = await fetch(apiUrl('/api/eve/route'), {
           method: 'POST',
@@ -315,6 +326,7 @@ export function EveHome({
             recent: live.messages.slice(-6).map((m) => ({ role: m.role, text: m.text })),
             stores: stores.map((s) => ({ name: s.name, slug: s.slug, hasSite: !!siteUrlFor(s) })),
             interviewActive: viewRef.current === 'interview',
+            awaitingDesignIdea: awaiting,
           }),
         });
         const d = (await r.json().catch(() => ({}))) as {
@@ -365,8 +377,10 @@ export function EveHome({
               onGo({ state: 'design', payload: { idea: d.idea } });
             } else {
               // A design ask with no subject ("make me a t-shirt") — opening EveDesign empty lands
-              // in a typed form. She asks for the artwork instead; the answer re-routes with idea.
-              live.sendContext(
+              // in a typed form. She asks for the artwork instead (prompt, so it's actually voiced);
+              // the answer re-routes with the idea via awaitDesignIdea.
+              awaitDesignIdea.current = true;
+              live.prompt(
                 "(They want a design but haven't said what the artwork is — in one short sentence, ask what should go on it.)",
               );
             }
@@ -427,8 +441,9 @@ export function EveHome({
 
     // Resuming a held socket costs nothing and keeps the thread; only open a new one if the grace
     // period already released it, and then WITHOUT a greeting — she's mid-conversation.
-    if (!live.resume()) live.start(wantGreetRef.current);
+    if (!live.resume()) live.start(wantGreetRef.current, pendingGreeting.current);
     wantGreetRef.current = false;
+    pendingGreeting.current = undefined;
   }, [talking, covered, view, meResolved, brand, paused, keyboardMode, open, appActive,
       live.start, live.stop, live.suspend, live.resume]);
   // Keyboard/chat mode mutes the mic so Eve doesn't react to the room while you type.
@@ -604,16 +619,24 @@ export function EveHome({
           // "Build your brand" button used this path; the spoke inherits it.
           void startVoice();
           return;
-        case 'design':
+        case 'design': {
           // Voice-first, not form-first. Opening <EveDesign> with no idea landed people in a bare
           // text input ("What shall I make?") — a typed form nobody asked for. Instead she stays
           // home, ASKS out loud, and the answer routes back as new-design{idea} → EveDesign opens
           // already generating (VENUS_CENTRAL C3: "no idea given → she asks first, then transitions").
-          if (!talking) void toggleTalk();
-          live.sendContext(
-            "(The creator picked DESIGN on your wheel — they want to create a design. In one short sentence, ask what they'd like to make. When they answer, their app opens your design surface with it — don't describe that mechanism, just ask.)",
-          );
+          // Talking → prompt() (sendContext is silent by design and can never voice the ask);
+          // silent → the ask becomes her opening line instead of the general hello.
+          const ask =
+            "(They picked DESIGN on your wheel — they want you to make a design. In ONE short sentence, ask what they'd like you to make. Nothing else.)";
+          awaitDesignIdea.current = true;
+          if (talking) {
+            live.prompt(ask);
+          } else {
+            pendingGreeting.current = ask;
+            void toggleTalk();
+          }
           return;
+        }
         case 'digest':
           void openDigest();
           return;
@@ -628,16 +651,20 @@ export function EveHome({
           onShowBrands();
           return;
         }
-        case 'brand':
+        case 'brand': {
           // There is no in-place identity editor yet (EVE_CONTROL P3.1 is open), and inventing a
           // half one here would be worse than the thing that already works: ask Eve. Edits still go
           // through buildBrandPatch on her side, so NEVER_VIOLATE §2 holds.
           if (!target) return;
-          if (!talking) void toggleTalk();
-          live.sendContext(
-            `The creator wants to change ${target.name}'s brand info — name, voice, palette or story. Ask which, then confirm before applying.`,
-          );
+          const ask = `(They want to change ${target.name}'s brand info — name, voice, palette or story. In one short sentence, ask which they'd like to change. Confirm before applying anything.)`;
+          if (talking) {
+            live.prompt(ask);
+          } else {
+            pendingGreeting.current = ask;
+            void toggleTalk();
+          }
           return;
+        }
       }
     },
     [stores, talking, toggleTalk, startVoice, openDigest, onGo, onShowBrands, live],
@@ -1005,8 +1032,11 @@ export function EveHome({
         ) : null}
       </KeyboardAvoidingView>
 
-      {/* Keyboard mode = a full-screen chat window over the overlay (text-only; her voice muted). */}
-      {session && view === 'interview' && !brand && keyboardMode ? (
+      {/* Keyboard mode = a full-screen chat window over the overlay (text-only; her voice muted).
+          Guide view gets it too — the TYPE spoke is the mic-denied path, and it used to mute her
+          and then render NO input at all outside the interview (a dead end, 2026-08-17). Typed
+          guide turns run through the same intent router as speech, so DESIGN-by-keyboard works. */}
+      {session && (view === 'interview' || view === 'guide') && !brand && keyboardMode ? (
         <ChatInterview
           messages={live.messages}
           streaming={live.venusText}
@@ -1014,10 +1044,10 @@ export function EveHome({
           aiName={AI_NAME}
           onSend={(t) => live.sendText(t)}
           onVoice={() => setKeyboardMode(false)}
-          onExit={resetToGuide}
+          onExit={view === 'interview' ? resetToGuide : () => setKeyboardMode(false)}
           onFinalize={live.finalize}
           finalizing={live.finalizing}
-          canBuild={buildReady}
+          canBuild={buildReady && view === 'interview'}
           p={p}
           bg={BG}
         />

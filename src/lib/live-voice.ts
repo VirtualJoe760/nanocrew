@@ -538,8 +538,8 @@ export class LiveVoiceSession {
       const nudge = this.greetingOverride
         ? this.greetingOverride
         : this.firstTime
-        ? `(The creator just opened the studio for the FIRST time. In one warm sentence introduce yourself — you're Eve and you'll help them build their brand and store by talking it through — then greet them: "${hi}, how's your day going? Want to talk branding your store?")`
-        : `(The creator just opened the studio. Greet them warmly: "${hi}, how's your day going? Want to talk branding your store?")`;
+        ? `(Their FIRST time here. One short sentence: "${hi}" — you're Eve, and you'll get their store up and running together. Then ONE easy question. Two sentences total, then stop and listen.)`
+        : `(Greet them: "${hi}" plus ONE easy question — a dozen words total. Nothing else, then stop and listen.)`;
       try {
         this.session?.sendClientContent({
           turns: [{ role: 'user', parts: [{ text: nudge }] }],
@@ -656,6 +656,21 @@ export class LiveVoiceSession {
       this.cb.onState?.('thinking');
     } catch (e) {
       console.warn('[live] sendText failed', e instanceof Error ? e.message : e);
+    }
+  }
+
+  /** Make her SPEAK now: an instruction sent as a completed turn, so the model replies out loud.
+   *  Unlike sendText it leaves no trace in the visible transcript — the creator hears her ask,
+   *  they never see the stage direction. This is what the wheel's ask-spokes use; sendContext
+   *  (below) can never voice anything, which is exactly why it exists and why this also must. */
+  prompt(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    try {
+      this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
+      this.cb.onState?.('thinking');
+    } catch {
+      /* socket closing — best-effort */
     }
   }
 
