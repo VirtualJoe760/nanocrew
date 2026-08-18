@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { subscribeEvePulse, type EvePulse } from '@/lib/eve-live-state-bus';
+import { subscribeEvePulse, toggleEveMute, type EvePulse } from '@/lib/eve-live-state-bus';
 
 // EVE'S EAR + CAPTIONS — the truthful presence layer that rides inside popups stacked over her
 // (product picker, placement, finalize): she is STILL live under them (Joe, 2026-08-17 — "she
@@ -21,14 +21,18 @@ export function EveEar() {
   useEffect(() => subscribeEvePulse(setPulse), []);
   const state = pulse?.state ?? 'off';
   if (state === 'off' || state === 'idle' || state === 'error') return null;
-  const tone = TONE[state] ?? '#8a8f99';
+  const muted = !!pulse.muted;
+  const tone = muted ? '#8a8f99' : (TONE[state] ?? '#8a8f99');
+  // Tap toggles her mic (Joe, 2026-08-17): hears you ⇄ muted, from any surface the badge rides.
   return (
-    <View style={styles.pill}>
-      <View style={[styles.dot, { backgroundColor: tone }]} />
-      <ThemedText type="code" style={[styles.text, { color: tone }]}>
-        {state === 'listening' ? 'EVE HEARS YOU' : state.toUpperCase()}
-      </ThemedText>
-    </View>
+    <Pressable onPress={toggleEveMute} hitSlop={8} accessibilityLabel={muted ? 'Unmute Eve' : 'Mute Eve'}>
+      <View style={[styles.pill, muted && styles.pillMuted]}>
+        <View style={[styles.dot, { backgroundColor: tone }]} />
+        <ThemedText type="code" style={[styles.text, { color: tone }]}>
+          {muted ? 'MUTED · TAP TO UNMUTE' : state === 'listening' ? 'EVE HEARS YOU' : state.toUpperCase()}
+        </ThemedText>
+      </View>
+    </Pressable>
   );
 }
 
@@ -52,6 +56,7 @@ export function EveCaptions() {
 
 const styles = StyleSheet.create({
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(12,16,22,0.85)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(124,199,223,0.4)' },
+  pillMuted: { borderColor: 'rgba(138,143,153,0.4)' },
   dot: { width: 6, height: 6, borderRadius: 3 },
   text: { fontSize: 10, letterSpacing: 1 },
   captionBand: { minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 4 },

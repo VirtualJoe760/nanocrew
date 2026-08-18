@@ -31,7 +31,7 @@ import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/li
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { registerEveSayListener } from '@/lib/eve-say-bus';
 import { consumeNextTurn } from '@/lib/eve-edit-bus';
-import { publishEvePulse } from '@/lib/eve-live-state-bus';
+import { publishEvePulse, registerEveMuteListener } from '@/lib/eve-live-state-bus';
 import { publishTranscript } from '@/lib/eve-transcript-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
@@ -249,9 +249,12 @@ export function EveHome({
   useEffect(() => registerEveSayListener((instruction) => live.prompt(instruction)), [live.prompt]);
 
   // Her pulse (state + caption), for badges/subtitles riding inside popups layered over her.
+  // Tap-to-mute from any EveEar badge (the popups' listening pill toggles her).
+  const [earMuted, setEarMuted] = useState(false);
+  useEffect(() => registerEveMuteListener(() => setEarMuted((m) => !m)), []);
   useEffect(() => {
-    publishEvePulse({ state: talking ? live.state : 'off', caption: live.venusText });
-  }, [talking, live.state, live.venusText]);
+    publishEvePulse({ state: talking ? live.state : 'off', caption: live.venusText, muted: earMuted });
+  }, [talking, live.state, live.venusText, earMuted]);
   const loggedTurns = useRef(0);
   const convoSession = useRef<{ id: string; startedAt: string } | null>(null);
   useEffect(() => {
@@ -494,7 +497,7 @@ export function EveHome({
   }, [talking, covered, view, meResolved, brand, paused, keyboardMode, open, appActive,
       live.start, live.stop, live.suspend, live.resume]);
   // Keyboard/chat mode mutes the mic so Eve doesn't react to the room while you type.
-  useEffect(() => { live.mute(keyboardMode); }, [keyboardMode, live.state, live.mute]);
+  useEffect(() => { live.mute(keyboardMode || earMuted); }, [keyboardMode, earMuted, live.state, live.mute]);
   useEffect(() => {
     setAppActive(AppState.currentState === 'active');
     const sub = AppState.addEventListener('change', (st) => setAppActive(st === 'active'));

@@ -4,7 +4,7 @@
 // (Joe, 2026-08-17). eve-home publishes; anyone subscribes. Sibling of eve-stage-bus.
 import type { LiveState } from '@/lib/live-voice';
 
-export type EvePulse = { state: LiveState | 'off'; caption: string };
+export type EvePulse = { state: LiveState | 'off'; caption: string; muted?: boolean };
 let current: EvePulse = { state: 'off', caption: '' };
 const subs = new Set<(p: EvePulse) => void>();
 
@@ -16,4 +16,14 @@ export function subscribeEvePulse(fn: (p: EvePulse) => void): () => void {
   subs.add(fn);
   fn(current);
   return () => { subs.delete(fn); };
+}
+
+// Tap-to-mute from the badge (Joe, 2026-08-17): surfaces request, eve-home applies.
+let muteListener: (() => void) | null = null;
+export function toggleEveMute(): void {
+  muteListener?.();
+}
+export function registerEveMuteListener(fn: () => void): () => void {
+  muteListener = fn;
+  return () => { if (muteListener === fn) muteListener = null; };
 }
