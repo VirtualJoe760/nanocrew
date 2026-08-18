@@ -297,17 +297,22 @@ export function EveHome({
   // creator the guide voice shares the session, so without this gate 6 turns of guide small talk
   // would light up "✓ Build my brand" before any interview happened (and finalize over chatter).
   const [buildReady, setBuildReady] = useState(false);
+  // A TYPED session hosts the interview in the GUIDE view (keyboardMode) — the build gate cares
+  // that an interview-shaped conversation happened, not which view hosted it (2026-08-18: she said
+  // "you've got everything you need" with no way to build). The 6-turn auto-floor stays
+  // interview-view-only; in guide-typed mode ONLY her explicit ready-cue unlocks it.
+  const interviewish = view === 'interview' || keyboardMode;
   useEffect(() => {
-    if (view !== 'interview' || !live.messages.length) { setBuildReady(false); return; }
+    if (!interviewish || !live.messages.length) { setBuildReady(false); return; }
     if (buildReady) return;
     const userTurns = live.messages.filter((m) => m.role === 'user').length;
     const lastEve = [...live.messages].reverse().find((m) => m.role === 'assistant')?.text ?? '';
-    const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we)\s+need|got everything|let'?s build|time to build|shall we build)\b/i;
-    if (userTurns >= 6 || (userTurns >= 3 && cue.test(lastEve))) {
+    const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we|you)\s+need|got everything|let'?s build|time to build|shall we build)\b/i;
+    if ((view === 'interview' && userTurns >= 6) || (userTurns >= 3 && cue.test(lastEve))) {
       buildHeardFrom.current = userTurns; // only turns spoken AFTER readiness can trigger the build
       setBuildReady(true);
     }
-  }, [view, live.messages, buildReady]);
+  }, [interviewish, view, live.messages, buildReady]);
 
   // NO build button (Joe, 2026-08-18): when she's ready she says so and hands them the phrase;
   // "okay, build it" (or kin) spoken after that point IS the trigger.
@@ -315,14 +320,14 @@ export function EveHome({
   const buildHeardFrom = useRef(0);
   useEffect(() => {
     if (!buildReady) { buildCueSent.current = false; return; }
-    if (buildCueSent.current || view !== 'interview' || brand) return;
+    if (buildCueSent.current || !interviewish || brand) return;
     buildCueSent.current = true;
     live.sendContext(
       "(You now have everything you need. In ONE short sentence, tell them that whenever they say “build it”, you'll build the whole thing — the brand, the store and the website.)",
     );
-  }, [buildReady, view, brand, live.sendContext]);
+  }, [buildReady, interviewish, brand, live.sendContext]);
   useEffect(() => {
-    if (!buildReady || view !== 'interview' || brand || live.finalizing) return;
+    if (!buildReady || !interviewish || brand || live.finalizing) return;
     const users = live.messages.filter((m) => m.role === 'user');
     for (let i = buildHeardFrom.current; i < users.length; i++) {
       if (/\b(build (it|her|them|my|the|this)|okay,? build|go ahead|let'?s (do it|go|build)|make it|launch it|do it|i'?m ready)\b/i.test(users[i].text)) {
@@ -332,7 +337,7 @@ export function EveHome({
       }
     }
     buildHeardFrom.current = users.length;
-  }, [buildReady, view, brand, live.messages, live.finalizing, live.finalize]);
+  }, [buildReady, interviewish, brand, live.messages, live.finalizing, live.finalize]);
 
   // The digest — Eve's proactive status report. Fetched lazily the first time it's opened.
   const [digest, setDigest] = useState<Digest | 'loading' | null>(null);
@@ -545,6 +550,14 @@ export function EveHome({
   // Keyboard/chat mode mutes the mic so Eve doesn't react to the room while you type.
   useEffect(() => { live.mute(keyboardMode || earMuted); }, [keyboardMode, earMuted, live.state, live.mute]);
   useEffect(() => {
+    // WEB: no app-active gating at all. AppState maps to window FOCUS there, so an unfocused
+    // (but fully visible) tab read as 'background' and the session gate never opened — she sat
+    // on "connecting…" forever (2026-08-18). Web voice sessions survive backgrounding the same
+    // way Meet/Discord calls do; suspend/release stays a MOBILE battery concern.
+    if (Platform.OS === 'web') {
+      setAppActive(true);
+      return;
+    }
     setAppActive(AppState.currentState === 'active');
     const sub = AppState.addEventListener('change', (st) => setAppActive(st === 'active'));
     return () => sub.remove();
@@ -1081,7 +1094,7 @@ export function EveHome({
           onExit={view === 'interview' ? resetToGuide : () => setKeyboardMode(false)}
           onFinalize={live.finalize}
           finalizing={live.finalizing}
-          canBuild={buildReady && view === 'interview'}
+          canBuild={buildReady}
           p={p}
           bg={BG}
         />

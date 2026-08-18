@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { LiveVoiceSession, AudioSessionBusyError, type LiveState } from '@/lib/live-voice';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 import { apiUrl } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 export interface UseLiveVoice {
   state: LiveState;
@@ -242,9 +243,17 @@ export function useLiveVoice(opts: {
     setFinalizing(true);
     setError(null);
     try {
+      // FRESH token: supabase-js pauses auto-refresh in hidden/unfocused web tabs, so the prop
+      // can be expired by build time (2026-08-18: Build → 'unauthorized'). getSession() refreshes
+      // an expired token on demand.
+      let token = opts.accessToken;
+      try {
+        const { data } = await supabase.auth.getSession();
+        token = data.session?.access_token ?? token;
+      } catch { /* fall back to the prop */ }
       const r = await fetch(apiUrl('/api/extract-brand'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opts.accessToken}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ messages }),
       });
       const d = (await r.json()) as { brand?: BrandResult; error?: string };

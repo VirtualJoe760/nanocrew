@@ -19,6 +19,7 @@ import {
 import { AudioContext, AudioRecorder, AudioBufferQueueSourceNode, AudioManager } from 'react-native-audio-api';
 
 import { apiUrl } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { type BrandResult, type ChatMessage } from '@/lib/interview';
 import { VOCABULARY_BRIEF } from '@/lib/site-vocabulary';
 import { pushSpeechChunk, resetSpeechLevel } from '@/lib/venus-speech-level';
@@ -386,10 +387,16 @@ export class LiveVoiceSession {
     // Watchdog: if we never reach "ws open" (audio session wedged, token expiry, network), surface a
     // retry instead of sitting on "thinking…" forever. Cleared in onopen; re-armed each start().
     this.armWatchdog();
-    // 1. mint the ephemeral token
+    // 1. mint the ephemeral token — with a FRESH auth token (supabase-js pauses auto-refresh in
+    // hidden/unfocused web tabs, so the constructor's token can be expired; 2026-08-18).
+    let auth = this.accessToken;
+    try {
+      const { data } = await supabase.auth.getSession();
+      auth = data.session?.access_token ?? auth;
+    } catch { /* fall back to the constructor token */ }
     const r = await fetch(apiUrl('/api/voice-live-token'), {
       method: 'POST',
-      headers: { Authorization: `Bearer ${this.accessToken}` },
+      headers: { Authorization: `Bearer ${auth}` },
     });
     const d = (await r.json()) as { token?: string; model?: string; error?: string };
     // If stop() ran while the token was minting (e.g. the overlay transitioned home→developing and a
