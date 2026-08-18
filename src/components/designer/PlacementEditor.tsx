@@ -9,7 +9,6 @@ import {
   ScrollView,
   StyleSheet,
   View,
-  Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 
@@ -117,21 +116,6 @@ function SizeSlider({
   );
 }
 
-// A titled horizontal rail of choice blocks — the tray's building unit (Joe, 2026-08-17:
-// "block style ui instead of stacking pills… scroll through our choices horizontally").
-function Blocks({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.section}>
-      <ThemedText type="code" themeColor="textSecondary" style={styles.sectionLabel}>
-        {label}
-      </ThemedText>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
-        {children}
-      </ScrollView>
-    </View>
-  );
-}
-
 // The embeddable editor core — used by the standalone modal AND inside the Finalize sheet,
 // so placement stays adjustable right up to publish.
 export function PlacementEditorBody({
@@ -162,6 +146,13 @@ export function PlacementEditorBody({
   const [addStep, setAddStep] = useState<'placement' | 'design' | null>(addDesignId ? 'placement' : null);
   const [pendingPlacement, setPendingPlacement] = useState<string | null>(null);
   const [mockups, setMockups] = useState<Record<string, string> | null>(null);
+  // v3 (Joe, 2026-08-17: "i dont like how all of the options we have to scroll the page down to
+  // see"): NO page scroll — the hero fills the measured stage and ONE tool rail shows at a time.
+  const [tool, setTool] = useState<'size' | 'color' | 'place' | 'align' | 'edges' | 'proof'>('size');
+  const [stageBox, setStageBox] = useState({ w: 0, h: 0 });
+  // Feather results override the prop-owned design urls (the server already persisted them).
+  const [feathered, setFeathered] = useState<Record<string, string>>({});
+  const [feathering, setFeathering] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -344,19 +335,19 @@ export function PlacementEditorBody({
 
   // ONE direct-manipulation hero (Joe's redesign, 2026-08-17): the design is dragged/resized ON
   // the garment mockup itself — no second abstract canvas. The hero matches the garment photo's
-  // aspect exactly, so PrintRect fractions of the container ARE fractions of the image.
-  const win = Dimensions.get('window');
-  let heroW = win.width - Spacing.four * 2;
+  // aspect exactly (fractions of the container ARE fractions of the image) and fills whatever
+  // space the measured stage gives it — the tool tray below is fixed, nothing scrolls.
+  let heroW = stageBox.w;
   let heroH = heroW / garmentAspect;
-  const heroMaxH = win.height * 0.5;
-  if (heroH > heroMaxH) {
-    heroH = heroMaxH;
+  if (stageBox.h && heroH > stageBox.h) {
+    heroH = stageBox.h;
     heroW = heroH * garmentAspect;
   }
+  const heroReady = heroW > 0 && heroH > 0;
   const useTmplPhoto = !!tmpl && onDefaultColor;
   const pa: PrintRect = useTmplPhoto && tmpl ? tmpl : PRINT_AREA_ON_GARMENT;
-  const scaleX = area ? (pa.w * heroW) / area.areaWidth : 1;
-  const scaleY = area ? (pa.h * heroH) / area.areaHeight : 1;
+  const scaleX = area && heroReady ? (pa.w * heroW) / area.areaWidth : 1;
+  const scaleY = area && heroReady ? (pa.h * heroH) / area.areaHeight : 1;
 
   // --- gesture plumbing (refs so the once-created responders read live values) ---
   const dragRef = useRef<{ box: Box } | null>(null);
@@ -554,7 +545,31 @@ export function PlacementEditorBody({
   }, [entries, loading, compositionId]);
 
   const availableToAdd = areas.filter((a) => !entries.some((e) => e.placement === a.placement));
-  const designUrl = entry ? designById.get(entry.designId)?.image : undefined;
+  const designUrl = entry
+    ? (feathered[entry.designId] ?? designById.get(entry.designId)?.image)
+    : undefined;
+
+  // Edge feather (Photoshop-style) right in the editor — Joe, 2026-08-17: "we should have
+  // options for feathering the edges here too". Free (no credits); the server persists the url.
+  const featherActive = (pct: number) => {
+    if (!entry || feathering) return;
+    setFeathering(true);
+    setError(null);
+    const natural = naturals[entry.designId] ?? 0;
+    const radius = natural ? Math.max(24, Math.round(natural * pct)) : undefined;
+    apiFetch('/api/creator/design-feather', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ designId: entry.designId, ...(radius ? { radius } : {}) }),
+    })
+      .then(readJson<{ image?: string; error?: string }>)
+      .then((d) => {
+        if (d.error) throw new Error(d.error);
+        if (d.image) setFeathered((m) => ({ ...m, [entry.designId]: d.image! }));
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : 'Feather failed'))
+      .finally(() => setFeathering(false));
+  };
 
   // Inch + DPI readout for the active design.
   const widthIn = entry ? entry.box.width / PRINT_DPI : 0;
@@ -583,232 +598,283 @@ export function PlacementEditorBody({
       </View>
     );
 
+  const TOOLS = [
+    ['size', 'SIZE'],
+    ...(colorVariants.length ? [['color', 'COLOR'] as const] : []),
+    ['place', 'PLACE'],
+    ['align', 'ALIGN'],
+    ['edges', 'EDGES'],
+    ['proof', 'PROOF'],
+  ] as [typeof tool, string][];
+
   return (
-    <ScrollView style={styles.fill} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
-      {/* ONE hero: the design is dragged/resized directly ON the garment (Joe, 2026-08-17).
-          GarmentMockup multiply-blends the art so it reads as printed; a transparent ghost box
-          with corner handles sits at the same spot for direct manipulation, and a dashed outline
-          marks the real Printful print area. */}
+    <View style={styles.fill}>
+      {/* ONE hero: the design is dragged/resized directly ON the garment. GarmentMockup
+          multiply-blends the art so it reads as printed; a transparent ghost box with corner
+          handles sits at the same spot, and a dashed outline marks the print area. */}
       {entry && area ? (
-        <View style={styles.editorWrap}>
-          <View style={[styles.hero, { width: heroW, height: heroH, borderColor: theme.backgroundSelected }]}>
-            <GarmentMockup
-              garmentUri={useTmplPhoto && tmpl ? tmpl.imageUrl : (previewVariant?.image ?? '')}
-              designUri={designUrl ?? null}
-              rect={{
-                x: pa.x + (entry.box.left / area.areaWidth) * pa.w,
-                y: pa.y + (entry.box.top / area.areaHeight) * pa.h,
-                w: (entry.box.width / area.areaWidth) * pa.w,
-                h: (entry.box.height / area.areaHeight) * pa.h,
-              }}
-              style={{ position: 'absolute', top: 0, left: 0, width: heroW, height: heroH }}
-            />
-            <View
-              pointerEvents="none"
-              style={[
-                styles.printZone,
-                {
-                  left: pa.x * heroW,
-                  top: pa.y * heroH,
-                  width: pa.w * heroW,
-                  height: pa.h * heroH,
-                  borderColor: theme.textSecondary,
-                },
-              ]}
-            />
-            <View
-              {...moveResponder.panHandlers}
-              style={[
-                styles.designBox,
-                {
-                  left: pa.x * heroW + entry.box.left * scaleX,
-                  top: pa.y * heroH + entry.box.top * scaleY,
-                  width: entry.box.width * scaleX,
-                  height: entry.box.height * scaleY,
-                },
-              ]}>
-              {(['tl', 'tr', 'bl', 'br'] as Corner[]).map((c) => (
-                <View key={c} {...cornerResponders[c].panHandlers} hitSlop={14} style={[styles.handle, HANDLE_POS[c]]} />
-              ))}
-            </View>
-          </View>
-          <ThemedText type="code" themeColor="textSecondary" style={styles.hint}>
-            DRAG TO MOVE · CORNERS TO RESIZE
-          </ThemedText>
-        </View>
-      ) : null}
-
-      {/* Size: readout strip + continuous slider */}
-      {entry && area ? (
-        <View style={styles.section}>
-          <View style={styles.readoutRow}>
-            <ThemedText type="code" themeColor="textSecondary" style={styles.sectionLabel}>
-              SIZE · {pct}% · {widthIn.toFixed(1)}″ × {heightIn.toFixed(1)}″
-            </ThemedText>
-            {dpi ? (
-              <ThemedText type="code" style={[styles.sectionLabel, { color: quality.color }]}>
-                ● {dpi} DPI · {quality.label.toUpperCase()}
-              </ThemedText>
-            ) : null}
-          </View>
-          <View style={styles.sizeRow}>
-            <Pressable onPress={() => setScalePct(Math.max(5, pct - 2))} hitSlop={8}>
-              <ThemedView type="backgroundElement" style={styles.stepBtn}>
-                <ThemedText type="small">−</ThemedText>
-              </ThemedView>
-            </Pressable>
-            <SizeSlider value={pct} min={5} max={entry.bleed ? 150 : 100} onChange={setScalePct} />
-            <Pressable onPress={() => setScalePct(Math.min(entry.bleed ? 150 : 100, pct + 2))} hitSlop={8}>
-              <ThemedView type="backgroundElement" style={styles.stepBtn}>
-                <ThemedText type="small">＋</ThemedText>
-              </ThemedView>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {/* Colourway blocks */}
-      {colorVariants.length ? (
-        <Blocks label="COLOR">
-          {colorVariants.map((c) => {
-            const on = previewColor === c.color;
-            return (
-              <Pressable key={c.color} onPress={() => setPreviewColor(c.color)} style={styles.block}>
-                <View style={[styles.swatchBig, { backgroundColor: c.colorCode }, on ? { borderColor: theme.text, borderWidth: 2 } : null]} />
-                <ThemedText type="code" themeColor={on ? 'text' : 'textSecondary'} style={styles.blockLabel} numberOfLines={1}>
-                  {c.color.toUpperCase()}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </Blocks>
-      ) : null}
-
-      {/* Placement blocks (design thumb per placement; long-press removes; ＋ adds) */}
-      <Blocks label="PLACEMENT">
-        {entries.map((e) => {
-          const on = active === e.placement;
-          const img = designById.get(e.designId)?.image;
-          return (
-            <Pressable
-              key={e.placement}
-              onPress={() => setActive(e.placement)}
-              onLongPress={() => removeEntry(e.placement)}
-              style={styles.block}>
-              <View style={[styles.blockTile, { backgroundColor: theme.backgroundElement }, on ? { borderColor: theme.text, borderWidth: 1.5 } : null]}>
-                {img ? <Image source={{ uri: img }} style={styles.blockTileImg} contentFit="contain" /> : null}
-              </View>
-              <ThemedText type="code" themeColor={on ? 'text' : 'textSecondary'} style={styles.blockLabel} numberOfLines={1}>
-                {(areas.find((a) => a.placement === e.placement)?.label ?? e.placement).toUpperCase()}
-              </ThemedText>
-            </Pressable>
-          );
-        })}
-        {addStep === 'placement'
-          ? availableToAdd.map((a) => (
-              <Pressable
-                key={a.placement}
-                onPress={() => {
-                  setPendingPlacement(a.placement);
-                  if (addDesignId) addEntry(a.placement, addDesignId);
-                  else setAddStep('design');
+        <View style={styles.stage} onLayout={(e) => setStageBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+          {heroReady ? (
+            <View style={[styles.hero, { width: heroW, height: heroH, borderColor: theme.backgroundSelected }]}>
+              <GarmentMockup
+                garmentUri={useTmplPhoto && tmpl ? tmpl.imageUrl : (previewVariant?.image ?? '')}
+                designUri={designUrl ?? null}
+                rect={{
+                  x: pa.x + (entry.box.left / area.areaWidth) * pa.w,
+                  y: pa.y + (entry.box.top / area.areaHeight) * pa.h,
+                  w: (entry.box.width / area.areaWidth) * pa.w,
+                  h: (entry.box.height / area.areaHeight) * pa.h,
                 }}
-                style={styles.block}>
-                <View style={[styles.blockTile, styles.blockTileDashed, { borderColor: theme.textSecondary }]}>
-                  <ThemedText type="small" themeColor="textSecondary">＋</ThemedText>
-                </View>
-                <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel} numberOfLines={1}>
-                  {a.label.toUpperCase()}
-                </ThemedText>
-              </Pressable>
-            ))
-          : availableToAdd.length ? (
-              <Pressable onPress={() => setAddStep('placement')} style={styles.block}>
-                <View style={[styles.blockTile, styles.blockTileDashed, { borderColor: theme.backgroundSelected }]}>
-                  <ThemedText type="small" themeColor="textSecondary">＋</ThemedText>
-                </View>
-                <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
-                  ADD
-                </ThemedText>
-              </Pressable>
-            ) : null}
-      </Blocks>
-      {addStep === 'design' && pendingPlacement ? (
-        <Blocks label="PICK A DESIGN">
-          {designs
-            .filter((d) => d.image && !d.image.startsWith('data:'))
-            .map((d) => (
-              <Pressable key={d.id} onPress={() => addEntry(pendingPlacement, d.id)} style={styles.block}>
-                <Image source={{ uri: d.image }} style={styles.blockTile} contentFit="cover" />
-              </Pressable>
-            ))}
-        </Blocks>
-      ) : null}
-
-      {/* Alignment blocks */}
-      {entry && area ? (
-        <Blocks label="ALIGN">
-          {(
-            [
-              ['Fit', (b: Box, a: Area) => clampBox({ ...b, left: 0, top: 0, width: a.areaWidth }, a.areaWidth, a.areaHeight, aspect, false)],
-              ['Fill width', (b: Box, a: Area) => ({ ...b, left: 0, width: a.areaWidth, height: a.areaWidth / aspect })],
-              ['Center', (b: Box, a: Area) => ({ ...b, left: (a.areaWidth - b.width) / 2, top: (a.areaHeight - b.height) / 2 })],
-              ['Top', (b: Box) => ({ ...b, top: 0 })],
-              ['Bottom', (b: Box, a: Area) => ({ ...b, top: a.areaHeight - b.height })],
-              ['Left', (b: Box) => ({ ...b, left: 0 })],
-              ['Right', (b: Box, a: Area) => ({ ...b, left: a.areaWidth - b.width })],
-            ] as const
-          ).map(([label, fn]) => (
-            <Pressable key={label} onPress={() => align(fn)}>
-              <ThemedView type="backgroundElement" style={styles.alignTile}>
-                <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
-                  {label.toUpperCase()}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-          ))}
-          <Pressable onPress={toggleBleed}>
-            <ThemedView type={entry.bleed ? 'backgroundSelected' : 'backgroundElement'} style={styles.alignTile}>
-              <ThemedText type="code" themeColor={entry.bleed ? 'text' : 'textSecondary'} style={styles.blockLabel}>
-                BLEED {entry.bleed ? 'ON' : 'OFF'}
-              </ThemedText>
-            </ThemedView>
-          </Pressable>
-        </Blocks>
-      ) : null}
-
-      {/* Printful's own render of the truth */}
-      {mockups ? (
-        <Blocks label="PRINTFUL MOCKUP">
-          {Object.entries(mockups).map(([k, url]) => (
-            <View key={k} style={styles.mockupItem}>
-              <Image source={{ uri: url }} style={styles.mockupImg} contentFit="contain" />
-              <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
-                {k.toUpperCase()}
-              </ThemedText>
+                style={{ position: 'absolute', top: 0, left: 0, width: heroW, height: heroH }}
+              />
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.printZone,
+                  {
+                    left: pa.x * heroW,
+                    top: pa.y * heroH,
+                    width: pa.w * heroW,
+                    height: pa.h * heroH,
+                    borderColor: theme.textSecondary,
+                  },
+                ]}
+              />
+              <View
+                {...moveResponder.panHandlers}
+                style={[
+                  styles.designBox,
+                  {
+                    left: pa.x * heroW + entry.box.left * scaleX,
+                    top: pa.y * heroH + entry.box.top * scaleY,
+                    width: entry.box.width * scaleX,
+                    height: entry.box.height * scaleY,
+                  },
+                ]}>
+                {(['tl', 'tr', 'bl', 'br'] as Corner[]).map((c) => (
+                  <View key={c} {...cornerResponders[c].panHandlers} hitSlop={14} style={[styles.handle, HANDLE_POS[c]]} />
+                ))}
+              </View>
             </View>
-          ))}
-        </Blocks>
-      ) : null}
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.stage} />
+      )}
+      <ThemedText type="code" themeColor="textSecondary" style={styles.hint}>
+        DRAG TO MOVE · CORNERS TO RESIZE
+      </ThemedText>
       {error ? (
-        <ThemedText type="small" style={{ color: '#e24b4a' }}>
+        <ThemedText type="small" style={styles.errorLine} numberOfLines={2}>
           {error}
         </ThemedText>
       ) : null}
 
-      <Pressable
-        onPress={generateMockup}
-        disabled={rendering || !variantId}
-        style={[styles.generate, { borderColor: theme.backgroundSelected, opacity: rendering ? 0.5 : 1 }]}>
-        {rendering ? (
-          <ActivityIndicator size="small" color={theme.text} />
-        ) : (
-          <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
-            GENERATE PRINTFUL MOCKUP
-          </ThemedText>
-        )}
-      </Pressable>
-    </ScrollView>
+      {/* Fixed tool tray — tabs swap ONE rail; nothing on this screen scrolls vertically. */}
+      <View style={styles.tray}>
+        <View style={styles.toolTabs}>
+          {TOOLS.map(([key, label]) => (
+            <Pressable key={key} onPress={() => setTool(key)} hitSlop={6} style={styles.toolTab}>
+              <ThemedText
+                type="code"
+                themeColor={tool === key ? 'text' : 'textSecondary'}
+                style={[styles.toolTabText, tool === key ? { borderBottomColor: theme.text, borderBottomWidth: 1 } : null]}>
+                {label}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.toolContent}>
+          {tool === 'size' && entry && area ? (
+            <View style={styles.fillW}>
+              <View style={styles.sizeRow}>
+                <Pressable onPress={() => setScalePct(Math.max(5, pct - 2))} hitSlop={8}>
+                  <ThemedView type="backgroundElement" style={styles.stepBtn}>
+                    <ThemedText type="small">−</ThemedText>
+                  </ThemedView>
+                </Pressable>
+                <SizeSlider value={pct} min={5} max={entry.bleed ? 150 : 100} onChange={setScalePct} />
+                <Pressable onPress={() => setScalePct(Math.min(entry.bleed ? 150 : 100, pct + 2))} hitSlop={8}>
+                  <ThemedView type="backgroundElement" style={styles.stepBtn}>
+                    <ThemedText type="small">＋</ThemedText>
+                  </ThemedView>
+                </Pressable>
+              </View>
+              <View style={styles.readoutRow}>
+                <ThemedText type="code" themeColor="textSecondary" style={styles.sectionLabel}>
+                  {pct}% · {widthIn.toFixed(1)}″ × {heightIn.toFixed(1)}″
+                </ThemedText>
+                {dpi ? (
+                  <ThemedText type="code" style={[styles.sectionLabel, { color: quality.color }]}>
+                    ● {dpi} DPI · {quality.label.toUpperCase()}
+                  </ThemedText>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
+          {tool === 'color' ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
+              {colorVariants.map((c) => {
+                const on = previewColor === c.color;
+                return (
+                  <Pressable key={c.color} onPress={() => setPreviewColor(c.color)} style={styles.block}>
+                    <View style={[styles.swatchBig, { backgroundColor: c.colorCode }, on ? { borderColor: theme.text, borderWidth: 2 } : null]} />
+                    <ThemedText type="code" themeColor={on ? 'text' : 'textSecondary'} style={styles.blockLabel} numberOfLines={1}>
+                      {c.color.toUpperCase()}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+
+          {tool === 'place' ? (
+            addStep === 'design' && pendingPlacement ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
+                {designs
+                  .filter((d) => d.image && !d.image.startsWith('data:'))
+                  .map((d) => (
+                    <Pressable key={d.id} onPress={() => addEntry(pendingPlacement, d.id)} style={styles.block}>
+                      <Image source={{ uri: d.image }} style={styles.blockTile} contentFit="cover" />
+                    </Pressable>
+                  ))}
+              </ScrollView>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
+                {entries.map((e) => {
+                  const on = active === e.placement;
+                  const img = feathered[e.designId] ?? designById.get(e.designId)?.image;
+                  return (
+                    <Pressable
+                      key={e.placement}
+                      onPress={() => setActive(e.placement)}
+                      onLongPress={() => removeEntry(e.placement)}
+                      style={styles.block}>
+                      <View style={[styles.blockTile, { backgroundColor: theme.backgroundElement }, on ? { borderColor: theme.text, borderWidth: 1.5 } : null]}>
+                        {img ? <Image source={{ uri: img }} style={styles.blockTileImg} contentFit="contain" /> : null}
+                      </View>
+                      <ThemedText type="code" themeColor={on ? 'text' : 'textSecondary'} style={styles.blockLabel} numberOfLines={1}>
+                        {(areas.find((a) => a.placement === e.placement)?.label ?? e.placement).toUpperCase()}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+                {addStep === 'placement'
+                  ? availableToAdd.map((a) => (
+                      <Pressable
+                        key={a.placement}
+                        onPress={() => {
+                          setPendingPlacement(a.placement);
+                          if (addDesignId) addEntry(a.placement, addDesignId);
+                          else setAddStep('design');
+                        }}
+                        style={styles.block}>
+                        <View style={[styles.blockTile, styles.blockTileDashed, { borderColor: theme.textSecondary }]}>
+                          <ThemedText type="small" themeColor="textSecondary">＋</ThemedText>
+                        </View>
+                        <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel} numberOfLines={1}>
+                          {a.label.toUpperCase()}
+                        </ThemedText>
+                      </Pressable>
+                    ))
+                  : availableToAdd.length ? (
+                      <Pressable onPress={() => setAddStep('placement')} style={styles.block}>
+                        <View style={[styles.blockTile, styles.blockTileDashed, { borderColor: theme.backgroundSelected }]}>
+                          <ThemedText type="small" themeColor="textSecondary">＋</ThemedText>
+                        </View>
+                        <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+                          ADD
+                        </ThemedText>
+                      </Pressable>
+                    ) : null}
+              </ScrollView>
+            )
+          ) : null}
+
+          {tool === 'align' && entry && area ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
+              {(
+                [
+                  ['Fit', (b: Box, a: Area) => clampBox({ ...b, left: 0, top: 0, width: a.areaWidth }, a.areaWidth, a.areaHeight, aspect, false)],
+                  ['Fill width', (b: Box, a: Area) => ({ ...b, left: 0, width: a.areaWidth, height: a.areaWidth / aspect })],
+                  ['Center', (b: Box, a: Area) => ({ ...b, left: (a.areaWidth - b.width) / 2, top: (a.areaHeight - b.height) / 2 })],
+                  ['Top', (b: Box) => ({ ...b, top: 0 })],
+                  ['Bottom', (b: Box, a: Area) => ({ ...b, top: a.areaHeight - b.height })],
+                  ['Left', (b: Box) => ({ ...b, left: 0 })],
+                  ['Right', (b: Box, a: Area) => ({ ...b, left: a.areaWidth - b.width })],
+                ] as const
+              ).map(([label, fn]) => (
+                <Pressable key={label} onPress={() => align(fn)}>
+                  <ThemedView type="backgroundElement" style={styles.alignTile}>
+                    <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+                      {label.toUpperCase()}
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              ))}
+              <Pressable onPress={toggleBleed}>
+                <ThemedView type={entry.bleed ? 'backgroundSelected' : 'backgroundElement'} style={styles.alignTile}>
+                  <ThemedText type="code" themeColor={entry.bleed ? 'text' : 'textSecondary'} style={styles.blockLabel}>
+                    BLEED {entry.bleed ? 'ON' : 'OFF'}
+                  </ThemedText>
+                </ThemedView>
+              </Pressable>
+            </ScrollView>
+          ) : null}
+
+          {tool === 'edges' && entry ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
+              {(
+                [
+                  ['FEATHER · LIGHT', 0.05],
+                  ['FEATHER · SOFT', 0.09],
+                  ['FEATHER · HEAVY', 0.14],
+                ] as const
+              ).map(([label, p]) => (
+                <Pressable key={label} onPress={() => featherActive(p)} disabled={feathering}>
+                  <ThemedView type="backgroundElement" style={[styles.alignTile, feathering ? { opacity: 0.5 } : null]}>
+                    <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+                      {label}
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              ))}
+              {feathering ? <ActivityIndicator size="small" color={theme.text} style={styles.trayBusy} /> : null}
+              <ThemedText type="code" themeColor="textSecondary" style={[styles.blockLabel, styles.trayNote]}>
+                SOFTENS THE EDGES · SAVES TO THE DESIGN
+              </ThemedText>
+            </ScrollView>
+          ) : null}
+
+          {tool === 'proof' ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
+              <Pressable onPress={generateMockup} disabled={rendering || !variantId}>
+                <ThemedView type="backgroundElement" style={[styles.alignTile, rendering ? { opacity: 0.5 } : null]}>
+                  {rendering ? (
+                    <ActivityIndicator size="small" color={theme.text} />
+                  ) : (
+                    <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+                      ✦ GENERATE PRINTFUL MOCKUP
+                    </ThemedText>
+                  )}
+                </ThemedView>
+              </Pressable>
+              {mockups
+                ? Object.entries(mockups).map(([k, url]) => (
+                    <View key={k} style={styles.mockupItem}>
+                      <Image source={{ uri: url }} style={styles.mockupImg} contentFit="contain" />
+                      <ThemedText type="code" themeColor="textSecondary" style={styles.blockLabel}>
+                        {k.toUpperCase()}
+                      </ThemedText>
+                    </View>
+                  ))
+                : null}
+            </ScrollView>
+          ) : null}
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -875,9 +941,17 @@ const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: Spacing.four, gap: Spacing.three },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   fill: { flex: 1 },
-  bodyContent: { gap: Spacing.three, paddingBottom: Spacing.four },
-  // Block tray — titled horizontal rails of choices.
-  section: { gap: 6 },
+  fillW: { flex: 1, gap: Spacing.two, justifyContent: 'center' },
+  // The hero fills whatever the stage measures; the tray below is FIXED — no page scroll.
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tray: { gap: Spacing.two, paddingTop: Spacing.two },
+  toolTabs: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  toolTab: { paddingVertical: 4 },
+  toolTabText: { fontSize: 10, letterSpacing: 1.2, paddingBottom: 3 },
+  toolContent: { height: 84, justifyContent: 'center' },
+  trayBusy: { alignSelf: 'center', marginLeft: Spacing.two },
+  trayNote: { alignSelf: 'center', marginLeft: Spacing.three, opacity: 0.7 },
+  errorLine: { color: '#e24b4a', textAlign: 'center' },
   sectionLabel: { fontSize: 9, letterSpacing: 1.2 },
   blockRow: { gap: Spacing.two, alignItems: 'flex-start', paddingRight: Spacing.four },
   block: { width: 60, alignItems: 'center', gap: 4 },
@@ -888,7 +962,6 @@ const styles = StyleSheet.create({
   alignTile: { paddingHorizontal: Spacing.three, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   swatchBig: { width: 34, height: 34, borderRadius: 17, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.5)' },
   // Hero
-  editorWrap: { alignItems: 'center', gap: Spacing.one },
   hero: { alignSelf: 'center', borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   printZone: { position: 'absolute', borderWidth: 1, borderStyle: 'dashed', borderRadius: 4, opacity: 0.45 },
   designBox: { position: 'absolute', borderWidth: 1, borderColor: '#3b82f6' },
@@ -912,12 +985,4 @@ const styles = StyleSheet.create({
   // Mockups + generate
   mockupItem: { alignItems: 'center', gap: 4 },
   mockupImg: { width: 120, height: 140, borderRadius: 10 },
-  generate: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.two,
-    borderRadius: 10,
-    borderWidth: 1,
-    minHeight: 40,
-  },
 });
