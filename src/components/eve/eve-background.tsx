@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { usePathname } from 'expo-router';
 import * as Device from 'expo-device';
 
@@ -56,7 +56,10 @@ export default function EveBackground() {
 }
 
 const styles = StyleSheet.create({
-  root: { position: 'absolute', top: 0, left: 0 },
+  // WEB: the R3F canvas creates its own stacking context and painted OVER the whole app (a black
+  // wall hiding every page — 2026-08-18). zIndex -1 pins her behind the DOM; native keeps plain
+  // sibling order (a negative zIndex there can drop her behind the root background).
+  root: { position: 'absolute', top: 0, left: 0, ...(Platform.OS === 'web' ? { zIndex: -1 } : null) },
   bed: { backgroundColor: '#08080a' },
   glyphWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -8,6 +8,7 @@ import { UpdateGate } from '@/components/update-gate';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
+import { Platform } from 'react-native';
 import EveBackground from '@/components/eve/eve-background';
 import { attachReviewDeepLink } from '@/lib/push';
 
@@ -44,7 +45,10 @@ export default function TabLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#08080a' }}>
+    // WEB: the root must be TRANSPARENT or it swallows Eve — her canvas sits at zIndex -1 inside
+    // this stacking context, and an opaque root paints over a negative-z child (2026-08-18; the
+    // page ground comes from <body>/SystemUI, both already #08080a).
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#08080a' }}>
       {/* Applies a downloaded OTA on the next return from background, so a fix doesn't need two
           force-quits to land. See components/update-gate.tsx. */}
       <UpdateGate />
