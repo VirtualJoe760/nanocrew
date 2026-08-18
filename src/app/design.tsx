@@ -9,12 +9,14 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
-import Svg, { Polyline } from 'react-native-svg';
+import * as FileSystem from 'expo-file-system/legacy';
+import Svg, { Circle, Path as SvgPath, Polyline } from 'react-native-svg';
 import type { DimensionValue } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { withScreenFade } from '@/components/screen-fade';
@@ -74,6 +76,41 @@ function shortPlacement(label: string): string {
 
 // A compact SQUARE action button for the design composer's tool row — an icon (or emoji) over a tiny
 // caption, laid out in a horizontally-scrolling strip. Toggle actions pass `selected`; one-shots don't.
+// Export a hosted image through the NATIVE share sheet (Joe, 2026-08-18: "save to the users
+// native photo collection… post it on instagram or take it to another platform"). iOS sharing a
+// LOCAL file offers Save Image / Instagram / Files; Android falls back to sharing the URL.
+async function shareImage(url: string | undefined) {
+  if (!url || !url.startsWith('http')) return;
+  try {
+    if (Platform.OS === 'ios') {
+      const dest = `${FileSystem.cacheDirectory}nanocrew-share-${Date.now()}.png`;
+      const dl = await FileSystem.downloadAsync(url, dest);
+      await Share.share({ url: dl.uri });
+    } else {
+      await Share.share({ message: url });
+    }
+  } catch (e) {
+    if (e instanceof Error && /cancel/i.test(e.message)) return;
+    Alert.alert('Could not share', e instanceof Error ? e.message : 'Try again.');
+  }
+}
+
+function FrogIcon({ size = 24 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      {/* eyes */}
+      <Circle cx="7.2" cy="7.2" r="3.4" fill="#5da345" />
+      <Circle cx="16.8" cy="7.2" r="3.4" fill="#5da345" />
+      <Circle cx="7.6" cy="7.4" r="1.5" fill="#0b0b0c" />
+      <Circle cx="16.4" cy="7.4" r="1.5" fill="#0b0b0c" />
+      {/* head */}
+      <SvgPath d="M2.5 12.2c0-3 4.2-4.6 9.5-4.6s9.5 1.6 9.5 4.6c0 4-4.2 7.3-9.5 7.3s-9.5-3.3-9.5-7.3z" fill="#5da345" />
+      {/* lips */}
+      <SvgPath d="M4 14.6c2.3 1.8 5 2.4 8 2.4s5.7-.6 8-2.4" stroke="#b8543f" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 function ActionTile({
   icon,
   emoji,
@@ -83,7 +120,7 @@ function ActionTile({
   onPress,
 }: {
   icon?: keyof typeof Ionicons.glyphMap;
-  emoji?: string;
+  emoji?: React.ReactNode;
   label: string;
   selected?: boolean;
   disabled?: boolean;
@@ -96,7 +133,8 @@ function ActionTile({
         type={selected ? 'backgroundSelected' : 'backgroundElement'}
         style={[styles.iconTile, selected ? { borderColor: theme.tint } : null]}>
         {emoji ? (
-          <ThemedText type="small" style={styles.tileEmoji}>{emoji}</ThemedText>
+          // ReactNode, not a string — this iOS runtime boxes emoji glyphs (B17), so icon art is SVG.
+          <View style={styles.tileEmoji}>{emoji}</View>
         ) : (
           <Ionicons name={icon ?? 'ellipse-outline'} size={22} color={selected ? theme.text : theme.textSecondary} />
         )}
@@ -1034,6 +1072,8 @@ function DesignScreen() {
       'Use this graphic',
       canAssign ? 'Assign it to your website, or remove it.' : 'Save the graphic first, then you can assign it.',
       [
+        { text: 'Add to canvas', onPress: () => void addNode('design', d.id) },
+        ...(canAssign ? [{ text: 'Share / save image', onPress: () => void shareImage(d.image) }] : []),
         ...(canAssign
           ? [
               { text: 'Set as website hero', onPress: () => void assignDesign(d, 'hero') },
@@ -2044,7 +2084,21 @@ function DesignScreen() {
                     // Drag the thumb UP toward the trashcan to delete the design (tap/long-press unchanged).
                     <GestureDetector key={d.id} gesture={trashPan('design', d.id, d.image)}>
                       <Pressable
-                        onPress={() => addNode('design', d.id)}
+                        // Tap = the EDIT flow (Joe, 2026-08-18): the design opens pre-staged in the
+                        // full-screen editor (mark/reprompt/regenerate/share). Canvas-add moved to
+                        // the long-press sheet.
+                        onPress={() => {
+                          if (!d.image || !d.image.startsWith('http')) return addNode('design', d.id) as unknown as void;
+                          setGeneratePreset({
+                            slot: 'images',
+                            label: assetMode ? 'Graphic' : 'Design',
+                            ratio: '1:1',
+                            background: 'transparent',
+                            guideline: '',
+                            currentUrl: d.image,
+                          });
+                          setGenerateOpen(true);
+                        }}
                         onLongPress={() => openDesignActions(d)}
                         delayLongPress={350}>
                         {d.image ? (
@@ -3204,52 +3258,35 @@ function GenerateModal({
                 placeholderTextColor={theme.textSecondary}
                 style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
               />
-              <View style={styles.optionRow}>
-                <Pressable onPress={() => setMarking((m) => !m)} disabled={busy}>
-                  <ThemedView type={marking ? 'backgroundSelected' : 'backgroundElement'} style={styles.chip}>
-                    <ThemedText type="small" themeColor={marking ? 'text' : 'textSecondary'}>
-                      ○ Mark area
-                    </ThemedText>
-                  </ThemedView>
-                </Pressable>
+              {/* SQUARE tool tiles in a horizontal strip — same language as the generation form
+                  (Joe, 2026-08-18: no more pill chips; the marker gets a pen icon). */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.iconStrip}>
+                <ActionTile icon="pencil-outline" label="Mark" selected={marking} disabled={busy} onPress={() => setMarking((m) => !m)} />
                 {strokes.length ? (
-                  <Pressable onPress={() => setStrokes([])} disabled={busy}>
-                    <ThemedView type="backgroundElement" style={styles.chip}>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        Clear marks
-                      </ThemedText>
-                    </ThemedView>
-                  </Pressable>
+                  <ActionTile icon="close-circle-outline" label="Clear" disabled={busy} onPress={() => setStrokes([])} />
                 ) : null}
-                <Pressable onPress={applyChange} disabled={!editText.trim() || busy}>
-                  <ThemedView
-                    type="backgroundElement"
-                    style={[styles.chip, { opacity: !editText.trim() || busy ? 0.5 : 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {busy ? '… working' : 'Apply change'}
-                    </ThemedText>
-                  </ThemedView>
-                </Pressable>
-                <Pressable onPress={() => void runGenerate()} disabled={busy}>
-                  <ThemedView type="backgroundElement" style={[styles.chip, { opacity: busy ? 0.5 : 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      ↻ Regenerate
-                    </ThemedText>
-                  </ThemedView>
-                </Pressable>
-                <Pressable
+                <ActionTile
+                  icon="color-wand-outline"
+                  label={busy ? 'Working…' : 'Apply'}
+                  disabled={!editText.trim() || busy}
+                  onPress={applyChange}
+                />
+                <ActionTile icon="refresh-outline" label="Regenerate" disabled={busy} onPress={() => void runGenerate()} />
+                <ActionTile icon="share-outline" label="Share" disabled={busy} onPress={() => void shareImage(staged.url)} />
+                <ActionTile
+                  icon="trash-outline"
+                  label="Discard"
+                  disabled={busy}
                   onPress={() => {
                     setStaged(null);
                     setError(null);
                   }}
-                  disabled={busy}>
-                  <ThemedView type="backgroundElement" style={styles.chip}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      Discard
-                    </ThemedText>
-                  </ThemedView>
-                </Pressable>
-              </View>
+                />
+              </ScrollView>
             </>
           ) : (
             <>
@@ -3317,7 +3354,7 @@ function GenerateModal({
                 ) : null}
                 {/* Frog = the IP-safe stand-in for meme-frog culture (Pepe is Matt Furie's copyright). */}
                 <ActionTile
-                  emoji="🐸"
+                  emoji={<FrogIcon />}
                   label="Meme"
                   selected={meme}
                   onPress={() => { const next = !meme; setMeme(next); if (next) { setIsText(false); setBackground(modality === 'graphics' ? 'filled' : 'transparent'); } }}
@@ -3568,7 +3605,7 @@ const styles = StyleSheet.create({
   chip: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.three, borderRadius: 999 },
   iconStrip: { flexDirection: 'row', gap: Spacing.two, paddingVertical: Spacing.one, paddingRight: Spacing.four },
   iconTile: { width: 66, height: 62, borderRadius: 14, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 4 },
-  tileEmoji: { fontSize: 22, lineHeight: 24 },
+  tileEmoji: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   tileLabel: { fontSize: 9, letterSpacing: 0.2 },
   genScreen: { flex: 1, paddingHorizontal: Spacing.four },
   genKav: { flex: 1, gap: Spacing.three },

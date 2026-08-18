@@ -768,7 +768,7 @@ export function DesignCanvas({
       {nodes.length === 0 ? (
         <View pointerEvents="none" style={styles.hintWrap}>
           <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-            Generate a design, then tap it (or a blank below) to drop it here. Drag to arrange,
+            Generate a design — tap it below to edit, long-press to drop it here. Drag to arrange,
             pinch to zoom.
           </ThemedText>
         </View>

@@ -272,7 +272,11 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   asset pre-staged — "change it" reprompts/imprints it (**○ Mark area**: draw red marker strokes
   on the image; they're baked into the reference server-side (`lib/annotate.ts`) and the model
   edits ONLY the marked region, erasing the marks — `/api/generate` `marks` param), Regenerate
-  rerolls, and the approve CTA
+  rerolls; the review toolbar is SQUARE icon tiles in a horizontal strip (pencil = Mark, wand =
+  Apply, share = the NATIVE share sheet — download-to-cache + iOS Share → Save Image / Instagram /
+  Files, no extra native deps); TAPPING a design/graphic thumb in the dock opens this edit flow
+  pre-staged (canvas-add moved to long-press, which also gains "Share / save image"), and the
+  approve CTA
   ("Set as hero" etc.) assigns straight to the slot. **Long-press a tile** drops its connect-target
   on the canvas (the drag-to-assign flow stays). Auto-generation (OG card, derived kit) is
   unchanged — these are creator overrides on top.
