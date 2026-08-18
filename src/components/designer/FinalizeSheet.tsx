@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
@@ -70,6 +70,12 @@ export function FinalizeSheet({
   // One-tap model shots right after publish — /api/publish returns the local product id, so the
   // success screen can kick off on-model advertising photos without leaving the sheet.
   const [productId, setProductId] = useState<string | null>(null);
+  // Per-COLOUR Printful shots for the pricing page (Joe, 2026-08-18): hyper-real product
+  // photography per colourway — on-model when the product's generator offers it, flat otherwise.
+  const [colorShots, setColorShots] = useState<Record<string, string>>({});
+  const [colorShotsStyle, setColorShotsStyle] = useState<string | null>(null);
+  const [colorShotsBusy, setColorShotsBusy] = useState(false);
+  const colorShotsFired = useRef(false);
   const [shots, setShots] = useState<string[]>([]);
   const [shotsBusy, setShotsBusy] = useState(false);
   const [shotsErr, setShotsErr] = useState<string | null>(null);
@@ -104,6 +110,31 @@ export function FinalizeSheet({
     }
     return [...m.entries()].map(([color, vs]) => ({ color, colorCode: vs[0].colorCode, vs }));
   }, [variants]);
+
+  // Kick off the per-colour shot render the first time pricing opens (one generator task,
+  // ~5–20s; thumbnails fill in together when it lands). Free — Printful, not paid AI.
+  useEffect(() => {
+    if (step !== 'pricing' || publishedId || colorShotsFired.current || !colorGroups.length) return;
+    colorShotsFired.current = true;
+    setColorShotsBusy(true);
+    apiFetch('/api/creator/color-mockups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ compositionId, templateKey, colors: colorGroups.map((g) => g.color).slice(0, 10) }),
+    })
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as {
+          mockups?: Record<string, string>;
+          style?: string | null;
+          error?: string;
+        };
+        if (!r.ok || d.error) throw new Error(d.error || 'shots failed');
+        setColorShots(d.mockups ?? {});
+        setColorShotsStyle(d.style ?? null);
+      })
+      .catch(() => {}) // best-effort — the swatch cards stand on their own
+      .finally(() => setColorShotsBusy(false));
+  }, [step, publishedId, colorGroups, compositionId, templateKey]);
 
   const toggleColor = (color: string) => {
     setSelectedColors((s) => {
@@ -369,22 +400,55 @@ export function FinalizeSheet({
                 </ThemedText>
               </View>
 
-              <ThemedText type="small" themeColor="textSecondary">
-                Colours · {selectedCount} variants selected
-              </ThemedText>
-              <View style={styles.colorWrap}>
+              <View style={styles.colorHeadRow}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Colours · {selectedCount} variants selected
+                </ThemedText>
+                {colorShotsBusy ? (
+                  <View style={styles.colorHeadBusy}>
+                    <ActivityIndicator size="small" color={theme.textSecondary} />
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Shooting…
+                    </ThemedText>
+                  </View>
+                ) : colorShotsStyle ? (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Printful model shots
+                  </ThemedText>
+                ) : null}
+              </View>
+              <View style={styles.colorGrid}>
                 {colorGroups.map((g) => {
                   const on = selectedColors.has(g.color);
+                  const shot = colorShots[g.color];
                   return (
-                    <Pressable key={g.color} onPress={() => toggleColor(g.color)}>
+                    <Pressable key={g.color} onPress={() => toggleColor(g.color)} style={styles.colorCard}>
                       <ThemedView
-                        type={on ? 'backgroundSelected' : 'backgroundElement'}
-                        style={styles.colorChip}>
+                        type="backgroundElement"
+                        style={[styles.colorCardThumb, on ? { borderColor: theme.text, borderWidth: 2 } : null]}>
+                        {shot ? (
+                          <Image source={{ uri: shot }} style={styles.colorCardImg} contentFit="cover" />
+                        ) : (
+                          <View style={[styles.colorCardFill, { backgroundColor: g.colorCode }]} />
+                        )}
+                        {on ? (
+                          <View style={[styles.colorCardTick, { backgroundColor: theme.text }]}>
+                            <ThemedText type="small" style={{ color: theme.background, fontSize: 11, lineHeight: 14 }}>
+                              ✓
+                            </ThemedText>
+                          </View>
+                        ) : null}
+                      </ThemedView>
+                      <View style={styles.colorCardMeta}>
                         <View style={[styles.swatch, { backgroundColor: g.colorCode }]} />
-                        <ThemedText type="small" themeColor={on ? 'text' : 'textSecondary'}>
+                        <ThemedText
+                          type="small"
+                          themeColor={on ? 'text' : 'textSecondary'}
+                          numberOfLines={1}
+                          style={styles.colorCardName}>
                           {g.color} · {g.vs.length}
                         </ThemedText>
-                      </ThemedView>
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -433,15 +497,25 @@ const styles = StyleSheet.create({
     minWidth: 84,
     textAlign: 'center',
   },
-  colorWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  colorChip: {
-    flexDirection: 'row',
+  colorHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  colorHeadBusy: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  colorCard: { width: '31.5%', gap: 4 },
+  colorCardThumb: { aspectRatio: 0.8, borderRadius: 10, overflow: 'hidden' },
+  colorCardImg: { width: '100%', height: '100%' },
+  colorCardFill: { flex: 1, opacity: 0.85 },
+  colorCardTick: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
-    gap: Spacing.one,
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: 999,
+    justifyContent: 'center',
   },
+  colorCardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  colorCardName: { flexShrink: 1 },
   swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.5)' },
   doneWrap: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.four },
   doneTitle: { textAlign: 'center' },

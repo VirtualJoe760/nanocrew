@@ -269,6 +269,59 @@ export async function renderMockups(
   throw new Error('Mockup task timed out');
 }
 
+// Mockup STYLE groups a product's generator offers (e.g. "Flat", "Men's", "Women's Lifestyle").
+// The on-model groups are real photographed models — the hyper-real per-colour shots the pricing
+// page shows (Joe, 2026-08-18).
+export async function getMockupOptionGroups(productId: number | string): Promise<string[]> {
+  const r = await pfRequest<{ option_groups?: string[] }>(`/mockup-generator/printfiles/${productId}`);
+  return r.option_groups ?? [];
+}
+
+// Render ONE generator task across MANY variants (one per colourway) and return the mockup url
+// per variant group. Same task machinery as renderMockups, but keeps the variant→url mapping.
+export async function renderMockupsForVariants(
+  productId: number | string,
+  variantIds: number[],
+  files: MockupFile[],
+  opts?: {
+    optionGroups?: string[];
+    technique?: string | null;
+    productOptions?: Record<string, string | string[]>;
+  },
+): Promise<{ variantIds: number[]; url: string }[]> {
+  const task = await pfPost<{ task_key: string }>(`/mockup-generator/create-task/${productId}`, {
+    variant_ids: variantIds,
+    format: 'jpg',
+    files,
+    ...(opts?.optionGroups?.length ? { option_groups: opts.optionGroups } : {}),
+    ...(opts?.technique && opts.technique !== 'DTG' ? { technique: opts.technique } : {}),
+    ...(opts?.productOptions && Object.keys(opts.productOptions).length
+      ? { product_options: opts.productOptions }
+      : {}),
+  });
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const status = await pfRequest<{
+      status: string;
+      error?: string;
+      mockups?: { placement: string; variant_ids?: number[]; mockup_url: string }[];
+    }>(`/mockup-generator/task?task_key=${encodeURIComponent(task.task_key)}`);
+    if (status.status === 'completed') {
+      const seen = new Set<string>();
+      const out: { variantIds: number[]; url: string }[] = [];
+      for (const m of status.mockups ?? []) {
+        const key = (m.variant_ids ?? []).join(',');
+        if (seen.has(key)) continue; // first mockup per variant group (the primary style/placement)
+        seen.add(key);
+        out.push({ variantIds: m.variant_ids ?? [], url: m.mockup_url });
+      }
+      return out;
+    }
+    if (status.status === 'failed') throw new Error(status.error || 'Mockup task failed');
+  }
+  throw new Error('Mockup task timed out');
+}
+
 export interface CatalogVariant {
   id: number;
   size: string;

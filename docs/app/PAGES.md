@@ -253,7 +253,10 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   (LIGHT/SOFT/HEAVY → `/api/creator/design-feather`, free, persists to the design). PROOF = generate + view the real Printful mockups. Picking a non-default
   colourway swaps the hero to that variant's catalog photo (real colour, approximate rect).
   Placements AUTOSAVE (debounced PATCH `/api/compositions/:id`) — no mockup render needed to
-  persist. **FinalizeSheet** (also full-screen) sets
+  persist. **FinalizeSheet** (also full-screen) sets — its pricing step shows colours as PHOTO CARDS: a grid of
+  per-colourway Printful mockup shots (`/api/creator/color-mockups`, on-model style when the product
+  offers one, flat otherwise; swatch placeholder until the ~15s generator task lands; tap toggles the
+  colour for publish) — and sets
   name/collection/sizes/colors and publishes (`/api/publish`, with the cost+$5 price floor enforced).
 - **Blend / Combine:** merge two designs (`/api/merge`) or pick placements for a design+product.
 - **Catalogues/drops:** create with season presets, scoped to the chosen brand (`/api/catalogues`).
