@@ -492,10 +492,12 @@ export class LiveVoiceSession {
         // gust doesn't read as a new turn starting.
         realtimeInputConfig: {
           automaticActivityDetection: {
+            // Rebalanced same night: 1000ms + END_LOW meant a windy room NEVER reads as silent —
+            // she'd listen forever. 650ms is the compromise between cut-offs and dead air.
             endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
             startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
-            silenceDurationMs: 1000,
-            prefixPaddingMs: 200,
+            silenceDurationMs: 650,
+            prefixPaddingMs: 100,
           },
         },
         inputAudioTranscription: {},
