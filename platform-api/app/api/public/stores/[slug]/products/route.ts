@@ -48,6 +48,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       name: string;
       descriptionMd: string | null;
       imageUrl: string | null;
+      mockupUrl: string | null;
       modelShots: string[];
       modelVideos: string[];
       category: string | null;
@@ -63,7 +64,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
           slug: r.slug,
           name: r.name,
           descriptionMd: r.descriptionMd,
-          imageUrl: r.imageUrl,
+          // ON-MODEL BY DEFAULT: the card image is a model WEARING the product when shots exist —
+          // never the flat slapped-on mockup (Joe, 2026-08-17). The flat render stays available
+          // as mockupUrl; product-page galleries still get the full modelShots array.
+          imageUrl: (r.modelShots && r.modelShots[0]) || r.imageUrl,
+          mockupUrl: r.imageUrl,
           modelShots: r.modelShots ?? [],
           modelVideos: r.modelVideos ?? [],
           category: r.category,

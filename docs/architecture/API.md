@@ -37,7 +37,7 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 |---|---|---|---|
 | GET | `/api/creator/products?storeSlug=` | bearer | A store's published products + video status. |
 | DELETE | `/api/creator/products/:id` | bearer | Remove a product everywhere — our DB **+ Printful** — then `revalidateStorefront(slug)` to repaint the website. |
-| POST | `/api/publish` | bearer, RL | Composition → live Printful sync product (idempotent). Enforces the price floor. |
+| POST | `/api/publish` | bearer, RL | Composition → live Printful sync product (idempotent). Enforces the price floor. **On-model by default (2026-08-17):** after publish it fire-and-forgets `generateModelShots` (debits `model_shots`, refunds on failure, skips quietly when credits are short) and repaints the storefront when shots land. |
 | GET/POST | `/api/catalogues` | bearer | List / create collections (drops). |
 | GET/PUT | `/api/canvas/:id` | bearer | Load / replace the designer canvas node tree. |
 | POST | `/api/designs` | bearer | Persist an uploaded image as a design. |

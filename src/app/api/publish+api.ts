@@ -9,6 +9,8 @@ import { createSyncProduct, getCatalogVariants, upscaleForPrint, type MockupPosi
 import { checkProviderPolicy, resolvePodProvider } from '@/lib/pod-policy';
 import { minRetailCents } from '@/lib/pricing';
 import { revalidateStorefront } from '@/lib/storefront-revalidate';
+import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
+import { generateModelShots } from '@/lib/model-shots';
 
 /** Printful mockup URLs are temporary S3 links (~72h) — persist to Cloudinary. */
 async function persistMockup(url: string | null): Promise<string | null> {
@@ -185,6 +187,7 @@ export async function POST(req: Request) {
 
     // Mirror into the local catalog (feeds the Market tab + the feed) — the composition
     // already knows which store it belongs to.
+    const mockupUrl = await persistMockup(comp.previewUrl ?? null);
     const [product] = await db
       .insert(schema.products)
       .values({
@@ -194,7 +197,7 @@ export async function POST(req: Request) {
         slug: `${slugify(name)}-${syncProductId}`,
         name,
         descriptionMd: body.description?.trim() || null,
-        imageUrl: await persistMockup(comp.previewUrl ?? null),
+        imageUrl: mockupUrl,
         isPublished: true,
       })
       .returning({ id: schema.products.id, slug: schema.products.slug });
@@ -217,6 +220,33 @@ export async function POST(req: Request) {
       .where(eq(schema.stores.id, comp.storeId))
       .limit(1);
     void revalidateStorefront(store?.slug);
+
+    // ON-MODEL BY DEFAULT (Joe, 2026-08-17): every published product gets model shots
+    // automatically — fire-and-forget so publish returns instantly (Cloud Run is a persistent
+    // Node, the work survives the response). Debits the standard model_shots cost with
+    // refund-on-failure; if credits are short the product still publishes and the Sell surface
+    // can offer shots later. The storefront repaints itself when the shots land.
+    if (mockupUrl) {
+      void (async () => {
+        try {
+          await debit(user.id, 'model_shots', product.id);
+        } catch (e) {
+          if (e instanceof InsufficientCreditsError) return; // skip quietly — publish is unaffected
+          return;
+        }
+        try {
+          const shots = await generateModelShots(mockupUrl, 3);
+          if (shots.length) {
+            await db.update(schema.products).set({ modelShots: shots }).where(eq(schema.products.id, product.id));
+            void revalidateStorefront(store?.slug);
+          } else {
+            await grant(user.id, CREDIT_COSTS.model_shots, 'refund', product.id).catch(() => {});
+          }
+        } catch {
+          await grant(user.id, CREDIT_COSTS.model_shots, 'refund', product.id).catch(() => {});
+        }
+      })();
+    }
 
     return Response.json({ ok: true, printfulSyncProductId: syncProductId, product, warnings: policy.warnings });
   } catch (e) {

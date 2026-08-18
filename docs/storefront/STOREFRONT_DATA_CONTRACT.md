@@ -49,7 +49,8 @@ Returns **published products with NESTED variants** (not flat rows — the #1 go
       "slug": "coast-sunset-crew-438876637",
       "name": "COAST SUNSET CREW",
       "descriptionMd": "string | null",
-      "imageUrl": "https://res.cloudinary.com/.../coast-sunset-crew.jpg | null",
+      "imageUrl": "https://res.cloudinary.com/.../coast-sunset-crew.jpg | null", // ON-MODEL when shots exist (modelShots[0]); flat mockup only as fallback (2026-08-17)
+      "mockupUrl": "url | null",           // the flat product render, always
       "modelShots": ["url", ...],          // on-model gallery
       "modelVideos": ["url", ...],
       "category": "string | null",          // free text; templates infer (tee/hoodie/…) from the name
