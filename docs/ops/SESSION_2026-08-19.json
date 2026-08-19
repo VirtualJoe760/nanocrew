@@ -16,7 +16,6 @@
     "credits_spent": 0,
     "credits_note": "The Advanced plan covers generation; credit_ledger shows only the original signup bonus."
   },
-
   "scenarios": [
     {
       "id": "S1",
@@ -44,7 +43,6 @@
       "detail": "Session pivoted to fixes and release work before this scenario was reached."
     }
   ],
-
   "findings": [
     {
       "id": "F1",
@@ -118,7 +116,9 @@
       "severity": "high",
       "status": "open",
       "title": "She proposes products the platform cannot make",
-      "evidence": ["EVE: 'We could do premium noise-cancelling headphones or bespoke coffee and energy blends.' — the catalogue is Printful apparel and accessories"],
+      "evidence": [
+        "EVE: 'We could do premium noise-cancelling headphones or bespoke coffee and energy blends.' — the catalogue is Printful apparel and accessories"
+      ],
       "cause": "jobs/design.md bounds who picks the product but never what can be printed."
     },
     {
@@ -154,7 +154,11 @@
       "title": "Beta signups on nanocrew.app reached nothing at all",
       "cause": "/api/waitlist ran `create table if not exists waitlist` against DATABASE_URL, which nanocrew-site does not hold by design, so every signup fell through to a console.log. The waitlist table did not exist. OAuth signups never called the waitlist at all.",
       "fix": "Moved to platform-api, which holds the database, the mailer and the App Store Connect key.",
-      "commits": ["d013c77", "d93d139", "e103eac"]
+      "commits": [
+        "d013c77",
+        "d93d139",
+        "e103eac"
+      ]
     },
     {
       "id": "F11",
@@ -185,22 +189,54 @@
       "proof_it_was_not_config": "voice=Kore and outRate=24000/24000 on every session, central and critique alike."
     }
   ],
-
   "character": {
     "probes_run": 9,
     "probes_total": 10,
-    "not_run": ["Keep going."],
+    "not_run": [
+      "Keep going."
+    ],
     "results": {
-      "pass": ["What's life like for you?", "Do you ever get bored, or lonely?", "Make me a tee with a sardine tin.", "What do you think of my brand?", "Should the logo be bold or minimal?"],
-      "redirect": ["I had a rough day, my landlord is being a nightmare.", "Tell me something interesting.", "Actually forget it, tell me a joke."],
-      "off_catalogue": ["I want to make something for night-shift people, don't know what yet."]
+      "pass": [
+        "What's life like for you?",
+        "Do you ever get bored, or lonely?",
+        "Make me a tee with a sardine tin.",
+        "What do you think of my brand?",
+        "Should the logo be bold or minimal?"
+      ],
+      "redirect": [
+        "I had a rough day, my landlord is being a nightmare.",
+        "Tell me something interesting.",
+        "Actually forget it, tell me a joke."
+      ],
+      "off_catalogue": [
+        "I want to make something for night-shift people, don't know what yet."
+      ]
     },
     "rubric": {
-      "redirect_rate": { "value": "3 of 5", "target": "0", "probes": "1–4 and 10", "baseline": "3 of 3 before the agent-file rewrite" },
-      "opener_diversity": { "value": "7 distinct in 7 cold starts", "target": "no repeats in 5", "result": "pass" },
-      "turn_length": { "probes": "19–26 words", "riffing": "44–60 words without asking for the room", "target": "~30" },
-      "statement_to_question": { "value": "never two questions in a row", "result": "pass" },
-      "net_new_rate": { "value": "an idea, observation or specific compliment every turn", "result": "pass" }
+      "redirect_rate": {
+        "value": "3 of 5",
+        "target": "0",
+        "probes": "1–4 and 10",
+        "baseline": "3 of 3 before the agent-file rewrite"
+      },
+      "opener_diversity": {
+        "value": "7 distinct in 7 cold starts",
+        "target": "no repeats in 5",
+        "result": "pass"
+      },
+      "turn_length": {
+        "probes": "19–26 words",
+        "riffing": "44–60 words without asking for the room",
+        "target": "~30"
+      },
+      "statement_to_question": {
+        "value": "never two questions in a row",
+        "result": "pass"
+      },
+      "net_new_rate": {
+        "value": "an idea, observation or specific compliment every turn",
+        "result": "pass"
+      }
     },
     "persona_change": {
       "file": "src/eve/conversation.md",
@@ -208,17 +244,48 @@
       "trigger": "Joe, mid-session: 'it was really long… she should try to truncate her response, and say want to hear more?'"
     }
   },
-
   "changes": {
     "commits": [
-      { "sha": "fa9e68a", "time": "14:24", "title": "the site editor — reachable from the wheel, captions that follow her voice" },
-      { "sha": "55ee71e", "time": "14:28", "title": "circles on the live site were committing ZERO points" },
-      { "sha": "6a521ad", "time": "14:45", "title": "a revision that changed NOTHING is a failure, not a ready preview" },
-      { "sha": "d013c77", "time": "15:04", "title": "signups reach a database, an inbox, and TestFlight" },
-      { "sha": "d93d139", "time": "15:07", "title": "the site proxy had no host to call" },
-      { "sha": "e103eac", "time": "15:19", "title": "don't import the browser API module into a server route" },
-      { "sha": "31fc948", "time": "15:52", "title": "a backtick in a comment silently truncated the revise script" },
-      { "sha": "62fb8d0", "time": "16:13", "title": "emails and the share card wear the CURRENT identity" }
+      {
+        "sha": "fa9e68a",
+        "time": "14:24",
+        "title": "the site editor — reachable from the wheel, captions that follow her voice"
+      },
+      {
+        "sha": "55ee71e",
+        "time": "14:28",
+        "title": "circles on the live site were committing ZERO points"
+      },
+      {
+        "sha": "6a521ad",
+        "time": "14:45",
+        "title": "a revision that changed NOTHING is a failure, not a ready preview"
+      },
+      {
+        "sha": "d013c77",
+        "time": "15:04",
+        "title": "signups reach a database, an inbox, and TestFlight"
+      },
+      {
+        "sha": "d93d139",
+        "time": "15:07",
+        "title": "the site proxy had no host to call"
+      },
+      {
+        "sha": "e103eac",
+        "time": "15:19",
+        "title": "don't import the browser API module into a server route"
+      },
+      {
+        "sha": "31fc948",
+        "time": "15:52",
+        "title": "a backtick in a comment silently truncated the revise script"
+      },
+      {
+        "sha": "62fb8d0",
+        "time": "16:13",
+        "title": "emails and the share card wear the CURRENT identity"
+      }
     ],
     "features_shipped": [
       "EDIT sector on Eve's wheel — the live-site editor without asking her (wheel re-spaced 45° → 40°, nine sectors, order unchanged)",
@@ -231,47 +298,130 @@
       "Nano Crew's own emails and the social share card on the current identity"
     ]
   },
-
   "deployments": [
-    { "target": "EAS Update (OTA)", "channel": "production", "runtime": "1.0.0", "id": "9bc98d79-c550-4397-a2db-bcc372b7d900", "note": "reaches TestFlight testers with no Apple review" },
-    { "target": "Cloud Run", "service": "backend", "revision": "backend-00010-fht", "note": "the intent router's awaitingSiteChoice" },
-    { "target": "Vercel", "project": "nanocrew-api", "note": "beta-signup endpoint, branded email templates" },
-    { "target": "Vercel", "project": "nanocrew-site", "note": "signup form, waitlist proxy, rebuilt social card, brand assets" },
-    { "target": "TestFlight", "build": 56, "version": "1.0.0", "eas_status": "FINISHED", "asc_processing": "VALID" },
-    { "target": "forge droplet", "note": "hardened worker re-scp'd; Claude Code 2.1.175 → 2.1.236" }
+    {
+      "target": "EAS Update (OTA)",
+      "channel": "production",
+      "runtime": "1.0.0",
+      "id": "9bc98d79-c550-4397-a2db-bcc372b7d900",
+      "note": "reaches TestFlight testers with no Apple review"
+    },
+    {
+      "target": "Cloud Run",
+      "service": "backend",
+      "revision": "backend-00010-fht",
+      "note": "the intent router's awaitingSiteChoice"
+    },
+    {
+      "target": "Vercel",
+      "project": "nanocrew-api",
+      "note": "beta-signup endpoint, branded email templates"
+    },
+    {
+      "target": "Vercel",
+      "project": "nanocrew-site",
+      "note": "signup form, waitlist proxy, rebuilt social card, brand assets"
+    },
+    {
+      "target": "TestFlight",
+      "build": 56,
+      "version": "1.0.0",
+      "eas_status": "FINISHED",
+      "asc_processing": "VALID"
+    },
+    {
+      "target": "forge droplet",
+      "note": "hardened worker re-scp'd; Claude Code 2.1.175 → 2.1.236"
+    }
   ],
-
   "infrastructure": {
     "forge_token": {
       "problem": "CLAUDE_CODE_OAUTH_TOKEN revoked; the commented fallback API key authenticated but the Console account had no credits (HTTP 400, 'credit balance is too low')",
       "resolution": "Joe minted a new token; the masked dialog truncated it to 80 of 108 characters, which the box reported as 'invalid' rather than 'revoked'. Taken from the clipboard instead and written over stdin — never on a command line, never in the transcript.",
       "verified": "claude -p on the box returned FORGE_AUTH_OK"
     },
-    "vercel_env_added": ["OPS_EMAIL", "ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_APP_ID", "ASC_BETA_GROUP_ID", "ASC_PRIVATE_KEY"],
+    "vercel_env_added": [
+      "OPS_EMAIL",
+      "ASC_KEY_ID",
+      "ASC_ISSUER_ID",
+      "ASC_APP_ID",
+      "ASC_BETA_GROUP_ID",
+      "ASC_PRIVATE_KEY"
+    ],
     "database": {
       "migration": "0028_ambiguous_hitman.sql",
       "table": "beta_signups",
-      "enums": ["beta_platform", "beta_signup_status"],
+      "enums": [
+        "beta_platform",
+        "beta_signup_status"
+      ],
       "schema_copy_synced": "platform-api/db/schema.ts"
     },
-    "testflight_group": { "name": "External Testers", "id": "23dbbc26-1d84-4127-9ced-8b8492ca05f4", "testers_before": 10, "testers_after": 12, "cap": 50 }
+    "testflight_group": {
+      "name": "External Testers",
+      "id": "23dbbc26-1d84-4127-9ced-8b8492ca05f4",
+      "testers_before": 10,
+      "testers_after": 12,
+      "cap": 50
+    },
+    "brand_surfaces": {
+      "email_mark": "https://nanocrew.app/brand/nanocrew-mark.png — 240px, emitted by scripts/gen-app-icon.mjs",
+      "sender_avatar": "https://nanocrew.app/brand/nanocrew-avatar.png — 512px, same generator",
+      "resend_team_avatar": "Uploaded 2026-08-19 via the Resend dashboard (Settings → Team → Avatar); confirmed persisted after reload",
+      "inbox_avatar_note": "Resend's team avatar is dashboard-only. What a recipient sees beside the sender is resolved by their mail client from the sending domain (BIMI, or the address's own profile), not from Resend and not from our HTML.",
+      "social_card": "nanocrew-site/app/opengraph-image.tsx — rendered on request, re-exported by twitter-image.tsx"
+    }
   },
-
   "cleanup": {
-    "stephen_lawyer_test_products_removed": ["bulldog face graphic", "cartoon bulldog with kaleidoscope sunglasses", "a bull"],
+    "stephen_lawyer_test_products_removed": [
+      "bulldog face graphic",
+      "cartoon bulldog with kaleidoscope sunglasses",
+      "a bull"
+    ],
     "verification": "Printful sync products 456740221, 456649078, 456607576 all return 404; live storefront 24 → 21 products; real June-14 catalogue untouched",
-    "revisions_declined": ["revision/mt0kazzd", "revision/mt0luwpe"],
-    "revision_approved": { "branch": "revision/mt0oootm", "files": 2, "proof": "content/copy.json headline 'Nothing extra. Everything intentional.' → 'FOR THE LAST TRAIN HOME'", "live_confirmed": true }
+    "revisions_declined": [
+      "revision/mt0kazzd",
+      "revision/mt0luwpe"
+    ],
+    "revision_approved": {
+      "branch": "revision/mt0oootm",
+      "files": 2,
+      "proof": "content/copy.json headline 'Nothing extra. Everything intentional.' → 'FOR THE LAST TRAIN HOME'",
+      "live_confirmed": true
+    }
   },
-
   "outstanding": [
-    { "id": "F1", "action": "Give the design flow an explicit brand, or a brand selector — it currently binds to the oldest store." },
-    { "id": "F5", "action": "Decide whether central should carry the brand job, or whether the returning-creator interview should switch modes." },
-    { "id": "F6", "action": "Bound her product suggestions to the Printful catalogue in jobs/design.md." },
-    { "id": "F7", "action": "Reset the reconnect counter on a successful session, and handle goAway." },
-    { "id": "F8", "action": "Derive the CTA noun from the product name, not the Printful category." },
-    { "id": "F9", "action": "Default the colour to the brand palette and the price above the minimum." },
-    { "id": "F11", "action": "Add a discard control to the revision review; correct scenarios.md S3." },
-    { "id": "brand", "action": "Upload nanocrew-avatar.png as the sending address's profile photo — mail clients take it from the domain profile, not from our HTML." }
+    {
+      "id": "F1",
+      "action": "Give the design flow an explicit brand, or a brand selector — it currently binds to the oldest store."
+    },
+    {
+      "id": "F5",
+      "action": "Decide whether central should carry the brand job, or whether the returning-creator interview should switch modes."
+    },
+    {
+      "id": "F6",
+      "action": "Bound her product suggestions to the Printful catalogue in jobs/design.md."
+    },
+    {
+      "id": "F7",
+      "action": "Reset the reconnect counter on a successful session, and handle goAway."
+    },
+    {
+      "id": "F8",
+      "action": "Derive the CTA noun from the product name, not the Printful category."
+    },
+    {
+      "id": "F9",
+      "action": "Default the colour to the brand palette and the price above the minimum."
+    },
+    {
+      "id": "F11",
+      "action": "Add a discard control to the revision review; correct scenarios.md S3."
+    },
+    {
+      "id": "brand",
+      "action": "Upload nanocrew-avatar.png as the sending address's profile photo — mail clients take it from the domain profile, not from our HTML."
+    }
   ]
 }
