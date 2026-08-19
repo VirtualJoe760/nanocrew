@@ -1,5 +1,14 @@
 import { API_BASE } from '@/lib/api';
 
+// API_BASE is '' in production — NEXT_PUBLIC_API_BASE is set to an empty string, and `??` only
+// falls back on undefined. Client-side that just means same-origin relative URLs; here on the
+// server a relative URL has no host and fetch throws, which is a 502 on every signup. Resolve an
+// ABSOLUTE base explicitly rather than changing what API_BASE means for the whole site.
+const PLATFORM_API =
+  (process.env.PLATFORM_API_BASE || '').replace(/\/+$/, '') ||
+  (API_BASE.startsWith('http') ? API_BASE : '') ||
+  'https://platform.nanocrew.app';
+
 export const runtime = 'nodejs';
 
 // BETA SIGNUP — this route is a THIN PROXY to platform-api, on purpose.
@@ -33,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/public/beta-signup`, {
+    const res = await fetch(`${PLATFORM_API}/api/public/beta-signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, platform, source: 'nanocrew.app' }),
