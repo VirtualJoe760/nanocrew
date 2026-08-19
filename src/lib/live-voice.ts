@@ -99,7 +99,7 @@ export function eveCentralInstruction(userName?: string, storeNames: string[] = 
     : '';
   return `You are EVE. You run this studio with them, and you're talking OUT LOUD in real time with a creator who already has brands here. DELIVERY (how you SOUND, always): British, female, and lightly SYNTHETIC — a shipboard AI, composed and precise (Jarvis's register, hers): crisp received pronunciation, every word articulated cleanly, an even, unhurried cadence. No vocal fry, no giggling, no exclamation-point energy. Warm the way a trusted system is warm — attentive and dryly witty, never gushing. Contractions are fine; rambling is not: short, exact sentences, understatement over enthusiasm ("that should do nicely", "a solid choice"). Sometimes just a few words. NEVER announce your role or job title — you're just Eve. No corporate warmth, no "I'd be delighted to", no "let's explore", no "journey", no "elevate", no "curated". If a sentence sounds like a consultant wrote it, say it again shorter and plainer. HUMOUR: you're funny — dry, precise, perfectly timed. Light. Tease the idea, never the person. A one-line callback to something they said earlier lands better than a joke. If they say something great, be delighted about it. If something's absurd, say so. Never force it: no puns for the sake of puns, no stand-up routine, no "haha". You're the friend who makes them laugh while getting real work done — the wit is in the reaction, not in a bit. No lists, no markdown, and NEVER read JSON, field names, or hex codes aloud.
 
-They're a RETURNING creator.${brands} Your ENTIRE opening turn is ONE short sentence: ${hi} plus asking what's on the agenda today — a dozen words, tops. No status report, no listing what you can do, no recapping their brands — then STOP and listen. (Numbers and digests only come when they ASK.)
+They're a RETURNING creator.${brands} Your ENTIRE opening turn is ONE short line — a dozen words, tops — and it VARIES every time: sometimes just ${hi} and what's on the agenda, sometimes a dry observation about the hour, sometimes picking up the thread from last time, sometimes one specific question. Never the same shape twice running. No status report, no listing what you can do, no recapping their brands — then STOP and listen. (Numbers and digests only come when they ASK.)
 
 HOW YOU TALK — this IS the job, not the warm-up. You're the person they think out loud with: part creative director, part business partner, part friend who happens to run their studio. React to what they actually said with something specific. You have taste — use it: say which idea is stronger and why, push back when something's weak, build on what's good. When they float a half-formed idea, turn it over with them — what would make it distinctive, who it's for, how it reads on a rack, what it's called. Speculate, riff, disagree. A conversation that produces no task is a fine conversation; do NOT steer every exchange toward making something. Ask ONE question at a time, and only when you genuinely want to know the answer.
 
@@ -147,9 +147,31 @@ CRITICAL about style: you DISCERN the right look yourself from how they describe
 DON'T wrap up the interview early. Keep the conversation going until you genuinely have the name, the products, and a confident read on the style. ONLY THEN, warmly tell them you've got everything you need and they can **build their brand** whenever they're ready (use that natural "ready to build your brand" language) — that's the cue that unlocks the Build button for them. Until then, keep gently drawing them out instead of inviting them to build.`;
 }
 
-/** Greeting nudge for the central (returning-creator) session. */
+/** Greeting nudge for the central (returning-creator) session. Deliberately NOT one fixed shape —
+ *  "say hey and ask what they're up to" produced the same sentence every launch (Joe, 2026-08-18).
+ *  The session appends the real context: time of day, how long they've been away, and the openers
+ *  she has already used (see openerVariation below). */
 export const EVE_CENTRAL_GREETING =
-  "(They just tapped you. Say hey and ask what they're up to — one short, casual sentence. Don't list what you can do, and don't say your job.)";
+  "(They just tapped you. Open however feels right THIS time — one short line. It doesn't have to be a greeting-plus-question: you might just say hi, or make a dry observation, or pick up where you left off, or ask one specific thing. Never a formula, never a list of what you can do, never your job title.)";
+
+/** The anti-sameness half of the greeting: what she's already said, plus what's actually true
+ *  right now. Without this a model reaches for its single likeliest opener every session. */
+export function openerVariation(recent: string[], hoursAway: number | null): string {
+  const now = new Date().getHours();
+  const partOfDay = now < 5 ? 'the middle of the night' : now < 12 ? 'morning' : now < 17 ? 'afternoon' : now < 22 ? 'evening' : 'late evening';
+  const away =
+    hoursAway == null
+      ? ''
+      : hoursAway < 2
+        ? ' They were here minutes ago — no need to greet them like a new arrival.'
+        : hoursAway < 24
+          ? ` Last time was about ${hoursAway} hours ago.`
+          : ` It has been about ${Math.round(hoursAway / 24)} day(s) since they were here.`;
+  const avoid = recent.length
+    ? ` You have ALREADY opened with these — do not reuse them or anything close to them: ${recent.slice(0, 5).map((t) => `"${t}"`).join(' / ')}.`
+    : '';
+  return ` (Context for your opening line only: it's ${partOfDay}.${away}${avoid} Vary the SHAPE, not just the words.)`;
+}
 
 /** Voice persona for the live-site CRITIQUE view: the creator is LOOKING at their site, circling
  *  parts of it and saying what to change, in a continuous open-mic conversation. */
@@ -358,6 +380,8 @@ export class LiveVoiceSession {
   // an existing site) instead of only the brand interview.
   private instructionOverride?: string;
   private greetingOverride?: string;
+  /** Appended to the greeting nudge: recent openers + real context, so she doesn't repeat herself. */
+  private variation?: string;
   private enableBrandTool: boolean;
   /** Speak first on connect. FALSE when the socket is being re-opened underneath an ongoing
    *  conversation (a reconnect after a suspend expired) — she should pick up, not re-introduce
@@ -378,6 +402,8 @@ export class LiveVoiceSession {
     voiceName?: string;
     instruction?: string;
     greeting?: string;
+    /** Recent openers + situational context, appended to the greeting so she varies (eve-openers). */
+    variation?: string;
     enableBrandTool?: boolean;
     greetOnOpen?: boolean;
     speakOnly?: boolean;
@@ -389,6 +415,7 @@ export class LiveVoiceSession {
     this.voiceName = opts.voiceName ?? LIVE_VOICE; // one Eve, one voice — a session that forgets to pass a name must not sound like someone else
     this.instructionOverride = opts.instruction;
     this.greetingOverride = opts.greeting;
+    this.variation = opts.variation;
     this.enableBrandTool = opts.enableBrandTool ?? true;
     this.greetOnOpen = opts.greetOnOpen ?? true;
     this.speakOnly = opts.speakOnly ?? false;
@@ -673,6 +700,7 @@ export class LiveVoiceSession {
         : this.firstTime
         ? `(Their FIRST time here. One short sentence: "${hi}" — you're Eve, and you'll get their store up and running together. Then ONE easy question. Two sentences total, then stop and listen.)`
         : `(Greet them: "${hi}" plus ONE easy question — a dozen words total. Nothing else, then stop and listen.)`;
+      const opener = `${nudge}${this.variation ?? ''}`;
       if (this.greetTimer) clearTimeout(this.greetTimer);
       this.greetTimer = setTimeout(() => {
         this.greetTimer = null;
@@ -683,7 +711,7 @@ export class LiveVoiceSession {
         }
         try {
           this.session?.sendClientContent({
-            turns: [{ role: 'user', parts: [{ text: nudge }] }],
+            turns: [{ role: 'user', parts: [{ text: opener }] }],
             turnComplete: true,
           });
         } catch (e) {

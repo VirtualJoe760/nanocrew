@@ -34,7 +34,8 @@ import { publishEvePulse, registerEveMuteListener } from '@/lib/eve-live-state-b
 import { publishTranscript } from '@/lib/eve-transcript-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
-import { announce, eveCentralInstruction, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
+import { announce, eveCentralInstruction, openerVariation, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
+import { hoursSinceLastOpen, recentOpeners, rememberOpener } from '@/lib/eve-openers';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
 // EVE'S HOME STATE — her voice surface, hosted by the Eve tab (/studio) since the overlay
@@ -208,6 +209,21 @@ export function EveHome({
     () => (hasStore ? eveCentralInstruction(creatorName, stores.map((s) => s.name)) : undefined),
     [hasStore, creatorName, stores],
   );
+  // SHE NEVER OPENS THE SAME WAY TWICE (Joe, 2026-08-18). Her last few openings live on this
+  // device; we hand them back as a do-not-repeat list alongside the time of day and how long
+  // they've been away, so the line she picks is both different AND true.
+  const [variation, setVariation] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const [recent, hours] = await Promise.all([recentOpeners(), hoursSinceLastOpen()]);
+      if (alive) setVariation(openerVariation(recent, hours));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const live = useLiveVoice({
     accessToken: session?.access_token,
     userName: creatorName,
@@ -215,6 +231,7 @@ export function EveHome({
     voiceName: LIVE_VOICE,
     instruction: centralInstruction,
     greeting: hasStore ? EVE_CENTRAL_GREETING : undefined,
+    variation,
     onBrand: (b, transcript) => {
       setBrand(b);
       // The interview is over and finalize() has already closed the socket — drop the intent too,
@@ -526,6 +543,17 @@ export function EveHome({
     },
     [session, stores, live.messages, live.sendContext, onGo, onRequestClose, enterInterview, openDigest],
   );
+  // Her FIRST line of each session is the opener — remember it so the next session avoids it.
+  const openerSaved = useRef(false);
+  useEffect(() => { if (!talking) openerSaved.current = false; }, [talking]);
+  useEffect(() => {
+    if (openerSaved.current || !talking) return;
+    const first = live.messages.find((m) => m.role === 'assistant')?.text?.trim();
+    if (!first) return;
+    openerSaved.current = true;
+    void rememberOpener(first);
+  }, [talking, live.messages]);
+
   const routedUsers = useRef(0);
   useEffect(() => {
     const said = live.messages.filter((m) => m.role === 'user');

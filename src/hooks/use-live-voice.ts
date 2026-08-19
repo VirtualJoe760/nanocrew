@@ -79,6 +79,8 @@ export function useLiveVoice(opts: {
   /** Override the persona/greeting + drop the brand tool — for non-build flows (e.g. editing a site). */
   instruction?: string;
   greeting?: string;
+  /** Recent openers + situational context (lib/eve-openers) — keeps her openings varied. */
+  variation?: string;
   enableBrandTool?: boolean;
   /** transcript is the full spoken conversation — pass it to /api/store so provisioning gets context. */
   onBrand: (b: BrandResult, transcript?: ChatMessage[]) => void;
@@ -188,6 +190,7 @@ export function useLiveVoice(opts: {
       voiceName: opts.voiceName,
       instruction: opts.instruction,
       greeting: greeting ?? opts.greeting,
+      variation: opts.variation,
       enableBrandTool: opts.enableBrandTool,
       greetOnOpen: greet,
       callbacks: {

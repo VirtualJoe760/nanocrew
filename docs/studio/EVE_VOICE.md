@@ -95,6 +95,24 @@ stopped: `userTurnActive` (server transcription) **OR** local mic RMS inside a 7
 into. The queued line waits as long as it takes, then speaks. Her own playback never counts as
 speech (the half-duplex gate runs first).
 
+## She never opens the same way twice (Joe, 2026-08-18)
+
+"She needs real diversity and authenticity." A model has no memory between sessions, so a fixed
+nudge ("say hey and ask what they're up to") collapses to its single likeliest sentence every
+launch — which is why every session started "Hi Joe, what's on the agenda?". Three changes:
+
+- **Her last 8 openers live on the device** (`lib/eve-openers.ts`) and come back as an explicit
+  do-not-repeat list.
+- **Real situational context** rides with them (`openerVariation`): time of day, and how long since
+  the last session — so a different line is also a TRUE line ("been a few days", "you were just
+  here").
+- **The shape varies, not just the words**: both the central greeting nudge and the persona now
+  offer several openings (plain hello · dry observation · picking up last time's thread · one
+  specific question) and forbid the same shape twice running.
+
+Caching her voice (pre-rendered `/api/say` audio) must therefore cache a POOL she wrote herself,
+rotated with this same recency memory — never one canned line.
+
 ## The greeting yields to whoever spoke first (Joe, 2026-08-18)
 
 Opening with a sentence ("Hi Eve, it's time we create another store") used to get answered and
