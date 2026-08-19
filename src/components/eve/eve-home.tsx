@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   AppState,
@@ -212,6 +212,13 @@ export function EveHome({
   // SHE NEVER OPENS THE SAME WAY TWICE (Joe, 2026-08-18). Her last few openings live on this
   // device; we hand them back as a do-not-repeat list alongside the time of day and how long
   // they've been away, so the line she picks is both different AND true.
+  // DEV-ONLY hands-free start: `xcrun simctl openurl booted "nanocrew://studio?talk=1"` opens a
+  // voice session without a tap, so her conversation can be exercised from the terminal (the
+  // ElevenLabs harness in scripts/talk-to-eve.mjs speaks into the Mac mic the Simulator listens on).
+  // Never reachable in a release build.
+  const { talk } = useLocalSearchParams<{ talk?: string }>();
+  const autoTalked = useRef(false);
+
   const [variation, setVariation] = useState<string | undefined>(undefined);
   useEffect(() => {
     let alive = true;
@@ -652,6 +659,17 @@ export function EveHome({
     pausedRef.current = false;
     setTalking(true);
   }, [talking, ensureMic]);
+
+  // DEV-ONLY hands-free start: `xcrun simctl openurl booted "nanocrew://studio?talk=1"` opens a
+  // voice session without a tap, so her conversation can be driven from the terminal (the
+  // ElevenLabs harness speaks into the Mac mic the Simulator listens on). Never in a release build.
+  useEffect(() => {
+    if (__DEV__) console.log('[dev-talk]', JSON.stringify({ talk, session: !!session, meResolved, talking }));
+    if (!__DEV__ || talk !== '1' || autoTalked.current) return;
+    if (!session || !meResolved || talking) return;
+    autoTalked.current = true;
+    void toggleTalk();
+  }, [talk, session, meResolved, talking, toggleTalk]);
 
 
 

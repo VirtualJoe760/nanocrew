@@ -11,6 +11,11 @@ Her persona is product logic, not copy. It lives in three places and they must s
 Change one, change all three. A rule that exists in only one is a rule that doesn't exist —
 that's how "bold or minimal?" survived two rounds of removal (see *History* below).
 
+> **Open personality work:** [`EVE_PERSONALITY.md`](EVE_PERSONALITY.md) — why she currently reads
+> bleak/monotone and funnels every turn back to the brand, the Gemini levers we aren't using
+> (affective dialog, temperature, frequency penalty, SI ordering), and the probe set that has to
+> score any change before it ships. Read it before editing her character.
+
 ## Register (Joe, 2026-08-17 — revised same day: Jarvis, but her)
 
 British, female, **lightly synthetic** — a shipboard AI: composed, precise, unhurried, crisply
