@@ -120,9 +120,11 @@ ${brief}
 NANOCREW_REVISION_EOF
 ${renderShots}
 pnpm install --silent 2>&1 | tail -1
-# `|| true` used to swallow EVERY failure here, including "401 OAuth access token has been
-# revoked" — the robot never ran, the branch carried nothing but the brief, and the revision was
-# still marked ready with a preview identical to live (2026-08-19). Report both facts instead.
+# NO BACKTICKS BELOW THIS LINE. This whole script is a JS template literal, so a backtick here
+# closes it and silently mangles the emitted shell (that is exactly what broke the first version
+# of this comment). "|| true" used to swallow EVERY failure on the claude call, including the
+# revoked-token 401: the robot never ran, the branch carried nothing but the brief, and the
+# revision was still marked ready with a preview identical to live (2026-08-19).
 if claude -p "Read $BRIEF and look at any images in briefs/screenshots/, then apply exactly that change. Then run pnpm run build and fix anything you broke." --dangerously-skip-permissions --max-turns 60 < /dev/null > /tmp/${repo}-revise.log 2>&1; then
   echo CLAUDE_OK
 else
