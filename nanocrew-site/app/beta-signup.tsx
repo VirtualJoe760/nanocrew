@@ -11,6 +11,15 @@ import { authConfigured, supabase } from '@/lib/supabase';
 
 const TERMS_VERSION = '2026-06-18'; // mirrors src/lib/legal.ts
 
+// The beta is a finite number of build slots per store, so signing up has to say WHICH build. An
+// iPhone signup goes to TestFlight; Android is its own queue. Without this the backend has to guess,
+// and a guess costs somebody a slot on a platform they can't install.
+const PLATFORMS = [
+  { id: 'ios', label: 'iPhone' },
+  { id: 'android', label: 'Android' },
+] as const;
+type Platform = (typeof PLATFORMS)[number]['id'];
+
 export function BetaSignup() {
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
   const [email, setEmail] = useState('');
@@ -18,38 +27,65 @@ export function BetaSignup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<'in' | 'confirm' | null>(null);
+  const [platform, setPlatform] = useState<Platform>('ios');
+  const [slot, setSlot] = useState<'approved' | 'waitlisted' | null>(null);
 
   // Coming back from the Google/Apple round-trip lands here with a session already established —
   // without this the form would just re-render empty and the whole trip would look like it failed.
   useEffect(() => {
     // Arriving from the hero's "Log in" (/?login=1#beta) should land on the login form, not the
     // signup one. Read from location rather than useSearchParams so the homepage stays static.
-    if (new URLSearchParams(window.location.search).get('login') === '1') setMode('login');
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('login') === '1') setMode('login');
+    const back = params.get('platform');
+    if (back === 'android' || back === 'ios') setPlatform(back);
     if (!authConfigured) return;
     void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setDone('in');
+      if (!data.session) return;
+      setDone('in');
+      // Coming back from OAuth with a session and a platform in the URL: this IS the signup, so
+      // claim the slot now — it never happened on the provider's side of the trip.
+      const addr = data.session.user.email;
+      if (back && addr) {
+        void fetch('/api/waitlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: addr, platform: back }),
+        })
+          .then((r) => r.json())
+          .then((d: { status?: string }) => {
+            if (d?.status === 'approved' || d?.status === 'waitlisted') setSlot(d.status);
+          })
+          .catch(() => {});
+      }
     });
   }, []);
 
-  /** Best-effort: keep the waitlist table populated as it always has been. Never blocks signup. */
+  /** Claim a beta slot. Never blocks the account — but its ANSWER decides what we promise them:
+   *  a slot means TestFlight is already on its way, no slot means we write at launch. */
   async function recordOnWaitlist(addr: string) {
     try {
-      await fetch('/api/waitlist', {
+      const res = await fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: addr }),
+        body: JSON.stringify({ email: addr, platform }),
       });
+      const d = (await res.json().catch(() => ({}))) as { status?: string };
+      if (d.status === 'approved' || d.status === 'waitlisted') setSlot(d.status);
     } catch {
-      /* the account is what matters; the table is a convenience */
+      /* the account is what matters; the slot request can be retried */
     }
   }
 
   function oauth(provider: 'google' | 'apple') {
     setError(null);
     if (!authConfigured) return setError('Sign-up is temporarily unavailable. Try again shortly.');
+    // The Google/Apple round trip leaves the page, so the claim can't be made here — carry the
+    // platform in the return URL and claim it on the way back (the effect above). Without this,
+    // every OAuth signup created an account and asked for NO beta slot at all.
     void supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/?welcome=1` },
+      options: { redirectTo: `${window.location.origin}/?welcome=1&platform=${platform}` },
     });
   }
 
@@ -88,9 +124,15 @@ export function BetaSignup() {
       <div className="signup">
         <p className="ok">{done === 'in' ? "✦ You're on the list." : '✦ Check your email.'}</p>
         <p className="fine">
-          {done === 'in'
-            ? "Your place is held against this email. We'll write when your TestFlight invite is ready."
-            : `We sent a confirmation link to ${email}. Confirm it and your place is locked in.`}
+          {done === 'confirm'
+            ? `We sent a confirmation link to ${email}. Confirm it and your place is locked in.`
+            : slot === 'approved'
+              ? platform === 'ios'
+                ? "You're in — check your email for the TestFlight invite."
+                : "You're in — we'll email you the Play beta link shortly."
+              : slot === 'waitlisted'
+                ? "The beta is full right now, so we've saved your place — we'll email you the moment it opens up."
+                : "Your place is held against this email. We'll write when your invite is ready."}
         </p>
         {done === 'in' ? (
           <a className="btn ghost" href="/account" style={{ textAlign: 'center', marginTop: 4 }}>
@@ -103,6 +145,19 @@ export function BetaSignup() {
 
   return (
     <form className="signup" onSubmit={submit}>
+      <div className="plat" role="group" aria-label="Which phone do you have?">
+        {PLATFORMS.map((pl) => (
+          <button
+            key={pl.id}
+            type="button"
+            className={`plat-btn${platform === pl.id ? ' on' : ''}`}
+            aria-pressed={platform === pl.id}
+            onClick={() => setPlatform(pl.id)}
+            disabled={busy}>
+            {pl.label}
+          </button>
+        ))}
+      </div>
       <button className="oauth" type="button" onClick={() => oauth('google')} disabled={busy}>
         Continue with Google
       </button>

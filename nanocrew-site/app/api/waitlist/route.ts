@@ -1,25 +1,30 @@
-import postgres from 'postgres';
+import { API_BASE } from '@/lib/api';
 
 export const runtime = 'nodejs';
 
-// Lazily connect to the shared Postgres if configured. The waitlist lives in its own
-// standalone table so it doesn't touch the app's migrations.
-let sql: ReturnType<typeof postgres> | null = null;
-let ensured = false;
-function db() {
-  const url = process.env.DATABASE_URL;
-  if (!url) return null;
-  if (!sql) sql = postgres(url, { prepare: false, max: 1 });
-  return sql;
-}
+// BETA SIGNUP — this route is a THIN PROXY to platform-api, on purpose.
+//
+// It used to own the signup itself: `create table if not exists waitlist` against DATABASE_URL. But
+// nanocrew-site holds no database credential (AGENTS.md), so that env var was never set here, the
+// table was never created, and every signup fell through the `if (!conn)` branch to a console.log
+// on a Vercel function — no row, no email, no beta invite. That is exactly what happened to the
+// person who signed up on 2026-08-18 (Joe: "i didnt recieve an email about it. nor did they get
+// added to the beta").
+//
+// The real thing lives at platform-api `/api/public/beta-signup`, which has the database, the
+// mailer and the App Store Connect key: it caps the beta, adds iOS testers to TestFlight, waitlists
+// the overflow, and emails both the signer and ops. We keep this path so the form's URL doesn't
+// change, and proxy server-side so the browser never needs CORS.
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {
   let email = '';
+  let platform = 'ios';
   try {
-    const b = (await req.json()) as { email?: string };
+    const b = (await req.json()) as { email?: string; platform?: string };
     email = (b.email || '').trim().toLowerCase();
+    platform = b.platform === 'android' ? 'android' : 'ios';
   } catch {
     return Response.json({ ok: false, error: 'Bad request' }, { status: 400 });
   }
@@ -27,24 +32,20 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: 'Enter a valid email.' }, { status: 400 });
   }
 
-  const conn = db();
-  if (!conn) {
-    // No DB configured yet — accept gracefully so the page works before it's wired.
-    console.log('[waitlist] (no DATABASE_URL set) signup:', email);
-    return Response.json({ ok: true });
-  }
   try {
-    if (!ensured) {
-      await conn`create table if not exists waitlist (
-        email text primary key,
-        created_at timestamptz not null default now()
-      )`;
-      ensured = true;
+    const res = await fetch(`${API_BASE}/api/public/beta-signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, platform, source: 'nanocrew.app' }),
+      cache: 'no-store',
+    });
+    const d = (await res.json().catch(() => ({}))) as { ok?: boolean; status?: string; error?: string };
+    if (!res.ok || !d.ok) {
+      return Response.json({ ok: false, error: d.error || 'Could not save — try again.' }, { status: res.status || 500 });
     }
-    await conn`insert into waitlist (email) values (${email}) on conflict (email) do nothing`;
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, status: d.status ?? 'waitlisted' });
   } catch (e) {
-    console.error('[waitlist]', e instanceof Error ? e.message : e);
-    return Response.json({ ok: false, error: 'Could not save — try again.' }, { status: 500 });
+    console.error('[waitlist proxy]', e instanceof Error ? e.message : e);
+    return Response.json({ ok: false, error: 'Could not save — try again.' }, { status: 502 });
   }
 }

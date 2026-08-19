@@ -162,6 +162,26 @@ unambiguous). DIRECT APIs (plain DB reads / a thin proxy), not the forge. See
 | POST | `/api/public/returns` | **Open a return claim** (guest from a brand site OR the in-app proxy). `{ orderId, reason, photoUrls?, note?, items? }`; validates the window is open + reason in-enum (`defective`/`wrong_item`/`damaged`/`not_received`) + photo present for defective/damaged, inserts a `return_requests` row, flips the order → `return_requested`, and best-effort acks the buyer (`sendReturnRequested`). **400** bad reason / missing photo · **404** unknown order · **409** not shipped / window closed / not claimable. CORS preflight. See [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md). |
 | POST | `/api/public/beacon` | Anonymous daily pageview tick. |
 
+### `POST /api/public/beta-signup` — the nanocrew.app beta door
+
+`{ email, platform: 'ios'|'android', source? }` → `{ ok, status: 'approved'|'waitlisted'|'failed', remaining }`.
+
+The **only** writer of `beta_signups`. It lives here, not on nanocrew-site, because the site holds no
+database credential — the site's `/api/waitlist` is a server-side proxy to this route (its old
+`create table if not exists waitlist` against an unset `DATABASE_URL` silently no-op'd: no row, no
+email, no invite — the 2026-08-18 signup that reached nobody).
+
+- **Caps** at 50 approved rows **per platform**, counted live.
+- Under the cap, **iOS** is added to the external TestFlight group through the App Store Connect API
+  (`lib/testflight.ts`; env `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`, `ASC_BETA_GROUP_ID`) —
+  that call is what sends the invite. **Android** has no automated tester list yet, so those rows are
+  collected and mailed at launch.
+- Over the cap, or unautomated: `waitlisted` — mailed when the app opens up (`launch_emailed_at`).
+- A store-API failure records `failed` + `error_msg`, **never** a false `approved`.
+- Always emails ops (`OPS_EMAIL`) with who signed up and slots left, plus the signer's own
+  approved/waitlisted mail. Sends are best-effort — a mail outage can't cost someone their place.
+- Idempotent on `(email, platform)`; an existing `approved` row is never downgraded.
+
 ### Internal email dispatch (server-to-server, `INTERNAL_API_KEY`)
 
 | Method | Path | Auth | Purpose |

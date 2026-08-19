@@ -754,6 +754,39 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   variant: one(variants, { fields: [orderItems.variantId], references: [variants.id] }),
 }));
 
+// ---------- Beta signups (the public beta list behind nanocrew.app) ----------
+
+// Signing up on nanocrew.app is a REQUEST for a build, and the number of build slots is finite:
+// TestFlight external testing and Play closed testing are both capped, so the row records which
+// platform they asked for and whether they got a slot. `approved` = handed to the store's tester
+// list; `waitlisted` = past the cap, emailed at launch instead. The site holds no DB credential,
+// so the only writer is platform-api's public/beta-signup route.
+export const betaPlatform = pgEnum('beta_platform', ['ios', 'android']);
+export const betaSignupStatus = pgEnum('beta_signup_status', ['approved', 'waitlisted', 'failed']);
+
+export const betaSignups = pgTable(
+  'beta_signups',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    email: text('email').notNull(),
+    platform: betaPlatform('platform').notNull(),
+    status: betaSignupStatus('status').notNull().default('waitlisted'),
+    /** Why a request didn't make it onto the tester list — the store API's own words. */
+    errorMsg: text('error_msg'),
+    /** Set when the address actually reached the store's tester list. */
+    invitedAt: timestamp('invited_at', { withTimezone: true }),
+    /** Set when we emailed them at launch (the waitlist's whole purpose). */
+    launchEmailedAt: timestamp('launch_emailed_at', { withTimezone: true }),
+    source: text('source'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // One request per address per platform — a double submit must not burn a second slot.
+    uniqueIndex('beta_signups_email_platform_idx').on(t.email, t.platform),
+    index('beta_signups_platform_status_idx').on(t.platform, t.status),
+  ],
+);
+
 // ---------- Type exports ----------
 
 export type Creator = typeof creators.$inferSelect;
@@ -767,3 +800,4 @@ export type Variant = typeof variants.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type StorePost = typeof storePosts.$inferSelect;
 export type StoreRevision = typeof storeRevisions.$inferSelect;
+export type BetaSignup = typeof betaSignups.$inferSelect;

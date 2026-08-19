@@ -368,3 +368,11 @@ Type exports (`$inferSelect`): `Creator`, `Store`, `Catalogue`, `DesignRow`, `Co
 3. **Copy `src/db/schema.ts` → `platform-api/db/schema.ts`** (they must stay byte-identical in
    table/column shape) and redeploy platform-api.
 4. Update this doc.
+
+## `beta_signups` — who asked for a build (2026-08-19)
+
+One row per **(email, platform)** request from nanocrew.app. `status` is `approved` (holds one of the
+50 per-platform slots and is on the store's tester list), `waitlisted` (past the cap — mailed at
+launch, which is what `launch_emailed_at` records) or `failed` (the store API refused; `error_msg`
+says why, and it is deliberately NOT approved). `invited_at` is set only when the address actually
+reached the tester list. Written solely by platform-api `POST /api/public/beta-signup`.

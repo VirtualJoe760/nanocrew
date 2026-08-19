@@ -55,7 +55,27 @@ export function buildPlatformSender(): string {
 }
 
 /** Nano Crew's own brand surface for platform emails — clean monochrome (the template defaults). */
-const PLATFORM_STORE: EmailStore = { slug: 'nanocrew', name: 'Nano Crew', logoUrl: null, colors: null };
+// Nano Crew's OWN emails wear Nano Crew — the NC monogram, the app's palette (cool monochrome +
+// platinum silver, no gold — AGENTS.md) and its typeface. They used to render as the generic
+// fallback: no logo, no colours, indistinguishable from any other transactional mail (Joe,
+// 2026-08-19: "they do not have our logo, or our fonts etc").
+// Values are the app's tokens via nanocrew-site/app/globals.css, not invented here.
+const PLATFORM_STORE: EmailStore = {
+  slug: 'nanocrew',
+  name: 'Nano Crew',
+  logoUrl: 'https://nanocrew.app/nc-icon.png',
+  colors: {
+    page: '#08080a',       // --bg
+    card: '#131317',       // --surface
+    ink: '#f4f4f6',        // --text
+    muted: '#8b909b',      // --dim
+    accent: '#cdd1d9',     // --accent, the platinum: CTA button
+    onAccent: '#08080a',   // dark ink reads on platinum
+    line: '#212127',       // --edge
+    headerBg: '#08080a',   // the masthead is the app's night — the monogram is light-on-black
+    headerInk: '#f4f4f6',
+  },
+};
 
 const PLAN_LABEL: Record<string, string> = { free: 'Free', starter: 'Starter', pro: 'Pro', advanced: 'Advanced' };
 function planLabel(plan: string): string {
@@ -453,6 +473,87 @@ export async function sendCollabInvite(opts: {
     body:
       p(`${esc(inviter)} invited you to collaborate on ${esc(opts.brandName)} — design products and manage the brand together on Nano Crew.`, { html: true }) +
       p(`No app yet? The invite also appears under Account in the Nano Crew app when you sign in with this email address.`, { muted: true }),
+  });
+}
+
+// ── Beta signups (nanocrew.app → public/beta-signup) ──────────────────────────────────────────────
+
+const STORE_LABEL: Record<string, string> = { ios: 'TestFlight', android: 'Google Play' };
+
+/**
+ * Their confirmation — "you're in". Only sent once the address is actually on the tester list, so
+ * it never promises a build that isn't coming. TestFlight sends its own invite separately; this is
+ * the email that explains what just landed in their inbox.
+ */
+export async function sendBetaApproved(opts: { to: string; platform: 'ios' | 'android' }): Promise<void> {
+  const store = STORE_LABEL[opts.platform];
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: 'You’re in the Nano Crew beta',
+    heading: 'You’re in.',
+    preheader: `Your ${store} invite is on its way.`,
+    body:
+      p(`You have a place in the Nano Crew beta. Your ${esc(store)} invite is on its way to this address — accept it and the app installs like any other.`, { html: true }) +
+      p(`Nano Crew turns a conversation into a clothing brand: talk to Eve, she builds the shop and the website, and you design and sell from your phone.`, { muted: true }) +
+      p(`Tell us what breaks. That's what a beta is for — just reply to this email.`, { muted: true }),
+  });
+}
+
+/**
+ * Past the cap. This is the honest version: no slot today, we'll email at launch. Deliberately does
+ * NOT dangle a maybe — the waitlist row is what gets mailed when the app goes public.
+ */
+export async function sendBetaWaitlisted(opts: { to: string; platform: 'ios' | 'android' }): Promise<void> {
+  const store = STORE_LABEL[opts.platform];
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to: opts.to,
+    subject: 'You’re on the Nano Crew list',
+    heading: 'You’re on the list.',
+    preheader: 'The beta is full — we’ll email you the moment it opens up.',
+    body:
+      p(`The ${esc(store)} beta is full right now, so we've saved your place. We'll email this address the moment the app is available — you don't need to do anything.`, { html: true }) +
+      p(`Nano Crew turns a conversation into a clothing brand: talk to Eve, she builds the shop and the website, and you design and sell from your phone.`, { muted: true }),
+  });
+}
+
+/** The heads-up to ops: who signed up, whether they got a slot, and how many are left. */
+export async function sendBetaSignupAlert(opts: {
+  email: string;
+  platform: 'ios' | 'android';
+  status: 'approved' | 'waitlisted' | 'failed';
+  remaining: number;
+  note?: string;
+}): Promise<void> {
+  const to = process.env.OPS_EMAIL;
+  if (!to) {
+    console.warn('[notify] beta signup (set OPS_EMAIL to receive these by email):', JSON.stringify(opts));
+    return;
+  }
+  const store = STORE_LABEL[opts.platform];
+  const headline =
+    opts.status === 'approved'
+      ? `Added to ${store}`
+      : opts.status === 'waitlisted'
+        ? `Waitlisted — ${store} is full`
+        : `Could NOT be added to ${store}`;
+  await sendEmail({
+    store: PLATFORM_STORE,
+    from: buildPlatformSender(),
+    to,
+    subject: `Beta signup — ${opts.email} (${store})`,
+    heading: headline,
+    preheader: `${opts.email} · ${opts.remaining} ${store} slot${opts.remaining === 1 ? '' : 's'} left`,
+    body:
+      p(`<strong>${esc(opts.email)}</strong> signed up for the ${esc(store)} beta.`, { html: true }) +
+      ul([
+        `Status: ${opts.status}`,
+        `Slots left: ${opts.remaining}`,
+        ...(opts.note ? [`Note: ${esc(opts.note)}`] : []),
+      ]),
   });
 }
 
