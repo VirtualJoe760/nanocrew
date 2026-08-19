@@ -182,6 +182,8 @@ const IN_RATE = 16000; // Gemini Live wants 16kHz PCM16 mono input
 const OUT_RATE = 24000; // Gemini Live emits 24kHz PCM16 mono output
 const VOICE_RMS = 0.015; // mic frame loudness that counts as "they're talking"
 const QUIET_SETTLE_MS = 700; // silence after their last word before any queued cue may speak
+const GREET_HOLD_MS = 700; // beat after setup to see whether THEY opened the conversation
+const OPENING_FRAMES = 3; // mic frames of real speech that mean "they're already talking" (~0.3s)
 /** Backstop for an announcement session (speakOnly) — it closes on turnComplete, but never lives
  *  longer than this even if that signal is lost. One spoken line is a few seconds. */
 const ANNOUNCE_MAX_MS = 25_000;
@@ -320,6 +322,10 @@ export class LiveVoiceSession {
   // LOCALLY, off the mic buffer itself, so the gate closes the instant they start talking.
   private lastUserVoiceAt = 0;
   private promptTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Mic frames with speech in them since this session opened — tells the greeting whether the
+   *  creator started the conversation themselves (Joe, 2026-08-18). */
+  private openVoiceFrames = 0;
+  private greetTimer: ReturnType<typeof setTimeout> | null = null;
   private transcript: { role: 'user' | 'assistant'; text: string }[] = [];
 
   /** The full conversation so far — used to extract the brand (native audio won't call the tool). */
@@ -424,6 +430,7 @@ export class LiveVoiceSession {
     }
     activeLiveSession = this;
     this.closed = false;
+    this.openVoiceFrames = 0; // fresh session: nobody has spoken into it yet
     this.cb.onState?.('connecting');
     // Watchdog: if we never reach "ws open" (audio session wedged, token expiry, network), surface a
     // retry instead of sitting on "thinking…" forever. Cleared in onopen; re-armed each start().
@@ -651,7 +658,13 @@ export class LiveVoiceSession {
         console.warn('[live] setupComplete → resumed, no greeting');
         return;
       }
-      console.warn('[live] setupComplete → greeting');
+      // DON'T GREET OVER THEM (Joe, 2026-08-18: he tapped and said "time we create another
+      // store"; she began answering — "hey Joe, another…" — and then this greeting, sent as its
+      // own completed turn, preempted her own reply and she restarted with the canned hello).
+      // If they opened the conversation, answering IS the greeting. Wait a beat first, because
+      // setup completes within milliseconds of the mic starting — their first words are still
+      // in flight at this point.
+      console.warn('[live] setupComplete → greeting (holding a beat)');
       const first = this.userName?.trim().split(/\s+/)[0];
       const hi = first ? `Hi ${first}` : 'Hi';
       const nudge = this.greetingOverride
@@ -659,14 +672,23 @@ export class LiveVoiceSession {
         : this.firstTime
         ? `(Their FIRST time here. One short sentence: "${hi}" — you're Eve, and you'll get their store up and running together. Then ONE easy question. Two sentences total, then stop and listen.)`
         : `(Greet them: "${hi}" plus ONE easy question — a dozen words total. Nothing else, then stop and listen.)`;
-      try {
-        this.session?.sendClientContent({
-          turns: [{ role: 'user', parts: [{ text: nudge }] }],
-          turnComplete: true,
-        });
-      } catch (e) {
-        console.warn('[live] greeting send failed', e instanceof Error ? e.message : e);
-      }
+      if (this.greetTimer) clearTimeout(this.greetTimer);
+      this.greetTimer = setTimeout(() => {
+        this.greetTimer = null;
+        if (this.closed) return;
+        if (this.creatorOpened()) {
+          console.warn('[live] greeting skipped — they opened the conversation');
+          return;
+        }
+        try {
+          this.session?.sendClientContent({
+            turns: [{ role: 'user', parts: [{ text: nudge }] }],
+            turnComplete: true,
+          });
+        } catch (e) {
+          console.warn('[live] greeting send failed', e instanceof Error ? e.message : e);
+        }
+      }, GREET_HOLD_MS);
       return;
     }
     const sc = m.serverContent;
@@ -794,7 +816,16 @@ export class LiveVoiceSession {
   private noteUserVoice(frame: Float32Array) {
     let sum = 0;
     for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
-    if (Math.sqrt(sum / frame.length) > VOICE_RMS) this.lastUserVoiceAt = Date.now();
+    if (Math.sqrt(sum / frame.length) > VOICE_RMS) {
+      this.lastUserVoiceAt = Date.now();
+      this.openVoiceFrames++;
+    }
+  }
+
+  /** Did the creator open this session by talking? Sustained mic speech, a live turn, or words
+   *  already transcribed — any of the three means she should answer, not greet. */
+  private creatorOpened(): boolean {
+    return this.userTurnActive || this.curUser.trim().length > 0 || this.openVoiceFrames >= OPENING_FRAMES;
   }
 
   /** True while the creator holds the floor: a server-confirmed turn, or mic energy inside the
@@ -902,6 +933,7 @@ export class LiveVoiceSession {
     resetSpeechLevel(); // no more audio → the avatar's mouth rests
 
     if (this.promptTimer) { clearTimeout(this.promptTimer); this.promptTimer = null; }
+    if (this.greetTimer) { clearTimeout(this.greetTimer); this.greetTimer = null; }
     this.pendingPrompt = null;
     const stranded = this.pendingPromptSent;
     this.pendingPromptSent = undefined;

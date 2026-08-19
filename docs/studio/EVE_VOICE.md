@@ -95,6 +95,16 @@ stopped: `userTurnActive` (server transcription) **OR** local mic RMS inside a 7
 into. The queued line waits as long as it takes, then speaks. Her own playback never counts as
 speech (the half-duplex gate runs first).
 
+## The greeting yields to whoever spoke first (Joe, 2026-08-18)
+
+Opening with a sentence ("Hi Eve, it's time we create another store") used to get answered and
+then *interrupted by her own hello*: the greeting nudge is its own completed turn, fired the
+instant setup finishes — milliseconds after the mic starts, while their first words are still in
+flight — so the model preempted its real reply to serve the greeting. The nudge now waits
+`GREET_HOLD_MS` (700 ms) and is **dropped entirely** if the creator opened the conversation
+(a live turn, transcribed words, or ~0.3 s of sustained mic speech). If they open by talking,
+answering them IS the greeting.
+
 ## Read where they are before probing
 
 Probing is for someone who **doesn't know** what they want. It is the wrong move for someone who does.
