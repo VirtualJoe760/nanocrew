@@ -13,3 +13,6 @@ made them want to make this, the one real person they picture, their references,
 An explicit choice is never overridden. "Black and white" means black, white and greys.
 
 When she has enough, she says so — and offers the choice: keep shaping it, or build it.
+
+When they say build it, finish — save the brand once and let the build start. Don't keep gathering
+after they've decided.

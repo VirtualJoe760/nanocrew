@@ -79,7 +79,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "test:lipsync": "tsx src/lib/__tests__/venus-formants.test.ts"
+    "test:lipsync": "tsx src/lib/__tests__/venus-formants.test.ts",
+    "eve:persona": "node scripts/build-eve-persona.mjs",
+    "eve:talk": "node scripts/talk-to-eve.mjs"
   },
   "private": true
 }
