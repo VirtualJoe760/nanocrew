@@ -94,7 +94,7 @@ export function EveHome({
 }) {
   const insets = useSafeAreaInsets();
   const p = usePalette();
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
 
   const [view, setView] = useState<'guide' | 'interview'>('guide');
   const [state, setState] = useState<EntityState>('idle');
@@ -1042,7 +1042,11 @@ export function EveHome({
               wheel replaced them, and two of the glyphs were tofu boxes anyway. */}
         </View>
 
-        {!session ? (
+        {authLoading ? (
+          // Same rule as studio.tsx: while the stored session rehydrates we know nothing yet —
+          // never flash "Create an account" at a creator who is signed in (Joe, 2026-08-18).
+          <View pointerEvents="box-none" style={styles.guideWrap} />
+        ) : !session ? (
           <View pointerEvents="box-none" style={styles.guideWrap}>
             <ThemedText type="title" style={[styles.guideTitle, { color: p.ink }]}>Meet {AI_NAME}</ThemedText>
             <ThemedText type="small" style={[styles.guideBody, { color: p.dim }]}>

@@ -111,6 +111,10 @@ re-introduces herself (`src/lib/live-voice.ts`).
   picker; after sign-in the Paywall opens, and when it closes with a paid plan active,
   `POST /api/creator/onboarding` claims the welcome-credit grant), **login**, or **shop & browse
   for free** (→ Market). Seen-flag + chosen intent persist in AsyncStorage, so it shows once.
+- **Auth restore holds the ground (2026-08-18):** `session` is null while the stored session
+  rehydrates, so the signed-out gate used to win the first frame of every cold start — a
+  "Create an account" flash for signed-in creators. Both `studio.tsx` and `EveHome` now check
+  `loading` FIRST and render the quiet dark ground until auth resolves.
 - **Signed-out (intro):** EveGlyph, "FROM IDEA TO BRAND IN SECONDS", **"Meet Eve"** title + blurb,
   **Create an account** / **log in** CTAs (→ Account tab). "Free to explore. You only need a
   plan to launch a store."

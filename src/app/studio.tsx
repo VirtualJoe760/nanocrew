@@ -258,7 +258,16 @@ function StudioScreen() {
           }}
         />
       ) : !deep ? (
-        !session ? (
+        loading ? (
+          // AUTH IS STILL RESTORING (Joe, 2026-08-18: "always shows create account for a split
+          // second"). session is null while the stored session rehydrates, so the signed-out gate
+          // used to win the first frame(s) of every cold start. Hold the quiet ground instead —
+          // we don't know which surface this is yet.
+          <>
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: EVE_SCRIM }]} />
+            <ActivityIndicator style={styles.center} color="#cdd1d9" />
+          </>
+        ) : !session ? (
           // Signed-out gate — dim Eve with the scrim so the copy reads.
           <>
             <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: EVE_SCRIM }]} />
@@ -293,7 +302,7 @@ function StudioScreen() {
               </View>
             </View>
           </>
-        ) : loading || !voiceResolved ? (
+        ) : !voiceResolved ? (
           <>
             <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: EVE_SCRIM }]} />
             <ActivityIndicator style={styles.center} color="#cdd1d9" />
