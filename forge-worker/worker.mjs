@@ -120,10 +120,21 @@ ${brief}
 NANOCREW_REVISION_EOF
 ${renderShots}
 pnpm install --silent 2>&1 | tail -1
-claude -p "Read $BRIEF and look at any images in briefs/screenshots/, then apply exactly that change. Then run pnpm run build and fix anything you broke." --dangerously-skip-permissions --max-turns 60 < /dev/null > /tmp/${repo}-revise.log 2>&1 || true
+# `|| true` used to swallow EVERY failure here, including "401 OAuth access token has been
+# revoked" — the robot never ran, the branch carried nothing but the brief, and the revision was
+# still marked ready with a preview identical to live (2026-08-19). Report both facts instead.
+if claude -p "Read $BRIEF and look at any images in briefs/screenshots/, then apply exactly that change. Then run pnpm run build and fix anything you broke." --dangerously-skip-permissions --max-turns 60 < /dev/null > /tmp/${repo}-revise.log 2>&1; then
+  echo CLAUDE_OK
+else
+  echo CLAUDE_FAILED
+  tail -3 /tmp/${repo}-revise.log
+fi
 pnpm run build > /tmp/${repo}-revise-build.log 2>&1 && echo BUILD_OK || echo BUILD_FAILED
 rm -rf briefs/screenshots
 git add -A
+# The brief itself is always written — an edit that touched NOTHING else did nothing at all.
+CHANGED=$(git diff --cached --name-only | grep -cv '^briefs/' || true)
+[ "$CHANGED" = "0" ] && echo NO_EDITS || echo "EDITED=$CHANGED"
 git -c user.name=nanocrew -c user.email=studio@nanocrew.app commit -q -m "${commitMsg}" || true
 git push -q -u origin ${branch}
 echo REVISE_DONE
@@ -161,7 +172,12 @@ NANOCREW_BRIEF_02
 git init -b main -q
 git remote add origin https://x-access-token:${GITHUB_TOKEN}@github.com/${fullRepo}.git
 pnpm install --silent 2>&1 | tail -2
-claude -p "Read briefs/01-BRAND.md and apply it to this storefront. Then verify every item in briefs/02-TEST.md and fix anything that fails." --dangerously-skip-permissions --max-turns 80 < /dev/null > /tmp/${repo}-claude.log 2>&1 || true
+if claude -p "Read briefs/01-BRAND.md and apply it to this storefront. Then verify every item in briefs/02-TEST.md and fix anything that fails." --dangerously-skip-permissions --max-turns 80 < /dev/null > /tmp/${repo}-claude.log 2>&1; then
+  echo CLAUDE_OK
+else
+  echo CLAUDE_FAILED
+  tail -3 /tmp/${repo}-claude.log
+fi
 tail -1 /tmp/${repo}-claude.log
 pnpm run build > /tmp/${repo}-build.log 2>&1 && echo "BUILD_OK" || echo "BUILD_FAILED"
 git add -A
@@ -288,6 +304,15 @@ async function processProvision(row) {
     // If the site's own `pnpm run build` failed (even after the robot's fix passes) do NOT present a
     // broken build as 'ready'. Skip the (doomed) Vercel deploy, record the failure, and leave the store
     // at 'draft' — retryable, NOT stuck on 'building' and NOT a false 'ready'. The creator is notified.
+    if (out.includes('CLAUDE_FAILED')) {
+      // The template deploys and looks fine, but NONE of the brand brief was applied — the copy is
+      // the template's, not theirs. Say so rather than shipping a generic site as their brand.
+      log(`✗ provision ${row.id} — the branding robot could not run (see /tmp/${repo}-claude.log)`);
+      await sql`update stores set status = 'draft' where id = ${row.storeId}`;
+      await sql`update store_revisions set status = 'failed', error_msg = 'the branding robot could not run — the site was never branded' where id = ${row.id}`;
+      await notifyCreator(row.storeId, `${row.storeName} — build didn’t finish`, 'Your site build hit a snag. Open Studio to try again.', { kind: 'provision_failed', storeId: row.storeId });
+      return;
+    }
     if (out.includes('BUILD_FAILED')) {
       log(`✗ provision ${row.id} build FAILED — not deploying, not marking ready`);
       await sql`update stores set status = 'draft' where id = ${row.storeId}`;
@@ -338,6 +363,10 @@ async function processOne() {
     const script = buildScript({ repo, fullRepo, branch: row.branch, requestMd: row.requestMd, annotations });
     const out = await run('bash', ['-s'], { input: script, timeoutMs: 30 * 60 * 1000 });
     if (!out.includes('REVISE_DONE')) throw new Error('forge revision did not complete');
+    // A revision that changed nothing is a FAILURE, not a ready preview of the unchanged site.
+    // Both halves are real: the robot can fail to start (auth) or run and touch nothing.
+    if (out.includes('CLAUDE_FAILED')) throw new Error(`the site robot could not run — see /tmp/${repo}-revise.log on the forge`);
+    if (out.includes('NO_EDITS')) throw new Error('the site robot made no changes to the site');
     if (out.includes('BUILD_FAILED')) log(`  build failing on ${row.branch}`);
 
     const previewUrl = await deployPreview(fullRepo, repo, row.branch);
