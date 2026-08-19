@@ -95,6 +95,19 @@ stopped: `userTurnActive` (server transcription) **OR** local mic RMS inside a 7
 into. The queued line waits as long as it takes, then speaks. Her own playback never counts as
 speech (the half-duplex gate runs first).
 
+## Her DELIVERY is one shared constant — `EVE_DELIVERY` (Joe, 2026-08-18)
+
+"She responded, got cut off, and then responded in a different voice." Two faults, one chain:
+
+- **`critiqueInstruction` carried no delivery paragraph at all.** The voice NAME already defaults to
+  Kore everywhere (that 2026-08-17 fix holds), but Gemini's native-audio model performs from the
+  *system instruction* — so a persona missing "British, lightly synthetic, unhurried…" renders the
+  same voice as a different person. All three personas now interpolate the single exported
+  `EVE_DELIVERY`; never write that paragraph inline again.
+- **The takeover chopped her mid-word.** Only one live session may exist, so a surface that opens
+  its own (the site-critique view auto-starts on mount) killed the active one instantly. The
+  displaced session is now allowed to finish its sentence first (`HANDOFF_TAIL_MS`, 2.5s cap).
+
 ## She never opens the same way twice (Joe, 2026-08-18)
 
 "She needs real diversity and authenticity." A model has no memory between sessions, so a fixed
