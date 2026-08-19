@@ -184,6 +184,7 @@ const VOICE_RMS = 0.015; // mic frame loudness that counts as "they're talking"
 const QUIET_SETTLE_MS = 700; // silence after their last word before any queued cue may speak
 const GREET_HOLD_MS = 700; // beat after setup to see whether THEY opened the conversation
 const OPENING_FRAMES = 3; // mic frames of real speech that mean "they're already talking" (~0.3s)
+const CUE_TTL_MS = 15_000; // a queued stage direction older than this no longer describes the screen
 /** Backstop for an announcement session (speakOnly) — it closes on turnComplete, but never lives
  *  longer than this even if that signal is lost. One spoken line is a few seconds. */
 const ANNOUNCE_MAX_MS = 25_000;
@@ -807,6 +808,10 @@ export class LiveVoiceSession {
    *  they never see the stage direction. This is what the wheel's ask-spokes use; sendContext
    *  (below) can never voice anything, which is exactly why it exists and why this also must. */
   private pendingPrompt: string | null = null;
+  /** When the queued cue stops being true. Stage directions describe what's ON SCREEN NOW ("the
+   *  placement editor just opened"); if the creator talks for half a minute the cue is stale and
+   *  saying it late is worse than not saying it (audit 2026-08-18). */
+  private pendingPromptAt = 0;
   /** Fires when the queued cue is dispatched — lets a caller time a surface to her voice. */
   private pendingPromptSent?: () => void;
   private reconnects = 0;
@@ -840,7 +845,11 @@ export class LiveVoiceSession {
     // NEVER barge in: a completed turn sent during their speech commits/cancels their in-flight
     // utterance (2026-08-17: "she died when the picker opened"; 2026-08-18: she talked over him
     // as the catalogue opened). Queue it and wait for actual quiet — however long that takes.
+    // One slot on purpose: a newer cue always describes the screen better than an older one. The
+    // displaced caller is still released so its surface never hangs waiting.
+    this.pendingPromptSent?.();
     this.pendingPrompt = t;
+    this.pendingPromptAt = Date.now();
     this.pendingPromptSent = onSent;
     this.flushPrompt();
   }
@@ -849,6 +858,14 @@ export class LiveVoiceSession {
   private flushPrompt() {
     if (this.promptTimer) { clearTimeout(this.promptTimer); this.promptTimer = null; }
     if (!this.pendingPrompt) return;
+    if (Date.now() - this.pendingPromptAt > CUE_TTL_MS) {
+      console.warn('[live] cue expired unspoken — the screen moved on');
+      this.pendingPrompt = null;
+      const stale = this.pendingPromptSent;
+      this.pendingPromptSent = undefined;
+      stale?.(); // release the surface anyway
+      return;
+    }
     if (this.creatorHasFloor()) {
       this.promptTimer = setTimeout(() => { this.promptTimer = null; this.flushPrompt(); }, 200);
       return;
