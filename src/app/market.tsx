@@ -22,6 +22,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { withScreenFade } from '@/components/screen-fade';
 import { GlowInput } from '@/components/glow-input';
 import { apiUrl } from '@/lib/api';
+import { MyStores } from '@/components/my-stores';
+import { useAuth } from '@/hooks/use-auth';
 
 // THE MARKET — a tabbed browser: one nav, several ways to shop. DISCOVER is the editorial home
 // (a featured hero + fresh drops + a curated grid); SHOP is a filterable product grid; BRANDS is
@@ -44,12 +46,14 @@ type Brand = { id: string; name: string; slug: string; tagline: string | null; l
 type Collection = { slug: string; name: string; season: string | null; coverImageUrl: string | null; storeSlug: string; storeName: string };
 type MarketData = { featured: Product[]; trending: Product[]; collections: Collection[]; brands: Brand[]; more: Product[] };
 
-type Tab = 'discover' | 'shop' | 'brands';
+// 'mine' = the creator's OWN marketplace (Joe, 2026-08-18) — only offered to a signed-in creator.
+type Tab = 'discover' | 'shop' | 'brands' | 'mine';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'discover', label: 'Discover' },
   { key: 'shop', label: 'Shop' },
   { key: 'brands', label: 'Brands' },
 ];
+const MY_TAB: { key: Tab; label: string } = { key: 'mine', label: 'My stores' };
 
 const CardBg = 'rgba(24,25,30,0.92)';
 const HairLine = 'rgba(205,209,217,0.14)';
@@ -185,7 +189,11 @@ export default withScreenFade(MarketScreen);
 function MarketScreen() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
+  const { session } = useAuth();
+  const tabs = session ? [...TABS, MY_TAB] : TABS;
   const [tab, setTab] = useState<Tab>('discover');
+  // Signing out while on My stores would strand them on a tab that no longer exists.
+  useEffect(() => { if (!session && tab === 'mine') setTab('discover'); }, [session, tab]);
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('All');
   const [data, setData] = useState<MarketData | null>(null);
@@ -244,7 +252,7 @@ function MarketScreen() {
         {/* Nav tabs — how you want to browse. Hidden while searching (results take over). */}
         {!searching ? (
           <View style={styles.tabNav}>
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <Pressable key={t.key} onPress={() => setTab(t.key)} style={styles.tabItem}>
                 <ThemedText type="smallBold" style={{ color: tab === t.key ? theme.text : theme.textSecondary, opacity: tab === t.key ? 1 : 0.6 }}>{t.label}</ThemedText>
                 <View style={[styles.tabUnderline, { backgroundColor: tab === t.key ? theme.tint : 'transparent' }]} />
@@ -289,6 +297,8 @@ function MarketScreen() {
                   <View style={[styles.emptyCard, styles.padWrap]}><ThemedText type="small" themeColor="textSecondary">No live storefronts yet.</ThemedText></View>
                 ) : null}
               </>
+            ) : tab === 'mine' ? (
+              <MyStores width={width} onOpen={(slug) => openStore(slug)} />
             ) : tab === 'shop' ? (
               <>
                 {cats.length > 1 ? (

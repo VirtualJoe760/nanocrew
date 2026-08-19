@@ -393,18 +393,22 @@ export function EveDesign({
         <View style={styles.stage}>
           {design ? <Image source={{ uri: design.url }} style={styles.doneImage} contentFit="contain" /> : null}
           <ThemedText style={[styles.line, { color: p.ink }]}>It’s live — in your catalogue and on your site.</ThemedText>
-          <Pressable onPress={onExit} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
-            <ThemedText type="smallBold" style={{ color: BG }}>Done</ThemedText>
-          </Pressable>
+          <View style={styles.actions}>
+            <Pressable onPress={onExit} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
+              <ThemedText type="smallBold" style={{ color: BG }}>Done</ThemedText>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
       {step === 'error' ? (
         <View style={styles.stage}>
           <ThemedText type="code" style={styles.error} numberOfLines={3}>{error ?? 'Something went wrong.'}</ThemedText>
-          <Pressable onPress={onExit} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
-            <ThemedText type="code" style={{ color: p.dim }}>‹ Back to Eve</ThemedText>
-          </Pressable>
+          <View style={styles.actions}>
+            <Pressable onPress={onExit} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
+              <ThemedText type="code" style={{ color: p.dim }}>‹ Back to Eve</ThemedText>
+            </Pressable>
+          </View>
         </View>
       ) : null}
     </View>

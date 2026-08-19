@@ -5,7 +5,7 @@ import { uploadImage } from '@/lib/cloudinary';
 import { db, schema } from '@/lib/db';
 import { guardRate } from '@/lib/rate-limit';
 import { TenantError, assertCompositionOwner } from '@/lib/tenant';
-import { createSyncProduct, getCatalogVariants, upscaleForPrint, type MockupPosition } from '@/lib/printful';
+import { createSyncProduct, getCatalogVariants, getProductMeta, renderMockups, upscaleForPrint, type MockupFile, type MockupPosition } from '@/lib/printful';
 import { checkProviderPolicy, resolvePodProvider } from '@/lib/pod-policy';
 import { minRetailCents } from '@/lib/pricing';
 import { revalidateStorefront } from '@/lib/storefront-revalidate';
@@ -187,7 +187,22 @@ export async function POST(req: Request) {
 
     // Mirror into the local catalog (feeds the Market tab + the feed) — the composition
     // already knows which store it belongs to.
-    const mockupUrl = await persistMockup(comp.previewUrl ?? null);
+    // PRODUCT IMAGE — never null (Joe, 2026-08-18: three freshly-published products were blank
+    // cards on the Stephen Lawyer store). previewUrl is only set when someone taps "Generate
+    // Printful mockup", which the redesigned placement editor no longer requires — so publishes
+    // that skipped the PROOF tab landed imageUrl null AND skipped model shots (they were gated on
+    // the same value). Now: the design art carries the card instantly, and the real garment mockup
+    // is rendered right after the response and swapped in (which then unlocks model shots).
+    const designFallback =
+      placementList.map((p) => urlById.get(p.designId)).find((u) => u && !u.startsWith('data:')) ?? null;
+    const mockupFiles: MockupFile[] = files.map((f) => ({
+      placement: f.type,
+      image_url: f.url,
+      ...(f.position ? { position: f.position } : {}),
+    }));
+    const previewMockup = await persistMockup(comp.previewUrl ?? null);
+    const mockupUrl = previewMockup ?? designFallback;
+    const mockupVariantId = body.variants[0].printfulVariantId; // validated above
     const [product] = await db
       .insert(schema.products)
       .values({
@@ -226,8 +241,33 @@ export async function POST(req: Request) {
     // Node, the work survives the response). Debits the standard model_shots cost with
     // refund-on-failure; if credits are short the product still publishes and the Sell surface
     // can offer shots later. The storefront repaints itself when the shots land.
-    if (mockupUrl) {
-      void (async () => {
+    void (async () => {
+      // Resolve a REAL garment mockup: the one already rendered, or render it now. Model shots
+      // need a garment — never the bare design art the card is temporarily showing.
+      let garment = previewMockup;
+      if (!garment && mockupFiles.length) {
+        try {
+          const meta = await getProductMeta(comp.templateKey).catch(() => ({
+            technique: null as string | null,
+            defaultOptions: {} as Record<string, string | string[]>,
+          }));
+          const rendered = await renderMockups(
+            comp.templateKey,
+            mockupVariantId,
+            mockupFiles,
+            meta.technique,
+            meta.technique === 'KNITWEAR' ? meta.defaultOptions : undefined,
+          );
+          garment = await persistMockup(rendered.front ?? Object.values(rendered)[0] ?? null);
+          if (garment) {
+            await db.update(schema.products).set({ imageUrl: garment }).where(eq(schema.products.id, product.id));
+            void revalidateStorefront(store?.slug);
+          }
+        } catch {
+          /* keep the design-art card — better than a blank tile */
+        }
+      }
+      if (garment) {
         try {
           await debit(user.id, 'model_shots', product.id);
         } catch (e) {
@@ -235,7 +275,7 @@ export async function POST(req: Request) {
           return;
         }
         try {
-          const shots = await generateModelShots(mockupUrl, 6); // 3 posed + 3 action/environment (Joe)
+          const shots = await generateModelShots(garment, 6); // 3 posed + 3 action/environment (Joe)
           if (shots.length) {
             await db.update(schema.products).set({ modelShots: shots }).where(eq(schema.products.id, product.id));
             void revalidateStorefront(store?.slug);
@@ -245,8 +285,8 @@ export async function POST(req: Request) {
         } catch {
           await grant(user.id, CREDIT_COSTS.model_shots, 'refund', product.id).catch(() => {});
         }
-      })();
-    }
+      }
+    })();
 
     return Response.json({ ok: true, printfulSyncProductId: syncProductId, product, warnings: policy.warnings });
   } catch (e) {

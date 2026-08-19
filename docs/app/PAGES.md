@@ -51,6 +51,10 @@ Brand discovery + in-app storefronts. Fully public. Monochrome "Marketplace" eye
 - **Brand cards:** logo, name, tagline (or drop count), product-count badge, a preview thumbnail
   strip, and a footer with **"Open store →"** (whole card opens the in-app store) plus a separate
   **"Website ↗"** pill that opens the live site (custom domain preferred) in a browser.
+- **My stores** (signed-in creators only, 2026-08-18): their OWN marketplace — every owned store with
+  its products (including hidden ones, dimmed with a HIDDEN badge; `/api/creator/products?storeSlug=`).
+  Tap a tile to open the store as shoppers see it; **long-press → Hide from store / Show in store /
+  Remove for good** (`PATCH|DELETE /api/creator/products/:id`).
 - **Deep link:** `/market?store=<slug>` (from the feed's Buy/Shop actions) opens that store directly.
 - **Calls:** `/api/market`, then `/api/store/:slug` (via Brand Store).
 
