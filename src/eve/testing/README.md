@@ -73,6 +73,12 @@ ambiguous about who said what.
 - **The phone (OTA build) writes no transcripts** — `/api/dev/log-conversation` is dev-server only.
   Voice testing happens on the Simulator.
 
+## Starting a fresh testing session
+
+[`SESSION_PROMPT.md`](SESSION_PROMPT.md) — a paste-in brief for a new Claude session with no context:
+objectives, the prompts to say to her in order, rules of engagement (throwaway brand, credit limits,
+decline the revision), and what to report back.
+
 ## Beyond conversation — the full flows
 
 Talking to her is one layer. To test that she can actually **build a brand, design a design, and
