@@ -26,6 +26,7 @@ import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl, readJson } from '@/lib/api';
+import { useSpokenText } from '@/lib/caption';
 import { buildDigest, digestBriefing, type Digest, type DigestStore } from '@/lib/eve-digest';
 import { imageForEve, registerEveVisionListener } from '@/lib/eve-vision-bus';
 import { registerEveSayListener } from '@/lib/eve-say-bus';
@@ -311,7 +312,10 @@ export function EveHome({
       loggedTurns.current = live.messages.length;
     }
   }, [live.messages]);
-  useEffect(() => { setLine(live.venusText); }, [live.venusText]);
+  // Her home caption follows her VOICE too — same clock as the site-editor subtitles, so nothing
+  // races ahead of the sound (Joe, 2026-08-19: "word for word… across all subtitles").
+  const spokenLine = useSpokenText(live.venusText, live.speechWindow, live.state === 'speaking');
+  useEffect(() => { setLine(spokenLine); }, [spokenLine]);
   useEffect(() => { setHeard(live.userText); }, [live.userText]);
   useEffect(() => { if (live.error) setError(live.error); }, [live.error]);
 
@@ -392,6 +396,8 @@ export function EveHome({
   /** Eve just asked what they'd like designed — the next user turn is (probably) the idea. */
   const awaitDesignIdea = useRef(false);
   const awaitAssetIdea = useRef(false);
+  /** She just asked WHICH brand's site to edit — the next turn is that answer, not a new topic. */
+  const awaitSiteChoice = useRef(false);
   /** One-shot greeting override for the NEXT session open (a spoke that wants her first line to be
    *  its own ask — e.g. DESIGN — instead of the general hello). Consumed by the gate effect. */
   const pendingGreeting = useRef<string | undefined>(undefined);
@@ -418,6 +424,64 @@ export function EveHome({
     setTalking(true);
     setView('interview');
   }, [live.stop]);
+  // ONE door for the site editor, two ways in: the wheel's EDIT sector and the edit-site voice
+  // intent both land here (Joe, 2026-08-19), so which brand gets opened can never drift between
+  // them. A named brand wins; a lone live site opens straight away; more than one and she ASKS —
+  // falling back to the brands deck when she isn't listening and can't ask.
+  const openSiteEditor = useCallback(
+    ({ slug, canAsk = true }: { slug?: string; canAsk?: boolean } = {}) => {
+      const withSites = stores.filter((s) => siteUrlFor(s));
+      const target = slug ? stores.find((s) => s.slug === slug) : withSites.length === 1 ? withSites[0] : undefined;
+      const url = target ? siteUrlFor(target) : null;
+      if (target && url) {
+        // SHE LEADS, THEN THE EDITOR (Joe, 2026-08-19: "she started to open the component while she
+        // was still responding, and it cut her response off"). Same shape as the design picker: one
+        // short line that names the brand and says she's opening it, and the surface mounts when
+        // that line is actually dispatched — the voice gate holds it until she has stopped talking.
+        let opened = false;
+        const open = () => {
+          if (opened) return;
+          opened = true;
+          onGo({ state: 'developing', payload: { slug: target.slug, url, name: target.name } });
+        };
+        // Cap the wait: a dead socket or typed mode must still get them into the editor.
+        setTimeout(open, 8000);
+        live.prompt(
+          `(You're opening the live site editor for "${target.name}" right now. ONE short line, then STOP: say you're pulling their site up and that they can circle anything and say the change. Nothing else — they're about to look at it.)`,
+          open,
+        );
+        return;
+      }
+      if (target && !url) {
+        // They NAMED a real brand, but it has no live site yet — say so about that brand,
+        // not a nonsensical "did you mean <the other one>?".
+        live.sendContext(
+          `(They asked to edit "${target.name}", but that brand has no live site yet — tell them gently, and suggest launching its site from the Studio first.)`,
+        );
+        return;
+      }
+      if (!withSites.length) {
+        live.sendContext(
+          '(They asked to edit their website, but none of their brands has a live site yet — tell them gently, and suggest launching the site from the Studio first.)',
+        );
+        return;
+      }
+      const options = withSites.map((s) => `"${s.name}"`).join(' or ');
+      if (canAsk) {
+        // Tell her what the ANSWER does, not just what to ask. Without it she treats the reply as a
+        // fresh topic and starts pitching hero art (Joe, 2026-08-19: "she thought you meant a
+        // design when you wanted her to edit the site — that felt like a context issue").
+        awaitSiteChoice.current = true;
+        live.sendContext(
+          `(They want to edit one of their websites but have more than one — ask which brand they mean: ${options}. One short line, nothing else. When they name one you'll open that site's editor for them, so don't suggest designs or artwork — just take the name.)`,
+        );
+      } else {
+        onShowBrands(); // silent wheel pick with several sites: let them tap the brand instead
+      }
+    },
+    [stores, onGo, onShowBrands, live],
+  );
+
   const routeTurn = useCallback(
     async (turn: string) => {
       if (!session) return;
@@ -428,6 +492,8 @@ export function EveHome({
       awaitDesignIdea.current = false;
       const awaitingAsset = awaitAssetIdea.current;
       awaitAssetIdea.current = false;
+      const awaitingSite = awaitSiteChoice.current;
+      awaitSiteChoice.current = false;
       try {
         const r = await fetch(apiUrl('/api/eve/route'), {
           method: 'POST',
@@ -439,6 +505,7 @@ export function EveHome({
             interviewActive: viewRef.current === 'interview',
             awaitingDesignIdea: awaiting,
             awaitingAssetIdea: awaitingAsset,
+            awaitingSiteChoice: awaitingSite,
           }),
         });
         const d = (await r.json().catch(() => ({}))) as {
@@ -449,33 +516,9 @@ export function EveHome({
         };
         if (!routingAlive.current) return; // left the guide while this classified — don't act
         switch (d.intent) {
-          case 'edit-site': {
-            const withSites = stores.filter((s) => siteUrlFor(s));
-            const target = d.storeSlug
-              ? stores.find((s) => s.slug === d.storeSlug)
-              : withSites.length === 1
-                ? withSites[0]
-                : undefined;
-            const url = target ? siteUrlFor(target) : null;
-            if (target && url) {
-              onGo({ state: 'developing', payload: { slug: target.slug, url, name: target.name } });
-            } else if (target && !url) {
-              // They NAMED a real brand, but it has no live site yet — say so about that brand,
-              // not a nonsensical "did you mean <the other one>?".
-              live.sendContext(
-                `(They asked to edit "${target.name}", but that brand has no live site yet — tell them gently, and suggest launching its site from the Studio first.)`,
-              );
-            } else if (!withSites.length) {
-              live.sendContext(
-                '(They asked to edit their website, but none of their brands has a live site yet — tell them gently, and suggest launching the site from the Studio first.)',
-              );
-            } else {
-              live.sendContext(
-                `(They asked to edit a site but it's unclear which brand — ask whether they mean ${withSites.map((s) => `"${s.name}"`).join(' or ')}.${d.ask ? ` Their app suggests asking: ${d.ask}` : ''})`,
-              );
-            }
+          case 'edit-site':
+            openSiteEditor({ slug: d.storeSlug });
             return;
-          }
           case 'create-brand':
             if (viewRef.current === 'guide') enterInterview();
             return;
@@ -548,7 +591,7 @@ export function EveHome({
         // routing is best-effort — a missed command costs a repeat, never an error
       }
     },
-    [session, stores, live.messages, live.sendContext, onGo, onRequestClose, enterInterview, openDigest],
+    [session, stores, live.messages, live.sendContext, onGo, onRequestClose, enterInterview, openDigest, openSiteEditor],
   );
   // Her FIRST line of each session is the opener — remember it so the next session avoids it.
   const openerSaved = useRef(false);
@@ -811,11 +854,16 @@ export function EveHome({
         case 'site': {
           // The Your-Brands deck (Joe, 2026-08-17): pick the brand FIRST, then its Console
           // (Edit site · Posts · Sell · Settings) via the deck's edit action — not Eve's voice-edit
-          // surface, and not the first brand's console unasked. Voice edits stay reachable by
-          // ASKING her (the edit-site intent → EveDeveloping).
+          // surface, and not the first brand's console unasked. The live-site editor is its own
+          // sector now (EDIT, below) and stays reachable by ASKING her (the edit-site intent).
           onShowBrands();
           return;
         }
+        case 'edit':
+          // Straight into the live-site editor — the same door the edit-site intent uses. With
+          // several live sites she asks which brand; silent, they get the deck to tap.
+          openSiteEditor({ canAsk: talking });
+          return;
         case 'brand': {
           // There is no in-place identity editor yet (EVE_CONTROL P3.1 is open), and inventing a
           // half one here would be worse than the thing that already works: ask Eve. Edits still go
@@ -832,7 +880,7 @@ export function EveHome({
         }
       }
     },
-    [stores, talking, toggleTalk, startVoice, openDigest, onGo, onShowBrands, live],
+    [stores, talking, toggleTalk, startVoice, openDigest, onShowBrands, openSiteEditor, live],
   );
 
   /** Release: act on the highlighted sector, or cancel when the thumb is in the centre. */

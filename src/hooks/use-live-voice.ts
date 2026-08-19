@@ -9,6 +9,8 @@ export interface UseLiveVoice {
   state: LiveState;
   /** Running transcript of what Eve is saying (for captions). */
   venusText: string;
+  /** Wall-clock span of her currently queued audio, or null between turns. */
+  speechWindow: { startedAt: number; endsAt: number } | null;
   /** Running transcript of what the user just said. */
   userText: string;
   /** The full committed conversation (completed turns) — for the keyboard chat view. */
@@ -87,6 +89,9 @@ export function useLiveVoice(opts: {
 }): UseLiveVoice {
   const [state, setState] = useState<LiveState>('idle');
   const [venusText, setVenusText] = useState('');
+  // The wall-clock window her queued audio occupies — subtitles ride it so they follow her VOICE
+  // rather than the transcript stream (src/lib/caption.ts).
+  const [speechWindow, setSpeechWindow] = useState<{ startedAt: number; endsAt: number } | null>(null);
   const [userText, setUserText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -181,6 +186,7 @@ export function useLiveVoice(opts: {
     setError(null);
     setAudioBusy(false);
     setVenusText('');
+    setSpeechWindow(null);
     setUserText('');
     setMessages([]);
     const s = new LiveVoiceSession({
@@ -197,6 +203,7 @@ export function useLiveVoice(opts: {
         onState: setState,
         // session emits the FULL current utterance (with per-turn resets), so just replace.
         onVenusTranscript: (t) => setVenusText(t),
+        onSpeechWindow: (startedAt, endsAt) => setSpeechWindow({ startedAt, endsAt }),
         onUserTranscript: (t) => setUserText(t),
         onTranscript: (msgs) => setMessages(msgs),
         onBrand: (b) => onBrandRef.current(b),
@@ -279,5 +286,5 @@ export function useLiveVoice(opts: {
   // fire against a dead session.
   useEffect(() => () => { clearGrace(); sessionRef.current?.stop(); sessionRef.current = null; }, [clearGrace]);
 
-  return { state, venusText, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, suspend, resume, isLive, sendText, prompt, sendContext, sendImage, mute, finalize };
+  return { state, venusText, speechWindow, userText, messages, error, audioBusy, dismissAudioBusy, finalizing, start, stop, suspend, resume, isLive, sendText, prompt, sendContext, sendImage, mute, finalize };
 }

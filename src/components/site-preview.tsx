@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, type LayoutChangeEvent, Linking, Modal, NativeModules, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, TurboModuleRegistry, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Line, Path, Polyline } from 'react-native-svg';
+import Svg, { G, Line, Path, Polygon, Polyline } from 'react-native-svg';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { VenusBubble } from '@/components/venus-bubble';
 import { WebFrame } from '@/components/web-frame';
+import { tabBarSpace } from '@/components/app-tabs';
 import { Spacing } from '@/constants/theme';
 import { useLiveVoice } from '@/hooks/use-live-voice';
 import { apiUrl } from '@/lib/api';
+import { tailWords, useSpokenText } from '@/lib/caption';
 import { CRITIQUE_GREETING, critiqueInstruction } from '@/lib/live-voice';
 import { venusContextForHit } from '@/lib/site-vocabulary';
 
@@ -53,10 +55,18 @@ const DIM = 'rgba(243,241,236,0.6)';
 const FAINT = 'rgba(243,241,236,0.28)';
 
 const COACHING = 'Circle anything you want to change and just say the adjustment — I’ll note each one. Tap me to pause. Submit when you’re done.';
-const CRITIQUE_INSTRUCTION = critiqueInstruction();
+
+/** Live captions read like captions, not paragraphs (Joe, 2026-08-19): the caption sits under the
+ *  URL bar — where nothing can clip it — and shows only the LAST few words of what she has actually
+ *  SPOKEN so far (src/lib/caption.ts paces it against her audio, not the transcript stream). */
+const CAPTION_WORDS = 5;
+// Built PER SESSION, not at module scope: it carries the brand whose site is on screen. Built once
+// with no brand, her "## Right now" said "They have no brands yet — this is their first" while she
+// was editing an existing brand's live site, so she talked like she was onboarding a newcomer
+// (Joe, 2026-08-19: "there's the different voice again… describing how to use the edit site platform").
 
 type Pt = { x: number; y: number };
-type Critique = { slug: string; token: string; onSent?: () => void };
+type Critique = { slug: string; token: string; brandName?: string; onSent?: () => void };
 type EditItem = { id: string; note: string; regions: string[]; strokes: Pt[][]; url: string; width: number; shots?: string[] };
 
 function host(url: string): string {
@@ -200,14 +210,17 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
   // listens the whole time this view is open; whatever the creator says becomes an edit (below),
   // and Eve converses in real time. Tap the orb to pause/resume listening.
   const [paused, setPaused] = useState(false);
+  const critiqueInstructionFor = useMemo(() => critiqueInstruction(critique?.brandName), [critique?.brandName]);
   const venus = useLiveVoice({
     accessToken: critique?.token,
-    instruction: CRITIQUE_INSTRUCTION,
+    instruction: critiqueInstructionFor,
     greeting: CRITIQUE_GREETING,
     enableBrandTool: false,
     onBrand: () => {},
   });
   const speaking = venus.state === 'speaking';
+  // Only what she has actually said out loud so far — the transcript arrives seconds ahead of it.
+  const spoken = useSpokenText(venus.venusText, venus.speechWindow, speaking);
   const recording = venus.state === 'listening' && !paused; // orb "active" while she's hearing you
 
   // No raw audio meter on the Live path — drive a gentle state-based pulse for the orb.
@@ -306,6 +319,7 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
       }
       if (d?.__nanoHit === true && typeof d.i === 'number') {
         const label = describeHit(d);
+        if (__DEV__) console.warn(`[critique] hit ${d.i} → ${label ?? 'null'} (block=${d.block ?? '-'} tag=${d.tag ?? '-'} heading=${d.heading ?? '-'})`);
         setDraftHits((h) => ({ ...h, [d.i as number]: label }));
         // Tell Eve (live) WHAT was just circled, silently, so "what's this?" / "help me with this
         // part" is answered with the section in hand. No-ops on web (no live session there).
@@ -327,6 +341,9 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
     const cx = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
     const cyDoc = (Math.min(...ys) + Math.max(...ys)) / 2;
     const vy = Math.round(cyDoc - scrollYRef.current); // back to viewport coords for elementFromPoint
+    if (__DEV__) {
+      console.warn(`[critique] mark ${i} pts=${s.length} centre=${cx},${vy} scrollY=${scrollYRef.current} view=${size.w}x${size.h}`);
+    }
     ref.current?.injectJavaScript(hitScript(i, cx, vy));
     // Capture the page + this fresh mark while it's on screen — the proof we send to Claude. Lazily
     // resolved; null on a binary without the native module → we just skip (forge re-renders strokes).
@@ -530,6 +547,15 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
   };
 
   const onLayout = (e: LayoutChangeEvent) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
+  // What the caption bar under the URL shows: her words while she talks, theirs while they do,
+  // the coaching line until either happens. Trimmed to the tail so it never wraps.
+  const caption = paused
+    ? 'Paused — tap the orb to resume'
+    : spoken
+      ? tailWords(spoken, CAPTION_WORDS)
+      : venus.userText
+        ? `you: ${tailWords(venus.userText, CAPTION_WORDS)}`
+        : subtitle;
   const toScreenPath = (s: Pt[]) => s.map((p) => `${Math.round(p.x)},${Math.round(p.y - scrollY)}`).join(' ');
 
   return (
@@ -567,6 +593,16 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
           </Pressable>
         </View>
 
+        {/* SUBTITLES LIVE HERE — directly under the URL bar. They used to sit at the bottom of the
+            Eve panel, where the tab bar cut them in half (Joe, 2026-08-19). One line, last words only. */}
+        {critique && caption ? (
+          <View style={styles.captionBar} pointerEvents="none">
+            <ThemedText type="small" style={styles.captionText} numberOfLines={1}>
+              {caption}
+            </ThemedText>
+          </View>
+        ) : null}
+
         <View ref={shotRef} collapsable={false} style={styles.webWrap} onLayout={onLayout}>
           {IS_WEB ? (
             // react-native-webview has no web build → use a real <iframe> so the site actually loads.
@@ -586,17 +622,30 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
           )}
           {/* Drawing layer — captures touches only while the pen is armed */}
           <View style={StyleSheet.absoluteFill} pointerEvents={armed ? 'auto' : 'none'} {...pan.panHandlers}>
+            {/* The mark reads as an INPAINT MASK, not a pen line (Joe, 2026-08-19): the region the
+                stroke encloses is tinted, so the creator SEES the patch of page they just handed
+                over — the same "mark the region, then describe it" language as the design editor's
+                retouch (lib/annotate.ts bakes these strokes into the image the model reads). */}
             <Svg style={StyleSheet.absoluteFill}>
               {edits.flatMap((ed) =>
                 ed.strokes.map((s, i) => (
-                  <Polyline key={`${ed.id}-${i}`} points={toScreenPath(s)} fill="none" stroke={GOLD} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity={0.32} />
+                  <G key={`${ed.id}-${i}`} opacity={0.34}>
+                    <Polygon points={toScreenPath(s)} fill={GOLD} fillOpacity={0.16} stroke="none" />
+                    <Polyline points={toScreenPath(s)} fill="none" stroke={GOLD} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+                  </G>
                 )),
               )}
               {draftStrokes.map((s, i) => (
-                <Polyline key={`d${i}`} points={toScreenPath(s)} fill="none" stroke={GOLD} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.95} />
+                <G key={`d${i}`}>
+                  <Polygon points={toScreenPath(s)} fill={GOLD} fillOpacity={0.24} stroke="none" />
+                  <Polyline points={toScreenPath(s)} fill="none" stroke={GOLD} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.95} />
+                </G>
               ))}
               {cur.current.length > 1 ? (
-                <Polyline points={toScreenPath(cur.current)} fill="none" stroke={GOLD} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
+                <G>
+                  <Polygon points={toScreenPath(cur.current)} fill={GOLD} fillOpacity={0.18} stroke="none" />
+                  <Polyline points={toScreenPath(cur.current)} fill="none" stroke={GOLD} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
+                </G>
               ) : null}
             </Svg>
           </View>
@@ -610,7 +659,7 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
         {/* Review mode — read-only preview + two choices. NO Eve here; she only wakes on "Continue
             editing", which swaps this for the critique panel below. */}
         {review && !critique ? (
-          <View style={[styles.panel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={[styles.panel, { paddingBottom: tabBarSpace(insets.bottom) + Spacing.two }]}>
             <ThemedText type="code" style={styles.hint}>Reviewing your change — approve it, or keep editing.</ThemedText>
             <View style={styles.reviewRow}>
               <Pressable onPress={review.onContinueEditing} style={styles.reviewSecondary}>
@@ -623,9 +672,9 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
           </View>
         ) : null}
 
-        {/* Eve panel — the orb is the focus; subtitles below; a faint control hint */}
+        {/* Eve panel — the orb is the focus; the caption rides under the URL bar; a faint hint */}
         {critique ? (
-          <View style={[styles.panel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={[styles.panel, { paddingBottom: tabBarSpace(insets.bottom) + Spacing.two }]}>
             {edits.length ? (
               <Pressable style={styles.submitBar} onPress={() => setReviewing(true)}>
                 <ThemedText type="code" style={styles.submitCount}>{edits.length} change{edits.length > 1 ? 's' : ''} captured</ThemedText>
@@ -679,9 +728,6 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
                     </Svg>
                   </Pressable>
                 </View>
-                <ThemedText type="small" style={styles.subtitle} numberOfLines={3}>
-                  {paused ? 'Paused — tap the orb to resume' : venus.venusText || (venus.userText ? `you: ${venus.userText}` : subtitle)}
-                </ThemedText>
                 <ThemedText type="code" style={styles.hint} numberOfLines={1}>
                   {armed ? 'mark any spot (circle or arrow), then tap 〰 to finish' : 'tap 〰 to mark · just speak · orb to pause · ⌨ to type'}
                 </ThemedText>
@@ -749,6 +795,8 @@ const styles = StyleSheet.create({
   sideBtn: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)' },
   sideBtnOn: { backgroundColor: GOLD, borderColor: GOLD },
   subtitle: { color: INK, textAlign: 'center', minHeight: 18 },
+  captionBar: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two },
+  captionText: { color: INK, textAlign: 'center' },
   hint: { color: FAINT, fontSize: 11, textAlign: 'center' },
   noteText: { color: '#e0a07a', fontSize: 12, textAlign: 'center' },
   reviewRow: { flexDirection: 'row', alignSelf: 'stretch', gap: Spacing.three, marginTop: Spacing.one },

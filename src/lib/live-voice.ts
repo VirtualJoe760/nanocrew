@@ -164,6 +164,10 @@ function isInsufficientPriority(e: unknown): boolean {
 
 export interface LiveCallbacks {
   onState?: (s: LiveState) => void;
+  /** The wall-clock window her QUEUED audio occupies this turn (start, end). Subtitles ride this so
+   *  they follow her voice instead of the transcript stream, which lands seconds ahead of the sound
+   *  (Joe, 2026-08-19: "we want it to be word for word"). */
+  onSpeechWindow?: (startedAt: number, endsAt: number) => void;
   onUserTranscript?: (text: string) => void; // running input transcription
   onVenusTranscript?: (text: string) => void; // running output transcription
   onTranscript?: (messages: ChatMessage[]) => void; // full committed conversation (for the chat view)
@@ -263,6 +267,7 @@ export class LiveVoiceSession {
   private outCtx: AudioContext | null = null;
   private queue: AudioBufferQueueSourceNode | null = null;
   private playEndsAt = 0; // wall-clock ms when her queued audio finishes — mic is gated until then
+  private playStartedAt = 0; // wall-clock ms when THIS turn's audio began — the caption clock's origin
   // Per-exchange caption segmentation (transcripts arrive as fragments; reset each new turn).
   private curUser = '';
   private curVenus = '';
@@ -300,6 +305,7 @@ export class LiveVoiceSession {
     if (m) {
       try { this.queue?.clearBuffers(); } catch {}
       this.playEndsAt = 0;
+      this.playStartedAt = 0;
       resetSpeechLevel();
     }
   }
@@ -480,7 +486,12 @@ export class LiveVoiceSession {
     // bundle was built from, plus a fingerprint and length of the composed instruction. A stale
     // bundle or a dropped file becomes provable instead of suspected (src/eve/README.md).
     const instruction = this.instructionOverride ?? liveSystemInstruction(this.userName, this.firstTime);
-    console.warn(`[live] persona files=${EVE_PERSONA_HASH} sent=${personaFingerprint(instruction)} chars=${instruction.length}`);
+    // voice + output rate ride the same line as the persona hash: "she sounded like someone else for
+    // a second" (Joe, 2026-08-19) is either a different voice NAME or a resampled graph, and neither
+    // was provable from the old log. Now both are on the wire next to which instruction she got.
+    console.warn(
+      `[live] persona files=${EVE_PERSONA_HASH} sent=${personaFingerprint(instruction)} chars=${instruction.length} voice=${this.voiceName} outRate=${this.outCtx?.sampleRate ?? '-'}/${OUT_RATE}`,
+    );
     this.session = await ai.live.connect({
       model: d.model,
       callbacks: {
@@ -668,6 +679,7 @@ export class LiveVoiceSession {
     if (sc?.interrupted) {
       this.queue?.clearBuffers();
       this.playEndsAt = 0; // her audio is gone — reopen the mic
+      this.playStartedAt = 0;
       resetSpeechLevel(); // her queued audio was flushed → close her mouth at once
       this.cb.onState?.('listening');
     }
@@ -688,7 +700,9 @@ export class LiveVoiceSession {
           // faster than realtime, so accumulate from whichever is later: now or the prior end).
           const durMs = (pcm.length / OUT_RATE) * 1000;
           const startAt = Math.max(this.playEndsAt, Date.now()); // wall-clock this chunk starts playing
+          if (!this.playEndsAt) this.playStartedAt = startAt; // first chunk of the turn — the clock's origin
           this.playEndsAt = startAt + durMs;
+          this.cb.onSpeechWindow?.(this.playStartedAt, this.playEndsAt);
           // Feed the lip-sync envelope: this exact PCM, aligned to when it becomes audible, so the
           // avatar's mouth tracks the real sound (loudness → jaw, brightness → vowel vs. sibilant).
           pushSpeechChunk(pcm, startAt, durMs);

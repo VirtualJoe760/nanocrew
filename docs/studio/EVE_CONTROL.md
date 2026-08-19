@@ -502,16 +502,25 @@ money), New design, Edit site, Site assets, Digest, Brand info, New brand, Type 
   stubbing one; edits still go through `buildBrandPatch()`.
 - Still to prove on device: the tap/long-press race, per the mock's own note.
 
-## The wheel's spokes — what each one owns (2026-08-17)
+## The wheel's spokes — what each one owns (2026-08-17, EDIT added 2026-08-19)
 
-Eight sectors, cardinals + diagonals. `spokeAt()` in `eve-wheel.tsx` is exported so the gesture and
-the render share one hit test.
+**Nine** sectors, evenly spaced at 40° (was eight at 45° — EDIT was added 2026-08-19 so the live-site
+editor is reachable without asking her). TALK keeps 12 o'clock and the clockwise ORDER is unchanged;
+only the spacing moved. `spokeAt()` in `eve-wheel.tsx` is exported so the gesture and the render
+share one hit test.
 
 | Sector | Does | Notes |
 |---|---|---|
 | **TALK** (12 o'clock, amber) | `toggleTalk()` | the ONLY spoke that spends money — set apart in amber for that reason |
 | **DESIGN** | voice-ask via `sendContext` | she stays home and ASKS what to make (starts talking if silent); the answer routes back as `new-design{idea}` → `<EveDesign>` opens already generating. Never opens the typed form — a routed `new-design` with no idea also re-asks instead of opening empty (2026-08-17; was `onGo({state:'design'})`, which landed in a bare text input) |
 | **BRANDS** (label; id `site`) | `onShowBrands()` | summons the **Your-Brands deck**, which IS the console now (merged 2026-08-17): its pills (Edit site · Posts · Settings) render `StudioComposer` **embedded, inline** under the card — the standalone console Modal is gone, and the Sell/video-ads tab was deleted (rebuilt later). Voice edits stay reachable by asking her (`edit-site` intent → `EveDeveloping`). (2026-08-17; was `onGo({state:'developing'})`, which stranded the console once the wheel replaced the deck as the main path) |
+| **EDIT** (id `edit`) | `openSiteEditor({ canAsk: talking })` | straight into the live-site editor (`EveDeveloping`) — the SAME door the `edit-site` intent uses, so the brand choice can't drift between them. One live site opens immediately; several and she **asks which brand** by voice; if she isn't listening they get the brands deck to tap instead; none and she says so. | brand-scoped |
+
+**Answering "which brand?"** is a one-shot, like `awaitingDesignIdea`/`awaitingAssetIdea`: the ask
+latches `awaitSiteChoice`, and the router is told `awaitingSiteChoice: true`, so a bare name
+("Sardine Club", even mis-heard as "Sardene Club") classifies as `edit-site` with that slug
+instead of dropping to `none`. The context line also tells her what the answer DOES — without that
+she treated the reply as a new topic and started pitching hero artwork (2026-08-19).
 | **ASSETS** | Voice-first, like DESIGN (2026-08-18): she asks what to make and for which spot (hero / logo / social) → the answer routes as `site-asset{idea,slot}` → **EveAssets** (`eve-assets.tsx`, Eve state `assets`): enhance-or-as-is → generate with slot framing (hero/og 16:9 filled, logo transparent) → same review tools → "Set as …" → `/api/creator/site-assets` (direct write + revalidate). No Design-tab redirect. | brand-scoped |
 | **DIGEST** | `openDigest()` | brand-scoped; also briefs her with the real figures |
 | **BRAND** | asks Eve conversationally | no in-place editor yet (P3.1); edits still go through `buildBrandPatch()` |

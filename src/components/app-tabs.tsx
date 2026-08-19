@@ -26,6 +26,17 @@ type TabDef = {
 };
 
 // `studio` route is now the EVE page (Studio merges into it). /feed stays hidden for v1.
+/** The bar's own content height — icon (24) + label (~13) + its 6pt top padding — ABOVE the
+ *  home-indicator inset it sits on. The bar is absolutely positioned, so a full-screen surface that
+ *  draws underneath it (Eve's site editor) must reserve this plus the inset, or its bottom controls
+ *  are cut in half (Joe, 2026-08-19: "the eve icon is being cut off by the mobile bottom bar"). */
+export const TAB_BAR_CONTENT_HEIGHT = 43;
+
+/** How much room a surface under the tab bar must leave at the bottom. */
+export function tabBarSpace(bottomInset: number): number {
+  return TAB_BAR_CONTENT_HEIGHT + Math.max(bottomInset - 6, 6);
+}
+
 const TABS: TabDef[] = [
   { name: 'studio', label: 'Eve', icon: 'sparkles-outline', href: '/studio' },
   { name: 'design', label: 'Design', icon: 'brush-outline', href: '/design' },

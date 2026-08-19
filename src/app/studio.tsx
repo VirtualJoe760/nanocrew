@@ -250,6 +250,7 @@ function StudioScreen() {
         <EveDeveloping
           url={typeof eve.payload?.url === 'string' ? eve.payload.url : undefined}
           slug={typeof eve.payload?.slug === 'string' ? eve.payload.slug : undefined}
+          name={typeof eve.payload?.name === 'string' ? eve.payload.name : undefined}
           onExit={() => setEve(null)}
           onSubmitted={(slug) => {
             setEve(null);

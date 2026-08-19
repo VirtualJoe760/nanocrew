@@ -19,7 +19,7 @@ import { useTheme } from '@/hooks/use-theme';
 // This component OWNS NO STATE about Eve. It reports a chosen id and the parent decides; that keeps
 // the "only a creator opens a socket" rule in one place (eve-home).
 
-export type WheelId = 'toggle' | 'design' | 'site' | 'assets' | 'digest' | 'brand' | 'newbr' | 'type';
+export type WheelId = 'toggle' | 'design' | 'site' | 'edit' | 'assets' | 'digest' | 'brand' | 'newbr' | 'type';
 
 type Spoke = {
   id: WheelId;
@@ -35,15 +35,19 @@ type Spoke = {
   needsBrand?: boolean;
 };
 
+// NINE sectors, evenly spaced at 40° (Joe, 2026-08-19: the site editor has to be reachable from
+// the wheel, not only by asking her). TALK stays at the top and the clockwise ORDER is unchanged —
+// EDIT is inserted after BRANDS — so the only thing that moved is the spacing.
 const SPOKES: Spoke[] = [
   { id: 'toggle', label: 'Talk to Eve', short: 'TALK', deg: -90, icon: 'M -5 -6 L 7 0 L -5 6 Z' },
-  { id: 'design', label: 'New design', short: 'DESIGN', deg: -45, icon: 'M -6 6 L 2 -6 L 6 0' },
-  { id: 'site', label: 'Your brands', short: 'BRANDS', deg: 0, icon: 'M -7 -5 h 14 v 10 h -14 z M -7 -1 h 14', needsBrand: true },
-  { id: 'assets', label: 'Site assets', short: 'ASSETS', deg: 45, icon: 'M -7 -6 h 14 v 12 h -14 z M -7 4 L -1 -3 L 3 2 L 7 -2', needsBrand: true },
-  { id: 'digest', label: 'Digest', short: 'DIGEST', deg: 90, icon: 'M -6 5 v -6 M 0 5 v -10 M 6 5 v -3', needsBrand: true },
-  { id: 'brand', label: 'Brand info', short: 'BRAND', deg: 135, icon: 'M 0 -7 L 6 -3 v 8 L 0 8 L -6 5 v -8 Z', needsBrand: true },
-  { id: 'newbr', label: 'New brand', short: 'NEW', deg: 180, icon: 'M 0 -7 v 14 M -7 0 h 14' },
-  { id: 'type', label: 'Type instead', short: 'TYPE', deg: -135, icon: 'M -8 -5 h 16 v 10 h -16 z M -4 1 h 8' },
+  { id: 'design', label: 'New design', short: 'DESIGN', deg: -50, icon: 'M -6 6 L 2 -6 L 6 0' },
+  { id: 'site', label: 'Your brands', short: 'BRANDS', deg: -10, icon: 'M -7 -5 h 14 v 10 h -14 z M -7 -1 h 14', needsBrand: true },
+  { id: 'edit', label: 'Edit your site', short: 'EDIT', deg: 30, icon: 'M -7 7 h 14 M -5 3 L 2 -6 L 5 -3 L -2 6 Z', needsBrand: true },
+  { id: 'assets', label: 'Site assets', short: 'ASSETS', deg: 70, icon: 'M -7 -6 h 14 v 12 h -14 z M -7 4 L -1 -3 L 3 2 L 7 -2', needsBrand: true },
+  { id: 'digest', label: 'Digest', short: 'DIGEST', deg: 110, icon: 'M -6 5 v -6 M 0 5 v -10 M 6 5 v -3', needsBrand: true },
+  { id: 'brand', label: 'Brand info', short: 'BRAND', deg: 150, icon: 'M 0 -7 L 6 -3 v 8 L 0 8 L -6 5 v -8 Z', needsBrand: true },
+  { id: 'newbr', label: 'New brand', short: 'NEW', deg: 190, icon: 'M 0 -7 v 14 M -7 0 h 14' },
+  { id: 'type', label: 'Type instead', short: 'TYPE', deg: -130, icon: 'M -8 -5 h 16 v 10 h -16 z M -4 1 h 8' },
 ];
 
 /**
@@ -66,7 +70,7 @@ function radiusFor(width: number, height: number): number {
 export function spokeAt(dx: number, dy: number): WheelId | null {
   if (Math.hypot(dx, dy) < WHEEL_DEAD_ZONE) return null;
   const deg = (Math.atan2(dy, dx) * 180) / Math.PI; // -180..180, 0 = right
-  // Nearest of the eight, each owning ±22.5°.
+  // Nearest of the nine, each owning ±20°.
   let best: Spoke = SPOKES[0];
   let bestDelta = 999;
   for (const s of SPOKES) {

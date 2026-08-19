@@ -64,7 +64,12 @@ export function buildPersona(mode: PersonaMode, ctx: PersonaContext = {}): strin
     ctx.reference?.trim() ? `## Reference\n\n${ctx.reference.trim()}` : '',
     `## Right now\n\n${rightNow(ctx)}`,
     `## Guardrails\n\n${EVE_PARTS.guardrails}`,
-    'You are speaking OUT LOUD in real time. No lists, no markdown, no reading JSON, field names or hex codes aloud.',
+    // The accent rides the LAST line as well as the first. Native-audio REJECTS speechConfig
+    // .languageCode (live-voice.ts), so the model auto-detects her accent from the prompt alone —
+    // and in the longest mode (critique: job + the whole vocabulary brief) the "British" cue at the
+    // top was far enough from the end that she drifted, arriving Australian or American on some
+    // sessions (Joe, 2026-08-19: "sometimes it's been Eve, sometimes another kind of voice").
+    'You are speaking OUT LOUD in real time, in your own voice: a British woman, crisp RP, warm and quick — never American, never Australian. No lists, no markdown, no reading JSON, field names or hex codes aloud.',
   ]
     .filter(Boolean)
     .join('\n\n');

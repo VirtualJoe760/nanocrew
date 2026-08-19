@@ -20,11 +20,14 @@ import { useAuth } from '@/hooks/use-auth';
 export function EveDeveloping({
   url,
   slug,
+  name,
   onExit,
   onSubmitted,
 }: {
   url?: string;
   slug?: string;
+  /** The brand whose site this is — she needs it, or her persona is told they have no brands. */
+  name?: string;
   /** Back to Eve's home state — fired by the header ✕ and the guard fallback. */
   onExit: () => void;
   /** A revision was submitted — hand off to the Studio review surface (where it builds + is
@@ -44,13 +47,14 @@ export function EveDeveloping({
         ? {
             slug,
             token,
+            brandName: name,
             onSent: () => {
               submittedRef.current = true;
               onSubmitted(slug);
             },
           }
         : undefined,
-    [slug, token, onSubmitted],
+    [slug, token, name, onSubmitted],
   );
 
   if (!url || !critique) {

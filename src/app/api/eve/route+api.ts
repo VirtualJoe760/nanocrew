@@ -69,6 +69,7 @@ export async function POST(req: Request) {
   let interviewActive: boolean;
   let awaitingDesignIdea: boolean;
   let awaitingAssetIdea: boolean;
+  let awaitingSiteChoice: boolean;
   try {
     const body = (await req.json()) as {
       turn?: string;
@@ -77,6 +78,7 @@ export async function POST(req: Request) {
       interviewActive?: boolean;
       awaitingDesignIdea?: boolean;
       awaitingAssetIdea?: boolean;
+      awaitingSiteChoice?: boolean;
     };
     turn = (body.turn ?? '').trim().slice(0, 600);
     if (!turn) throw new Error();
@@ -85,6 +87,7 @@ export async function POST(req: Request) {
     interviewActive = !!body.interviewActive;
     awaitingDesignIdea = !!body.awaitingDesignIdea;
     awaitingAssetIdea = !!body.awaitingAssetIdea;
+    awaitingSiteChoice = !!body.awaitingSiteChoice;
   } catch {
     return Response.json({ error: 'invalid body' }, { status: 400 });
   }
@@ -102,6 +105,12 @@ export async function POST(req: Request) {
         : '',
       awaitingAssetIdea
         ? 'awaitingAssetIdea: true — Eve just asked what WEBSITE graphic they want (and for which spot). If this utterance names a subject/concept (even a bare noun phrase), classify it as "site-asset" with idea = that concept, and slot when they named hero/banner, logo, or social card. If they decline or change the subject, classify normally.'
+        : '',
+      // Same exception for the brand they're editing: she just asked WHICH site, so a bare brand
+      // name ("Sardine Club", "the second one") is the answer — not a new topic (2026-08-19: it
+      // classified as none, the editor never opened, and she wandered into design suggestions).
+      awaitingSiteChoice
+        ? 'awaitingSiteChoice: true — Eve just asked WHICH of their brands\' websites to edit. If this utterance names or clearly points at one of the stores above (even a bare name, "the first one", "the dog one"), classify it as "edit-site" with storeSlug = that store\'s slug. If they decline or change the subject, classify normally.'
         : '',
       recent.length ? `Recent conversation:\n${recent.map((m) => `${m.role}: ${m.text}`).join('\n')}` : '',
       `Utterance: "${turn}"`,

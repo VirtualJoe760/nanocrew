@@ -217,6 +217,19 @@ on-device annotated screenshot** (`react-native-view-shot` `captureRef` → host
 downloaded into `briefs/screenshots/`); if a build lacks that native module, the forge falls back to
 re-rendering the strokes (Playwright/Chromium). The mark can be any shape (circle, arrow, scribble).
 
+**Marks read as an inpaint mask, not a pen line (2026-08-19).** The region a stroke encloses is
+tinted (`Polygon` fill under the `Polyline`), so the creator sees the patch of page they just handed
+over — the same "mark the region, then describe it" language as the design editor's retouch, whose
+strokes `src/lib/annotate.ts` bakes into the reference image.
+
+**Subtitles live under the URL bar (2026-08-19).** They used to sit at the bottom of the Eve panel,
+where the tab bar cut them in half. They are also trimmed to the LAST few words (`tailWords`,
+`CAPTION_WORDS = 5`) so a long sentence rolls past like a caption instead of growing a paragraph,
+and they are **speech-paced**: her transcript arrives from the model far ahead of her audio, so a
+cursor walks the words at ~`WORD_MS` each (catching up in bigger steps when it falls behind, never
+past what has arrived) and flushes to the end when her turn finishes. Rendering the stream directly
+raced her voice.
+
 **Preview-ready push:** the forge **worker** (which marks revisions/provisions ready on the box)
 push-notifies the creator on **ready** and on **failed** (Expo push to their `device_tokens`) — so
 they're told when a preview lands or an edit didn't take, instead of watching "building…". (The
