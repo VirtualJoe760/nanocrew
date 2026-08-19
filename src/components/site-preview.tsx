@@ -287,22 +287,30 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
           cur.current.push({ x: e.nativeEvent.locationX ?? 0, y: (e.nativeEvent.locationY ?? 0) + scrollYRef.current });
           tick((n) => n + 1);
         },
+        // CAPTURE THE STROKE BEFORE RESETTING THE BUFFER. A state updater runs at FLUSH time, not
+        // when it's called — so `(s) => [...s, cur.current]` read `cur.current` AFTER the reset two
+        // lines below and appended the empty array. Every circle committed with zero points: no mark
+        // was ever drawn, the hit-test centre came out NaN (so the brief said "circled: somewhere on
+        // the page"), and no annotated screenshot was captured for the forge — which the revision
+        // brief then told it to go and read. (2026-08-19; `[critique] mark 0 pts=0 centre=NaN,NaN`.)
         onPanResponderRelease: () => {
           // One-shot: after a real circle, DISARM the pen so you can scroll/navigate the site again.
           // (A fumbled tap — too few points — leaves the pen armed so it isn't silently lost.)
-          if (cur.current.length > 1) {
-            setDraftStrokes((s) => [...s, cur.current]);
+          const stroke = cur.current;
+          cur.current = [];
+          if (stroke.length > 1) {
+            setDraftStrokes((s) => [...s, stroke]);
             arm(false);
           }
-          cur.current = [];
           tick((n) => n + 1);
         },
         onPanResponderTerminate: () => {
-          if (cur.current.length > 1) {
-            setDraftStrokes((s) => [...s, cur.current]);
+          const stroke = cur.current;
+          cur.current = [];
+          if (stroke.length > 1) {
+            setDraftStrokes((s) => [...s, stroke]);
             arm(false);
           }
-          cur.current = [];
           tick((n) => n + 1);
         },
       }),
