@@ -1,12 +1,10 @@
-import { API_BASE } from '@/lib/api';
-
-// API_BASE is '' in production — NEXT_PUBLIC_API_BASE is set to an empty string, and `??` only
-// falls back on undefined. Client-side that just means same-origin relative URLs; here on the
-// server a relative URL has no host and fetch throws, which is a 502 on every signup. Resolve an
-// ABSOLUTE base explicitly rather than changing what API_BASE means for the whole site.
+// Resolve the platform API from the env, with an absolute literal fallback. Deliberately NOT via
+// `@/lib/api`: that module is written for the browser (it pulls in the Supabase client and reads
+// NEXT_PUBLIC_API_BASE, which is set to an EMPTY STRING in production). Importing it here broke the
+// build outright — `API_BASE.startsWith is not a function` while collecting page data — and even
+// when it loads, '' has no host for a server-side fetch, so every signup came back 502.
 const PLATFORM_API =
-  (process.env.PLATFORM_API_BASE || '').replace(/\/+$/, '') ||
-  (API_BASE.startsWith('http') ? API_BASE : '') ||
+  (process.env.PLATFORM_API_BASE || process.env.NEXT_PUBLIC_API_BASE || '').replace(/\/+$/, '') ||
   'https://platform.nanocrew.app';
 
 export const runtime = 'nodejs';
