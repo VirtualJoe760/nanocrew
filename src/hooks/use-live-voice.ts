@@ -38,7 +38,7 @@ export interface UseLiveVoice {
   sendText: (text: string) => void;
   /** Make her SPEAK now — a stage direction sent as a completed turn (she replies out loud, no
    *  transcript trace). sendContext can never voice anything; this is the ask-spokes' channel. */
-  prompt: (text: string) => void;
+  prompt: (text: string, onSent?: () => void) => void;
   /** Push silent context into the session (no reply) — e.g. which site section was just circled. */
   sendContext: (text: string) => void;
   /** Let her SEE something — a settled design, a product shot. Base64 + mime, optional note. */
@@ -218,8 +218,9 @@ export function useLiveVoice(opts: {
     sessionRef.current?.sendText(text);
   }, []);
 
-  const prompt = useCallback((text: string) => {
-    sessionRef.current?.prompt(text);
+  const prompt = useCallback((text: string, onSent?: () => void) => {
+    if (!sessionRef.current) { onSent?.(); return; } // no session → don't strand the caller
+    sessionRef.current.prompt(text, onSent);
   }, []);
 
 

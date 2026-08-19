@@ -457,8 +457,27 @@ export function EveHome({
             return;
           case 'new-design':
             if (d.idea) {
-              // Into Eve's design state with the spoken idea — she generates it in her own surface.
-              onGo({ state: 'design', payload: { idea: d.idea } });
+              // SHE LEADS, THEN THE MODAL (Joe, 2026-08-18: "she should lead with 'okay let me open
+              // the apparel selection for you', then give her two cents"). The picker used to mount
+              // the instant the router classified — which is often mid-thought, since routing fires
+              // on the FIRST committed turn — so the catalogue appeared over them and her cue landed
+              // as a bare instruction. Now ONE line does the acknowledging, the announcing and the
+              // two cents, and the surface opens when that line is actually dispatched (the voice
+              // gate holds it until they've stopped talking).
+              const idea = d.idea;
+              let opened = false;
+              const openDesign = () => {
+                if (opened) return;
+                opened = true;
+                onGo({ state: 'design', payload: { idea } });
+              };
+              // Cap the wait: if she can't speak at all (typed mode, dead socket), the surface must
+              // still open rather than hang on a cue that will never dispatch.
+              setTimeout(openDesign, 8000);
+              live.prompt(
+                `(They want a design: "${idea}". ONE short line, then STOP: say the idea back, tell them you're opening the product selection, and give ONE suggestion of what it'd suit. They're about to browse — nothing more until they've picked.)`,
+                openDesign,
+              );
             } else {
               // A design ask with no subject ("make me a t-shirt") — opening EveDesign empty lands
               // in a typed form. She asks for the artwork instead (prompt, so it's actually voiced);

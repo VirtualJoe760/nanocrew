@@ -100,7 +100,9 @@ export function EveDesign({
     started.current = true;
     void resolveCatalogue();
     void loadBlanks();
-    sayEve('(Their design surface just opened with the product catalogue — in ONE short sentence, tell them to pick the product this goes on.)');
+    // NO cue here (Joe, 2026-08-18): the routing line already said the idea back, announced the
+    // catalogue and gave her one suggestion — a second utterance the moment the picker mounts is
+    // exactly the talking-over that surfaced this. She's quiet while they browse (persona rule).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -461,7 +461,7 @@ down.** No session-lifting needed.
 2. **SUPERSEDED by the full pipeline (2026-08-17, Joe's california-flag walkthrough):** EveDesign
    is now product-first and finishes IN her tab — routed idea → `ProductPicker` (reused, modal) →
    she asks enhance-or-as-is (say-bus) → `POST /api/generate` (`background:'transparent'`, a
-   print-ready cutout) → approve → `POST /api/compositions` → `PlacementEditor` (reused) →
+   she LEADS the handoff (one line: idea back + "opening the product selection" + ONE suggestion) and the picker mounts when that line DISPATCHES, not before (2026-08-18) → print-ready cutout) → approve → `POST /api/compositions` → `PlacementEditor` (reused) →
    `FinalizeSheet` (reused; prices + `POST /api/publish`, which auto-generates on-model shots) →
    live in the catalogue + site. NO redirects — the old "Open in Design ›"/meme `router.push`
    handoffs are gone. The router's `idea` is the ARTWORK concept, never the garment.

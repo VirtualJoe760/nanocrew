@@ -785,6 +785,8 @@ export class LiveVoiceSession {
    *  they never see the stage direction. This is what the wheel's ask-spokes use; sendContext
    *  (below) can never voice anything, which is exactly why it exists and why this also must. */
   private pendingPrompt: string | null = null;
+  /** Fires when the queued cue is dispatched — lets a caller time a surface to her voice. */
+  private pendingPromptSent?: () => void;
   private reconnects = 0;
 
   /** Mic frame → is there speech in it? RMS over the raw float buffer; called only OUTSIDE her own
@@ -801,13 +803,14 @@ export class LiveVoiceSession {
     return this.userTurnActive || Date.now() - this.lastUserVoiceAt < QUIET_SETTLE_MS;
   }
 
-  prompt(text: string) {
+  prompt(text: string, onSent?: () => void) {
     const t = text.trim();
-    if (!t) return;
+    if (!t) { onSent?.(); return; }
     // NEVER barge in: a completed turn sent during their speech commits/cancels their in-flight
     // utterance (2026-08-17: "she died when the picker opened"; 2026-08-18: she talked over him
     // as the catalogue opened). Queue it and wait for actual quiet — however long that takes.
     this.pendingPrompt = t;
+    this.pendingPromptSent = onSent;
     this.flushPrompt();
   }
 
@@ -820,13 +823,16 @@ export class LiveVoiceSession {
       return;
     }
     const t = this.pendingPrompt;
+    const done = this.pendingPromptSent;
     this.pendingPrompt = null;
+    this.pendingPromptSent = undefined;
     try {
       this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: t }] }], turnComplete: true });
       this.cb.onState?.('thinking');
     } catch {
       /* socket closing — best-effort */
     }
+    done?.(); // even on a dead socket: the caller's surface must never be stranded shut
   }
 
   /** Push SILENT context into the session — `turnComplete:false` appends to the pending turn WITHOUT
@@ -897,6 +903,9 @@ export class LiveVoiceSession {
 
     if (this.promptTimer) { clearTimeout(this.promptTimer); this.promptTimer = null; }
     this.pendingPrompt = null;
+    const stranded = this.pendingPromptSent;
+    this.pendingPromptSent = undefined;
+    stranded?.();
     try {
       this.recorder?.stop();
       this.webMicStop?.();
