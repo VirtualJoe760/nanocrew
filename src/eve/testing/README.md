@@ -73,6 +73,16 @@ ambiguous about who said what.
 - **The phone (OTA build) writes no transcripts** — `/api/dev/log-conversation` is dev-server only.
   Voice testing happens on the Simulator.
 
+## Beyond conversation — the full flows
+
+Talking to her is one layer. To test that she can actually **build a brand, design a design, and
+edit a website**, you need to press buttons too:
+
+- [`ui-driving.md`](ui-driving.md) — taps (computer-use · idb · cliclick), deep links, screenshots,
+  and the internal-key API layer that sets up state for free.
+- [`scenarios.md`](scenarios.md) — the four end-to-end runs (brand · design · site edit · site
+  graphics), each with the UI path, the API path, and how to verify it truly landed.
+
 ## The probe set
 
 Run these against any persona change, in a fresh session each time, and score them. They exist
