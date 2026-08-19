@@ -9,10 +9,15 @@
 // Writes: images/icon.png (iOS, 1024) · brand/app-icon-1024.png (App Store) · images/favicon.png ·
 // android adaptive foreground/background/monochrome · images/splash-icon.png · brand/eve-boot.png
 // (the launch loader portrait, 1024x1536 — animated-icon.tsx + the expo-splash-screen plugin).
+import fs from 'node:fs/promises';
 import sharp from 'sharp';
 
 const IMG = new URL('../assets/images/', import.meta.url);
 const BRAND = new URL('../assets/brand/', import.meta.url);
+// Public copies. Email clients can't read a repo and won't render SVG, so the two raster assets the
+// OUTSIDE world needs — the masthead mark in every Nano Crew email, and the profile photo shown
+// beside the sender — are written straight into the site's public dir and served from nanocrew.app.
+const SITE = new URL('../nanocrew-site/public/brand/', import.meta.url);
 const p = (dir, file) => new URL(file, dir).pathname;
 
 const NET = '#7fd7e6', CORE = '#eaf4f9', BG = '#08080a';
@@ -92,4 +97,13 @@ await render(boot).toFile(p(BRAND, 'eve-boot.png'));
 // Play Store listing icon.
 await render(iconSVG()).resize(512, 512).toFile(p(BRAND, 'play-store-icon-512.png'));
 
-console.log('✓ Eve icon set generated (variant B) — icon, favicon, android adaptive, splash, boot, play-store');
+
+// ── Outward-facing raster ──────────────────────────────────────────────────────────────────────
+// Email masthead mark (240 = 2× its 120px display box, so it stays crisp on retina) and the profile
+// photo (512) used as the sender avatar. Both are the SAME glyph, so they can never drift from the
+// app icon the way the retired nc-icon.png did (Joe, 2026-08-19: "it has our old app icon").
+await fs.mkdir(new URL('.', SITE), { recursive: true });
+await render(iconSVG()).resize(240, 240).toFile(p(SITE, 'nanocrew-mark.png'));
+await render(iconSVG()).resize(512, 512).toFile(p(SITE, 'nanocrew-avatar.png'));
+
+console.log('✓ Eve icon set generated (variant B) — icon, favicon, android adaptive, splash, boot, play-store, email mark + avatar');

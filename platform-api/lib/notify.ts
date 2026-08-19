@@ -63,16 +63,19 @@ export function buildPlatformSender(): string {
 const PLATFORM_STORE: EmailStore = {
   slug: 'nanocrew',
   name: 'Nano Crew',
-  logoUrl: 'https://nanocrew.app/nc-icon.png',
+  // The CURRENT app icon — Eve's glyph. The first version of this pointed at nanocrew.app/nc-icon.png,
+  // which is the retired June serif monogram (Joe, 2026-08-19: "it has our old app icon"). Generated
+  // from assets/images/icon.png, so regenerating the icon regenerates this.
+  logoUrl: 'https://nanocrew.app/brand/nanocrew-mark.png',
   colors: {
-    page: '#08080a',       // --bg
-    card: '#131317',       // --surface
+    page: '#08080a',       // --bg, the app's ground
+    card: '#101015',       // one step up so the card reads as a surface, not a hole
     ink: '#f4f4f6',        // --text
     muted: '#8b909b',      // --dim
-    accent: '#cdd1d9',     // --accent, the platinum: CTA button
-    onAccent: '#08080a',   // dark ink reads on platinum
-    line: '#212127',       // --edge
-    headerBg: '#08080a',   // the masthead is the app's night — the monogram is light-on-black
+    accent: '#7fd7e6',     // Eve's blue — the glyph's own colour, and the only flash in the email
+    onAccent: '#06181c',   // deep ink reads on the blue; pure black is harsh against it
+    line: '#22232b',       // hairlines, a touch warmer than --edge so they survive on #101015
+    headerBg: '#08080a',
     headerInk: '#f4f4f6',
   },
 };

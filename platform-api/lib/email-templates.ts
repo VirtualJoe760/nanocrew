@@ -101,20 +101,19 @@ export function renderEmail(opts: {
   const p = paletteFor(store);
   const brand = esc(store.name || 'Nano Crew');
   const logo = store.logoUrl && /^https?:\/\//.test(store.logoUrl) ? store.logoUrl : null;
+  const isPlatform = store.slug === 'nanocrew';
 
-  // Logo AND name, not one or the other: a bare monogram doesn't say who this is from in a crowded
-  // inbox, and a bare name throws away the mark people recognise.
-  const header = logo
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-         <td style="padding-right:12px;"><img src="${esc(logo)}" alt="" width="36" height="36" style="display:block;width:36px;height:36px;border-radius:9px;border:0;outline:none;text-decoration:none;" /></td>
-         <td style="font-size:19px;font-weight:600;letter-spacing:0.4px;color:${p.headerInk};">${brand}</td>
-       </tr></table>`
-    : `<span style="font-size:20px;font-weight:700;letter-spacing:0.3px;color:${p.headerInk};">${brand}</span>`;
+  // The mark sits on its OWN ground, centred, with the wordmark under it — Eve's glyph is a glowing
+  // orb on near-black, so a coloured band behind it would fight the glow instead of framing it.
+  // A brand with a light card gets the same composition in its own palette.
+  const masthead = logo
+    ? `<img src="${esc(logo)}" alt="${brand}" width="56" height="56" style="display:block;margin:0 auto 12px;width:56px;height:56px;border-radius:14px;border:0;outline:none;text-decoration:none;" />`
+    : '';
 
   const ctaHtml = cta
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px;">
-         <tr><td style="border-radius:8px;background:${p.accent};">
-           <a href="${esc(cta.url)}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;color:${p.onAccent};text-decoration:none;border-radius:8px;">${esc(cta.label)}</a>
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:26px auto 4px;">
+         <tr><td style="border-radius:999px;background:${p.accent};">
+           <a href="${esc(cta.url)}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;letter-spacing:.01em;color:${p.onAccent};text-decoration:none;border-radius:999px;">${esc(cta.label)}</a>
          </td></tr>
        </table>`
     : '';
@@ -123,33 +122,53 @@ export function renderEmail(opts: {
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;height:0;width:0;">${esc(preheader)}</div>`
     : '';
 
+  const footer = isPlatform
+    ? `<a href="https://nanocrew.app" style="color:${p.muted};text-decoration:none;">nanocrew.app</a>
+       &nbsp;·&nbsp; Talk to Eve, and she builds the brand, the shop and the website.`
+    : `Sent by Nano Crew on behalf of ${brand}.`;
+
   return `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<meta name="color-scheme" content="light dark" />
-<!-- Jost is Nano Crew's typeface (the app and nanocrew.app both use it). Apple Mail and iOS honour
-     the webfont; Gmail and Outlook ignore it and land on the fallback stack, which is fine. -->
-<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<!-- The brand is dark. Declaring only "dark" stops Gmail and Outlook inverting a palette that is
+     already dark, which is what turns a considered email into a grey smear. -->
+<meta name="color-scheme" content="dark" />
+<meta name="supported-color-schemes" content="dark" />
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
 </head>
 <body style="margin:0;padding:0;background:${p.page};">
 ${pre}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${p.page};">
-  <tr><td align="center" style="padding:28px 12px;">
-    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:${p.card};border:1px solid ${p.line};border-radius:14px;overflow:hidden;font-family:'Jost',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
-      <tr><td style="background:${p.headerBg};padding:20px 28px;">${header}</td></tr>
-      <tr><td style="padding:28px;color:${p.ink};">
-        <h1 style="margin:0 0 14px;font-size:22px;line-height:1.25;font-weight:700;color:${p.ink};">${esc(heading)}</h1>
+  <tr><td align="center" style="padding:40px 14px 56px;">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;background:${p.card};border:1px solid ${p.line};border-radius:18px;overflow:hidden;font-family:'Jost',ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+
+      <!-- A single hairline of the accent across the top: the one flash of colour, and the thing
+           that makes the card read as lit rather than flat. -->
+      <tr><td style="height:3px;line-height:3px;font-size:0;background:${p.accent};">&nbsp;</td></tr>
+
+      <tr><td align="center" style="padding:34px 34px 0;">
+        ${masthead}
+        <div style="font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:${p.muted};">${brand}</div>
+      </td></tr>
+
+      <tr><td align="center" style="padding:26px 34px 0;">
+        <h1 style="margin:0;font-size:30px;line-height:1.18;font-weight:400;letter-spacing:-0.02em;color:${p.ink};">${esc(heading)}</h1>
+      </td></tr>
+
+      <tr><td style="padding:18px 34px 0;color:${p.ink};font-size:16px;line-height:1.62;">
         ${body}
         ${ctaHtml}
       </td></tr>
-      <tr><td style="padding:18px 28px;border-top:1px solid ${p.line};">
-        <p style="margin:0;font-size:12px;line-height:1.5;color:${p.muted};">${
-          store.slug === 'nanocrew'
-            ? 'Nano Crew — talk to Eve, and she builds the brand, the shop and the website.'
-            : `Sent by Nano Crew on behalf of ${brand}.`
-        }</p>
+
+      <tr><td style="padding:30px 34px 0;">
+        <div style="height:1px;line-height:1px;font-size:0;background:${p.line};">&nbsp;</div>
       </td></tr>
+
+      <tr><td align="center" style="padding:16px 34px 30px;">
+        <p style="margin:0;font-size:12.5px;line-height:1.6;color:${p.muted};">${footer}</p>
+      </td></tr>
+
     </table>
   </td></tr>
 </table>
