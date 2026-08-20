@@ -121,10 +121,13 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   swap test → live keys at launch — note [../ops/PAYOUTS_SETUP.md](../ops/PAYOUTS_SETUP.md) records
   `STRIPE_SECRET_KEY` as already live; confirm with Joe and strike the key-swap sub-item.
   (See PRODUCTION_CHECKLIST.)
-- 🟡 **Auto first-drop** — `generateFirstDrop()` is wired into store creation but gated by
-  `AUTO_FIRST_DROP=1` (real Gemini + Printful spend). Validate on one brand, then enable. (Task #26)
-  **Resolved:** `first-drop.ts` now authenticates server-to-server via `INTERNAL_API_KEY` +
-  `x-internal-creator` (acts as the store's creator), so set that env to enable it.
+- 🟡 **First drop** — two doors, one pipeline (`lib/first-drop.ts`, 2026-08-20). SILENT:
+  `generateFirstDrop()` fire-and-forget on store creation, gated by `AUTO_FIRST_DROP=1` (real
+  Gemini + Printful spend). EVE-GUIDED (Joe's chosen default): `/api/creator/first-drop/propose`
+  + `create` — she pitches each concept aloud for a quick OK, each approved product builds free
+  (gift-gated at 4 products). Server half shipped + live-verified ("Packed Tight" on
+  sardine-club); **her conversational wiring in eve-home is the open half** — needs an
+  interactive voice session to build/test. (Task #26)
 - ⚪ **Meta (Facebook) app** — required for the "Continue with Facebook" button: icon, privacy policy,
   data-deletion URL, category, review. (Task #18)
 

@@ -34,7 +34,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
+import { choosePhoto } from '@/lib/pick-photo';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DesignTile, tileColor } from '@/components/design-tile';
@@ -211,36 +211,6 @@ function reflowGroups(nodes: CanvasNode[]): CanvasNode[] {
     });
   }
   return out;
-}
-
-async function toDataUrl(uri: string): Promise<string> {
-  if (uri.startsWith('data:')) return uri;
-  try {
-    const res = await fetch(uri);
-    const blob = await res.blob();
-    return await new Promise<string>((resolve) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result));
-      r.onerror = () => resolve(uri);
-      r.readAsDataURL(blob);
-    });
-  } catch {
-    return uri;
-  }
-}
-
-async function pickImage(): Promise<string | null> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (perm.status !== 'granted') return null;
-  const res = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    base64: true,
-    quality: 0.9,
-  });
-  if (res.canceled || !res.assets?.[0]) return null;
-  const a = res.assets[0];
-  if (a.base64) return `data:${a.mimeType ?? 'image/png'};base64,${a.base64}`;
-  return toDataUrl(a.uri);
 }
 
 let designCounter = 0;
@@ -3093,7 +3063,8 @@ function GenerateModal({
   };
 
   const pick = async () => {
-    const uri = await pickImage();
+    // Camera OR library (shared lib/pick-photo — Eve's "Add a photo" is the same door).
+    const uri = await choosePhoto();
     if (uri) setRefImage(uri);
   };
 

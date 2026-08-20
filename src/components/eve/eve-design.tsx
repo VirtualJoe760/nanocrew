@@ -14,6 +14,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiFetch, apiUrl, readJson } from '@/lib/api';
 import { armNextTurn } from '@/lib/eve-edit-bus';
+import { choosePhoto } from '@/lib/pick-photo';
 import { recentTranscript } from '@/lib/eve-transcript-bus';
 import { sayEve } from '@/lib/eve-say-bus';
 import { showEve } from '@/lib/eve-vision-bus';
@@ -59,6 +60,8 @@ export function EveDesign({
   const [blanksError, setBlanksError] = useState(false);
   const [blank, setBlank] = useState<CatalogBlank | null>(null);
   const [design, setDesign] = useState<Design | null>(null);
+  /** Inspiration photo (camera/library) riding the next generation as the image reference. */
+  const [refImage, setRefImage] = useState<string | null>(null);
   const [compositionId, setCompositionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const catalogueRef = useRef<string | null>(null);
@@ -133,7 +136,8 @@ export function EveDesign({
           // 'transparent' = the chroma-key pipeline: a print-ready cutout graphic, never a photo
           // OF the product (the Design tab's product default). templateKey = the picked blank, so
           // an embroidered cap or knitted sweater gets art born producible (lib/technique.ts).
-          body: JSON.stringify({ prompt, catalogueId, background: 'transparent', aspectRatio: '1:1', templateKey: blank?.id }),
+          // image = their inspiration photo, when they gave one (camera/library).
+          body: JSON.stringify({ prompt, catalogueId, background: 'transparent', aspectRatio: '1:1', templateKey: blank?.id, image: refImage ?? undefined }),
         });
         const d = (await r.json().catch(() => ({}))) as { image?: string; id?: string; error?: string; needed?: number };
         if (!r.ok || !d.image || !d.id) throw new Error(failFrom(r.status, d));
@@ -149,8 +153,19 @@ export function EveDesign({
         setStep(design ? 'review' : 'error');
       }
     },
-    [token, authHeaders, resolveCatalogue, blank?.name, blank?.id, design],
+    [token, authHeaders, resolveCatalogue, blank?.name, blank?.id, design, refImage],
   );
+
+  /** Camera or photo library → the inspiration reference for the next generation. She sees it. */
+  const addPhoto = useCallback(async () => {
+    const url = await choosePhoto();
+    if (!url) return;
+    setRefImage(url);
+    showEve({
+      url,
+      note: "(They just handed you an inspiration photo for this design — you can SEE it. React in one short sentence and say you'll fold it into the artwork.)",
+    });
+  }, []);
 
   /** Apply an edit instruction to the CURRENT design via /api/edit (custom mode, die-cut gated). */
   const applyEdit = useCallback(
@@ -325,7 +340,7 @@ export function EveDesign({
             // knitted she SAYS so — the tab shows the same fact as a chip in the picker.
             const fab = techniqueInfo(chosen.technique)?.spoken;
             sayEve(
-              `(They picked the ${chosen.name}.${fab ? ` First, in one natural clause, mention that ${fab} — you'll design for that.` : ''} Now RIFF on the idea with them — react in one short sentence with ONE build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; do NOT mention the enhance/as-is buttons until they say they're done — then one line: ✦ Enhance folds this whole conversation in, as-is stays literal.)`,
+              `(They picked the ${chosen.name}.${fab ? ` First, in one natural clause, mention that ${fab} — you'll design for that.` : ''} Now RIFF on the idea with them — react in one short sentence with ONE build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; do NOT mention the enhance/as-is buttons until they say they're done — then one line: ✦ Enhance folds this whole conversation in, as-is stays literal. If they mention having a photo, a sketch, or wanting to snap a picture for inspiration, point them at the "Add a photo" button on screen.)`,
             );
           }}
         />
@@ -344,6 +359,16 @@ export function EveDesign({
             </Pressable>
             <Pressable onPress={() => idea && void generate(idea)} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
               <ThemedText type="code" style={{ color: p.ink }}>Print as-is</ThemedText>
+            </Pressable>
+          </View>
+          {/* Inspiration photo (Joe, 2026-08-20): camera or library via the shared door
+              (lib/pick-photo — the tab's Upload tile is the same). The photo rides the
+              generation as /api/generate's `image` reference, and she SEES it. */}
+          <View style={styles.actions}>
+            <Pressable onPress={() => void addPhoto()} style={[styles.action, refImage ? { borderColor: p.accent, backgroundColor: `${p.accent}22` } : { borderColor: `${p.dim}66` }]} hitSlop={6}>
+              <ThemedText type="code" style={{ color: refImage ? p.accent : p.ink }}>
+                {refImage ? '📷 Photo added — tap to change' : '📷 Add a photo'}
+              </ThemedText>
             </Pressable>
           </View>
         </View>

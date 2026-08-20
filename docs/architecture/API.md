@@ -103,6 +103,8 @@ debit larger amounts the same way.
 | POST | `/api/transcribe` | bearer | Verbatim transcription of base64 m4a/mp4 (Gemini). Powers critique. |
 | POST | `/api/video` | bearer, **credits** | Product video. `voiceover` cheap / `veo` = 400 credits (`CREDIT_COSTS.video_veo`). |
 | POST | `/api/creator/model-shots` | bearer, **credits** | On-model image gallery (Nano Banana). Debits 25 (`model_shots`). |
+| POST | `/api/creator/first-drop/propose` | bearer, RL | The EVE-GUIDED first-drop door (2026-08-20): Gemini invents palette-constrained demo-product concepts for her to pitch aloud. Pure proposal, nothing spent. Gift-gated: 403 once the store has 4+ products. |
+| POST | `/api/creator/first-drop/create` | bearer, RL | Builds ONE approved first-drop concept end-to-end (design → composition → mockup → publish) as the FREE onboarding gift via the internal identity — fire-and-forget, returns `{started, remaining}`. Same gift gate. `lib/first-drop.ts` is the shared pipeline behind both this and the silent `AUTO_FIRST_DROP` door. |
 | POST | `/api/creator/model-videos` | bearer, RL, **credits** | On-model Veo film for the website (appends, max 3 angles). Debits 400; rate-limited. |
 | POST | `/api/creator/scene-video` | bearer, RL, **credits** | "Cool short" on fal.ai — pick `wan` (60) / `seedance` (260) / `veo3` (400); variable charge. |
 | POST | `/api/creator/preview-shots` | bearer, **credits** | On-model PREVIEW photos at the placement step, BEFORE a composition exists — real Printful mockup first, then Nano Banana puts it on a model. Debits 16 (`preview_shots`); nothing persisted (client caches per session). |

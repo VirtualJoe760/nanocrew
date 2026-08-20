@@ -49,7 +49,7 @@ Taken from the imports and the API calls in each file, not from intent.
 | **Idea generator** | ✅ `/api/idea` | ❌ | she could riff one aloud |
 | **Meme mode** | ✅ | ❌ | |
 | **Text / typography** | ✅ "Text" | ❌ | |
-| **Upload your own art** | ✅ "Upload" | ❌ | |
+| Upload your own art / photo | ✅ "Upload" tile → camera or library | ✅ "Add a photo" on the style step → camera or library | shared `lib/pick-photo.ts` door (2026-08-20); the photo rides `/api/generate`'s `image` reference, and Eve SEES it on the vision bus |
 | **Merge two designs** | ✅ `/api/merge` | ❌ | |
 | **Transparent / filled background** | ✅ toggle | ❌ | she passes `background` at generate time only |
 | **Share / export** | ✅ native share | ❌ | |
