@@ -100,3 +100,9 @@ Until it exists, match the existing pattern rather than inventing a new modal sh
 ## Adopt opportunistically (don't mass-rewrite)
 You don't have to convert all ~270 Pressables at once. When you touch a screen for any reason, swap its
 bare buttons/inputs for the primitives as you go. Pair this with bug-fix work.
+
+**Same rule for accessibility.** A bare `Pressable` renders on web as a `<div tabindex="0">` no
+screen reader can operate, so every interactive one wants `accessibilityRole` (+ a label when the
+content isn't self-describing, + `accessibilityState` for selected/disabled). Done so far: the
+first-run carousel (`welcome.tsx`) and the paywall — the two surfaces a new creator meets before
+anything else. Add them to whatever screen you touch next.

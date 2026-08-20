@@ -157,7 +157,7 @@ export function Welcome({
 
       {/* Top bar: just log in (brand mark removed per design) */}
       <View style={[s.topBar, { paddingTop: topInset + 14 }]}>
-        <Pressable onPress={() => onChoose('login')} hitSlop={8}>
+        <Pressable onPress={() => onChoose('login')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Sign in">
           <ThemedText type="code" style={[s.loginLink, { color: p.accent }, textGlow(p.accent, 8)]}>Log in</ThemedText>
         </Pressable>
       </View>
@@ -192,10 +192,10 @@ export function Welcome({
 
           {/* Monthly / annual toggle */}
           <View style={[s.toggle, { borderColor: p.faint }]}>
-            <Pressable onPress={() => setBilling('monthly')} style={[s.toggleBtn, billing === 'monthly' && { backgroundColor: p.accent }]}>
+            <Pressable onPress={() => setBilling('monthly')} accessibilityRole="radio" accessibilityState={{ selected: billing === 'monthly' }} accessibilityLabel="Monthly billing" style={[s.toggleBtn, billing === 'monthly' && { backgroundColor: p.accent }]}>
               <ThemedText type="code" style={{ color: billing === 'monthly' ? p.bg : p.dim }}>Monthly</ThemedText>
             </Pressable>
-            <Pressable onPress={() => setBilling('annual')} style={[s.toggleBtn, billing === 'annual' && { backgroundColor: p.accent }]}>
+            <Pressable onPress={() => setBilling('annual')} accessibilityRole="radio" accessibilityState={{ selected: billing === 'annual' }} accessibilityLabel="Annual billing" style={[s.toggleBtn, billing === 'annual' && { backgroundColor: p.accent }]}>
               <ThemedText type="code" style={{ color: billing === 'annual' ? p.bg : p.dim }}>Annual · save 15%</ThemedText>
             </Pressable>
           </View>
@@ -209,6 +209,8 @@ export function Welcome({
               <Pressable
                 key={pl.plan}
                 onPress={() => onChoose('subscribe')}
+                accessibilityRole="button"
+                accessibilityLabel={`Choose the ${pl.label} plan`}
                 style={[
                   s.planCard,
                   { borderColor: pl.popular ? p.accent : p.faint, backgroundColor: pl.popular ? (p.dark ? '#101014' : '#fbfbfc') : 'transparent' },
@@ -240,7 +242,7 @@ export function Welcome({
             );
           })}
 
-          <Pressable onPress={() => onChoose('shop')} hitSlop={8} style={s.declineLink}>
+          <Pressable onPress={() => onChoose('shop')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Just browse the shop for now" style={s.declineLink}>
             <ThemedText type="small" style={[s.declineText, { color: p.dim }]}>Not ready? Shop and browse for free</ThemedText>
           </Pressable>
         </View>
@@ -249,13 +251,13 @@ export function Welcome({
       {/* Footer: Next + dots + version */}
       <View style={[s.footer, { paddingBottom: bottomInset + 14 }]}>
         {page < lastPage ? (
-          <Pressable onPress={() => goTo(page + 1)} style={[s.nextBtn, { backgroundColor: p.accent }, glow(p.accent, 20, 0.6)]}>
+          <Pressable onPress={() => goTo(page + 1)} accessibilityRole="button" accessibilityLabel="Next" style={[s.nextBtn, { backgroundColor: p.accent }, glow(p.accent, 20, 0.6)]}>
             <ThemedText type="smallBold" style={{ color: p.bg }}>Next</ThemedText>
           </Pressable>
         ) : null}
         <View style={s.dots}>
           {Array.from({ length: pageCount }).map((_, i) => (
-            <Pressable key={i} onPress={() => goTo(i)} hitSlop={6}>
+            <Pressable key={i} onPress={() => goTo(i)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Go to slide ${i + 1} of ${pageCount}`} accessibilityState={{ selected: i === page }}>
               <View style={[s.dot, { backgroundColor: i === page ? p.accent : p.faint, opacity: i === page ? 1 : 0.4 }]} />
             </Pressable>
           ))}

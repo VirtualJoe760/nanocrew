@@ -187,7 +187,7 @@ export function Paywall({
               <EveGlyph size={26} />
               <ThemedText type="code" style={[s.eyebrow, { marginLeft: Spacing.two }]}>PLANS &amp; CREDITS</ThemedText>
               <View style={{ flex: 1 }} />
-              <Pressable onPress={onClose} hitSlop={12}>
+              <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close plans and credits">
                 <ThemedText type="code" style={s.dim}>close ✕</ThemedText>
               </Pressable>
             </View>
@@ -201,7 +201,7 @@ export function Paywall({
                 {note ? <ThemedText type="small" style={s.warn}>{note}</ThemedText> : null}
 
                 {reason === 'brand_limit' && onFreeSlot ? (
-                  <Pressable onPress={onFreeSlot} style={[s.btn, s.btnCurrent]}>
+                  <Pressable onPress={onFreeSlot} accessibilityRole="button" accessibilityLabel="Free up a brand slot" style={[s.btn, s.btnCurrent]}>
                     <ThemedText type="smallBold" style={s.accent}>Free up a slot — delete a brand</ThemedText>
                   </Pressable>
                 ) : null}
@@ -231,6 +231,9 @@ export function Paywall({
                         <Pressable
                           onPress={() => subscribe(t.plan)}
                           disabled={!!busy}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Subscribe to ${t.label}, ${money(t.priceCents)} a month`}
+                          accessibilityState={{ disabled: !!busy }}
                           style={s.btn}
                         >
                           {busy === t.plan ? (
@@ -259,7 +262,7 @@ export function Paywall({
                         {money(yourPrice)}{mult < 1 ? ` · ${Math.round((1 - mult) * 100)}% off (your rate)` : ''}
                       </ThemedText>
                     </View>
-                    <Pressable onPress={() => buyPack(pk)} disabled={!!busy} style={s.packBtn}>
+                    <Pressable onPress={() => buyPack(pk)} disabled={!!busy} accessibilityRole="button" accessibilityLabel={`Buy ${pk.label} for ${money(pk.priceCents)}`} accessibilityState={{ disabled: !!busy }} style={s.packBtn}>
                       {busy === pk.id ? <ActivityIndicator size="small" color={p.accent} /> : <ThemedText type="code" style={s.accent}>buy</ThemedText>}
                     </Pressable>
                   </View>
@@ -267,7 +270,7 @@ export function Paywall({
                 })}
 
                 {data?.entitlements.active ? (
-                  <Pressable onPress={openPortal} disabled={!!busy} style={s.manageBtn}>
+                  <Pressable onPress={openPortal} disabled={!!busy} accessibilityRole="button" accessibilityLabel="Manage billing" accessibilityState={{ disabled: !!busy }} style={s.manageBtn}>
                     {busy === 'portal' ? (
                       <ActivityIndicator size="small" color={p.accent} />
                     ) : (
