@@ -28,7 +28,8 @@ export const TECHNIQUE_INFO: Record<string, TechniqueInfo> = {
       'This artwork will be EMBROIDERED in stitched thread, not printed: use bold, simplified ' +
       'shapes with clean flat fills in at most 6 solid thread colors. No gradients, no ' +
       'photorealistic shading, no fine details or thin lines, no small text — every element ' +
-      'must read clearly when stitched.',
+      'must read clearly when stitched. Draw flat, clean vector-style fills — do NOT simulate ' +
+      'thread or fabric texture in the image; the stitching happens at production.',
     spoken: 'this one is embroidered — stitched in thread — so it wants bold shapes in a few solid colors',
   },
   KNITWEAR: {

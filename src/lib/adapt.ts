@@ -52,7 +52,8 @@ export async function adaptDesignForTechnique(
         'same subject and composition. Constraints of stitched thread: use ONLY bold simplified ' +
         'shapes with clean flat fills in at most 6 solid thread colors. No gradients, no ' +
         'photorealistic shading, no fine details or thin lines, no small text — every element ' +
-        `must read clearly when embroidered. ${magenta}`;
+        'must read clearly when embroidered. Draw flat, clean vector-style fills — do NOT ' +
+        `simulate thread or fabric texture; the stitching happens at production. ${magenta}`;
 
   const ai = new GoogleGenAI({ apiKey });
   let lastErr = 'No image returned';
