@@ -268,22 +268,29 @@ export async function POST(req: Request) {
         }
       }
       if (garment) {
-        try {
-          await debit(user.id, 'model_shots', product.id);
-        } catch (e) {
-          if (e instanceof InsufficientCreditsError) return; // skip quietly — publish is unaffected
-          return;
+        // The first drop is a free onboarding gift: internal server-to-server publishes
+        // (first-drop.ts via x-internal-creator) must not spend the new creator's signup
+        // credits — the same exemption /api/generate and /api/merge apply
+        // (BUG_AUDIT_2026-08-20 #5).
+        const charge = user.email !== 'internal@nanocrew';
+        if (charge) {
+          try {
+            await debit(user.id, 'model_shots', product.id);
+          } catch (e) {
+            if (e instanceof InsufficientCreditsError) return; // skip quietly — publish is unaffected
+            return;
+          }
         }
         try {
           const shots = await generateModelShots(garment, 6); // 3 posed + 3 action/environment (Joe)
           if (shots.length) {
             await db.update(schema.products).set({ modelShots: shots }).where(eq(schema.products.id, product.id));
             void revalidateStorefront(store?.slug);
-          } else {
+          } else if (charge) {
             await grant(user.id, CREDIT_COSTS.model_shots, 'refund', product.id).catch(() => {});
           }
         } catch {
-          await grant(user.id, CREDIT_COSTS.model_shots, 'refund', product.id).catch(() => {});
+          if (charge) await grant(user.id, CREDIT_COSTS.model_shots, 'refund', product.id).catch(() => {});
         }
       }
     })();

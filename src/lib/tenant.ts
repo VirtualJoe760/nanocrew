@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 
@@ -59,15 +59,17 @@ export async function storeForMember(
   return (await isCollaborator(store.id, userId)) ? store : null;
 }
 
-/** The signed-in creator's primary store — owned first, else one they collaborate on. */
+/** The signed-in creator's ONLY store — the safe slug-less fallback. A creator with several
+ *  brands must name one (?store=<slug>): guessing (this used to pick the OLDEST) is how test
+ *  products got published onto the wrong live brand — BUG_AUDIT_2026-08-20 #1. */
 export async function getCreatorStore(userId: string): Promise<{ id: string; slug: string }> {
   const ids = await accessibleStoreIds(userId);
   if (!ids.length) throw new TenantError('no store for this creator', 404);
+  if (ids.length > 1) throw new TenantError('multiple brands — pass a store slug', 409);
   const [row] = await db
     .select({ id: schema.stores.id, slug: schema.stores.slug })
     .from(schema.stores)
-    .where(inArray(schema.stores.id, ids))
-    .orderBy(asc(schema.stores.createdAt))
+    .where(eq(schema.stores.id, ids[0]))
     .limit(1);
   if (!row) throw new TenantError('no store for this creator', 404);
   return row;

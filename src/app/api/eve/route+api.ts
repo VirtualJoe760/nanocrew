@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { getUserFromRequest } from '@/lib/auth';
 import { guardRate } from '@/lib/rate-limit';
 
-// POST /api/eve/route — Eve's VOICE-INTENT ROUTER (docs/studio/VENUS_CENTRAL.md §3).
+// POST /api/eve/route — Eve's VOICE-INTENT ROUTER (docs/archive/VENUS_CENTRAL.md §3).
 //
 // Native-audio Gemini Live can't do reliable tool-calling, so the client distills instead: every
 // committed user turn in Eve's home state is POSTed here (~300ms flash call, non-blocking) and a
@@ -26,7 +26,7 @@ const SYSTEM = `You classify ONE spoken utterance from a clothing-brand creator 
 Intents:
 - "edit-site": they clearly want to change/edit/fix their EXISTING website ("I want to edit my site", "let's change the homepage", "can we update the hero on my store"). If the utterance names one of the provided stores, set storeSlug to that store's slug (must be from the list). If several stores could match and it's ambiguous, keep intent "edit-site", omit storeSlug, and set ask to a one-line question naming the options.
 - "create-brand": they clearly want to start/build a NEW brand ("let's build another brand", "I want to start a new label").
-- "new-design": they clearly ask to create a design, graphic, or meme ("make me a meme about mondays", "new tee design with a chrome skull"). Put their concept in idea, short. idea is the ARTWORK to print — the graphic itself, never the garment carrying it: "new tee design with a chrome skull" → idea "chrome skull graphic"; "make me a t-shirt" (no subject given) → idea omitted, so Eve asks what goes on it.
+- "new-design": they clearly ask to create a design, graphic, or meme ("make me a meme about mondays", "new tee design with a chrome skull"). Put their concept in idea, short. idea is the ARTWORK to print — the graphic itself, never the garment carrying it: "new tee design with a chrome skull" → idea "chrome skull graphic"; "make me a t-shirt" (no subject given) → idea omitted, so Eve asks what goes on it. If the utterance names one of the provided stores as the brand the design is FOR ("a bulldog tee for Stephen Lawyer"), set storeSlug to that store's slug (must be from the list); omit it otherwise.
 - "site-asset": they ask for a graphic FOR THEIR WEBSITE — a hero/banner image, a logo, or a social/share card ("new hero for my site", "make me a logo", "redo the banner"). idea = the graphic concept, short (omit if they gave none). slot = "hero" for hero/banner/header imagery, "logo" for the wide wordmark logo, "mark" for the square icon / app icon, "favicon" when they specifically say favicon or browser-tab icon, "og" for the social/share/preview card; omit slot when they didn't say which. A design for a PRODUCT (tee, hoodie, print) is "new-design", not this.
 - "write-post": they clearly ask to write/draft a blog post. topic = short topic.
 - "digest": they ASK how their store/brand is doing, for stats, sales, orders, views, revenue, or a status update ("how am I doing", "yes" to a digest offer, "show my numbers", "any sales?"). Statements ABOUT sales or news that don't ask for numbers ("we sold out at the market last weekend") are conversation → "none".
@@ -70,6 +70,8 @@ export async function POST(req: Request) {
   let awaitingDesignIdea: boolean;
   let awaitingAssetIdea: boolean;
   let awaitingSiteChoice: boolean;
+  let awaitingDesignBrand: boolean;
+  let awaitingAssetBrand: boolean;
   try {
     const body = (await req.json()) as {
       turn?: string;
@@ -79,6 +81,8 @@ export async function POST(req: Request) {
       awaitingDesignIdea?: boolean;
       awaitingAssetIdea?: boolean;
       awaitingSiteChoice?: boolean;
+      awaitingDesignBrand?: boolean;
+      awaitingAssetBrand?: boolean;
     };
     turn = (body.turn ?? '').trim().slice(0, 600);
     if (!turn) throw new Error();
@@ -88,6 +92,8 @@ export async function POST(req: Request) {
     awaitingDesignIdea = !!body.awaitingDesignIdea;
     awaitingAssetIdea = !!body.awaitingAssetIdea;
     awaitingSiteChoice = !!body.awaitingSiteChoice;
+    awaitingDesignBrand = !!body.awaitingDesignBrand;
+    awaitingAssetBrand = !!body.awaitingAssetBrand;
   } catch {
     return Response.json({ error: 'invalid body' }, { status: 400 });
   }
@@ -111,6 +117,15 @@ export async function POST(req: Request) {
       // classified as none, the editor never opened, and she wandered into design suggestions).
       awaitingSiteChoice
         ? 'awaitingSiteChoice: true — Eve just asked WHICH of their brands\' websites to edit. If this utterance names or clearly points at one of the stores above (even a bare name, "the first one", "the dog one"), classify it as "edit-site" with storeSlug = that store\'s slug. If they decline or change the subject, classify normally.'
+        : '',
+      // A design (or website graphic) binds to ONE brand — she just asked which, so a bare brand
+      // name is the answer, not a new topic. The idea/slot are carried client-side; only the slug
+      // needs to come back.
+      awaitingDesignBrand
+        ? 'awaitingDesignBrand: true — Eve just asked WHICH of their brands the design is for. If this utterance names or clearly points at one of the stores above (even a bare name, "the first one"), classify it as "new-design" with storeSlug = that store\'s slug (idea may be omitted — Eve already has it). If they decline or change the subject, classify normally.'
+        : '',
+      awaitingAssetBrand
+        ? 'awaitingAssetBrand: true — Eve just asked WHICH of their brands\' websites the graphic is for. If this utterance names or clearly points at one of the stores above (even a bare name), classify it as "site-asset" with storeSlug = that store\'s slug (idea and slot may be omitted — Eve already has them). If they decline or change the subject, classify normally.'
         : '',
       recent.length ? `Recent conversation:\n${recent.map((m) => `${m.role}: ${m.text}`).join('\n')}` : '',
       `Utterance: "${turn}"`,
@@ -140,6 +155,7 @@ export async function POST(req: Request) {
       ...(intent === 'edit-site' && storeSlug ? { storeSlug } : {}),
       ...(intent === 'edit-site' && parsed.ask ? { ask: String(parsed.ask).slice(0, 200) } : {}),
       ...(intent === 'new-design' && parsed.idea ? { idea: String(parsed.idea).slice(0, 300) } : {}),
+      ...(intent === 'new-design' && storeSlug ? { storeSlug } : {}),
       ...(intent === 'site-asset' && parsed.idea ? { idea: String(parsed.idea).slice(0, 300) } : {}),
       ...(intent === 'site-asset' && ['hero', 'logo', 'mark', 'favicon', 'og'].includes((parsed as { slot?: string }).slot ?? '')
         ? { slot: (parsed as { slot?: string }).slot }

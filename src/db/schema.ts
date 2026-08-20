@@ -195,6 +195,10 @@ export const designs = pgTable(
     cloudinaryPublicId: text('cloudinary_public_id'),
     url: text('url').notNull(),
     thumbUrl: text('thumb_url'),
+    // Print technique this art was generated/adapted FOR (EMBROIDERY / KNITWEAR). Null = plain
+    // full-color art. Lets /api/compositions skip re-adapting a design that was already
+    // generated technique-ready (lib/technique.ts).
+    technique: text('technique'),
     createdBy: uuid('created_by').references(() => creators.id),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },

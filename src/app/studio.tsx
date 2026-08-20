@@ -354,6 +354,7 @@ function StudioScreen() {
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.designScrim]} />
           <EveDesign
             idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
+            storeSlug={typeof eve.payload?.storeSlug === 'string' ? eve.payload.storeSlug : undefined}
             onExit={() => setEve(null)}
           />
         </View>

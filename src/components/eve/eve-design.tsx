@@ -18,6 +18,7 @@ import { recentTranscript } from '@/lib/eve-transcript-bus';
 import { sayEve } from '@/lib/eve-say-bus';
 import { showEve } from '@/lib/eve-vision-bus';
 import type { CatalogBlank } from '@/lib/printful';
+import { techniqueInfo } from '@/lib/technique';
 
 // EVE'S DESIGN PIPELINE — voice-first, product-first, START to FINISH inside her tab (Joe's
 // california-flag-tee walkthrough, 2026-08-17):
@@ -37,10 +38,14 @@ type Design = { id: string; url: string; prompt: string };
 
 export function EveDesign({
   idea,
+  storeSlug,
   onExit,
 }: {
   /** The concept to make (from the routed spoken intent). */
   idea?: string;
+  /** The brand this design is FOR (resolved by EveHome: named brand → lone brand → she asked).
+   *  Without it a multi-brand creator's /api/catalogues fallback is a 409, never a guess. */
+  storeSlug?: string;
   /** Back to Eve's home state. */
   onExit: () => void;
 }) {
@@ -63,15 +68,18 @@ export function EveDesign({
     [token],
   );
 
-  // Resolve the collection to persist into: the primary store's first catalogue, or create "Designs".
+  // Resolve the collection to persist into: THIS brand's first catalogue, or create "Designs".
+  // Always store-scoped — the slug-less fallback used to bind to the creator's oldest brand
+  // (BUG_AUDIT_2026-08-20 #1); the server now 409s that instead of guessing.
   const resolveCatalogue = useCallback(async (): Promise<string | null> => {
     if (catalogueRef.current) return catalogueRef.current;
     try {
-      const r = await fetch(apiUrl('/api/catalogues'), { headers: authHeaders() });
+      const q = storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : '';
+      const r = await fetch(apiUrl(`/api/catalogues${q}`), { headers: authHeaders() });
       const d = (await r.json().catch(() => ({}))) as { catalogues?: { id: string }[] };
       let id = d.catalogues?.[0]?.id;
       if (!id) {
-        const c = await fetch(apiUrl('/api/catalogues'), { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: 'Designs' }) });
+        const c = await fetch(apiUrl('/api/catalogues'), { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: 'Designs', storeSlug }) });
         const cd = (await c.json().catch(() => ({}))) as { catalogue?: { id: string } };
         id = cd.catalogue?.id;
       }
@@ -80,7 +88,7 @@ export function EveDesign({
     } catch {
       return null;
     }
-  }, [authHeaders]);
+  }, [authHeaders, storeSlug]);
 
   const loadBlanks = useCallback(() => {
     setBlanksError(false);
@@ -123,8 +131,9 @@ export function EveDesign({
           method: 'POST',
           headers: authHeaders(),
           // 'transparent' = the chroma-key pipeline: a print-ready cutout graphic, never a photo
-          // OF the product (the Design tab's product default).
-          body: JSON.stringify({ prompt, catalogueId, background: 'transparent', aspectRatio: '1:1' }),
+          // OF the product (the Design tab's product default). templateKey = the picked blank, so
+          // an embroidered cap or knitted sweater gets art born producible (lib/technique.ts).
+          body: JSON.stringify({ prompt, catalogueId, background: 'transparent', aspectRatio: '1:1', templateKey: blank?.id }),
         });
         const d = (await r.json().catch(() => ({}))) as { image?: string; id?: string; error?: string; needed?: number };
         if (!r.ok || !d.image || !d.id) throw new Error(failFrom(r.status, d));
@@ -140,7 +149,7 @@ export function EveDesign({
         setStep(design ? 'review' : 'error');
       }
     },
-    [token, authHeaders, resolveCatalogue, blank?.name, design],
+    [token, authHeaders, resolveCatalogue, blank?.name, blank?.id, design],
   );
 
   /** Apply an edit instruction to the CURRENT design via /api/edit (custom mode, die-cut gated). */
@@ -222,14 +231,15 @@ export function EveDesign({
         headers: authHeaders(),
         // Fold in the conversation: her riffs ("I'd do neon sunglasses") become part of the
         // design when they hit ✦ Enhance (Joe, 2026-08-17 — as-is stays literal on purpose).
-        body: JSON.stringify({ prompt: idea, context: recentTranscript() }),
+        // technique keeps the enhanced prompt inside what the blank can fabricate.
+        body: JSON.stringify({ prompt: idea, context: recentTranscript(), technique: blank?.technique ?? undefined }),
       });
       const d = (await r.json().catch(() => ({}))) as { enhanced?: string };
       await generate(d.enhanced?.trim() || idea);
     } catch {
       await generate(idea);
     }
-  }, [idea, authHeaders, generate]);
+  }, [idea, authHeaders, generate, blank?.technique]);
 
   // Approve → a composition on the chosen blank (front placement; the editor refines it).
   const toPlacement = useCallback(async () => {
@@ -246,12 +256,34 @@ export function EveDesign({
           placement: 'front',
         }),
       });
-      const d = (await r.json().catch(() => ({}))) as { composition?: { id: string }; id?: string; error?: string };
+      const d = (await r.json().catch(() => ({}))) as {
+        composition?: { id: string };
+        id?: string;
+        adaptedDesign?: { id: string; url: string; prompt: string };
+        technique?: string;
+        error?: string;
+      };
       const id = d.composition?.id ?? d.id;
       if (!r.ok || !id) throw new Error(d.error ?? 'Could not stage the product');
+      if (d.adaptedDesign) {
+        // Fabrication requirement (knitwear / embroidery): the server regenerated the art to what
+        // the technique can produce, and the composition points at the NEW design row — swap to it
+        // or the shared PlacementEditor renders blank tiles (BUG_AUDIT_2026-08-20 #4). Parity
+        // with the tab's "Design adapted" alert: she SAYS it instead.
+        const how = d.technique === 'EMBROIDERY' ? 'embroidered in stitched thread' : 'knitted from yarn';
+        setDesign({ id: d.adaptedDesign.id, url: d.adaptedDesign.url, prompt: d.adaptedDesign.prompt });
+        showEve({
+          url: d.adaptedDesign.url,
+          note: `(This product is ${how}, so the design was regenerated as bold flat fabrication-friendly art — this is the version that will be produced.)`,
+        });
+        sayEve(
+          `(The placement editor just opened. In one warm sentence: this product is ${how}, so you remade their design as bold flat art that fabricates cleanly — the original is untouched — and they can size and position it now.)`,
+        );
+      } else {
+        sayEve('(The placement editor just opened — one short sentence: they can size and position the print, then hit Done.)');
+      }
       setCompositionId(id);
       setStep('place');
-      sayEve('(The placement editor just opened — one short sentence: they can size and position the print, then hit Done.)');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not stage the product');
       setStep('review');
@@ -289,8 +321,11 @@ export function EveDesign({
             if (!chosen) return;
             setBlank(chosen);
             setStep('style');
+            // Surfaced technique awareness (Joe, 2026-08-20): when the blank is stitched or
+            // knitted she SAYS so — the tab shows the same fact as a chip in the picker.
+            const fab = techniqueInfo(chosen.technique)?.spoken;
             sayEve(
-              `(They picked the ${chosen.name}. Now RIFF on the idea with them — react in one short sentence with ONE build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; do NOT mention the enhance/as-is buttons until they say they're done — then one line: ✦ Enhance folds this whole conversation in, as-is stays literal.)`,
+              `(They picked the ${chosen.name}.${fab ? ` First, in one natural clause, mention that ${fab} — you'll design for that.` : ''} Now RIFF on the idea with them — react in one short sentence with ONE build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; do NOT mention the enhance/as-is buttons until they say they're done — then one line: ✦ Enhance folds this whole conversation in, as-is stays literal.)`,
             );
           }}
         />
@@ -383,7 +418,7 @@ export function EveDesign({
           onClose={() => setStep('review')}
           onPublished={() => {
             setStep('done');
-            sayEve('(It published! One warm sentence: the product is in their catalogue and live on their site — model photos are rendering now.)');
+            sayEve('(It published! One warm sentence: the product is in their catalogue now, their website is rebuilding itself and will show it in a couple of minutes, and model photos are rendering. Do NOT say it is already on the site — the rebuild takes a few minutes.)');
           }}
         />
       ) : null}
@@ -392,7 +427,10 @@ export function EveDesign({
       {step === 'done' ? (
         <View style={styles.stage}>
           {design ? <Image source={{ uri: design.url }} style={styles.doneImage} contentFit="contain" /> : null}
-          <ThemedText style={[styles.line, { color: p.ink }]}>It’s live — in your catalogue and on your site.</ThemedText>
+          {/* HONEST TIMING (BUG_AUDIT_2026-08-20 #1b): publish is instant in the catalogue, but the
+              brand site does a full rebuild (~2–5 min) — saying "on your site" here made a creator
+              file the delay as a broken publish. */}
+          <ThemedText style={[styles.line, { color: p.ink }]}>It’s live in your catalogue — your site refreshes in a couple of minutes.</ThemedText>
           <View style={styles.actions}>
             <Pressable onPress={onExit} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
               <ThemedText type="smallBold" style={{ color: BG }}>Done</ThemedText>

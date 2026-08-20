@@ -46,26 +46,31 @@ export async function POST(req: Request) {
     let designId = list[0].designId;
     let adaptedDesign: { id: string; url: string; prompt: string } | null = null;
 
-    // Knit adaptation applies to the PRIMARY design only — multi-placement knitwear is an edge case
-    // and extra placements pass through unadapted rather than blocking the combine.
+    // Technique adaptation (KNITWEAR · EMBROIDERY — lib/technique.ts) applies to the PRIMARY
+    // design only — multi-placement edge cases pass through unadapted rather than blocking the
+    // combine. A design that was already GENERATED for this technique (designs.technique set by
+    // /api/generate when the blank was known up front) is producible as-is — skip the re-adapt,
+    // which would double-spend a model call on art that's already right.
     const meta = await getProductMeta(body.templateKey).catch(() => null);
-    if (meta?.technique === 'KNITWEAR') {
+    const fabTechnique =
+      meta?.technique === 'KNITWEAR' || meta?.technique === 'EMBROIDERY' ? meta.technique : null;
+    if (fabTechnique) {
       const [original] = await db
-        .select({ url: schema.designs.url, prompt: schema.designs.prompt })
+        .select({ url: schema.designs.url, prompt: schema.designs.prompt, technique: schema.designs.technique })
         .from(schema.designs)
         .where(and(eq(schema.designs.id, designId), eq(schema.designs.storeId, storeId)))
         .limit(1);
-      if (original && !original.url.startsWith('data:')) {
+      if (original && original.technique !== fabTechnique && !original.url.startsWith('data:')) {
         try {
-          const { adaptDesignForKnit, hostAdaptedDesign } = await import('@/lib/adapt');
-          const yarn = meta.defaultOptions.yarn_colors;
+          const { adaptDesignForTechnique, hostAdaptedDesign } = await import('@/lib/adapt');
+          const yarn = meta?.defaultOptions.yarn_colors;
           const palette = Array.isArray(yarn) ? yarn : ['#090909', '#fdfafa', '#999996', '#d52213'];
-          const buffer = await adaptDesignForKnit(original.url, palette);
+          const buffer = await adaptDesignForTechnique(original.url, fabTechnique, palette);
           const url = await hostAdaptedDesign(buffer);
-          const prompt = `Knit-adapted — ${original.prompt.slice(0, 70)}`;
+          const prompt = `${fabTechnique === 'KNITWEAR' ? 'Knit' : 'Embroidery'}-adapted — ${original.prompt.slice(0, 70)}`;
           const [row] = await db
             .insert(schema.designs)
-            .values({ storeId, catalogueId: body.catalogueId, prompt, url })
+            .values({ storeId, catalogueId: body.catalogueId, prompt, url, technique: fabTechnique })
             .returning({ id: schema.designs.id });
           designId = row.id;
           adaptedDesign = { id: row.id, url, prompt };

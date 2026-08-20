@@ -24,7 +24,12 @@ async function findProjectId(token: string, slug: string): Promise<string | null
 /** Redeploy a store's storefront so it reflects the current catalogue. Safe to await or not. */
 export async function revalidateStorefront(slug: string | null | undefined): Promise<void> {
   const token = process.env.VERCEL_TOKEN;
-  if (!token || !slug) return;
+  if (!slug) return;
+  if (!token) {
+    // Without the token every brand site silently stays stale — make the miss legible.
+    console.warn('[revalidate-storefront] VERCEL_TOKEN unset — skipped');
+    return;
+  }
   try {
     const projectId = await findProjectId(token, slug);
     if (!projectId) {

@@ -1374,8 +1374,10 @@ function DesignScreen() {
               ...prev,
             ]);
             Alert.alert(
-              'Design adapted for knitting',
-              'This product is knitted from yarn, which can only reproduce bold flat shapes in a few colors. We generated a knit-friendly version of your design and used it for this product — the original is untouched.',
+              d.technique === 'EMBROIDERY' ? 'Design adapted for embroidery' : 'Design adapted for knitting',
+              d.technique === 'EMBROIDERY'
+                ? 'This product is embroidered in stitched thread, which can only reproduce bold shapes in a few solid colors. We generated an embroidery-friendly version of your design and used it for this product — the original is untouched.'
+                : 'This product is knitted from yarn, which can only reproduce bold flat shapes in a few colors. We generated a knit-friendly version of your design and used it for this product — the original is untouched.',
             );
           }
           if (compositionId) {
@@ -1441,7 +1443,7 @@ function DesignScreen() {
   };
 
   // ── THE DESIGN COMMAND BUS (src/lib/design-bus.ts) ────────────────────────
-  // External actors (deep links today, Venus tomorrow — VENUS_CENTRAL.md) drive the canvas
+  // External actors (deep links today, Venus tomorrow — docs/archive/VENUS_CENTRAL.md) drive the canvas
   // through commands: open the generator prefilled, land an external image in the collection,
   // show it, edit it. The handler lives in a ref so the registered listener never closes over
   // stale state; commands whose data isn't loaded yet (catalogue / designs) wait in a retry queue.

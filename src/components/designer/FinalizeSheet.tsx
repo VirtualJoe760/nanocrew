@@ -306,6 +306,11 @@ export function FinalizeSheet({
               <ThemedText type="small" themeColor="textSecondary" style={styles.doneTitle}>
                 Sync product #{publishedId} · {selectedCount} variants
               </ThemedText>
+              {/* HONEST TIMING (BUG_AUDIT_2026-08-20 #1b): the brand site rebuilds itself after a
+                  publish (~2–5 min) — without this line the delay reads as a failed publish. */}
+              <ThemedText type="small" themeColor="textSecondary" style={styles.doneTitle}>
+                Your site refreshes itself in a couple of minutes.
+              </ThemedText>
               {warnings.length ? (
                 <View style={styles.warnBox}>
                   {warnings.map((w, i) => (
