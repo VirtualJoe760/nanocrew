@@ -146,6 +146,10 @@ A generated art asset within a catalogue.
   `/api/generate` when the destination blank is known and by the `/api/compositions` adaptation;
   lets compositions skip re-adapting art that is already technique-ready (`lib/technique.ts`).
 
+> `products.compositionId` (nullable, 2026-08-20, migration 0031) links a product back to the
+> composition it was published from — the only path to its placements, which the model-shot
+> pipeline angle-matches (a back print is shot from behind). Null on pre-link rows.
+
 ### `compositions`
 A design placed on a Printful template → a printable/publishable product candidate.
 - `id`, `storeId` (cascade), `catalogueId` (cascade), `designId` → `designs` (cascade).

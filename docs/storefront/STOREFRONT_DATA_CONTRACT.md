@@ -41,7 +41,10 @@ Keep this section in lockstep with those routes.
 
 ### `GET /api/public/stores/:slug/products`
 
-Returns **published products with NESTED variants** (not flat rows — the #1 gotcha):
+Returns **published products with NESTED variants** (not flat rows — the #1 gotcha), ordered
+**newest first** (2026-08-20 — this is the drop feed: templates take the head of the list for
+"Latest Drop" rails, and the old oldest-first order meant a new product could never appear there;
+`/videos` orders the same way):
 
 ```jsonc
 {

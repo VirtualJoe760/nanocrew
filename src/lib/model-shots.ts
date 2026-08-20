@@ -58,6 +58,9 @@ async function urlToInline(url: string): Promise<InlinePart> {
   };
 }
 
+/** @deprecated 2026-08-20 — both callers (publish auto-shots, /api/creator/model-shots) moved to
+ *  the placement-aware `generateModelShotsFromMockup`, which angle-matches the print's placement
+ *  (a back print is shot from behind). This pose-bank generator shoots front-ish regardless. */
 export async function generateModelShots(productImageUrl: string, count = 3): Promise<string[]> {
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GOOGLE_GENAI_API_KEY not configured');
@@ -112,9 +115,13 @@ function angleFor(placement: string): string {
   for (const k of Object.keys(PLACEMENT_ANGLE)) if (key.includes(k)) return PLACEMENT_ANGLE[k];
   return PLACEMENT_ANGLE.front;
 }
-// Action-first here too (Joe, 2026-08-20) — the studio look stays as the second frame's anchor.
+// Action-first here too (Joe, 2026-08-20) — the studio look stays as one anchor frame. Four
+// scenes, not two: the publish path pads to 6 shots by rotating this bank, so more variety here
+// is directly more variety in every product gallery.
 const SCENES = [
-  'Action photo, model walking through a leafy park or stepping out of a coffee shop, mid-stride, natural light, print clearly readable.',
+  'Action photo, model walking through a leafy park, mid-stride, natural light, print clearly readable.',
+  'Candid photo, model at a coffee shop — stepping out with a cup or at an outdoor table, print clearly readable.',
+  'Action photo, model mid-stride crossing a city street, motion in the scene, print clearly readable.',
   'Clean studio fashion photo, seamless neutral background, soft even lighting.',
 ];
 

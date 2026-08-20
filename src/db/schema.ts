@@ -286,6 +286,10 @@ export const products = pgTable(
       .references(() => stores.id, { onDelete: 'cascade' }),
     // Which collection/drop this product belongs to (for storefront grouping).
     catalogueId: uuid('catalogue_id').references(() => catalogues.id, { onDelete: 'set null' }),
+    // The composition this product was published FROM (2026-08-20, migration 0031) — the only
+    // path back to its placements (front/back/sleeve), which the model-shot pipeline needs to
+    // angle-match shots so a back print isn't photographed from the front. Null on pre-link rows.
+    compositionId: uuid('composition_id').references(() => compositions.id, { onDelete: 'set null' }),
     printfulSyncProductId: text('printful_sync_product_id').unique(),
     slug: text('slug').notNull(),
     name: text('name').notNull(),

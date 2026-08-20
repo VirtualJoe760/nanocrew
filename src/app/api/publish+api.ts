@@ -10,7 +10,7 @@ import { checkProviderPolicy, resolvePodProvider } from '@/lib/pod-policy';
 import { minRetailCents } from '@/lib/pricing';
 import { revalidateStorefront } from '@/lib/storefront-revalidate';
 import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
-import { generateModelShots } from '@/lib/model-shots';
+import { generateModelShotsFromMockup } from '@/lib/model-shots';
 
 /** Printful mockup URLs are temporary S3 links (~72h) — persist to Cloudinary. */
 async function persistMockup(url: string | null): Promise<string | null> {
@@ -208,6 +208,7 @@ export async function POST(req: Request) {
       .values({
         storeId: comp.storeId,
         catalogueId: comp.catalogueId ?? null, // the collection/drop this product lives in
+        compositionId: comp.id, // the path back to placements — model shots angle-match on it
         printfulSyncProductId: syncProductId,
         slug: `${slugify(name)}-${syncProductId}`,
         name,
@@ -282,7 +283,12 @@ export async function POST(req: Request) {
           }
         }
         try {
-          const shots = await generateModelShots(garment, 6); // 3 posed + 3 action/environment (Joe)
+          // Placement-aware + mockup-grounded (2026-08-20): one angle-matched shot per placement,
+          // scene-padded to 6. A back print gets shot FROM BEHIND — the old pose-bank generator
+          // photographed every product from the front, so back-print cards showed a blank garment
+          // (Joe's Coast Sunset Crew report).
+          const shotPlacements = mockupFiles.map((f) => ({ placement: f.placement, label: f.placement }));
+          const shots = await generateModelShotsFromMockup(garment, shotPlacements, 6);
           if (shots.length) {
             await db.update(schema.products).set({ modelShots: shots }).where(eq(schema.products.id, product.id));
             void revalidateStorefront(store?.slug);

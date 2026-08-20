@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 import { corsJson, corsPreflight } from '@/lib/cors';
@@ -27,7 +27,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       })
       .from(schema.products)
       .where(and(eq(schema.products.storeId, store.id), eq(schema.products.isPublished, true)))
-      .orderBy(asc(schema.products.createdAt));
+      // NEWEST FIRST (2026-08-20): this is the storefronts' drop feed — templates take the head
+      // of the list for "Latest Drop" rails, and oldest-first meant a new product could NEVER
+      // appear there (Joe's bulldog-tee report; BUG_AUDIT_2026-08-20).
+      .orderBy(desc(schema.products.createdAt));
 
     type Video = { src: string; poster: string | null; productSlug: string; productName: string };
     const videos: Video[] = [];

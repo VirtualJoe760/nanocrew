@@ -4,7 +4,7 @@ import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { isStoreMember } from '@/lib/tenant';
 import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
-import { generateModelShots } from '@/lib/model-shots';
+import { generateModelShotsFromMockup } from '@/lib/model-shots';
 
 // POST /api/creator/model-shots { productId } — generate an on-model photo gallery for one of
 // the creator's products (Nano Banana). Ownership-checked + credit-gated; debits before
@@ -17,7 +17,12 @@ export async function POST(req: Request) {
   if (!body?.productId) return Response.json({ error: 'productId required' }, { status: 400 });
 
   const [product] = await db
-    .select({ id: schema.products.id, imageUrl: schema.products.imageUrl, storeId: schema.products.storeId })
+    .select({
+      id: schema.products.id,
+      imageUrl: schema.products.imageUrl,
+      storeId: schema.products.storeId,
+      compositionId: schema.products.compositionId,
+    })
     .from(schema.products)
     .where(eq(schema.products.id, body.productId))
     .limit(1);
@@ -40,8 +45,22 @@ export async function POST(req: Request) {
     throw e;
   }
 
+  // Placement-aware (2026-08-20): resolve the source composition's placements so a back print is
+  // shot from behind, not photographed invisibly from the front. Pre-link products (null
+  // compositionId, before migration 0031) fall back to a front-framed shot — same as before.
+  let placements: { placement: string; label: string }[] = [];
+  if (product.compositionId) {
+    const [comp] = await db
+      .select({ placement: schema.compositions.placement, placements: schema.compositions.placements })
+      .from(schema.compositions)
+      .where(eq(schema.compositions.id, product.compositionId))
+      .limit(1);
+    const list = comp?.placements?.length ? comp.placements.map((p) => p.placement) : comp?.placement ? [comp.placement] : [];
+    placements = [...new Set(list)].map((p) => ({ placement: p, label: p }));
+  }
+
   try {
-    const shots = await generateModelShots(product.imageUrl, 3);
+    const shots = await generateModelShotsFromMockup(product.imageUrl, placements, 3);
     if (!shots.length) throw new Error('no shots generated');
     await db.update(schema.products).set({ modelShots: shots }).where(eq(schema.products.id, product.id));
     return Response.json({ modelShots: shots });
