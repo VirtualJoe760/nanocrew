@@ -346,8 +346,7 @@ creator **circles** elements on the site — each hit is pushed silently via
 `venus.sendContext(venusContextForHit(...))` with the site-vocabulary brief, so Eve can name and
 explain the section — changes are logged as they go, and **Submit** builds the revision via the
 existing `POST /api/creator/revise` (forge revision) — no API change. The old record→transcribe
-pipeline is gone, which leaves `POST /api/transcribe` (`src/app/api/transcribe+api.ts`) with zero
-callers — retired dead code (its header comment still claims the critique flow uses it).
+pipeline is gone, and `POST /api/transcribe` — its last dead remnant — was deleted 2026-08-20.
 
 
 ## Available and unused (researched 2026-08-17)

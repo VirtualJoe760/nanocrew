@@ -65,10 +65,10 @@ function StudioScreen() {
   const [eve, setEve] = useState<EveSummon | null>(null);
   useEffect(() => registerEveSummonListener((s) => setEve(s)), []);
 
-  // The swipe-down brand deck.
+  // The brand deck (opened from the wheel's BRANDS spoke — see below).
   const [deckShown, setDeckShown] = useState(false);
   // Eve only listens when her tab is actually the active one (not just mounted-but-hidden by the
-  // tab navigator) AND the brand deck isn't pulled down over her.
+  // tab navigator) AND the brand deck isn't open over her.
   const focused = usePathname().startsWith('/studio');
   // `design` is deliberately NOT deep: it renders as a translucent overlay ON TOP of EveHome so she
   // KEEPS LISTENING while you talk about the design. Swapping it in (the old behaviour) unmounted
@@ -337,7 +337,8 @@ function StudioScreen() {
                   token={session.access_token}
                   refreshKey={dashKey}
                   onClose={() => { setDeckShown(false); setDeckFocus(null); }}
-                  onBounty={(panel, slot) => { setDeckShown(false); router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`); }}
+                  // design.tsx reads panel/action/prompt/meme/edit — never slot, so it isn't passed.
+                  onBounty={(panel) => { setDeckShown(false); router.navigate(`/design?panel=${panel}`); }}
                 />
               </>
             ) : null}

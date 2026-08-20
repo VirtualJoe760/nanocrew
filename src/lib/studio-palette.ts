@@ -1,9 +1,8 @@
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Shared theme-aware palette for the Studio surfaces (dashboard, composer, paywall,
-// cockpit). Venus is a holographic entity: the cyan/violet accents hold on both light and
-// dark, while the surface, ink and fields flip. Mirrors makePalette() in studio.tsx so the
-// modals match the screen behind them in either mode.
+// Shared theme-aware palette for the Eve-side surfaces (the Eve page, composer, paywall).
+// Eve's blue accent holds on both light and dark, while the surface, ink and fields flip.
+// Mirrors makePalette() in nc-screen.tsx so modals match the screen behind them in either mode.
 
 export type StudioPalette = ReturnType<typeof makeStudioPalette>;
 

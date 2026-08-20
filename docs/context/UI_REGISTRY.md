@@ -24,7 +24,7 @@ The **living catalogue** of reusable app components — what exists (reuse it) a
 | `withScreenFade` | `screen-fade.tsx` | `(Screen, { background \| eveThrough \| eveThrough:'clear' })` | Screen-transition HOC wrapping account/design/market/studio/reset-password; also exports `EVE_SCRIM` |
 | `SquareCarousel` | `square-carousel.tsx` | `images`, `size`, `accent`, `radius` | Square swipe carousel (brand-store, product-detail) |
 | `GradientSlider` | `gradient-slider.tsx` | `id`, `stops`, `value`, `onChange` | Gradient-track 0..1 slider (brand-review, site-editor) |
-| **Designer seam** | `designer/` — `DesignEditor`, `DesignCanvas`, `PlacementEditor`, `ContentDock`, `TemplatesDock`, `WebAssetsDock`, `ProductPicker`, `ProductDetailSheet`, `FinalizeSheet` | — | The shared design surface used by BOTH `design.tsx` and `eve/eve-design.tsx` — the parity seam [`CLAUDE.md`](../../CLAUDE.md) mandates building into first. See [`DESIGN_SURFACES.md`](../studio/DESIGN_SURFACES.md) |
+| **Designer seam** | `designer/` — `DesignEditor`, `DesignCanvas`, `PlacementEditor`, `ProductPicker`, `ProductDetailSheet`, `FinalizeSheet`, `garment-mockup` | — | The shared design surface used by BOTH `design.tsx` and `eve/eve-design.tsx` — the parity seam [`CLAUDE.md`](../../CLAUDE.md) mandates building into first. See [`DESIGN_SURFACES.md`](../studio/DESIGN_SURFACES.md) |
 
 ## Chrome — Studio surface helpers (`nc-screen.tsx`)
 | Component / hook | Props | Notes |

@@ -7,8 +7,10 @@
 // ~/stores/.forge.lock ⇒ never two forge jobs at once (RAM-safe), and the 30-min build no
 // longer depends on the app server staying alive (serverless-safe).
 //
-// ⚠️ The bash pipeline below MUST stay in sync with src/lib/revise.ts (same persistent-clone +
-// pnpm + render + global-lock recipe). It's duplicated here so the worker stays dependency-light.
+// ⚠️ The bash pipeline below is the ONLY copy of the forge run (persistent-clone + pnpm + render
+// + global-lock). src/lib/revise.ts no longer holds it — that module is now just the post-review
+// actions (approve → merge, decline → discard). Editing this file does NOT ship it: re-scp to the
+// droplet (see forge-worker/CLAUDE.md).
 //
 // Run as the `forge` user via systemd (see nanocrew-forge-worker.service). Env required:
 //   DATABASE_URL, GITHUB_TOKEN, GITHUB_OWNER, VERCEL_TOKEN

@@ -49,7 +49,7 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | POST | `/api/creator/color-mockups` | bearer | Per-COLOUR Printful mockup shots for the pricing page — one generator task, one variant per colourway, preferring the product's photographed on-model style (`Men's`/`Women's`) over flat. Free (Printful generator, not paid AI). |
 | GET/PATCH/DELETE | `/api/compositions/:id` | bearer | Read / update / delete a composition. PATCH also accepts `placements[]` — the PlacementEditor autosaves (debounced) as the creator drags, server-clamped and design-ownership-scoped, so publish never falls back to the default placement. |
 | GET | `/api/creator/margins` | bearer | Per-product retail / Printful cost / margin% + average. |
-| GET | `/api/blanks`, `/api/blank/:id/{variants,colors,placements,printareas,template}` | bearer | Printful catalogue data (`template` = the flat mockup image + REAL print-area fractions, so previews blend onto the actual print zone). |
+| GET | `/api/blanks`, `/api/blank/:id/{variants,placements,printareas,template}` | bearer | Printful catalogue data (`template` = the flat mockup image + REAL print-area fractions, so previews blend onto the actual print zone). |
 | GET/PATCH/DELETE | `/api/creator/stores/:slug` | bearer | Read / edit / **delete** a brand. DELETE is owner-only and cascades the store → catalogues/designs/products/variants/orders/posts/revisions (external Printful/GitHub/Vercel cleaned out of band). |
 | GET | `/api/creator/stats` | bearer | Per-store revenue, orders, 30-day views, product images, and `bannerUrl` — the brand banner (site hero → OG card → read-time `buildOgImageUrl` for any logo'd brand), never a product photo. |
 | GET | `/api/creator/orders` | bearer | Recent orders across the creator's stores. |
@@ -100,7 +100,6 @@ debit larger amounts the same way.
 | POST | `/api/tryon` | bearer, RL | Render a product on a selfie (selfie not stored). |
 | POST | `/api/voice-live-token` | bearer | Mint a short-lived Gemini Live ephemeral token; the app connects to Gemini Live directly (the realtime Eve interview — `lib/live-voice.ts`). |
 | POST | `/api/say` | bearer, RL | One-shot TTS in Eve's Gemini voice (Aoede) → base64 WAV. Used for the post-build launch line. (The old turn-based `/api/voice` + `/api/interview` ElevenLabs routes were removed.) |
-| POST | `/api/transcribe` | bearer | Verbatim transcription of base64 m4a/mp4 (Gemini). Powers critique. |
 | POST | `/api/video` | bearer, **credits** | Product video. `voiceover` cheap / `veo` = 400 credits (`CREDIT_COSTS.video_veo`). |
 | POST | `/api/creator/model-shots` | bearer, **credits** | On-model image gallery (Nano Banana). Debits 25 (`model_shots`). |
 | GET/POST | `/api/creator/avatars` | bearer, RL, **credits** | Krea AVATAR LoRAs (2026-08-20, K2 server half — KREA_LORA.md). GET lists the creator's models + the house library, lazily refreshing non-terminal training jobs. POST `{name?, photos[], consent: true}` uploads the training set, debits 600 (`lora_train`), submits the Krea fine-tune. 503 until `KREA_ENABLED=1`. |

@@ -6,9 +6,9 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Shared Studio "chrome": the monochrome silk background, the NC brand mark, and the screen
-// palette — so Studio, Design, Market, and Account all read as one product. (Extracted from
-// studio.tsx; Studio imports these too, so the look stays in ONE place.)
+// Shared app "chrome": the monochrome silk background, the brand mark (Eve's constellation
+// glyph — the NC monogram is retired), and the screen palette — so Eve, Design, Market and
+// Account all read as one product. The Eve page imports these too, so the look stays in ONE place.
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 

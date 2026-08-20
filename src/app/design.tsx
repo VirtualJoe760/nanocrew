@@ -43,7 +43,6 @@ import { DesignEditor } from '@/components/designer/DesignEditor';
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { ProductDetailSheet } from '@/components/designer/ProductDetailSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
-import { DOCK_TAB_CLEARANCE } from '@/components/designer/TemplatesDock';
 import { ProductPicker } from '@/components/designer/ProductPicker';
 import { GlowButton } from '@/components/glow-button';
 import { GlowInput } from '@/components/glow-input';
@@ -51,7 +50,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, DOCK_TAB_CLEARANCE, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch, readJson } from '@/lib/api';

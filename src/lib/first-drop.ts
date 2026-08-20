@@ -260,8 +260,11 @@ export async function generateFirstDrop(opts: { storeId: string; baseUrl: string
     for (const idea of ideas) {
       await createFirstDropProduct({ storeId: opts.storeId, baseUrl: opts.baseUrl, idea });
     }
-    // Products published + site provisioned → 'ready' (not 'live' — live means a domain is attached).
-    await db.update(schema.stores).set({ status: 'ready' }).where(eq(schema.stores.id, opts.storeId));
+    // NO status write here (BUG_AUDIT_2026-08-20 #22). Store status is owned by creation and
+    // provisioning: /api/store opens a website brand at 'building' (provisioning drives it from
+    // there) and a shop-only brand at 'ready' already. The old unconditional 'ready' stamp was
+    // redundant in the shop-only case and a RACE in the website case — it could mark a site
+    // finished while the forge was still building it.
     log('── done ──');
   } catch (e) {
     log('failed:', e instanceof Error ? e.message : e);
