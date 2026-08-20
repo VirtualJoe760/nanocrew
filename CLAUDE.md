@@ -1,75 +1,76 @@
 @AGENTS.md
 
-# Nano Crew — context map
+# Nano Crew — the rules that stay in memory
 
-AI-native creator commerce (Expo / React Native, iOS + Android): a creator talks to **Eve** →
-Nano Crew auto-generates a Printful-backed shop **and** a per-brand storefront, then they design,
-sell, and edit the site by chatting. This file is the **orchestrator** — it tells you what to read,
-in what order, and which doc owns each task. The durable core (units, conventions, doc-discipline)
-is in [`AGENTS.md`](AGENTS.md); the working rules live in [`docs/context/`](docs/context/README.md).
+AI-native creator commerce: a creator talks to **Eve**, and Nano Crew generates a Printful-backed
+shop **and** a per-brand storefront, which they then design, sell and edit by chatting.
 
-> **New here (a human)? →** [`docs/context/CONTEXT_GUIDE.md`](docs/context/CONTEXT_GUIDE.md) — the
-> plain-English guide to this system and how to work with the AI agent.
+This file is **deliberately short**. It holds only what must be true in working memory on every
+task. The bones — the units, the directory of which doc owns what, the conventions — are in
+[`AGENTS.md`](AGENTS.md), loaded above.
 
-## Read order (load these first, every task)
-1. [`AGENTS.md`](AGENTS.md) — what this is, the four units, documentation discipline.
-2. [`docs/context/PROJECT_OVERVIEW.md`](docs/context/PROJECT_OVERVIEW.md) — the product, the user flow, and what's in/out of scope.
-3. [`docs/context/NEVER_VIOLATE.md`](docs/context/NEVER_VIOLATE.md) — the hard rules. **Before any change.**
-4. [`docs/context/CODE_STANDARDS.md`](docs/context/CODE_STANDARDS.md) — how we write code here.
-5. [`docs/architecture/TECH_STACK.md`](docs/architecture/TECH_STACK.md) — the technology inventory.
-6. the **division doc** for your task (table below).
-7. [`docs/context/UI_RULES.md`](docs/context/UI_RULES.md) (+ TOKENS, REGISTRY) — when touching UI.
-8. [`docs/roadmap/REMAINING_FEATURES.md`](docs/roadmap/REMAINING_FEATURES.md) — in flight vs. scope.
+> **New here (a human)? →** [`docs/context/CONTEXT_GUIDE.md`](docs/context/CONTEXT_GUIDE.md).
 
-## Where things live (open the entry doc, don't guess)
-| When you're touching… | Read first |
-|---|---|
-| The rules / how to work | [`docs/context/`](docs/context/README.md) |
-| A brand website · catalogue · public API | [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](docs/storefront/STOREFRONT_DATA_CONTRACT.md) |
-| App UI — buttons, inputs, tokens, a new screen | [`docs/context/UI_RULES.md`](docs/context/UI_RULES.md) (+ UI_TOKENS, UI_REGISTRY) |
-| Eve build → forge → publish | [`docs/studio/BUILD_FLOW.md`](docs/studio/BUILD_FLOW.md) · [`FORGE_AI.md`](docs/studio/FORGE_AI.md) |
-| How Eve TALKS (persona, questions) | [`docs/studio/EVE_VOICE.md`](docs/studio/EVE_VOICE.md) — change one persona, change all three |
-| Eve's avatar look | [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md) + the Eve Lab (below) |
-| Identity · orders · money · credits | [`docs/accounts/`](docs/accounts/README.md) |
-| The **account page** (app *or* web) | [`docs/accounts/ACCOUNT_SURFACE.md`](docs/accounts/ACCOUNT_SURFACE.md) — **change all three: app · site · API** |
-| The marketing site / nanocrew.app | [`nanocrew-site/CLAUDE.md`](nanocrew-site/CLAUDE.md) |
-| Creating a template | [`docs/storefront/TEMPLATE_AUTHORING.md`](docs/storefront/TEMPLATE_AUTHORING.md) |
-| Schema · endpoints | [`docs/architecture/DATABASE_PLAN.md`](docs/architecture/DATABASE_PLAN.md) · [`API.md`](docs/architecture/API.md) |
-| What's shipped vs open | [`docs/roadmap/REMAINING_FEATURES.md`](docs/roadmap/REMAINING_FEATURES.md) |
+## Before any task
+1. [`AGENTS.md`](AGENTS.md) — what this is, the five units, the directory, documentation discipline.
+2. [`docs/context/NEVER_VIOLATE.md`](docs/context/NEVER_VIOLATE.md) — the hard rules.
+3. [`docs/context/CODE_STANDARDS.md`](docs/context/CODE_STANDARDS.md) — how we write code here.
+4. The **division doc** for your task — the table in [`AGENTS.md`](AGENTS.md#where-things-live).
 
-Full doc map: [`docs/README.md`](docs/README.md).
+## 🔴 Documentation drift is a defect
 
-## Automatic working loop (no command needed)
-Memory and review are **behaviors, not commands** — see [`docs/context/CODE_STANDARDS.md`](docs/context/CODE_STANDARDS.md):
-- **Auto-memory** — the doc for the view/space being worked on is updated in the same change.
-- **Auto-review** — `tsc` + lint + the sync checks (schema/palette/RLS) run before each commit; `expo export` before a push.
-- **Commit often, no gate** — commit at each logical milestone automatically; Joe doesn't review first.
+**Every change updates the documentation it affects, in the same change.** Not at the end of the
+day, not in a follow-up — the same commit. A change that ships with stale docs is incomplete, and a
+doc that describes behaviour the code no longer has is worse than no doc at all: the next session
+reads it and acts on it.
+
+When you finish a piece of work, before you commit: **ask which docs your change just made wrong.**
+The mapping table in [`AGENTS.md`](AGENTS.md#documentation-discipline) tells you which file owns
+what — but the mapping is a floor, not the whole duty. If you changed how something behaves, find
+the doc that describes that behaviour and fix it, whether or not it appears in the table.
+
+The specs are the source of truth for *how things should work*; the code for *how they currently
+work*. When they disagree that is a bug — say so out loud rather than quietly picking a side.
+
+## 🔴 Parity rules — one product, several front doors
+
+Both of these are the same rule: a creator meets the product through more than one door, and the
+doors are not allowed to drift.
+
+- **Design.** The **Design Center** (`src/app/design.tsx`) and **Eve's design pipeline**
+  (`src/components/eve/eve-design.tsx`) are one product. A capability added to one is added to the
+  other in the same change, built into the shared `src/components/designer/` seam first. The parity
+  matrix — including what is deliberately *not* parity — is
+  [`docs/studio/DESIGN_SURFACES.md`](docs/studio/DESIGN_SURFACES.md); update it in that same change.
+- **Account.** The account page exists in the app (`src/app/account.tsx`), on the website
+  (`nanocrew-site/app/account/`) and in the API. Change one → change all three, then update the
+  matrix in [`docs/accounts/ACCOUNT_SURFACE.md`](docs/accounts/ACCOUNT_SURFACE.md).
+
+Intentional exceptions are recorded in those matrices with a reason, never left implicit.
+
+## UI preferences
+- **Cool monochrome + platinum silver.** `#08080a` ground, `#cdd1d9` accent. **No gold, no warm
+  neutrals.** Brand storefronts keep their own colours; the app chrome does not.
+- **Eve blue `#7fd7e6` is hers.** In the app it appears only where Eve herself does. On outward
+  surfaces — email, the social card — it is the brand accent, because the logo is her glyph.
+- **Type is Jost**, self-hosted in both the app and the site. Email is the one place a font CDN is
+  allowed (there is no bundler in an inbox).
+- **Safe-area insets on every edge**, in mockups as well as code. Never draw under the Dynamic
+  Island, and never let the tab bar clip a control — full-screen surfaces reserve it with
+  `tabBarSpace()`.
+- **Reuse the primitives.** Check [`docs/context/UI_REGISTRY.md`](docs/context/UI_REGISTRY.md)
+  before building a component; add new reusable ones to it. Tokens and rules:
+  [`UI_RULES.md`](docs/context/UI_RULES.md) · [`UI_TOKENS.md`](docs/context/UI_TOKENS.md).
+- **Voice-first surfaces stay voice-first.** Eve asks and then opens a surface; she never lands the
+  creator in a bare form. A typed path is a deliberate fallback, not the default.
+
+## The working loop (behaviours, not commands)
+- **Commit often, no gate.** Commit at each logical milestone; Joe doesn't review first.
+- **Self-review before each commit:** `tsc` + lint + the sync checks (schema / palette / RLS).
+  `npx expo export` before a push.
+- **Update the docs in the same commit** — the rule above, applied.
 
 ## Skills (`.claude/commands/`) — occasional, optional
-- **/architect** — plan a big/ambiguous feature against the context docs before coding.
-- **/recover** — rebuild context after a long / compacted session.
-- **/imprint** — refresh the context docs from the current code.
-- **/instructions** — regenerate the human onboarding guide ([`CONTEXT_GUIDE.md`](docs/context/CONTEXT_GUIDE.md)).
-
-## Per-unit rules
-- **App backend** (`src/app/**+api.ts`, Cloud Run): no `fetch()` before the first DB query.
-- **platform-api/** — its own [`CLAUDE.md`](platform-api/CLAUDE.md) (Next + Stripe; schema-copy sync).
-- **nanocrew-site/** — its own [`CLAUDE.md`](nanocrew-site/CLAUDE.md) (nanocrew.app; no DB credential,
-  the app's palette, account parity with the app).
-- **forge-worker/** — its own [`CLAUDE.md`](forge-worker/CLAUDE.md) (re-scp the worker). NB:
-  `forge-worker/forge-CLAUDE.md` conditions the storefront-building **robot**, not the dev agent.
-
-## Editing Eve's APPEARANCE? → the Eve Lab
-Source of truth: [`docs/studio/VENUS_AVATAR.md`](docs/studio/VENUS_AVATAR.md). Open the Eve Lab from
-**Account → Developer → "Eve Lab (test)"** (gated to josephsardella@gmail.com) to render the live
-avatar (`src/components/backgrounds/venus-orb-scene.tsx` plus its sibling `venus-*` modules —
-plasma, geometry, shaders, points, textures); the same one avatar mounts persistently at the app
-root via `src/components/eve/eve-background.tsx`. The Lab's test hooks are `__DEV__`-gated inside
-the scene, so nothing needs resetting before a build/PR.
-
-## Status & scope
-- Current status + open work (the progress-tracker): [`docs/roadmap/REMAINING_FEATURES.md`](docs/roadmap/REMAINING_FEATURES.md).
-- In-flight / deferred / parked buckets: [`docs/context/PROJECT_OVERVIEW.md`](docs/context/PROJECT_OVERVIEW.md).
-
-## Run
-`npm run ios` · `npm run android` · `npm run web`
+**/architect** plan a big feature first · **/recover** rebuild context after a compaction ·
+**/imprint** refresh the context docs from the code · **/instructions** regenerate
+[`CONTEXT_GUIDE.md`](docs/context/CONTEXT_GUIDE.md).
