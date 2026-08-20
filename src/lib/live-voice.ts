@@ -77,6 +77,15 @@ export function eveCentralInstruction(userName?: string, storeNames: string[] = 
   return buildPersona('central', { userName, brands: storeNames });
 }
 
+/** Eve's INTERVIEW persona for a creator who ALREADY has brands — the wheel's NEW spoke, or a
+ *  spoken "let's start another label". Same brand job as a first-timer (jobs/brand.md carries the
+ *  whole method), but with their name and existing brands as context so she can reference their
+ *  taste instead of meeting a stranger. Without this the new-brand interview ran on the CENTRAL
+ *  persona, whose jobs are design/assets/status — no brand job at all (BUG_AUDIT_2026-08-20 #30). */
+export function eveInterviewInstruction(userName?: string, storeNames: string[] = []): string {
+  return buildPersona('interview', { userName, brands: storeNames });
+}
+
 /** Greeting nudge for the central (returning-creator) session. Deliberately NOT one fixed shape —
  *  "say hey and ask what they're up to" produced the same sentence every launch (Joe, 2026-08-18).
  *  The session appends the real context: time of day, how long they've been away, and the openers

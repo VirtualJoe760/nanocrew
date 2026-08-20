@@ -130,8 +130,11 @@ which is not asking. The rule now says so explicitly.
 Statement:question and net-new — pass. Turn length ~19–26 words on probes but **44–60 while riffing**
 on a brand, without asking. Probe 9 ("Keep going.") not run.
 
-**Open, not fixed:** `MODE_JOBS.central` carries design/assets/status and **no brand job**, yet a
-returning creator's new-brand interview runs on it (fingerprint match, §5's method).
+**Closed 2026-08-20 (was: open):** `MODE_JOBS.central` carries design/assets/status and **no brand
+job**, and a returning creator's new-brand interview used to run on it. `eveInterviewInstruction()`
+now composes the INTERVIEW mode with their name and existing brands, and `eve-home` selects by
+`view` rather than by `hasStore` — so the second brand gets `jobs/brand.md`'s method, with their
+taste as context. The central greeting is suppressed during an interview for the same reason.
 
 **Closed 2026-08-20:** `jobs/design.md` now names what the catalogue actually is — printed,
 stitched and knitted apparel and accessories — and tells her to say plainly when something isn't

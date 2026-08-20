@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 import { TenantError, assertCatalogueOwner, assertDesignOwner } from '@/lib/tenant';
-import { getProductMeta } from '@/lib/printful';
+import { getBlankPrintareas, getProductMeta } from '@/lib/printful';
 
 // POST /api/compositions → create a composition row (status: generating) and return its
 // id. Fabrication-aware: if the product's technique can't reproduce the design as-is
@@ -33,6 +33,27 @@ export async function POST(req: Request) {
       return Response.json({ error: 'catalogueId, templateKey, designId(s) required' }, { status: 400 });
     }
     const storeId = await assertCatalogueOwner(body.catalogueId, user.id);
+
+    // FAIL HERE, NOT AT PUBLISH (BUG_AUDIT_2026-08-20 #27 / B12). Printful placement keys are
+    // per-product — an all-over tee prints 'front_dtfabric', not 'front' — and the route used to
+    // accept any string, so the creator finished the whole flow and hit a raw passthrough
+    // '502 Printful 400: Incorrect file type: front' at publish. Best-effort: a Printful blip
+    // must not block a composition, so an empty/failed lookup skips the check.
+    const printable = await getBlankPrintareas(body.templateKey)
+      .then((pa) => pa.areas.map((a) => a.placement))
+      .catch(() => [] as string[]);
+    if (printable.length) {
+      const bad = [...new Set(list.map((p) => p.placement))].filter((p) => !printable.includes(p));
+      if (bad.length) {
+        return Response.json(
+          {
+            error: `This product can't print ${bad.join(', ')} — it prints ${printable.join(', ')}.`,
+            allowedPlacements: printable,
+          },
+          { status: 422 },
+        );
+      }
+    }
     // IDOR FIX: the catalogue is the caller's, but the design ids come from the client — verify the
     // caller owns EVERY design AND that each lives in the SAME store, or one creator could bake another
     // creator's private design into their own composition/product (realized downstream in publish).

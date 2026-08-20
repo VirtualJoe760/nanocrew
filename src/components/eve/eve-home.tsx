@@ -35,7 +35,7 @@ import { publishEvePulse, registerEveMuteListener } from '@/lib/eve-live-state-b
 import { publishTranscript } from '@/lib/eve-transcript-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
-import { announce, eveCentralInstruction, openerVariation, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
+import { announce, eveCentralInstruction, eveInterviewInstruction, openerVariation, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
 import { hoursSinceLastOpen, recentOpeners, rememberOpener } from '@/lib/eve-openers';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
@@ -206,9 +206,18 @@ export function EveHome({
   // creators get the CENTRAL persona — greeting + task awareness + the interview module verbatim
   // (the "ready to build your brand" cue survives, so buildReady below keeps working). The hook
   // reads opts at start() time and we never start before meResolved, so the choice is always final.
+  // The BRAND INTERVIEW always gets the interview persona — carrying their name and existing
+  // brands when they have them. A returning creator starting a second brand used to keep the
+  // CENTRAL instruction, whose jobs are design/assets/status with no brand job, so she ran the
+  // interview without jobs/brand.md's method (BUG_AUDIT_2026-08-20 #30).
   const centralInstruction = useMemo(
-    () => (hasStore ? eveCentralInstruction(creatorName, stores.map((s) => s.name)) : undefined),
-    [hasStore, creatorName, stores],
+    () =>
+      view === 'interview'
+        ? eveInterviewInstruction(creatorName, stores.map((s) => s.name))
+        : hasStore
+          ? eveCentralInstruction(creatorName, stores.map((s) => s.name))
+          : undefined,
+    [view, hasStore, creatorName, stores],
   );
   // SHE NEVER OPENS THE SAME WAY TWICE (Joe, 2026-08-18). Her last few openings live on this
   // device; we hand them back as a do-not-repeat list alongside the time of day and how long
@@ -238,7 +247,7 @@ export function EveHome({
     firstTime: !hasStore,
     voiceName: LIVE_VOICE,
     instruction: centralInstruction,
-    greeting: hasStore ? EVE_CENTRAL_GREETING : undefined,
+    greeting: hasStore && view !== 'interview' ? EVE_CENTRAL_GREETING : undefined,
     variation,
     onBrand: (b, transcript) => {
       setBrand(b);
