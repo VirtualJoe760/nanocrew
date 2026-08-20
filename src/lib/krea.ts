@@ -1,5 +1,7 @@
-// KREA API client (docs/architecture/KREA_LORA.md) — LoRA training + inference for on-model
-// shots of the actual garment. Endpoints verified against krea.ai docs 2026-08-15:
+// KREA API client (docs/architecture/KREA_LORA.md) — AVATAR LoRA training + inference: persistent
+// virtual MODELS (people), never garments (Joe, 2026-08-15 — garment fidelity is the composite
+// pipeline's job; the product rides shot generation as reference imagery).
+// Endpoints verified against krea.ai docs 2026-08-15:
 //   POST /styles/train      — train a LoRA ("style"): name, urls[], model, type, trigger_word,
 //                             max_train_steps (min 100 charged, ≤2000). $0.003/step.
 //   GET  /jobs/{id}         — poll any async job (training or generation).
@@ -45,7 +47,7 @@ export type KreaJob = {
   error: string | null;
 };
 
-/** Train a garment LoRA. `type: 'Object'` teaches the SUBJECT (our product) rather than a style.
+/** Train an AVATAR LoRA. `type: 'Object'` teaches the SUBJECT (the person) rather than a style.
  *  Cost: steps × $0.003 (min 100 charged) — the standard 1000-step run is $3.00. */
 export async function kreaTrainStyle(input: {
   name: string;

@@ -211,6 +211,13 @@
       "when": 1787213216788,
       "tag": "0029_aberrant_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1787215977592,
+      "tag": "0030_shocking_shinobi_shaw",
+      "breakpoints": true
     }
   ]
 }

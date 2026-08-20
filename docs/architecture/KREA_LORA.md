@@ -36,19 +36,23 @@ imagery + prompt, and our existing composite pipeline owns garment fidelity — 
 - A shot prompt reads: `<AVATAR_TRIGGER> wearing <product description>, <scene/pose from the
   diversity bank>` with the product image as reference — one avatar, any product, any scene.
 - Schema: `loras` rows are avatars (`product_id` stays NULL / may be dropped), `creator_id` for
-  personal avatars, `store_id` NULL for the house library. **(NOT YET MIGRATED — the shipped 0026
-  table is the pre-pivot garment shape: `store_id` NOT NULL, no `creator_id`. A migration must
-  relax `store_id` and add `creator_id`, and the "garment LoRA" comments in both schema copies,
-  `src/lib/krea.ts`, and DATABASE_PLAN.md must be rewritten to the avatar model — see
-  docs/ops/BUG_AUDIT_2026-08-20.md.)**
+  personal avatars, `store_id` NULL for the house library. **(MIGRATED 2026-08-20, migration
+  0030: `store_id` relaxed to nullable, `creator_id` + `name` + `photo_urls` added, both schema
+  copies re-commented to the avatar model, `src/lib/krea.ts` headers rewritten.)**
 - **Consent/safety:** uploads gated by an explicit "I have rights to these photos / this is me or
   a model who consented" affirmation; avatar LoRAs are private to the uploading account, never
   shared or listed. No training on third-party/celebrity photos.
 
 ## Build phases
-**STATUS 2026-08-20** — K1 shipped 2026-08-15 but is unwired; K2–K6 are not started.
-`KREA_API_KEY` is already provisioned in the dev env (`.env.local`). Blocked pieces: the schema
-avatar migration (see the NOT YET MIGRATED note above) and the FORGE_WATCHDOG cron.
+**STATUS 2026-08-20 (late)** — K1 shipped + now WIRED; the avatar migration (0030) landed; **K2's
+server half + K5's gate/keys shipped**: `GET/POST /api/creator/avatars` (photo upload → consent →
+`lora_train` debit → Krea fine-tune → row; list refreshes non-terminal rows lazily), gated by
+`KREA_ENABLED=1`, credit keys `lora_train: 600` / `lora_shot: 10` in `CREDIT_COSTS`.
+`KREA_API_KEY` is provisioned in the dev env (`.env.local`). Still open: the client/Eve selfie
+surface (lib/pick-photo.ts is ready as the capture door), K3 shot generation, K4 rerouting,
+K6 picker, the house library training, and the FORGE_WATCHDOG cron (the list endpoint is the
+interim poller). No paid training run has happened yet — the pilot needs ops to fund/verify the
+prepaid balance and flip `KREA_ENABLED`.
 
 - **K1 — Client lib** `src/lib/krea.ts` — **SHIPPED 2026-08-15, unwired:** the lib exists
   (`kreaTrainStyle` / `kreaGetJob` / `kreaAwaitJob` / `kreaGenerate`; auth via KREA_API_KEY env)

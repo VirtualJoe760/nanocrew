@@ -91,6 +91,8 @@ on first use.
 | `merge` | 8 | `POST /api/merge` — fuses 2 designs via one Nano Banana call (same size as a generate) |
 | `design_edit` | 8 | `POST /api/edit` — revises a design via one Nano Banana call (same size as a generate) |
 | `preview_shots` | 16 | `POST /api/creator/preview-shots` — on-model PREVIEW at the placement step (2 Nano Banana renders) |
+| `lora_train` | 600 | `POST /api/creator/avatars` — one-time avatar LoRA fine-tune (~$3.00 real at 1000 steps; KREA_LORA.md). Gated by `KREA_ENABLED=1`. |
+| `lora_shot` | 10 | one Krea-2 render with a trained avatar (~$0.03–0.07 real) — reserved; the K3 shot path isn't wired yet |
 | `model_shots` | 25 | `POST /api/creator/model-shots` |
 | `video_voiceover` | 25 |
 | `revision` | 60 |

@@ -19,6 +19,8 @@ export const CREDIT_COSTS = {
   tryon: 6, // shopper-facing conversion feature — NOT currently debited (rate-limited instead)
   model_shots: 25, // 3 Nano Banana renders ~$0.12 → ~2×
   preview_shots: 16, // on-model PREVIEW at the placement step: 2 Nano Banana renders ~$0.08 → ~2×
+  lora_train: 600, // one-time avatar LoRA fine-tune, 1000 steps ≈ $3.00 real → ~2× (KREA_LORA.md)
+  lora_shot: 10, // one Krea-2 render with a trained avatar ~$0.03–0.07 → ~2×
   revision: 60,
   // NOTE: scene-video ("cool short") is variable-cost — the creator picks a model tier whose price
   // lives in VIDEO_MODELS (src/lib/fal-video.ts). It charges via debitCredits() with reason

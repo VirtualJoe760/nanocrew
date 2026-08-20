@@ -103,6 +103,7 @@ debit larger amounts the same way.
 | POST | `/api/transcribe` | bearer | Verbatim transcription of base64 m4a/mp4 (Gemini). Powers critique. |
 | POST | `/api/video` | bearer, **credits** | Product video. `voiceover` cheap / `veo` = 400 credits (`CREDIT_COSTS.video_veo`). |
 | POST | `/api/creator/model-shots` | bearer, **credits** | On-model image gallery (Nano Banana). Debits 25 (`model_shots`). |
+| GET/POST | `/api/creator/avatars` | bearer, RL, **credits** | Krea AVATAR LoRAs (2026-08-20, K2 server half — KREA_LORA.md). GET lists the creator's models + the house library, lazily refreshing non-terminal training jobs. POST `{name?, photos[], consent: true}` uploads the training set, debits 600 (`lora_train`), submits the Krea fine-tune. 503 until `KREA_ENABLED=1`. |
 | POST | `/api/creator/first-drop/propose` | bearer, RL | The EVE-GUIDED first-drop door (2026-08-20): Gemini invents palette-constrained demo-product concepts for her to pitch aloud. Pure proposal, nothing spent. Gift-gated: 403 once the store has 4+ products. |
 | POST | `/api/creator/first-drop/create` | bearer, RL | Builds ONE approved first-drop concept end-to-end (design → composition → mockup → publish) as the FREE onboarding gift via the internal identity — fire-and-forget, returns `{started, remaining}`. Same gift gate. `lib/first-drop.ts` is the shared pipeline behind both this and the silent `AUTO_FIRST_DROP` door. |
 | POST | `/api/creator/model-videos` | bearer, RL, **credits** | On-model Veo film for the website (appends, max 3 angles). Debits 400; rate-limited. |

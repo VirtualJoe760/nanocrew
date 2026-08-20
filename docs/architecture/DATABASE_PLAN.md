@@ -67,14 +67,15 @@ The app users (people building stores).
   `/api/me` upserts them + stamps acceptance server-side on first sign-in (migration 0020).
 
 ### `loras`
-Krea LoRA training jobs — one per trained **avatar** LoRA (persistent virtual model; **never a
-garment LoRA** — see [KREA_LORA.md](KREA_LORA.md); the schema comment still says "garment", which is
-stale — see `docs/ops/BUG_AUDIT_2026-08-20.md`).
-- `id`, `storeId` → `stores` (cascade), `productId` → `products` (cascade, nullable).
+Krea **avatar** LoRAs — one per trained persistent virtual model (**never a garment LoRA** — see
+[KREA_LORA.md](KREA_LORA.md)). Avatar shape landed in migration 0030 (2026-08-20).
+- `id`, `creatorId` → `creators` (cascade, nullable — NULL + `storeId` NULL = the house library),
+  `name` (picker display name), `photoUrls` jsonb (the Cloudinary training set).
+- Legacy pre-pivot columns, now nullable: `storeId` → `stores`, `productId` → `products`.
 - `kreaJobId`, `styleId` (set on completion; referenced in generation), `triggerWord`.
-- `status` (Krea job states + watchdog outcomes), `steps`, `costCents`, `errorMsg`,
-  `createdAt`/`completedAt`. Will be polled by the planned forge-watchdog cron
-  ([FORGE_WATCHDOG.md](FORGE_WATCHDOG.md) — not yet built).
+- `status` (Krea job states), `steps`, `costCents`, `errorMsg`, `createdAt`/`completedAt`.
+  `GET /api/creator/avatars` refreshes non-terminal rows lazily; the forge-watchdog cron
+  ([FORGE_WATCHDOG.md](FORGE_WATCHDOG.md) — not yet built) will own polling later.
 
 ### `stores`
 One per creator website/store (the thing the app generates).
