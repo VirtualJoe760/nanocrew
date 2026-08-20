@@ -69,9 +69,10 @@ function liveSystemInstruction(userName?: string, firstTime?: boolean): string {
  *  VERBATIM from liveSystemInstruction — which she now ENTERS for a new brand rather than being.
  *
  *  Two things to preserve when editing:
- *   1. the "ready to build your brand" cue sentence the buildReady regex (eve-home.tsx) listens for —
- *      the regex also accepts "got everything", "let's build", etc., and unlocks after 6 user turns
- *      regardless, so it's forgiving; still, don't drop the phrase.
+ *   1. the READY CUE now lives in src/eve/jobs/brand.md ("everything she needs" + "build it"), not
+ *      in this wrapper — that's the sentence eve-home's buildReady regex listens for. The regex is
+ *      forgiving and the interview view also unlocks after 6 user turns, but a TYPED interview in
+ *      the guide view has no such floor, so the job file must keep instructing the phrasing.
  *   2. the DELIVERY paragraph — it's her voice, tuned against the live TTS. */
 export function eveCentralInstruction(userName?: string, storeNames: string[] = []): string {
   return buildPersona('central', { userName, brands: storeNames });

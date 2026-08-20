@@ -6,7 +6,7 @@ they must stay in step:
 | Where | Used for |
 |---|---|
 | `src/eve/*.md` + `jobs/*.md`, composed by `buildPersona()` (`src/lib/eve-persona.ts`) | ALL spoken personas — `liveSystemInstruction`, `eveCentralInstruction` and `critiqueInstruction` (`live-voice.ts`) are thin wrappers over the three modes (interview · central · critique) |
-| `src/lib/interview.ts` → `interviewSystem` | the extraction persona — used ONLY by `/api/extract-brand` (the typed-interview endpoint `/api/interview` was deleted) |
+| `src/lib/interview.ts` → `interviewSystem` | the extraction persona — used ONLY by `/api/extract-brand` (the typed-interview endpoint `/api/interview` was deleted). **Composed from the same `src/eve/*.md` source since 2026-08-20** (`buildPersona('interview')` + the extraction method and JSON contract), so it can no longer drift from the spoken legs — it had twice. |
 
 Change one, change both. A rule that exists in only one is a rule that doesn't exist —
 that's how "bold or minimal?" survived two rounds of removal (see *History* below).
@@ -93,7 +93,7 @@ people guess* — and she probes at things people are fluent about. The noun tes
 only be answered with an adjective, it is the wrong question* — is no longer worded anywhere in the
 spoken persona; it had replaced a blacklist of banned phrasings, which failed twice because the
 model simply found synonyms ("cosy or stark?", "quiet stillness or edgy and lonely?"). That ban
-list now survives only in `interviewSystem` (the out-of-sync extraction persona flagged above).
+list is gone everywhere — `interviewSystem` dropped it on 2026-08-20 when it moved onto the shared source.
 
 **2. On TASTE she proposes; on PROCESS she presents options** (`src/eve/conversation.md`'s split of
 the old "never offer two options" rule). On *creative direction* she never polls — "Don't ask bold

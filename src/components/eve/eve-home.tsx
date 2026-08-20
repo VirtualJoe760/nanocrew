@@ -344,7 +344,11 @@ export function EveHome({
     if (buildReady) return;
     const userTurns = live.messages.filter((m) => m.role === 'user').length;
     const lastEve = [...live.messages].reverse().find((m) => m.role === 'assistant')?.text ?? '';
-    const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we|you)\s+need|got everything|let'?s build|time to build|shall we build)\b/i;
+    // src/eve/jobs/brand.md instructs the phrasing this matches ("everything she needs" + "build
+    // it"); the variants below are the same sentence said naturally. Keep the two in step — the
+    // job file lost the instruction once and only the regex's breadth was holding the gate up
+    // (BUG_AUDIT_2026-08-20 #16).
+    const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we|you)\s+need|got everything|let'?s build|time to build|(shall|should|want me to|ready to)\s+((we|i|you)\s+)?build|build it now|ready when you are)\b/i;
     if ((view === 'interview' && userTurns >= 6) || (userTurns >= 3 && cue.test(lastEve))) {
       buildHeardFrom.current = userTurns; // only turns spoken AFTER readiness can trigger the build
       setBuildReady(true);
