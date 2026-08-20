@@ -196,9 +196,12 @@ live in **[RETURNS_REFUNDS.md](RETURNS_REFUNDS.md)**.
 
 **Account creation is gated on the platform Stripe account.** It only works once Connect is
 enabled there (otherwise Stripe rejects `/v1/accounts` and `POST /api/creator/connect` surfaces a
-friendly "Payouts aren't available yet"). The go-live gate is enforced **only** when
-`connectEnabled()` is true (`STRIPE_CONNECT_ENABLED` + `STRIPE_SECRET_KEY`). Checkout itself,
-though, enforces a **hard KYC gate** (Joe, 2026-08-16): it captures 100% to the platform, persists
+friendly "Payouts aren't available yet"). **The go-live gate and checkout now enforce the SAME
+rule** (2026-08-20, BUG_AUDIT #37): `goLiveBlockReason` no longer opts out when
+`STRIPE_CONNECT_ENABLED` is unset — it requires a charges-enabled account whenever Stripe is
+configured at all, and honours the same `PLATFORM_SETTLED_SLUGS` bypass (so that var must be set in
+**both** environments). Previously the rollback path would have let creators publish shops whose
+every checkout 409s. Checkout enforces the same **hard KYC gate** (Joe, 2026-08-16): it captures 100% to the platform, persists
 `brandNetCents` + `payoutStatus='held'` for a charges-enabled creator, and **refuses with a 409**
 ("the owner is still setting up payments") for any brand whose creator lacks a `charges_enabled`
 account — the only opt-out is `PLATFORM_SETTLED_SLUGS` (comma-separated env) for platform-owned

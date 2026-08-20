@@ -2,8 +2,11 @@ import { and, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 
-// Stripe Connect — each creator gets one Express connected account; their brands' storefront
-// checkouts route money to it (a destination charge with an application fee = the platform's cut).
+// Stripe Connect — each creator gets one Express connected account. Their brands' storefront
+// checkouts capture 100% to the PLATFORM and the brand's net is TRANSFERRED later, once the return
+// window closes (separate charges + transfers — the held-marketplace pattern; see
+// docs/accounts/RETURNS_REFUNDS.md). It is NOT a destination charge with an application fee: that
+// was the earlier design, and the comment outlived it.
 // Like billing.ts we talk to Stripe over plain REST so the Expo app needs no Stripe SDK; the
 // signature-verifying webhook that syncs charges_enabled lives in platform-api.
 //
@@ -348,9 +351,22 @@ export async function refundOrder(orderId: string): Promise<{ refundId: string }
 }
 
 /** Go-live gate. Returns a reason string when the creator may NOT go live, or null when they can.
- *  Only enforced when Connect is enabled — otherwise the storefront settles to the platform as before. */
-export async function goLiveBlockReason(creatorId: string): Promise<string | null> {
-  if (!connectEnabled()) return null;
+ *
+ *  THE SAME RULE THE MONEY PATH ENFORCES (BUG_AUDIT_2026-08-20 #37). platform-api's checkout
+ *  refuses any brand without a charges-enabled account — unconditionally, because checkout is
+ *  public and reachable by slug — with one bypass: PLATFORM_SETTLED_SLUGS (platform-owned demo
+ *  stores). This gate used to opt out whenever STRIPE_CONNECT_ENABLED was unset, so the documented
+ *  rollback would have let creators publish shops whose every checkout 409s. It now mirrors
+ *  checkout exactly, including the bypass — so PLATFORM_SETTLED_SLUGS must be set in BOTH
+ *  environments. The one remaining escape is Stripe not being configured at all, where checkout
+ *  503s anyway and publishing is moot. */
+export async function goLiveBlockReason(creatorId: string, slug?: string): Promise<string | null> {
+  if (!process.env.STRIPE_SECRET_KEY) return null; // payments stack off entirely (dev)
+  const settled = (process.env.PLATFORM_SETTLED_SLUGS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (slug && settled.includes(slug)) return null;
   const status = await getConnectedAccount(creatorId);
   if (!status.stripeAccountId) return 'finish setting up payments before going live';
   if (!status.chargesEnabled) return 'your payment setup is still pending — finish it before going live';

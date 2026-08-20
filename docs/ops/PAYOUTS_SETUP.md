@@ -97,10 +97,13 @@ webhook later that calls the same refresh — nice-to-have, not required for lau
 
 ## Rollback
 
-Unsetting `STRIPE_CONNECT_ENABLED` only removes the **app-side publish gate** (`goLiveBlockReason`
-no-ops) and hides onboarding; the public checkout KYC gate stays on regardless and needs
-`PLATFORM_SETTLED_SLUGS` (or a code change) to bypass — so non-KYC brands still can't take orders.
-Already-connected (KYC-complete) brands keep the held-payout flow untouched.
+Unsetting `STRIPE_CONNECT_ENABLED` hides onboarding, but **no longer unlocks publishing**
+(2026-08-20, BUG_AUDIT #37): `goLiveBlockReason` now requires a charges-enabled account whenever
+Stripe is configured at all, matching the public checkout gate it always had to agree with — the old
+behaviour would have let creators publish shops whose every checkout 409s. Both sides bypass on
+`PLATFORM_SETTLED_SLUGS`, which must therefore be set in **both** environments (the app's and
+platform-api's). A true rollback now means unsetting `STRIPE_SECRET_KEY` (payments off entirely) or
+listing the slugs. Already-connected (KYC-complete) brands keep the held-payout flow untouched.
 
 ## LIVE — 2026-08-16 (supersedes the checklist above where they differ)
 

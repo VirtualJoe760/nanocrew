@@ -40,7 +40,7 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
     // $0 transferable — checkout settles 100% to the platform when there's no charges-enabled
     // account (payoutStatus 'none', brandNetCents 0), a silent underpayment, not an error. The gate
     // was previously only on the custom-domain flow; opening the shop is the real "start selling".
-    const payoutBlock = await goLiveBlockReason(user.id);
+    const payoutBlock = await goLiveBlockReason(user.id, slug);
     if (payoutBlock) return Response.json({ error: payoutBlock, code: 'payouts_required' }, { status: 409 });
 
     // Don't open an empty shop.

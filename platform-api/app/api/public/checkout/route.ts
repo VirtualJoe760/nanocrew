@@ -82,8 +82,9 @@ export async function POST(req: Request) {
     // to the PLATFORM (no destination charge, no application fee), compute the brand's exact net the
     // same way as before, and persist it as HELD on the order. The brand is only paid later, by the
     // release job, once the return window closes with no open claim (see docs/accounts/RETURNS_REFUNDS.md).
-    // When no charges-enabled account exists, checkout settles to the platform exactly as before
-    // (payoutStatus 'none', brandNetCents 0 — nothing to transfer). Inert until Connect is set up.
+    // When no charges-enabled account exists the sale is REFUSED by the hard gate below — the old
+    // "settle to the platform, brandNetCents 0" fallback is gone (it completed the sale with the
+    // creator earning nothing transferable). Only PLATFORM_SETTLED_SLUGS still takes that path.
     const COMMISSION_PCT = Number(process.env.PLATFORM_COMMISSION_PCT ?? 0.1);
     const COGS_FALLBACK_PCT = Number(process.env.DEFAULT_COGS_PCT ?? 0.5); // when a variant's Printful cost is unknown
     const [connected] = await db
