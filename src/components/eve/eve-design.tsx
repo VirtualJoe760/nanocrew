@@ -19,6 +19,7 @@ import { recentTranscript } from '@/lib/eve-transcript-bus';
 import { sayEve } from '@/lib/eve-say-bus';
 import { showEve } from '@/lib/eve-vision-bus';
 import type { CatalogBlank } from '@/lib/printful';
+import { blankLabel, garmentNoun } from '@/lib/garment-noun';
 import { techniqueInfo } from '@/lib/technique';
 
 // EVE'S DESIGN PIPELINE — voice-first, product-first, START to FINISH inside her tab (Joe's
@@ -352,7 +353,7 @@ export function EveDesign({
           {/* The REAL Eve glows through from the root behind this overlay — no stand-in orb. */}
           <View style={styles.avatarWindow} />
           <ThemedText style={[styles.line, { color: p.ink }]}>“{idea}”</ThemedText>
-          <ThemedText type="small" style={{ color: p.dim }}>on the {blank?.name}</ThemedText>
+          <ThemedText type="small" style={{ color: p.dim }}>on the {blankLabel(blank?.name)}</ThemedText>
           <View style={styles.actions}>
             <Pressable onPress={() => void enhanceAndGenerate()} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
               <ThemedText type="smallBold" style={{ color: BG }}>✦ Enhance it</ThemedText>
@@ -409,7 +410,7 @@ export function EveDesign({
           </View>
           <View style={styles.actions}>
             <Pressable onPress={() => void toPlacement()} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
-              <ThemedText type="smallBold" style={{ color: BG }}>Put it on the {blank?.type?.replace(/s$/, '') ?? 'product'} ›</ThemedText>
+              <ThemedText type="smallBold" style={{ color: BG }}>Put it on the {garmentNoun(blank?.name)} ›</ThemedText>
             </Pressable>
           </View>
         </>

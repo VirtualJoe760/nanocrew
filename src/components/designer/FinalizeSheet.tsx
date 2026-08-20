@@ -19,7 +19,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
 import { apiFetch } from '@/lib/api';
-import { minRetailCents } from '@/lib/pricing';
+import { minRetailCents, suggestedRetailCents } from '@/lib/pricing';
 
 // Finalize & publish (port of stephen-lawyer's FinalizeForm): pick colors, set one retail
 // price (default ≈ 2× base cost), name it → creates the live Printful sync product.
@@ -82,16 +82,24 @@ export function FinalizeSheet({
 
   useEffect(() => {
     let alive = true;
-    apiFetch(`/api/blank/${templateKey}/variants`)
-      .then((r) => r.json())
-      .then((d: { variants?: Variant[] }) => {
+    // The variants AND the print-area response — the latter names the variant every mockup was
+    // rendered on, which is the colour the creator has been looking at all along.
+    Promise.all([
+      apiFetch(`/api/blank/${templateKey}/variants`).then((r) => r.json()),
+      apiFetch(`/api/blank/${templateKey}/printareas`).then((r) => r.json()).catch(() => ({})),
+    ])
+      .then(([d, pa]: [{ variants?: Variant[] }, { variantId?: number | null }]) => {
         if (!alive || !d.variants?.length) return;
         setVariants(d.variants);
-        // Pricing standard: the floor is the highest base cost + margin; default to it.
+        // The floor is the highest base cost + margin; OPEN at a real markup above it, never at
+        // the floor itself (BUG_AUDIT_2026-08-20 #46 — accepting the default earned ~$5 a sale).
         const maxBase = Math.max(...d.variants.map((v) => v.priceCents));
         setMaxBaseCents(maxBase);
-        setPrice((minRetailCents(maxBase) / 100).toFixed(2));
-        const first = d.variants[0]?.color;
+        setPrice((suggestedRetailCents(maxBase) / 100).toFixed(2));
+        // Pre-select the PREVIEWED colour, not the alphabetically-first one — "Aqua" was the
+        // default for a charcoal brand whose design had been previewed on black (#46).
+        const previewed = pa?.variantId ? d.variants.find((v) => v.id === pa.variantId)?.color : undefined;
+        const first = previewed ?? d.variants[0]?.color;
         if (first) setSelectedColors(new Set([first]));
       })
       .catch(() => setError('Failed to load variants'))

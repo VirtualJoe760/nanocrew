@@ -341,7 +341,7 @@ export function BrandDeck({
           url={reviewRev.previewUrl}
           onClose={() => { setReviewRev(null); setCritique(false); }}
           critique={critique ? { slug: stores[page].slug, token, onSent: () => { setReviewRev(null); setCritique(false); void loadRevisions(); } } : undefined}
-          review={!critique ? { onContinueEditing: () => setCritique(true), onApprove: () => void approveRev(reviewRev), approving } : undefined}
+          review={!critique ? { onContinueEditing: () => setCritique(true), onApprove: () => void approveRev(reviewRev), onDiscard: () => { declineRev(reviewRev); setReviewRev(null); setCritique(false); }, approving } : undefined}
         />
       ) : null}
 

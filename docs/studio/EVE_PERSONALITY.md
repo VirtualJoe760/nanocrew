@@ -131,6 +131,9 @@ Statement:question and net-new — pass. Turn length ~19–26 words on probes bu
 on a brand, without asking. Probe 9 ("Keep going.") not run.
 
 **Open, not fixed:** `MODE_JOBS.central` carries design/assets/status and **no brand job**, yet a
-returning creator's new-brand interview runs on it (fingerprint match, §5's method); and nothing in
-`jobs/design.md` bounds her product suggestions to the Printful catalogue — she offered
-noise-cancelling headphones and coffee blends.
+returning creator's new-brand interview runs on it (fingerprint match, §5's method).
+
+**Closed 2026-08-20:** `jobs/design.md` now names what the catalogue actually is — printed,
+stitched and knitted apparel and accessories — and tells her to say plainly when something isn't
+makeable and offer the nearest thing that is. (She had offered noise-cancelling headphones and
+coffee blends.) Rebuild after editing any job file: `npm run eve:persona`.

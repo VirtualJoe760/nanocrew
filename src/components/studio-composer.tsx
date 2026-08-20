@@ -352,6 +352,23 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     }
   };
 
+  /** Say NO to a previewed change: the branch is discarded, production was never touched
+   *  (BUG_AUDIT_2026-08-20 #47 — before this, closing the sheet left it 'ready' forever). */
+  const discardFromReview = async (rev: Revision) => {
+    setPreviewTarget(null);
+    setReviewRev(null);
+    setCritiquePreview(false);
+    try {
+      const res = await fetch(apiUrl(`/api/creator/revisions/${rev.id}/decline`), { method: 'POST', headers });
+      if (!res.ok) throw new Error();
+      setNote('Discarded — your site is unchanged.');
+    } catch {
+      setNote('Couldn’t discard that change. Try again in a moment.');
+    } finally {
+      await loadRevisions();
+    }
+  };
+
   // EMBEDDED (inside the BrandDeck): no Modal shell, no own header/tab bar — the deck names the
   // brand and drives `tab` via initialTab. The overlays (site preview, short composer) are RN
   // Modals, which render fine from any parent. Standalone keeps the original sheet.
@@ -604,7 +621,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
           url={previewTarget}
           onClose={() => { setPreviewTarget(null); setReviewRev(null); setCritiquePreview(false); }}
           critique={critiquePreview && active ? { slug: active, token, onSent: () => { void loadRevisions(); } } : undefined}
-          review={reviewRev && !critiquePreview ? { onContinueEditing: () => setCritiquePreview(true), onApprove: () => void approveFromReview(reviewRev), approving } : undefined}
+          review={reviewRev && !critiquePreview ? { onContinueEditing: () => setCritiquePreview(true), onApprove: () => void approveFromReview(reviewRev), onDiscard: () => void discardFromReview(reviewRev), approving } : undefined}
         />
       ) : null}
       {shortComposer && active ? (

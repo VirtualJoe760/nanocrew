@@ -229,6 +229,12 @@ packs, verified by `/api/creator/billing/iap-verify`), falling back to **web Str
 **"Manage billing in Stripe ↗"** portal link. Reads `/api/creator/subscription`.
 
 ### Site Preview + Critique (`src/components/site-preview.tsx`)
+
+**Review mode has three answers (2026-08-20).** A previewed revision can be approved, kept for more
+editing, or **discarded** — the quiet third action confirms, then calls
+`/api/creator/revisions/:id/decline` (branch discarded; production was never touched). Before it,
+saying no meant closing the sheet, which left the revision `ready` forever and the deck kept
+offering it (BUG_AUDIT_2026-08-20 #47).
 In-app browser (back / reload / open-in-browser). On **web** the site loads in an `<iframe>`
 (react-native-webview has no web build); on native it's a real WebView. **Critique mode** for the
 live site: mark up the page + record a spoken critique → posts to `/api/creator/revise`
