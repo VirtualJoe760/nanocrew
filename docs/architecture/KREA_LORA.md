@@ -36,16 +36,28 @@ imagery + prompt, and our existing composite pipeline owns garment fidelity — 
 - A shot prompt reads: `<AVATAR_TRIGGER> wearing <product description>, <scene/pose from the
   diversity bank>` with the product image as reference — one avatar, any product, any scene.
 - Schema: `loras` rows are avatars (`product_id` stays NULL / may be dropped), `creator_id` for
-  personal avatars, `store_id` NULL for the house library.
+  personal avatars, `store_id` NULL for the house library. **(NOT YET MIGRATED — the shipped 0026
+  table is the pre-pivot garment shape: `store_id` NOT NULL, no `creator_id`. A migration must
+  relax `store_id` and add `creator_id`, and the "garment LoRA" comments in both schema copies,
+  `src/lib/krea.ts`, and DATABASE_PLAN.md must be rewritten to the avatar model — see
+  docs/ops/BUG_AUDIT_2026-08-20.md.)**
 - **Consent/safety:** uploads gated by an explicit "I have rights to these photos / this is me or
   a model who consented" affirmation; avatar LoRAs are private to the uploading account, never
   shared or listed. No training on third-party/celebrity photos.
 
 ## Build phases
-- **K1 — Client lib** `src/lib/krea.ts`: auth (KREA_API_KEY env), submit training job, poll to
-  completion, run LoRA inference. All jobs recorded in a new `loras` table
-  (id, storeId, productId, kreaJobId, weightsRef, status, steps, costCents) — statuses ride the
-  SAME watchdog pattern as forge jobs (stalled/retry/abandoned) via the FORGE_WATCHDOG cron.
+**STATUS 2026-08-20** — K1 shipped 2026-08-15 but is unwired; K2–K6 are not started.
+`KREA_API_KEY` is already provisioned in the dev env (`.env.local`). Blocked pieces: the schema
+avatar migration (see the NOT YET MIGRATED note above) and the FORGE_WATCHDOG cron.
+
+- **K1 — Client lib** `src/lib/krea.ts` — **SHIPPED 2026-08-15, unwired:** the lib exists
+  (`kreaTrainStyle` / `kreaGetJob` / `kreaAwaitJob` / `kreaGenerate`; auth via KREA_API_KEY env)
+  and so does the `loras` table
+  (id, storeId, productId, kreaJobId, styleId, triggerWord, status, steps, costCents, errorMsg,
+  createdAt, completedAt — both schema copies + migration 0026, RLS enabled) — but nothing imports
+  the lib or writes the table yet, and nothing polls non-terminal rows. Statuses WILL ride the
+  SAME watchdog pattern as forge jobs (stalled/retry/abandoned) once the FORGE_WATCHDOG cron ships
+  (docs/architecture/FORGE_WATCHDOG.md — not yet built).
 - **K2 — Avatar training flow:** photo upload (Cloudinary) + consent affirmation → train the
   avatar LoRA (trigger word per avatar). House base models trained once by ops the same way.
 - **K3 — Shot generation:** avatar LoRA + the product render as reference + scene/pose prompt

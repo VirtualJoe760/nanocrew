@@ -41,8 +41,10 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
   on Vercel; checkout produces `cs_live` sessions (confirmed). Real product purchases charge.
 - [ ] Turn on Stripe receipts/emails.
 - [x] **Stripe Connect — ENABLED** ✅ (2026-06-18). `STRIPE_CONNECT_ENABLED=1` on Cloud Run; Express
-  onboarding + destination-charge split live (`src/lib/connect.ts`, checkout split in platform-api).
-  Runbook: `docs/ops/PAYOUTS_SETUP.md`. Creators onboard via Account → Set up payouts.
+  onboarding + separate-charges-and-transfers **held payouts** live (`src/lib/connect.ts`, checkout
+  in platform-api); selling is KYC-gated at both publish (`409 payouts_required`) and public
+  checkout. Runbook: `docs/ops/PAYOUTS_SETUP.md` (LIVE 2026-08-16). Creators onboard via Account →
+  Set up payouts.
 
 ### Fulfilment (Printful)
 - [ ] Set `PRINTFUL_CONFIRM_ORDERS=1` (paid orders auto-confirm instead of staying drafts).
@@ -76,18 +78,19 @@ that floor — see [BILLING_CREDITS.md](../accounts/BILLING_CREDITS.md). Remaini
   (2026-06-18; submitted with build 23). Screenshots at 1284×2778 (`~/Desktop/nanocrew-appstore/`).
 - [x] **Account/data deletion path** ✅ Code done (2026-06-13) — "Delete account" in Account →
   `DELETE /api/me` wipes the creator + all cascaded data; best-effort deletes the Supabase auth
-  identity when `SUPABASE_SERVICE_ROLE_KEY` is set (set it so the auth user is removed too).
+  identity when `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`) is set (set it so the
+  auth user is removed too).
   *Note: live Printful products + active Stripe subs aren't auto-cancelled — handle out of band.*
 - [x] Legal: **Privacy Policy + Terms** ✅ live at `nanocrew-api.vercel.app/privacy` + `/terms`
   (real content, branded "Nano Crew"), linked from Account.
 
 ## 🟠 Required infrastructure / env
-Set in `.env.local` (dev) **and** the Vercel projects (app server + `platform-api`). Provisioning
+Set in `.env.local` (dev), on **Cloud Run** (app backend), and on **Vercel** (`platform-api`). Provisioning
 **silently skips** if GitHub/VPS/Vercel vars are missing — the site just never deploys.
 
 | Group | Vars |
 |---|---|
-| Data/auth | `DATABASE_URL`, `SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (auth-user deletion) |
+| Data/auth | `DATABASE_URL`, `SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`) (auth-user deletion) |
 | AI | `GOOGLE_GENAI_API_KEY` (or `GEMINI_API_KEY`), `ELEVENLABS_API_KEY` |
 | Media | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` |
 | Commerce | `PRINTFUL_API_KEY`, `PRINTFUL_STORE_ID`, `PRINTFUL_CONFIRM_ORDERS=1`, `SHIPPING_FLAT_CENTS` |
@@ -112,7 +115,10 @@ Set in `.env.local` (dev) **and** the Vercel projects (app server + `platform-ap
 - [ ] Light **and** dark mode read correctly on every tab + modal.
 
 ## 🟢 Nice-to-have before/just-after launch
-- [ ] Bundle **General Sans**; fix the brand-store cyan fallback → gold; custom tab glyphs.
+- [ ] Custom tab glyphs. *(The rest of this line is superseded by the brand rules: Jost is the
+  bundled app face and gold is banned — see `CLAUDE.md` UI preferences.)*
 - [ ] In-app platform admin screen; website `/admin`; Studio media uploads.
-- [ ] On-model galleries (#31), site Veo videos (#33), template animations (#32).
+- [x] On-model galleries (#31) ✅ (2026-08-17) — every publish auto-generates a 6-shot on-model
+  gallery (3 posed + 3 action), credit-debited with refund-on-failure (`src/app/api/publish+api.ts`).
+- [ ] Site Veo videos (#33), template animations (#32).
 - [ ] Error monitoring (Sentry) + basic analytics; uptime checks on `platform-api`.

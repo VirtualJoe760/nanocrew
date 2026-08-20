@@ -12,7 +12,7 @@ for a **single agent with modes** and for Google's documented ordering for voice
 | `user.md` | Who she works for + what she remembers | `USER.md` |
 | `conversation.md` | The loop: turn length, consent, net-new turns | `AGENTS.md` (rules half) |
 | `guardrails.md` | The narrow refusals + failure behaviour | (end of the SI, per Google) |
-| `jobs/*.md` | One per mode: brand · design · assets · critique | `AGENTS.md` (job half) |
+| `jobs/*.md` | One per job: brand · design · assets · critique · status (a mode carries one or several) | `AGENTS.md` (job half) |
 
 **No `TOOLS.md`.** In OpenClaw an agent won't call a tool that isn't listed in prose. Gemini takes
 tools **structurally** — `tools: [{ functionDeclarations: [...] }]` in the session setup — so prose
@@ -49,8 +49,9 @@ into the markdown.
 
 ## How these reach the model
 
-A composer assembles `identity + soul + user + conversation + job(mode) + guardrails` into ONE
-string, sent as `systemInstruction` in the Live API setup message. Three consequences:
+A composer assembles `identity + soul + conversation + user + job(mode)` (+ reference, for critique)
+`+ right-now + guardrails` + the closing voice line into ONE string, sent as `systemInstruction` in
+the Live API setup message. Three consequences:
 
 1. **Order matters** — persona first, guardrails last (Google's guidance).
 2. **Size matters** — Google warns against multi-page instructions; the composer enforces a budget.

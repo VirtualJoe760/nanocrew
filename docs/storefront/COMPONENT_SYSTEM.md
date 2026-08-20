@@ -13,7 +13,7 @@ from *hand-edited clones* to a system of **shared, declarative, typed pieces**.
 
 ## Current state (and why it blocks the vision)
 - **Per-brand sites are clones of ONE template.** The forge build script does
-  `cp -R templates/<template>/.` into a standalone repo ([forge-worker/worker.mjs:145-148](../../forge-worker/worker.mjs)).
+  `cp -R templates/<template>/.` into a standalone repo ([forge-worker/worker.mjs:158-161](../../forge-worker/worker.mjs)).
   Only that template's files ship — there is no shared code in a per-brand repo.
 - **5 templates duplicate** `header` / `footer` / `hero` / `button` / `product-card` /
   `platform-auth` / `site-config` / `seo` verbatim (the 2026-06-20 audit). A fix to one must be
@@ -78,6 +78,10 @@ No guessing; each component is defined once in `_shared`, not 5×.
   there is **no path magic, no `worker.mjs` change, no droplet redeploy, and zero production-coupling**
   — provisioning is untouched; only how WE maintain the layer changes (edit `_shared`, run sync,
   commit). street is excluded (its data layer diverges). See `nanocrew-templates/templates/_shared/README.md`.
+  ⚠️ Run `node scripts/sync-shared.mjs --check` at the start of any templates session — the invariant
+  has been violated before: the B9 contrast fix (2026-08-14) landed per-template without a backport to
+  `_shared`, so `--check` currently fails and a blind sync would revert B9 fleet-wide (see
+  [docs/ops/BUG_AUDIT_2026-08-20.md](../ops/BUG_AUDIT_2026-08-20.md)).
   - The heavier **tsconfig-alias + forge-vendoring** approach (below) remains the option IF we later
     want a literal single physical file + automatic vendoring; it's higher-risk (dual path resolution +
     a forge redeploy) and unnecessary for the maintenance win 5a already delivers.

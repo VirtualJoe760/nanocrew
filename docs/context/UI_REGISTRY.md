@@ -4,8 +4,9 @@ The **living catalogue** of reusable app components — what exists (reuse it) a
 (build it as a token-driven primitive, don't one-off it). The behavioral rules are in
 [`UI_RULES.md`](UI_RULES.md); tokens in [`UI_TOKENS.md`](UI_TOKENS.md).
 
-> 🟡 **Add a row here whenever you create or promote a reusable component** — auto-review flags a new
-> reusable `src/components/*` that isn't registered (a never-violate process rule).
+> 🟡 **Add a row here whenever you create or promote a reusable component** — a never-violate process
+> rule ([`NEVER_VIOLATE.md`](NEVER_VIOLATE.md) §6), checked by hand before commit (the automated sync
+> checks do not cover it).
 
 ## Primitives — reuse these
 
@@ -18,6 +19,12 @@ The **living catalogue** of reusable app components — what exists (reuse it) a
 | `DesignTile` | `design-tile.tsx` | `color`, `label`, `style` | Square brand-tinted tile w/ label (design canvas) |
 | `GarmentMockup` | `designer/garment-mockup.tsx` (+ `.web`) | `garmentUri`, `designUri`, `rect`, `blend` | Supplier-agnostic "printed" mockup (Skia native / CSS-blend web) |
 | `EveGlyph` | `eve/eve-glyph.tsx` | `size` | Eve's static neural-constellation mark (SVG, no GL) — use wherever the old NC monogram orb appeared |
+| `EveWheel` | `eve/eve-wheel.tsx` | `x`, `y`, `active`, `hasBrand`, `brandsKnown`, `talking`, `micDenied` | Eve's press-and-hold radial menu. Nine sectors evenly spaced at 40° (TALK stays at top; EDIT inserted after BRANDS — Joe, 2026-08-19); presentational only (the gesture lives in `eve-home`). Exports `spokeAt(dx,dy)` so the hit test and the highlight share one definition |
+| `Collaborators` | `collaborators.tsx` | `visible`, `onClose`, `stores` | Account → brand collaborator management (invite/revoke/remove) |
+| `withScreenFade` | `screen-fade.tsx` | `(Screen, { background \| eveThrough \| eveThrough:'clear' })` | Screen-transition HOC wrapping account/design/market/studio/reset-password; also exports `EVE_SCRIM` |
+| `SquareCarousel` | `square-carousel.tsx` | `images`, `size`, `accent`, `radius` | Square swipe carousel (brand-store, product-detail) |
+| `GradientSlider` | `gradient-slider.tsx` | `id`, `stops`, `value`, `onChange` | Gradient-track 0..1 slider (brand-review, site-editor) |
+| **Designer seam** | `designer/` — `DesignEditor`, `DesignCanvas`, `PlacementEditor`, `ContentDock`, `TemplatesDock`, `WebAssetsDock`, `ProductPicker`, `ProductDetailSheet`, `FinalizeSheet` | — | The shared design surface used by BOTH `design.tsx` and `eve/eve-design.tsx` — the parity seam [`CLAUDE.md`](../../CLAUDE.md) mandates building into first. See [`DESIGN_SURFACES.md`](../studio/DESIGN_SURFACES.md) |
 
 ## Chrome — Studio surface helpers (`nc-screen.tsx`)
 | Component / hook | Props | Notes |
@@ -28,8 +35,10 @@ The **living catalogue** of reusable app components — what exists (reuse it) a
 | `FabricBackground` | `p` | The monochrome silk/wave backdrop |
 
 Hooks: `useTheme()` (ColorScheme → `Colors`), `useColorScheme()` (pinned dark), `useStudioPalette()`
-(modal palette). Niche but reusable: `HintRow` (`hint-row.tsx`), `WebBadge` (`web-badge.tsx`),
-`SectionScreen` (`section-screen.tsx`, scaffold for unbuilt tabs).
+(modal palette), `useAuth()` (`hooks/use-auth.ts` — Supabase session + loading), `useLiveVoice()`
+(`hooks/use-live-voice.ts` — Eve's live voice session state/transcripts). Currently **UNUSED**
+(candidates for deletion — check before reviving): `HintRow` (`hint-row.tsx`), `WebBadge`
+(`web-badge.tsx`), `SectionScreen` (`section-screen.tsx`).
 
 ## Shared behaviour — not components, but reuse them anyway
 
@@ -44,7 +53,7 @@ them is part of the **UI component system** in-flight work — do it opportunist
 
 | Needed | Why (current duplication) |
 |---|---|
-| **`Sheet`** (modal wrapper) | The `<Modal>` + backdrop + SafeAreaView-inset pattern is copy-pasted in ~5 screens (feed, brand-store, product-detail, paywall, …) |
+| **`Sheet`** (modal wrapper) | The `<Modal>` + backdrop + SafeAreaView-inset pattern is copy-pasted in ~10 surfaces (design, studio-composer, collaborators, go-live, returns, purchases, site-editor, cockpit, …) |
 | **`Card`** | ~10 hardcoded card layouts (earnings, plans, orders, claims) — only `DesignTile` is shared |
 | **`Pill` / `Chip`** | Toggle/tag patterns inline (buy tag, store selector, tab switcher) |
 | **`IconButton`** | Emoji-glyph + label buttons hardcoded with white glyph + shadow (feed actions) |
@@ -57,9 +66,3 @@ The Next.js **storefront templates** have their own component system (shared blo
 that's [`../storefront/COMPONENT_SYSTEM.md`](../storefront/COMPONENT_SYSTEM.md), not this registry.
 Same philosophy (reuse blocks, don't reinvent), different stack. The forge robot is being conditioned
 toward that block system as a follow-up.
-
-| `Collaborators` | `src/components/collaborators.tsx` | `visible onClose stores` | Account → brand collaborator management (invite/revoke/remove). |
-
-- **`EveWheel`** (`src/components/eve/eve-wheel.tsx`) — Eve's press-and-hold radial menu. Eight
-  sectors on the cardinals/diagonals; presentational only (the gesture lives in `eve-home`).
-  Exports `spokeAt(dx,dy)` so the hit test and the highlight share one definition.

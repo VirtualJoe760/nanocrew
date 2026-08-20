@@ -1,11 +1,12 @@
 # Nano Crew — Remaining Features Audit
 
-**The canonical roadmap.** Status of everything, grouped by what unblocks it. As of 2026-06-16.
+**The canonical roadmap.** Status of everything, grouped by what unblocks it. As of 2026-08-20.
 Legend: 🟢 built · 🟡 partial · ⚪ not started · 🔒 blocked on an external/native dependency.
 
 For the brand build→domain→live→Connect **lifecycle** specifically, see
-[LIFECYCLE_ROADMAP.md](LIFECYCLE_ROADMAP.md) (Phases A–D code-complete, inert until Joe's config).
-The original designer-parity plan lives in [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) (delivered;
+[LIFECYCLE_ROADMAP.md](LIFECYCLE_ROADMAP.md) (Phases A–D code-complete; checkout hard-gates on
+payout setup since 2026-08-16).
+The original designer-parity plan lives in [FEATURE_ROADMAP.md](../archive/FEATURE_ROADMAP.md) (delivered;
 historical).
 
 ## Scope — what we're focused on
@@ -22,12 +23,12 @@ an explicit go.
 ## 0. Shipped this session (2026-06-15/16)
 - 🟢 **Mini-CMS (✦ Customize)** — Studio brand console → `SiteEditor` edits site copy/colors/fonts
   live with **no rebuild**: `stores.site_config` (migration 0018) via `POST /api/creator/site-config`;
-  served by `GET /api/public/stores/:slug/site-config`; read by all 4 templates' `lib/site-config.ts`.
+  served by `GET /api/public/stores/:slug/site-config`; read by all 5 templates' `lib/site-config.ts`.
   Documented in STOREFRONT_DATA_CONTRACT, PAGES, DATABASE_PLAN. The **direct** (instant, deterministic)
   edit path — distinct from the forge (open-ended redesigns).
 - 🟢 **✦ Enhance** — every mini-CMS text box has an AI rewrite-in-brand-voice button
   (`POST /api/creator/enhance-copy`, gemini-2.5-flash, free + rate-limited like `/api/enhance`).
-- 🟢 **SEO layer (all 4 templates)** — `lib/seo.ts` (canonical siteUrl + Organization JSON-LD),
+- 🟢 **SEO layer (all 5 templates)** — `lib/seo.ts` (canonical siteUrl + Organization JSON-LD),
   layout metadata + OpenGraph/Twitter, product-page `generateMetadata` + Product JSON-LD (offers),
   blog-post `generateMetadata` + BlogPosting JSON-LD, `app/sitemap.ts`, `app/robots.ts`. See
   STOREFRONT_ENGINE "SEO".
@@ -99,9 +100,10 @@ These three all unlock with **one** EAS dev build. The server sides are already 
   config: create the App Store Connect products (`com.nanocrew.credits.{500,1500,5000}` +
   `com.nanocrew.plan.{starter,pro,advanced}`) + an IAP API key, then set
   `APPLE_IAP_KEY_ID / ISSUER_ID / PRIVATE_KEY / APPLE_BUNDLE_ID` on Cloud Run. (Task #39)
-- 🔒 **Push notifications** — `device_tokens` table, registration endpoint, and `notify.ts` delivery
-  are live (revision "ready to review" fires once a token exists). Needs: `expo-notifications` + dev
-  build + mint the token (`src/lib/push.ts`, `PUSH_ENABLED`). (Task #35)
+- 🟢 **Push notifications — shipped** — `expo-notifications` is in the binary and `src/lib/push.ts`
+  mints + registers the token (`PUSH_ENABLED = true`); `device_tokens`, `/api/creator/push-token`,
+  and `notify.ts` delivery are live (revision "ready to review" fires once a token exists). Remote
+  tokens mint only in a dev/production build (not Expo Go). (Task #35)
 - 🟢 **Critique screenshots** — done, then upgraded (2026-06-20). The live-site editor is Eve-driven:
   talk via Gemini Live, tap the squiggle to mark a spot (circle/arrow/any shape; marks anchor to the
   page in document coords), type via the keyboard icon, then Submit. **The primary proof fed to Claude
@@ -116,7 +118,9 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 ## 2. Blocked on your account / config (no code)
 - ⚪ **Stripe go-live** — create 3 recurring Prices (`STRIPE_PRICE_{STARTER,PRO,ADVANCED}`); add the
   billing webhook → `nanocrew-api.vercel.app/api/public/billing-webhook` (`STRIPE_BILLING_WEBHOOK_SECRET`);
-  swap test → live keys at launch. (See PRODUCTION_CHECKLIST.)
+  swap test → live keys at launch — note [../ops/PAYOUTS_SETUP.md](../ops/PAYOUTS_SETUP.md) records
+  `STRIPE_SECRET_KEY` as already live; confirm with Joe and strike the key-swap sub-item.
+  (See PRODUCTION_CHECKLIST.)
 - 🟡 **Auto first-drop** — `generateFirstDrop()` is wired into store creation but gated by
   `AUTO_FIRST_DROP=1` (real Gemini + Printful spend). Validate on one brand, then enable. (Task #26)
   **Resolved:** `first-drop.ts` now authenticates server-to-server via `INTERNAL_API_KEY` +
@@ -131,33 +135,42 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 
 ## 4. Unbuilt product features
 - 🟢 **Product-page model gallery** — done (Task #31): `products.model_shots` + `/api/creator/model-shots`
-  (Nano Banana, credit-gated) + Sell-tab trigger; surfaced on the storefront product page (all 4 templates)
+  (Nano Banana, credit-gated) + Sell-tab trigger; surfaced on the storefront product page (all 5 templates)
   via the public catalog. Generating spends real AI credits — validate on one product.
 - 🟢 **Veo on-model videos on websites** — done (Task #33): `products.model_videos` +
   `/api/creator/model-videos` (Veo, ownership + rate-limited + 400-credit-gated, appends up to 3
   angles) + Studio Sell-tab "film" trigger. Surfaced on the storefront product page (on-model film
-  gallery) and the homepage **featured video wall** (new `VideoGallery` block, all 4 templates) via
-  the public `/videos` endpoint. Generating spends real Veo credits — validate on one product.
+  gallery) and the homepage **featured video wall** (new `VideoGallery` block, 4 of the 5 templates
+  — street lacks it, see the parity item below) via the public `/videos` endpoint. Generating
+  spends real Veo credits — validate on one product.
 - 🟢 **Template polish** — done (Task #32): dependency-free premium-motion layer (smooth scroll,
-  transitions, image hover-zoom, page-entrance fade) in all 4 templates' `globals.css`.
+  transitions, image hover-zoom, page-entrance fade) in 4 of the 5 templates' `globals.css`
+  (street lacks it, see the parity item below).
 - 🟢 **In-app platform admin** — done: Account → "Platform admin" (admin emails only) opens a
   metrics + all-stores overview. (Task #25)
 - 🟢 **Creator /admin on the brand websites** — done (Task #24): the brand-site `/admin` now has the
   full surface — Nano Crew sign-in (magic-link/password), revenue/orders/views, recent orders +
   tracking, the **Journal** composer, and a new **Edit your site** panel (`components/blocks/site-editor.tsx`,
-  synced to all 4 templates) that requests changes → reviews the preview → publishes, using new
+  synced to 4 of the 5 templates — street lacks it, see the parity item below) that requests
+  changes → reviews the preview → publishes, using new
   CORS'd platform-api routes `POST /api/creator/revise`, `GET /api/creator/revisions`,
   `POST /api/creator/revisions/:id/approve`. Approve merges the branch via **GitHub's merge API**
   (serverless — no SSH), so platform-api needs `GITHUB_OWNER` + `GITHUB_TOKEN` set on its Vercel project.
 - 🟡 **Studio media uploads** — Cloudinary image upload from the composer (post cover images, etc.)
   is partial. (Task #23)
+- ⚪ **street template parity** — the 5th template (`street`, a live provisioning target via
+  `designStyle: 'street'`) has the SEO layer, site-config, and model shots, but lacks the `/admin`
+  **Edit your site** panel, the video-gallery/hero-video blocks, and the premium-motion layer the
+  other four ship — bring it to parity or record the exception. (See
+  [../ops/BUG_AUDIT_2026-08-20.md](../ops/BUG_AUDIT_2026-08-20.md).)
 
 ## 5. Brand / polish cleanup (small)
-- ⚪ **General Sans font** — the brand typeface isn't bundled (system sans stand-in). Needs the font
-  files + `expo-font`.
-- 🟢 **Brand-store accent fallback** — fixed: falls back to gold `#c9a86a` (was cyan).
-- ⚪ **Custom tab-bar glyphs** — tabs use SF Symbols + gold tint; true NC-monogram glyphs would need a
-  custom JS tab bar.
+- 🟢 **Brand typeface** — Jost, self-hosted (`assets/fonts/`) in both the app and the site. The
+  earlier General Sans plan is superseded.
+- 🟢 **Brand-store accent fallback** — superseded by the cool-monochrome rebrand: app chrome uses
+  the platinum accent (`src/constants/theme.ts`); brand storefronts keep their own colours.
+- ⚪ **Custom tab-bar glyphs** — tabs use Ionicons + the platinum tint on a custom JS bar
+  (`src/components/app-tabs.tsx`); true NC-monogram glyphs would still need custom artwork.
 - 🟢 **Designer endpoints auth** — resolved (verified 2026-06-13): `/api/generate`, `/api/designs`,
   `/api/compositions`, `/api/publish` (+ their `[id]` routes) all call `getUserFromRequest` (401 on no
   user) and enforce per-creator ownership via `assertCatalogueOwner` / `assertCompositionOwner` /
@@ -171,12 +184,16 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 ## 7. Build quality — remaining (the sighted forge)
 The first two of three fixes shipped (Eve authors the brief; Master `CLAUDE.md` conditions the
 robot — see [../studio/FORGE_AI.md](../studio/FORGE_AI.md) and
-[../storefront/BUILD_QUALITY.md](../storefront/BUILD_QUALITY.md)). Still open:
+[../storefront/BUILD_QUALITY.md](../storefront/BUILD_QUALITY.md)). Status:
 - ⚪ **Give the forge robot eyes + a self-critique loop on the provision path** — screenshot the
   built site, judge it against the brief + quality checklist, iterate before finishing. (The
   annotated-screenshot rig already used for revisions is the foundation.)
-- ⚪ **A real quality gate** — stop swallowing the robot's exit code (`|| true`) and gate the
-  `ready`-flip on more than "does it compile," so a weak build doesn't silently ship.
+- 🟢 **Fail loudly on the robot's exit code** — shipped 2026-08-19: the `|| true` swallow is gone on
+  both provision and revise (`CLAUDE_OK`/`CLAUDE_FAILED` branches in `forge-worker/worker.mjs`); a
+  robot or build failure reverts the store to `draft`, fails the revision row, and notifies the
+  creator — never a false `ready`.
+- ⚪ **A real quality gate** — judge the built site against the brief + quality checklist, not just
+  "does it compile," so a weak (but compiling) build doesn't silently ship.
 
 
 ## Web account surface (2026-08-16)

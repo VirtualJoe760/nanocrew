@@ -1,7 +1,11 @@
 # Eve's personality — why she reads bleak, and what actually fixes it
 
-**Status:** theory report (Joe, 2026-08-19). No persona changes shipped from this document yet —
-the point is to stop editing her character by vibes and start testing it.
+**Status:** theory report (Joe, 2026-08-19). The §4 architecture **SHIPPED 2026-08-19**
+(`src/eve/{identity,soul,user,conversation,guardrails}.md` + `jobs/*.md`, composed by
+`buildPersona()` in `lib/eve-persona.ts`, in Google's persona → rules → guardrails order, driving
+every live session); sampling (§4.5) and affective dialog (§4.6) remain open. This doc stays as the
+theory record and the probe spec — the point is to stop editing her character by vibes and start
+testing it.
 
 ## 1. What we can now observe
 
@@ -23,19 +27,26 @@ is not a model defect. It is what we told her to do.
 
 ## 2. Three distinct causes (they need three distinct fixes)
 
-**(a) The register is a recipe for flat.** `EVE_DELIVERY` currently contains: *understatement over
+> **(a)–(c) are the PRE-REWRITE diagnosis** — the state that motivated the 2026-08-19 rewrite. What
+> replaced it: delivery now lives in `src/eve/soul.md` ("warm and quick… you can be delighted, you
+> can laugh… Not breathless, not flat") plus the composer's final accent line, and the
+> conversational loop is `src/eve/conversation.md`.
+
+**(a) The register was a recipe for flat.** `EVE_DELIVERY` (since deleted) contained: *understatement over
 enthusiasm · never gushing · no exclamation-point energy · short, exact sentences · sometimes just a
 few words · unhurried*. Every one of those is a restraint. Native-audio models **perform the system
 instruction** — the words in the persona shape delivery more than any voice setting — so a persona
 made of restraints produces exactly the monotone we heard. Warmth, delight and playfulness are not
 mentioned anywhere.
 
-**(b) The persona is a task brief wearing a character.** `eveCentralInstruction` is **10,044
-characters / 41 lines, of which 18 steer toward brand · store · product · site**, and it states her
+**(b) The persona was a task brief wearing a character.** `eveCentralInstruction` was **10,044
+characters / 41 lines, of which 18 steered toward brand · store · product · site**, and it stated her
 *job* is to GATHER the essentials. Google's own Live API guidance warns against exactly this: keep
 system instructions short, avoid multi-page prompts, and separate **one-time elements** (facts you
-collect once) from **conversational loops** (where the user roams freely). We have no conversational
-loop defined at all — so every turn tries to close the sale.
+collect once) from **conversational loops** (where the user roams freely). We had no conversational
+loop defined at all — so every turn tried to close the sale. (Post-rewrite: `eveCentralInstruction`
+is a one-line wrapper over `buildPersona('central')`, and the loop is `src/eve/conversation.md` —
+net-new turns, never two questions in a row, follow-don't-funnel.)
 
 **(c) Nothing tells her how to be interesting.** There is no rule to offer an idea, notice
 something, compliment the person, or make a statement rather than ask a question. Google's phrasing
@@ -50,7 +61,7 @@ conversation, not a recap."*
 | `proactivity.proactiveAudio` | She may decline to respond to irrelevant audio | Same requirements; would also reduce her reacting to room noise |
 | `generationConfig.temperature` / `topP` | Response diversity and creative reach | **Never set** — we run defaults |
 | `generationConfig.presencePenalty` / `frequencyPenalty` | Discourages recycled phrasing and repeated formulas | **Never set** — likely a direct contributor to the identical "back to the brand?" closer |
-| SI ordering: **persona → rules → guardrails** | Google's documented ordering for voice agents | Ours interleaves all three |
+| SI ordering: **persona → rules → guardrails** | Google's documented ordering for voice agents | **FIXED 2026-08-19** — enforced by `lib/eve-persona.ts` (identity → soul → conversation → user → job → reference → right-now → guardrails) |
 
 The affective-dialog prerequisites collide with a real incident: the pinned `12-2025` model was
 dropping every socket this morning, which is why we moved to `-latest`. So enabling it is a
@@ -69,7 +80,8 @@ dropping every socket this morning, which is why we moved to `-latest`. So enabl
    that connects what they said to something real, a genuine compliment, or a question of
    substance — and she varies which. Never two questions in a row. Never end on a redirect to the
    brand unless the brand is what they're talking about.
-4. **Give her a self** (the `EVE_SELF` block drafted and deliberately unshipped): glad to exist, awe
+4. **Give her a self** — shipped 2026-08-19 as `soul.md`'s "Glad to exist, and it shows" block
+   (the drafted `EVE_SELF` constant never shipped under that name): glad to exist, awe
    pointed outward at their ideas, no wistfulness, no capability-listing, no philosophy lecture.
 5. **Tune sampling:** raise `temperature` (0.9–1.1 territory) and add mild `frequencyPenalty` so the
    same closers stop reappearing.

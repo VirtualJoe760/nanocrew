@@ -10,16 +10,15 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 
 ---
 
-## At a glance — the four deployable units (+ two sibling repos)
+## At a glance — the five deployable units (one shared Supabase Postgres)
 
 | Unit | Where it lives | Framework | Runtime / host | Talks to |
 |---|---|---|---|---|
 | **Mobile app** (this repo) | `/` (Expo) | Expo SDK 54 · React Native 0.81 · React 19 | iOS/Android (Hermes) + web; **server routes (`**+api.ts`) on Google Cloud Run** (persistent Node via `expo serve`) | Postgres, Gemini, fal, Stripe, Printful, Cloudinary, Apple |
 | **platform-api** | `platform-api/` | **Next.js 16** | Vercel (`nanocrew-api.vercel.app`) | Postgres, **Stripe**, Printful webhooks |
-| **nanocrew-site** | `nanocrew-site/` | **Next.js 15** | Vercel | Postgres (read), shared POS |
-| **forge-worker** | `forge-worker/` | Node ESM + **systemd** | **DigitalOcean droplet** (`ssh nanocrew-forge`) | Postgres queue, **headless `claude` CLI** |
+| **nanocrew-site** | `nanocrew-site/` | **Next.js 15** | Vercel (`nanocrew.app`) | platform-api over HTTP (**no DB credential**); the app's Cloud Run backend for Stripe Connect only |
 | **nanocrew-templates** | sibling repo | Next.js storefronts ×5 | Vercel (per brand) | platform-api (thin client) |
-| **forge** (the robot) | DO droplet | headless **Anthropic Claude** CLI | same droplet | GitHub, Vercel previews |
+| **forge** | `forge-worker/` (Node ESM + **systemd**) driving the headless **Anthropic Claude** CLI | — | **DigitalOcean droplet** (`ssh nanocrew-forge`) | Postgres queue, GitHub, Vercel previews |
 
 **One shared Supabase Postgres** underpins all of them. `platform-api/db/schema.ts` is a hand-kept
 **copy** of `src/db/schema.ts` — re-sync on every migration.
@@ -72,7 +71,6 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 |---|---|---|
 | `three` | ^0.184.0 | 3D scene |
 | `@react-three/fiber` | ^9.6.1 | React renderer for three |
-| `@react-three/drei` | ^10.7.7 | R3F helpers |
 | `expo-gl` | ~16.0.10 | WebGL context on native |
 | `react-native-nitro-modules` | ^0.35.9 | Native module bridge (Skia/audio deps) |
 | `@types/three` | ^0.184.1 | — |
@@ -106,11 +104,11 @@ See also: [ARCHITECTURE.md](ARCHITECTURE.md) (how the units fit together), [DATA
 |---|---|---|
 | **Supabase Postgres** | — | Single multi-tenant database (the `creators` identity = Supabase uid). **RLS deny-all** on every public table; servers use the service key. |
 | `drizzle-orm` | ^0.45.2 | Typed query builder + schema (`src/db/schema.ts`) |
-| `drizzle-kit` | ^0.31.10 | Migrations (`db:generate` / `db:migrate`) + `db:studio`. **25 migrations** to date. |
+| `drizzle-kit` | ^0.31.10 | Migrations (`db:generate` / `db:migrate`) + `db:studio` (count them in `src/db/migrations/` — 29 as of 2026-08-20). |
 | `postgres` (postgres-js) | ^3.4.9 | Driver. **Constraint:** authed routes must not `fetch()` before the first DB query (persistent Node/postgres-js). Migrations use the **session pooler** (`DATABASE_URL_SESSION`), runtime the transaction pooler. |
 
-**Auth model:** Supabase Auth issues JWTs; the app verifies locally and platform-api verifies remotely
-(`SUPABASE_JWKS`). Store ownership + `store_collaborators` enforced in code via `src/lib/tenant.ts`.
+**Auth model:** Supabase Auth issues JWTs; the app verifies locally against `SUPABASE_JWKS`, and
+platform-api verifies remotely via `GET /auth/v1/user`. Store ownership + `store_collaborators` enforced in code via `src/lib/tenant.ts`.
 See [accounts/AUTH_IDENTITY.md](../accounts/AUTH_IDENTITY.md).
 
 ---
@@ -127,7 +125,7 @@ robot** (site building).
 | `gemini-2.5-flash` | Interview, ✦ Enhance copy, plans, content safety | `interview.ts`, `content-safety.ts`, `adapt.ts` |
 | `gemini-2.5-pro` | **Authoring the forge build brief** (`authorBrandBrief`) | `provision.ts` |
 | `gemini-2.5-flash-preview-tts` | Eve TTS (`/api/say`) | `src/app/api/say+api.ts` (`TTS_MODEL`) |
-| `gemini-2.5-flash-native-audio-preview-12-2025` | **Gemini Live** real-time voice (push-to-talk Eve) | `src/app/api/voice-live-token+api.ts` (`LIVE_MODEL`) + `live-voice.ts` |
+| `gemini-2.5-flash-native-audio-latest` | **Gemini Live** real-time voice (push-to-talk Eve). Pinned to `-latest` deliberately — dated preview ids rot (ws 1006 right after setup while still listed) | `src/app/api/voice-live-token+api.ts` (`LIVE_MODEL`) + `live-voice.ts` |
 | `gemini-2.0-flash` | Misc lightweight text | — |
 
 > The Gemini **Live** session forces the `@google/genai` **web build** (global `WebSocket`) on both
@@ -144,7 +142,14 @@ Creator-pickable tiers in a `VIDEO_MODELS` registry (variable credit cost):
 
 Direct Veo (`veo.ts`) also references `veo-3.0-fast-generate-001`.
 
-### ElevenLabs — `eleven_turbo_v2_5` TTS (alternate Eve voice path, `api.elevenlabs.io`).
+### Krea — avatar-LoRA training + inference (`api.krea.ai`, `src/lib/krea.ts`)
+LoRA training + generation for on-model shots (avatar LoRAs — persistent virtual models; never
+garment LoRAs). Prepaid USD API balance, `KREA_API_KEY`, $0.003/step training. Plan:
+[KREA_LORA.md](KREA_LORA.md) — the client + `loras` table shipped, but no endpoint/UI is wired yet.
+
+### ElevenLabs — `eleven_turbo_v2_5` TTS (`api.elevenlabs.io`)
+Used for voiceover ads + the AI-consultant voice roster (`voiceover-ad.ts`, `voices.ts`). Eve's own
+voice is Gemini (Aoede via `/api/say` + Gemini Live).
 
 ### Anthropic Claude — the **forge robot**
 Headless `claude` CLI on the DigitalOcean droplet builds/revises brand sites on working branches.
@@ -229,7 +234,7 @@ loop" in [`../context/CODE_STANDARDS.md`](../context/CODE_STANDARDS.md).)
 
 | | Status |
 |---|---|
-| **iOS** | iPhone-only (`supportsTablet: false`), bundle `com.nanocrew.app`, build 37. Live on TestFlight; submitted to App Store. Capabilities: IAP, Push, Sign in with Apple. |
+| **iOS** | iPhone-only (`supportsTablet: false`), bundle `com.nanocrew.app`, build 56 (current `buildNumber`: see `app.json`). Live on TestFlight; submitted to App Store. Capabilities: IAP, Push, Sign in with Apple. |
 | **Android** | `com.nanocrew.app`, versionCode 6, adaptive icon. `.aab` built; Google Play internal testing. |
 | **Web** | `react-native-web`, `web.output: "server"` (used for dev preview + nanocrew.app surfaces). |
 

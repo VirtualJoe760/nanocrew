@@ -65,7 +65,7 @@ function liveSystemInstruction(userName?: string, firstTime?: boolean): string {
 /** Eve's CENTRAL persona — the home-state session for a RETURNING creator (has stores). One merged
  *  instruction, ordered by how often it's used: CONVERSATION FIRST (she's a collaborator they think
  *  out loud with — this is the default mode, not a fallback), then task awareness (the intent router
- *  transitions surfaces; docs/studio/VENUS_CENTRAL.md §3), then the brand-interview module CARRIED
+ *  transitions surfaces; docs/archive/VENUS_CENTRAL.md §3), then the brand-interview module CARRIED
  *  VERBATIM from liveSystemInstruction — which she now ENTERS for a new brand rather than being.
  *
  *  Two things to preserve when editing:

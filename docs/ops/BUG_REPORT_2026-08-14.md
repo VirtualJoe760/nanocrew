@@ -1,6 +1,6 @@
 # Bug report — full-app test pass, 2026-08-14
 
-Companion to [TEST_PLAN_2026-08-14.md](TEST_PLAN_2026-08-14.md). Env: iPhone 17 Pro sim (iOS 26.3),
+Companion to [TEST_PLAN_2026-08-14.md](../archive/TEST_PLAN_2026-08-14.md). Env: iPhone 17 Pro sim (iOS 26.3),
 Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `claudetest@nanocrew.dev` (comp).
 
 | ID | Sev | Area | Status | Summary |
@@ -48,8 +48,9 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 - **Fix (shipped + verified):** [store+api.ts](../../src/app/api/store+api.ts) prompt now scopes the palette to THE MARK, mandates the magenta backdrop "even if the brand palette is dark", name EXACTLY ONCE, no frame. Regenerated night-circuit's logo with the new prompt: clean single wordmark on true magenta → keyed to a 735×163 transparent PNG → uploaded → stores.logo_url updated.
 - **Residuals for the report:** glyph precision (image models typeset imperfectly — recommend composing wordmark-style logos deterministically, as the OG card already does with Cloudinary text); add a cheap post-generation check (name-once + magenta-border) with one retry.
 
-### B8 · Med · Logo changes don't propagate to the deployed site
+### B8 · Med · FIXED (street pending) · Logo changes don't propagate to the deployed site
 - After updating `stores.logo_url`, store-night-circuit.vercel.app still serves the old Cloudinary asset — the logo is baked at forge build time, not read from the store API at runtime. A creator updating their logo sees no change on their site until some unrelated revision rebuilds it. Either read the logo live from the public store payload or trigger a site revision on logo change.
+- **Fixed for elegant/minimal/extravagant/bold**: `getSiteLogo()` (templates `_shared/lib/api.ts`) live-reads the platform logo from `/site-assets` (served from `stores.logo_url`) and prefers it over the baked `brand.json` value — no rebuild. **Street still bakes `brand.logoUrl`** — decide whether that is an accepted exception.
 
 ### B6 · Med · FIXED · Product picker collapses to a single column on 375pt screens
 - **Evidence:** category + search grids rendered one card per row with a dead right half (web mobile viewport; would reproduce natively on iPhone SE/mini-class).
@@ -60,7 +61,7 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 - The "No microphone access" toast rendered on top of BrandReview's "Create my store" button; the CTA was untappable until the toast was dismissed. Anchor toasts above the CTA zone (or make them non-blocking / auto-dismiss).
 
 ### Cosmetic
-- Product picker breadcrumb renders a trailing "›" after the last crumb.
+- FIXED — Product picker breadcrumb rendered a trailing "›" after the last crumb; the separator now only renders on non-active crumbs ([ProductPicker.tsx](../../src/components/designer/ProductPicker.tsx)).
 
 ### B9 · High · Storefront CTAs are invisible for dark-palette brands
 - **Evidence:** night-circuit's hero "Shop the collection": computed `background: rgb(0,0,0)`, `color: rgb(18,18,18)` — ~1.02:1 contrast. Mechanism: the template button is `bg-primary text-background`, which assumes background contrasts with primary; every dark brand breaks it.
@@ -78,8 +79,9 @@ Debug build @ main, Metro :8081 + `.env.local` (prod Supabase DB), account `clau
 ### B12 · Med · Composition accepts invalid placements; publish fails late with a raw Printful 502
 - `POST /api/compositions` accepted `placement:"front"` for blank 1482 (All-Over Print tee, whose allowed keys are `front_dtfabric`/`back_dtfabric`/…); the error only surfaced at publish as `502 Printful 400: Incorrect file type: front` passthrough. Validate the placement against the blank's allowed set at composition time and return a 400 with the allowed keys.
 
-### B13 · Med · Publish allows image-less products → blank cards on the storefront
+### B13 · Med · FIXED · Publish allows image-less products → blank cards on the storefront
 - A composition created without its on-garment preview (API path skipping the UI's composite/mockup step) publishes successfully and renders as an empty dark card with just the name on the site's /shop. Publish should either refuse (409 "composition has no preview") or auto-render the preview server-side before listing.
+- **Fixed 2026-08-18** ([publish+api.ts](../../src/app/api/publish+api.ts)): `products.imageUrl` is never null — the design art carries the card instantly as a fallback, and the real garment mockup is rendered right after the response and swapped in (which also unlocks the auto model shots).
 
 ## Final pass log (browser-testable scope complete)
 - **Site revision console** (brand deck → edit): all four tabs render with real data — Site Options mini-CMS edit verified LIVE (headline change on the deployed site in ~20s, no rebuild); Sell shows video-ad tiers + credit costs; Settings shows real margins (Circuit Owl Tee $19.60 · 45%), views, returns queue, go-live gate (not pressed, per Joe), danger zone.

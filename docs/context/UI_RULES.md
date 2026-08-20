@@ -90,9 +90,9 @@ differently from a CTA — don't unify them.
 ## Modals / sheets
 The recurring pattern is a `<Modal>` over a `modalBackdrop` with a `sheet`, and a manual SafeAreaView
 inset (`Math.max(insets.top, Spacing.three)`) because insets don't resolve inside `Modal`. This is
-copy-pasted across ~5 screens — a shared `Sheet` wrapper is a **missing primitive** (see the registry).
+copy-pasted across ~10 surfaces — a shared `Sheet` wrapper is a **missing primitive** (see the registry).
 Until it exists, match the existing pattern rather than inventing a new modal shape.
 
 ## Adopt opportunistically (don't mass-rewrite)
-You don't have to convert all 220 Pressables at once. When you touch a screen for any reason, swap its
+You don't have to convert all ~270 Pressables at once. When you touch a screen for any reason, swap its
 bare buttons/inputs for the primitives as you go. Pair this with bug-fix work.

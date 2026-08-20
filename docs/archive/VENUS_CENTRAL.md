@@ -1,3 +1,8 @@
+> **ARCHIVED 2026-08-20.** Superseded planning doc: the pull-down overlay it designs was retired by
+> THE PIVOT and its phases shipped in reshaped form. Current architecture:
+> [`docs/studio/EVE_CONTROL.md`](../studio/EVE_CONTROL.md) · session mechanics:
+> [`docs/studio/GEMINI_LIVE.md`](../studio/GEMINI_LIVE.md).
+
 # VENUS CENTRAL — the game plan (2026-07-05)
 
 > **SUPERSEDED (2026-07/08).** This plan shipped, then was overtaken: the pull-down overlay

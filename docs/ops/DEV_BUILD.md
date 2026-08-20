@@ -22,26 +22,18 @@ npx eas build:configure    # links the project (creates the EAS project id)
 ```bash
 npx expo install expo-notifications react-native-iap react-native-view-shot
 ```
-Add the notifications plugin to `app.json` → `expo.plugins`:
-```json
-["expo-notifications", { "icon": "./assets/images/notification-icon.png" }]
-```
+The notifications plugin is in `app.json` → `expo.plugins` as a bare `"expo-notifications"` entry —
+no icon config (Android falls back to the default notification icon; add
+`["expo-notifications", { "icon": … }]` later if we ship a dedicated notification glyph).
 `react-native-iap` and `react-native-view-shot` are autolinked (no plugin entry needed).
 
-## 2. Push notifications — wire the token
-The server side is done (`device_tokens`, `/api/creator/push-token`, `notify.ts` delivery). In
-`src/lib/push.ts`: set `PUSH_ENABLED = true` and fill `registerForPush()`:
-```ts
-import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
-const { status } = await Notifications.requestPermissionsAsync();
-if (status !== 'granted') return;
-const { data: token } = await Notifications.getExpoPushTokenAsync();   // needs the dev build
-await registerPushToken(token, authToken, Platform.OS);
-```
-Call `registerForPush(session.access_token)` after sign-in (e.g. in `account.tsx`/`use-auth`).
-**APNs:** in the Apple Developer portal enable Push Notifications for `com.nanocrew.app`; EAS
-manages the key during `eas build`.
+## 2. Push notifications — WIRED
+The server side is done (`device_tokens`, `/api/creator/push-token`, `notify.ts` delivery) and so is
+the client: `src/lib/push.ts` ships `PUSH_ENABLED = true` and a full `registerForPush()` (permission
+request + `getExpoPushTokenAsync` with the EAS `projectId`), and `use-auth` calls
+`registerForPush(session.access_token)` on every session (best-effort; no-op on web / Expo Go).
+**APNs:** Push Notifications is enabled for `com.nanocrew.app`; EAS manages the key during
+`eas build`.
 
 ## 3. Apple IAP — StoreKit 2 (shipped)
 **`react-native-iap` (v15) is now installed** and the IAP path is wired end-to-end on **StoreKit 2**:
@@ -93,18 +85,22 @@ routes**, so those must be DEPLOYED and the build pointed at them — otherwise 
 
 ### 0. One-time prerequisites (Joe)
 - **Apple Developer Program** ($99/yr) + an App Store Connect app record for `com.nanocrew.app`.
-- `eas init` to link the repo to an Expo project (writes `extra.eas.projectId`). Not linked yet.
+- `eas init` to link the repo to an Expo project — ✅ done (`extra.eas.projectId` is in `app.json`;
+  builds/submits ship routinely through it).
 - Apple Sign In enabled in Supabase Auth (the button exists).
 
 ### 1. Deploy the app's server routes → get a production API URL
-The `src/app/**+api.ts` routes only run on Metro in dev. Deploy them to EAS Hosting:
+The `src/app/**+api.ts` routes only run on Metro in dev. In production they run on **Google Cloud
+Run** (persistent Node via `expo serve` — **NOT** EAS Hosting; a persistent server is required for
+the postgres-js pool):
 ```bash
-npx eas deploy            # publishes the Expo Router server output → a https://…expo.app URL
+./scripts/deploy-cloudrun.sh nanocrew-api us-west1 backend   # Cloud Build from source; no local Docker
 ```
 Then set that URL as **`EXPO_PUBLIC_API_URL`** (an EAS env var / `.env`), so `apiUrl()` (src/lib/api.ts)
-targets it in the build instead of the Metro host. The server also needs all the runtime env the app
-uses (SUPABASE_*, STRIPE_*, PRINTFUL_*, GOOGLE_GENAI_API_KEY, FAL_KEY, VERCEL_TOKEN, DOMAIN_CONTACT_*,
-GITHUB_*, PLATFORM_API_BASE, INTERNAL_API_KEY) configured on EAS Hosting.
+targets it in the build instead of the Metro host — the service answers at `api.nanocrew.app`. The
+server also needs all the runtime env the app uses (SUPABASE_*, STRIPE_*, PRINTFUL_*,
+GOOGLE_GENAI_API_KEY, FAL_KEY, VERCEL_TOKEN, DOMAIN_CONTACT_*, GITHUB_*, PLATFORM_API_BASE,
+INTERNAL_API_KEY) — the deploy script uploads them from `.env.local` as runtime env vars.
 
 ### 2. Build
 ```bash

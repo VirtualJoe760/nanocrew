@@ -32,17 +32,19 @@ revise) and [`docs/storefront/STOREFRONT_DATA_CONTRACT.md`](../storefront/STOREF
 
 Entry point is the **Eve tab** (`src/app/studio.tsx`), whose default surface is **EveHome**
 (`src/components/eve/eve-home.tsx`) — Eve's voice surface over the persistent root avatar.
-First-brand creators see a **"🎙 Build your brand"** CTA — tapping it requests the mic (the only
-place we prompt; a typed fallback covers denial) and starts the **interview** view. Returning
-creators land in Eve's open-mic **guide** (greeting + digest + voice-intent routing via
-`/api/eve/route`); their brands live behind a swipe-down **BrandDeck**
-(`src/components/eve/brand-deck.tsx`), and "create another brand" routes into the same interview.
+Eve is **asleep by default** — *"Tap to talk to Eve; she stays quiet until you do."* Tapping
+anywhere starts her (the only place we prompt for the mic; a typed fallback covers denial), and a
+first-brand creator (`firstTime: !hasStore`) lands directly in the **interview** persona. Returning
+creators get the same quiet guide — tapping to talk wakes her (greeting + digest + voice-intent
+routing via `/api/eve/route`); their brands live behind the wheel's **BRANDS** spoke (**BrandDeck**,
+`src/components/eve/brand-deck.tsx`), and press-and-hold opens the radial wheel (see
+[EVE_CONTROL.md](EVE_CONTROL.md)), whose **NEW BRAND** spoke starts a fresh interview.
 
 **Voice is open-mic + VAD:** once started, Eve listens continuously, replies, and the creator
 interrupts by simply talking (`use-live-voice.ts`; her queued audio is flushed on interruption) —
 there is no push-to-talk. The session runs only while Eve's surface is on screen and the app is
-foregrounded; the manual controls are a prominent **Pause/Resume pill** and a **keyboard mode**
-(which mutes the mic).
+foregrounded; the manual controls are the **header state pill** / tap-anywhere (the talk toggle)
+and the wheel — **keyboard mode** (which mutes the mic) is the deliberate typed path.
 
 **Eve** is the brand consultant. She runs as a realtime **Gemini Live** speech-to-speech session
 (`src/lib/live-voice.ts` + `hooks/use-live-voice.ts`; persona prompt in `live-voice.ts`), open-mic with
@@ -53,11 +55,13 @@ idea, logo direction, palette, design temperament, **how the site should feel/ma
 products they're excited to sell. A **hard rule** binds her — *never override an explicit choice*
 (if they say "black and white", the palette is exactly that; she fills only the gaps they leave).
 
-**Extraction is creator-triggered:** her "ready to build your brand" cue unlocks the **"✓ Build my
-brand"** pill (the `buildReady` gate — floored at 3 user turns, with a 6-turn safety net); tapping
-it calls `live.finalize` → `POST /api/extract-brand` (which reuses `interview.ts`
-`interviewSystem`/`parseTurn`) to distill the transcript into a `BrandResult`. The shape that
-everything downstream consumes (`src/lib/interview.ts`):
+**Extraction is creator-triggered:** her "ready to build" cue latches the `buildReady` gate
+(floored at 3 user turns; a 6-turn safety net applies in the voice interview view). She then hands
+the creator the phrase — a spoken **"build it"** (or kin) calls `live.finalize` →
+`POST /api/extract-brand` (which reuses `interview.ts` `interviewSystem`/`parseTurn`) to distill
+the transcript into a `BrandResult`. There is no build button in voice mode; only the typed
+keyboard view still shows a **"✓ Build my brand"** button. The shape that everything downstream
+consumes (`src/lib/interview.ts`):
 
 - identity: `name`, `tagline`, `mission`, `audience`, `voice`, `story`, `vibeKeywords`
 - `designStyle`: `minimalist | bold | elegant | extravagant | street` → **picks the template**
@@ -136,18 +140,22 @@ Postgres — the single source of truth — and fire-and-forgets a `revalidateSt
 so the live site self-heals to show the real catalogue. The creator never edits the brand repo to do
 this; the catalogue flows through the platform API.
 
-Site **look** edits (not catalogue) ride a different rail: the creator tells Eve "make the hero
-bigger" — either by voice from her home surface (intent routing opens the live site view, where they
-circle spots and speak the change) or from the Studio console — which enqueues a branch-based
-**revision** (Vercel preview → approve → merge). That's the storefront engine's revision path, not
-the design generator.
+Site **look** edits (not catalogue) ride two rails. Pure picture swaps into known slots
+(hero/logo/og) and mini-CMS fields (copy/colors/fonts in `stores.site_config`) apply **instantly**
+through direct APIs (`plan-site-edits`' "images" bucket → `/api/creator/site-assets`; the SiteEditor
+→ `/api/creator/site-config` — live-read, no rebuild). Only structural/behavioral changes take the
+forge rail: the creator tells Eve "make the hero a carousel" — either by voice from her home surface
+(intent routing opens the live site view, where they circle spots and speak the change) or from the
+Studio console — which enqueues a branch-based **revision** (Vercel preview → approve → merge).
+That's the storefront engine's revision path, not the design generator.
 
 ## 4 · Publish — go live
 
 **Selling is now decoupled from websites.** The cheapest path to live is **app-only Publish**:
 `POST /api/creator/stores/:slug/publish { listed }` (`src/app/api/creator/stores/[slug]/publish+api.ts`)
-sets `isPublic + status='live'` with **only an active plan + ≥1 published product — NO website, NO
-custom domain**. That lists the brand in the in-app **Market** (`/api/market` lists
+sets `isPublic + status='live'` with **an active plan, ≥1 published product, and (when Stripe
+Connect is enabled) completed payments setup (`409 payouts_required` otherwise) — still NO website
+and NO custom domain**. That lists the brand in the in-app **Market** (`/api/market` lists
 `isPublic && status='live'`) and on `nanocrew.app/b/<slug>` (see
 [STOREFRONT_DATA_CONTRACT.md](../storefront/STOREFRONT_DATA_CONTRACT.md)). Studio → Settings →
 **"Marketplace → Open shop"** drives it; `listed: false` closes the shop. A **custom domain /

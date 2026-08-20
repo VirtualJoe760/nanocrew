@@ -38,18 +38,18 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | GET | `/api/creator/products?storeSlug=` | bearer | A store's published products + video status. |
 | DELETE | `/api/creator/products/:id` | bearer | Remove a product everywhere — our DB **+ Printful** — then `revalidateStorefront(slug)` to repaint the website. |
 | POST | `/api/publish` | bearer, RL | Composition → live Printful sync product (idempotent). Enforces the price floor. **On-model by default (2026-08-17):** after publish it fire-and-forgets `generateModelShots` (debits `model_shots`, refunds on failure, skips quietly when credits are short) and repaints the storefront when shots land. |
-| GET/POST | `/api/catalogues` | bearer | List / create collections (drops). |
+| GET/POST | `/api/catalogues` | bearer | List / create collections (drops). Store-scoped via `?store=<slug>` / body `storeSlug`; the slug-less fallback resolves only for a single-brand creator — several brands is a **409**, never a guess (2026-08-20, BUG_AUDIT #1). |
 | GET/PUT | `/api/canvas/:id` | bearer | Load / replace the designer canvas node tree. |
 | POST | `/api/designs` | bearer | Persist an uploaded image as a design. |
 | DELETE | `/api/designs/:id` | bearer | Delete a design. |
-| POST | `/api/compositions` | bearer | Create a design-on-garment composition row. |
+| POST | `/api/compositions` | bearer | Create a design-on-garment composition row. Technique adaptation (2026-08-20): a KNITWEAR **or EMBROIDERY** blank regenerates the primary design as fabrication-friendly art (`lib/adapt.ts` → new `designs` row with `technique` set) and returns `{adaptedDesign, technique}` — skipped when the design was already generated technique-ready (`designs.technique` matches). |
 | PATCH | `/api/creator/products/:id` | bearer | Hide/show a product (`{isPublished}`) — it leaves the Market, feed and storefront but keeps its Printful sync product, variants and order history. Backs Market → My stores. |
 | GET | `/api/creator/site-assets?storeSlug=` | bearer | The FULL live web-asset inventory ({hero, heroVideo, og (override ?? generated OG card), logo, favicon, logoKit:{wordmark,mark,appTile,favicon}, sections}) — read by the Design tab's Site-assets dock and Eve's asset flow; pre-kit brands derive the kit read-time from logo_url. POST slots: hero/heroVideo/heroPoster/logo/mark/favicon/cover/og/section:* — `logo`/`mark` re-derive the LogoKit + favicon_url; `favicon` overrides directly (a later mark assignment re-derives over it). |
 | — | `/api/generate` `marks` param | bearer | Optional marker annotations (normalized polylines) with a reference image: baked as red strokes into the reference (`lib/annotate.ts`, pure-JS) + a marked-region rule appended — the model edits ONLY the circled region and erases the marks. |
 | POST | `/api/creator/color-mockups` | bearer | Per-COLOUR Printful mockup shots for the pricing page — one generator task, one variant per colourway, preferring the product's photographed on-model style (`Men's`/`Women's`) over flat. Free (Printful generator, not paid AI). |
 | GET/PATCH/DELETE | `/api/compositions/:id` | bearer | Read / update / delete a composition. PATCH also accepts `placements[]` — the PlacementEditor autosaves (debounced) as the creator drags, server-clamped and design-ownership-scoped, so publish never falls back to the default placement. |
 | GET | `/api/creator/margins` | bearer | Per-product retail / Printful cost / margin% + average. |
-| GET | `/api/blanks`, `/api/blank/:id/{variants,colors,placements,printareas}` | bearer | Printful catalogue data. |
+| GET | `/api/blanks`, `/api/blank/:id/{variants,colors,placements,printareas,template}` | bearer | Printful catalogue data (`template` = the flat mockup image + REAL print-area fractions, so previews blend onto the actual print zone). |
 | GET/PATCH/DELETE | `/api/creator/stores/:slug` | bearer | Read / edit / **delete** a brand. DELETE is owner-only and cascades the store → catalogues/designs/products/variants/orders/posts/revisions (external Printful/GitHub/Vercel cleaned out of band). |
 | GET | `/api/creator/stats` | bearer | Per-store revenue, orders, 30-day views, product images, and `bannerUrl` — the brand banner (site hero → OG card → read-time `buildOgImageUrl` for any logo'd brand), never a product photo. |
 | GET | `/api/creator/orders` | bearer | Recent orders across the creator's stores. |
@@ -69,6 +69,8 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | POST | `/api/creator/revise` | bearer | Request a site change on a `revision/<id>` branch (enqueues; never edits `main`). |
 | GET | `/api/creator/revisions?storeSlug=` | bearer | Revision history + status + preview URLs. |
 | POST | `/api/creator/revisions/:id/approve` | bearer | Merge a `ready` preview branch → production. |
+| POST | `/api/creator/revisions/:id/decline` | bearer | Reject the preview — `declineRevision()` discards the working branch and marks the revision `declined`; production is never touched. Only a `building`/`ready` revision can be declined. |
+| GET/POST | `/api/creator/site-config` | bearer | The **mini-CMS** write/read path: edit the site's copy / colors / fonts from Studio — a direct DB write to `stores.site_config` (NOT the forge), read live by `/api/public/stores/:slug/site-config`. No rebuild. |
 | GET/POST | `/api/creator/posts` | bearer | Journal list / create. |
 | PATCH/DELETE | `/api/creator/posts/:id` | bearer | Edit / delete a journal post. |
 | GET | `/api/creator/stores/:slug/domain/search` | bearer | Search available custom domains. |
@@ -81,17 +83,20 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 
 ## 3. AI / designer
 
-Core image ops are **authed + rate-limited but not credit-gated**; the expensive media ops debit
-credits up front and refund on failure.
+Image generation/edit ops debit **8 credits** each (debit-before, refund-on-failure, `402` when
+short); composite/mockup/enhance/tryon/idea are free but rate-limited. The expensive media ops
+debit larger amounts the same way.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/idea?effort=` | bearer, RL | Random on-brand graphic prompt. |
-| POST | `/api/generate` | bearer, RL | Nano Banana image gen (prompt + optional reference). |
-| POST | `/api/merge` | bearer, RL | Blend two designs (Nano Banana). |
+| POST | `/api/generate` | bearer, RL, **credits** | Nano Banana image gen (prompt + optional reference). Debits 8 (`design_generate` / `logo_generate`). Optional `templateKey` (the destination Printful blank, 2026-08-20): constrained techniques (EMBROIDERY / KNITWEAR — `lib/technique.ts`) condition the prompt so the art is born producible; the design row and response carry `technique`. |
+| POST | `/api/merge` | bearer, RL, **credits** | Blend two designs (Nano Banana). Debits 8 (`merge`). |
+| POST | `/api/edit` | bearer, RL, **credits** | Semantic design editor — one existing design + an instruction shaped by an edit mode (`inpaint` / `text` / `remix` / `custom`); stores the result as a **NEW** design row (non-destructive). Debits 8 (`design_edit`). |
+| POST | `/api/extract-brand` | bearer | Turn the accumulated Gemini Live transcript → structured `BrandResult` with a text model (native-audio Live can't reliably emit the save-brand tool call). Same brain as the interview (`lib/interview.ts`). |
 | POST | `/api/composite` | bearer, RL | Render a design on a garment photo (review). |
 | POST | `/api/mockup` | bearer, RL | Real Printful mockups + persist positions. |
-| POST | `/api/enhance` | bearer, RL | Expand a terse prompt into a rich one. |
+| POST | `/api/enhance` | bearer, RL | Expand a terse prompt into a rich one. Optional `technique` (2026-08-20): EMBROIDERY / KNITWEAR steer the enhancement away from gradients and photo detail the fabrication can't produce. |
 | POST | `/api/tryon` | bearer, RL | Render a product on a selfie (selfie not stored). |
 | POST | `/api/voice-live-token` | bearer | Mint a short-lived Gemini Live ephemeral token; the app connects to Gemini Live directly (the realtime Eve interview — `lib/live-voice.ts`). |
 | POST | `/api/say` | bearer, RL | One-shot TTS in Eve's Gemini voice (Aoede) → base64 WAV. Used for the post-build launch line. (The old turn-based `/api/voice` + `/api/interview` ElevenLabs routes were removed.) |
@@ -100,6 +105,18 @@ credits up front and refund on failure.
 | POST | `/api/creator/model-shots` | bearer, **credits** | On-model image gallery (Nano Banana). Debits 25 (`model_shots`). |
 | POST | `/api/creator/model-videos` | bearer, RL, **credits** | On-model Veo film for the website (appends, max 3 angles). Debits 400; rate-limited. |
 | POST | `/api/creator/scene-video` | bearer, RL, **credits** | "Cool short" on fal.ai — pick `wan` (60) / `seedance` (260) / `veo3` (400); variable charge. |
+| POST | `/api/creator/preview-shots` | bearer, **credits** | On-model PREVIEW photos at the placement step, BEFORE a composition exists — real Printful mockup first, then Nano Banana puts it on a model. Debits 16 (`preview_shots`); nothing persisted (client caches per session). |
+| POST | `/api/creator/design-feather` | bearer | Photoshop-style edge feather on a design's PNG — deterministic pixel op (no AI, no credits); saves the feathered image as the design's new url. |
+| POST | `/api/creator/enhance-copy` | bearer, RL | AI-improve one mini-CMS copy field in the brand's voice (the ✦ Enhance button in the Customize-site editor). Free, like `/api/enhance`. |
+| POST | `/api/creator/plan-site-edits` | bearer | Distill a live-site critique conversation into a plan: `images` (direct slot swaps via `/api/creator/site-assets`) + `edits` (forge work, each optionally carrying new `assets` to generate). |
+
+### Dev / Gen Lab (admin-gated)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/api/dev/logo` | bearer (admin/comp) | Gen Lab harness for Eve's exact logo pipeline (`lib/logo.ts` — same prompt assembly, retry, chroma-key). Uploads land in `nanocrew/logo-lab`. |
+| POST | `/api/dev/logo-kit` | bearer (admin/comp) | Gen Lab harness for the full LogoKit (`lib/logo-kit.ts` — 2 masters + derived assets). Same gating. |
+| POST | `/api/dev/log-conversation` | dev only | Persist live-conversation transcripts to gitignored `local-logs/` for Eve tuning. Hard-disabled in production. |
 
 ## 4. Store & feed (app, public read)
 
@@ -112,6 +129,7 @@ credits up front and refund on failure.
 | GET | `/api/feed` | bearer (optional) | Published products, newest first, with like/share counts; `likedByMe` filled when a token is present. |
 | POST | `/api/feed/:id/like` | bearer | Toggle like. |
 | POST | `/api/feed/:id/share` | — | Bump share count. |
+| POST | `/api/report` | bearer | Report Market content (Apple 1.2 UGC moderation) — always logs server-side + fires the ops email via `internal/notify`; no DB write (pairs with the on-device block, `lib/blocklist.ts`). |
 | GET | `/api/public/stores/:slug/products` | — | (App-side mirror) headless catalog. |
 | POST | `/api/public/beacon` | — | Anonymous pageview tick. |
 
@@ -132,6 +150,7 @@ unambiguous). DIRECT APIs (plain DB reads / a thin proxy), not the forge. See
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/creator/credits` | bearer | Balance, op costs, ledger. Grants the signup bonus on first call. |
+| POST | `/api/creator/onboarding` | bearer | Record the welcome-flow choice (`path: 'subscribe' \| 'free' \| 'shop'`) and grant starting credits idempotently — free → `SIGNUP_BONUS` (300) on first touch; shop → account with NO creator credits; subscribe → `WELCOME_CREDITS` ($10) once, only after a paid plan verifies server-side. |
 | GET | `/api/creator/subscription` | bearer | Plan + entitlements, brand count vs cap, tiers + credit packs. |
 | POST | `/api/creator/billing/checkout` | bearer | Stripe Checkout URL (`kind: subscription | credit_pack`). |
 | POST | `/api/creator/billing/portal` | bearer | Stripe billing-portal URL. |
@@ -158,6 +177,8 @@ unambiguous). DIRECT APIs (plain DB reads / a thin proxy), not the forge. See
 | GET | `/api/public/stores/:slug/videos` | Featured on-model film wall (Veo) for the homepage. |
 | GET | `/api/public/stores/:slug/posts` | Published journal for the website. |
 | GET | `/api/public/stores/:slug/posts/:postSlug` | One journal post. |
+| GET | `/api/public/stores/:slug/site-assets` | Creator graphics (logo, hero, sections, OG) merged **live** over the template placeholders. |
+| GET | `/api/public/stores/:slug/site-config` | Mini-CMS copy/colors/fonts overrides, read live over the baked `brand.json`/`copy.json` — no rebuild. |
 | POST | `/api/public/checkout` | **The POS.** Storefront cart → Stripe Checkout; validates store/variant ownership, in-stock, price. **Separate charges + transfers** (held-marketplace): captures 100% to the platform and persists the brand's net as HELD (`payoutStatus='held'`, `brandNetCents`, `connectedAccountId`) when the brand has a charges-enabled Connect account, else settles to the platform (`payoutStatus='none'`). CORS preflight (`OPTIONS`). **503** if Stripe unconfigured. See [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md). |
 | POST | `/api/public/order-lookup` | **Guest return gate.** `{ email, orderNumber }` (the order id) → a minimal order view (`status`, items, tracking, `returnWindowEndsAt`, `inWindow`). Email + id must both match; same `404` either way (no order-existence leak). CORS preflight. |
 | POST | `/api/public/returns` | **Open a return claim** (guest from a brand site OR the in-app proxy). `{ orderId, reason, photoUrls?, note?, items? }`; validates the window is open + reason in-enum (`defective`/`wrong_item`/`damaged`/`not_received`) + photo present for defective/damaged, inserts a `return_requests` row, flips the order → `return_requested`, and best-effort acks the buyer (`sendReturnRequested`). **400** bad reason / missing photo · **404** unknown order · **409** not shipped / window closed / not claimable. CORS preflight. See [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md). |
@@ -187,7 +208,7 @@ email, no invite — the 2026-08-18 signup that reached nobody).
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/internal/notify` | `x-internal-key` (constant-time) | Central send dispatch so **app-side** creator actions (the app-backend approve/decline routes) can fire a branded shopper email **without** pulling Resend into the app — Resend lives ONLY in platform-api. Payload `{ action: 'approved'｜'declined', returnId, reason? }`; the route resolves the claim → store → buyer from `returnId` and dispatches `sendReturnApproved`/`sendReturnDeclined`. Best-effort: a configured-and-authed call always **202**s (a failed send never fails the creator action); **401** when the key is unset/mismatched. See [EMAIL_PIPELINE.md](../accounts/EMAIL_PIPELINE.md). |
+| POST | `/api/internal/notify` | `x-internal-key` (constant-time) | Central send dispatch so **app-side** creator actions (the app-backend approve/decline routes) can fire a branded shopper email **without** pulling Resend into the app — Resend lives ONLY in platform-api. Payload is a five-action union: returns `{ action: 'approved'｜'declined', returnId, reason? }` (resolves claim → store → buyer, dispatches `sendReturnApproved`/`sendReturnDeclined`) · `{ action: 'brand_live', slug }` (creator email) · `{ action: 'payout', orderId }` (creator email) · `{ action: 'report', targetType, slug, reason, reporter? }` (ops email, Market UGC) · `{ action: 'collab_invite', inviteId }` (invitee email). Best-effort: a configured-and-authed call always **202**s (a failed send never fails the creator action); **401** when the key is unset/mismatched. See [EMAIL_PIPELINE.md](../accounts/EMAIL_PIPELINE.md). |
 
 ### Billing return pages
 
@@ -229,8 +250,9 @@ These back the storefront's own `/admin` console (it calls platform-api `apiBase
 - **`platform-api/db/schema.ts` is a COPY of `src/db/schema.ts`** — re-sync on every migration.
 
 
-### `GET /api/public/invite/:token`
-Resolve an invite token to display copy (masked email). Unauthenticated — the token is the credential. Lets nanocrew.app host the invite page without DB access.
+### `GET /api/public/invite/:token` · `POST /api/public/invite`
+GET resolves an invite token to display copy (masked email). Unauthenticated — the token is the credential. Lets nanocrew.app host the invite page without DB access.
+POST `{ token, action: 'accept' | 'decline' }` (Supabase bearer from the invite page) is the **web half** of collaboration invites — mirrors the app's `/api/creator/invites` accept/decline, with one web-only extra: it **ensures the `creators` row first**, so a brand-new invitee (no app sign-in yet) can accept.
 
 
 ### `GET/PATCH /api/creator/account`

@@ -1,11 +1,12 @@
 # App Store — submission package (paste-ready)
 
 Everything to submit **Nano Crew** (`com.nanocrew.app`, ASC app id `6780275901`) for App Store
-review. Build **#19 (1.0.0)** is uploaded via EAS auto-submit. The **[YOU]** steps happen in App
-Store Connect; the copy/answers below are ready to paste. Mirrors `PLAY_STORE.md`.
+review. Status (2026-08-20): **submitted with build 23 (2026-06-18)** via EAS auto-submit;
+TestFlight currently ships **build 56**. The **[YOU]** steps happen in App Store Connect; the
+copy/answers below are ready to paste. Mirrors `PLAY_STORE.md`.
 
 ## 0. Status / prereqs
-- ✅ Binary in ASC (build 19, processing → TestFlight).
+- ✅ Binary in ASC — submitted with build 23 (2026-06-18); TestFlight currently ships build 56.
 - ✅ IAP configured (server verification live on Cloud Run; StoreKit 2 in the binary; products
   `READY_TO_SUBMIT`). **Attach the IAP products to this version** when submitting (first review
   covers app + IAP together).
@@ -46,14 +47,14 @@ Speak your brand into existence.
 ```
 clothing brand,AI design,print on demand,merch,streetwear,sell shirts,store builder,dropshipping,apparel,POD
 ```
-**What's New (build 19):**
+**What's New (as submitted with build 23):**
 ```
 A refreshed look with our new brand mark, smoother brand creation, and a new bold "street" storefront style.
 ```
 
 ## 3. Screenshots (you supply; [CLAUDE] can capture from the web build / simulator)
 Required: **6.7"** (1290×2796). Optional but recommended: **6.5"** (1242×2688). No iPad set unless
-you mark iPad support. Suggested shots from build 19:
+you mark iPad support. Suggested shots from the current TestFlight build:
 1. Studio — the "Meet Eve" welcome (new NC logo).
 2. Eve interview / "BRAND COMPILED" palette screen.
 3. A live brand storefront (e.g. the street template hero).
@@ -93,8 +94,9 @@ paying. **[YOU] before submitting:**
 Nano Crew lets a creator build a clothing brand with an AI assistant (Eve), then sell via
 print-on-demand. Demo account is comped (no charge) so you can explore the full flow.
 
-To try it: open Studio → "Build a new brand" → tap the keyboard icon to type answers to Eve →
-after the brand compiles, tap "Create my store".
+To try it: open the Eve tab → press-and-hold Eve to open her wheel → choose "New brand" (pick
+"Type instead" from the wheel, or deny the mic prompt, to type answers to Eve) → after the brand
+compiles, tap "Create my store".
 
 In-App Purchases: subscription plans (Starter/Pro/Advanced) and credit packs are digital goods sold
 via StoreKit 2 IAP. Physical merchandise (shirts, etc.) is shipped goods and checks out via Stripe,
@@ -109,7 +111,8 @@ Contact: <your email/phone>.
 encryption declaration. (We only use standard HTTPS.)
 
 ## 8. Submit
-ASC → the app → **(+) Version or Platform → 1.0.0** → fill §1–§7 → under **Build**, select **build 19**
+ASC → the app → **(+) Version or Platform → 1.0.0** → fill §1–§7 → under **Build**, select the latest
+processed build (56 at time of writing; build 23 was the one submitted 2026-06-18)
 → attach the **In-App Purchases** to the version → **Add for Review → Submit**. First review typically
 1–3 days.
 

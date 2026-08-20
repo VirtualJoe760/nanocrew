@@ -52,7 +52,8 @@ are **hints layered on top** — useful for an instant direct swap — not the p
 capture fails, the forge falls back to re-rendering the strokes onto a fresh Playwright screenshot.
 
 ## Status
-- ✅ `site-assets` write path supports `hero/logo/og/cover/section:<key>`.
+- ✅ `site-assets` write path supports `hero/heroVideo/heroPoster/logo/mark/favicon/og/cover/section:<key>`
+  (logo/mark assignment re-derives the full LogoKit).
 - ✅ hit-test detects images + reads `data-nano-image`.
 - ✅ real screenshot capture → host → forge (with stroke-render fallback). **Needs a build (native lib) + a worker redeploy.**
 - ✅ tagged all 5 templates (`minimal/bold/elegant/extravagant/street`) — hint only.

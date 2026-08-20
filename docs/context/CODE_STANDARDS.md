@@ -55,5 +55,5 @@ Memory and review are **behaviors, not commands** — they happen on every chang
   invoke a review — it's part of committing.
 - **Commit often, no gate.** Commit at each logical milestone **automatically** — Joe does not review
   before a commit. Push to the working branch at sensible points. End every message with
-  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`. (Say "hold commits" / "don't push" to override.)
+  `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`. (Say "hold commits" / "don't push" to override.)
 - **Branch off `main`** for features; site edits are branch-based (`revision/<id>`), never on a brand's `main`.

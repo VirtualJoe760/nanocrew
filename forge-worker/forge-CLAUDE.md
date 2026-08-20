@@ -36,7 +36,7 @@ conflict, these rules win on the rails and the safety items; the brief wins on t
   fallback variables, and **composing existing blocks** inside `app/*/page.tsx`.
 - **Read `TEMPLATE.md` first** — it's the spec for THIS template: the blocks that exist, their
   props, the hard rules, and the recommended page skeleton. Your per-brand brief
-  (`briefs/01-BRAND.md`) is a **concrete, block-by-block plan** — Venus already interpreted the
+  (`briefs/01-BRAND.md`) is a **concrete, block-by-block plan** — Eve already interpreted the
   creator and named the exact blocks to use. **Build what the brief specifies; you do not decode
   the creator's words — that is already done.** If the brief ever names something not in
   `TEMPLATE.md`, note it in your final message — never invent a new block, route, or dependency.
@@ -84,7 +84,7 @@ videos, and the live catalogue/videos **auto-override** them the moment real one
   "Essential Tee"). They're temporary and swap cleanly for real products without re-layout.
 
 ## 5. Be faithful to the creator
-The creator talked to Venus in their own words; the brief carries those words verbatim. Honor
+The creator talked to Eve in their own words; the brief carries those words verbatim. Honor
 explicit choices exactly (if they said "black and white", the palette is black, white, and
 neutral grays — full stop). Compose the blocks their wishes map to. Don't impose a different
 aesthetic because you'd prefer it.

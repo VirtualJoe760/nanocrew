@@ -15,7 +15,7 @@ Update this table in the same change that adds or moves a capability. It is the 
 
 | Capability | App | Web | Endpoint |
 |---|---|---|---|
-| Identity header (avatar · email · plan · creator id) | ✅ read-only | ✅ read-only | app `GET /api/me` · web `GET /api/creator/account` |
+| Identity header (avatar · email · plan · creator id) | ✅ read-only | ✅ read-only | app `GET /api/me` + `GET /api/creator/subscription` (plan) · web `GET /api/creator/account` |
 | Edit name / phone | ❌ *(captured at sign-up only)* | ✅ | `PATCH /api/creator/account` (platform-api) |
 | Change password | ❌ | ✅ | Supabase `auth.updateUser` (client) |
 | Your brands | ✅ | ✅ | app `GET /api/me` · web `GET /api/creator/stores` |

@@ -32,13 +32,13 @@ prices/credits/caps** (the schema enum comment lists older numbers; trust the co
 |---|---|---|---|---|---|---|
 | `starter` | $10 (1000¢) | 500 | $0.020 | 1 | ❌ | list ($0.01) |
 | `pro` | $50 (5000¢) | 3000 | $0.0167 | 3 | ✅ | list ($0.01) |
-| `advanced` | $149 (14900¢) | 12000 | $0.0124 | 99 | ✅ | list ($0.01) |
+| `advanced` | $175 (17500¢) | 12000 | $0.0146 | 99 | ✅ | list ($0.01) |
 
 **The credit economy (the rule that keeps every generation profitable):** a credit is a flat
 **$0.01 everywhere** — credit packs carry **no volume discount** (removed the old Advanced 20%-off),
 so $0.01/cr is the hard **profitability floor**. Every generation charge is sized at **≥2× our real
 API cost measured at that floor**. Plan allotments give a *better effective rate* (Starter $0.020/cr
-→ Advanced $0.0124/cr), so the **cheaper the plan, the better our margin** — and every tier still
+→ Advanced $0.0146/cr), so the **cheaper the plan, the better our margin** — and every tier still
 clears the floor. Real costs anchoring the charges: Nano Banana (gemini-2.5-flash-image) ≈
 **$0.039/image**, Veo 3 Fast ≈ **$0.15/s**, fal Seedance 2.0 (5s) ≈ **$1.21**, fal Wan 2.5 (5s) ≈
 **$0.25**, ElevenLabs voiceover ≈ **$0.01**.
@@ -57,7 +57,7 @@ prices. Entitlements collapse to `FREE_ENTITLEMENTS` unless a **paid** plan is `
 Checkout Session (recurring price from `STRIPE_PRICE_<TIER>`, customer keyed to `creatorId`) and
 returns its URL.
 
-**Manage** — `GET /api/creator/billing/portal` → `createBillingPortalSession()` returns a Stripe
+**Manage** — `POST /api/creator/billing/portal` → `createBillingPortalSession()` returns a Stripe
 Customer Portal URL (cancel/update card/plan); null if the creator has no Stripe customer yet.
 
 **Activation is the webhook's job** — `platform-api/app/api/public/billing-webhook/route.ts`
@@ -78,7 +78,7 @@ the ledger doubles as the cost/profit audit). **1 credit ≈ $0.01 retail.**
   `balanceAfter`. The balance is the running sum, cached on the account.
 
 **First touch grants a signup bonus.** `ensureCreditAccount()` (called by `getBalance`, and on
-the first `GET /api/creator/credits`) creates the account with **200 credits** (`signup_bonus`)
+the first `GET /api/creator/credits`) creates the account with **300 credits** (`signup_bonus`)
 on first use.
 
 **Fixed per-operation costs** — `CREDIT_COSTS` (`src/lib/credits.ts`):
@@ -88,6 +88,9 @@ on first use.
 | `design_generate` | 8 | `POST /api/generate` (default) — every image generation: Design tab + the voice critique loop's hero/og. Sized at ~2× one Nano Banana image (~$0.039) at the $0.01/cr floor. |
 | `tryon` | 6 | NOT debited — rate-limited instead (shopper-facing conversion feature) |
 | `logo_generate` | 8 | `POST /api/generate` when `purpose:'logo'` (the critique loop sends it for the logo slot) |
+| `merge` | 8 | `POST /api/merge` — fuses 2 designs via one Nano Banana call (same size as a generate) |
+| `design_edit` | 8 | `POST /api/edit` — revises a design via one Nano Banana call (same size as a generate) |
+| `preview_shots` | 16 | `POST /api/creator/preview-shots` — on-model PREVIEW at the placement step (2 Nano Banana renders) |
 | `model_shots` | 25 | `POST /api/creator/model-shots` |
 | `video_voiceover` | 25 |
 | `revision` | 60 |
@@ -125,7 +128,10 @@ fallback; plan products (`com.nanocrew.plan.{starter,pro,advanced}`) are defined
 
 **Grants land via the webhook** — `topup` (credit packs) and `subscription_grant` (monthly
 invoices) are credited in `billing-webhook`, **idempotent on the Stripe id** via
-`ledgerHas(reason, refId)`.
+`ledgerHas(reason, refId)`. One grant lives outside the webhook: `WELCOME_CREDITS` = **1000**
+("$10 in free credits"), granted once by `POST /api/creator/onboarding` after the first paid plan
+is genuinely active/trialing (reason `subscription_grant`, idempotent on refId
+`onboard_welcome:<creatorId>`).
 
 ### Comp / internal accounts · `src/lib/comp.ts`
 
@@ -139,9 +145,10 @@ spends real money or hits the paywall.
 ## 3. Creator payouts · `src/lib/connect.ts`, `connected_accounts` table
 
 Stripe **Connect** is how each creator gets *paid*. Each creator has **one Express connected
-account**; their brands' storefront checkouts route money to it as a **destination charge with an
-application fee** (the platform's cut). Talks to Stripe over REST; the `account.updated` webhook
-in `stripe-webhook` syncs the capability flags.
+account**; their brands' storefront checkouts capture 100% of the charge to the **platform**
+(separate charges and transfers) and the brand's net is persisted as **held**, then transferred to
+the connected account once the return window closes (see "Payout timing" below). Talks to Stripe
+over REST; the `account.updated` webhook in `stripe-webhook` syncs the capability flags.
 
 `connected_accounts` (`src/db/schema.ts`) — `creatorId` (unique) → `stripeAccountId` (unique) +
 `chargesEnabled` / `payoutsEnabled` / `detailsSubmitted`.
@@ -173,18 +180,20 @@ half-migrated mix is unambiguous. The release job (`POST /api/internal/release-p
 `releasePayout(order)`. A refund inside the window is just "don't send the transfer" (`skipped`) — no
 risky claw-back; a refund after release falls back to `reverse_transfer` (`reversed`).
 
-This is why the **destination-charge note above** (`checkout/route.ts` only adds
-`transfer_data.destination` + `application_fee_amount`) describes the *old* path: under the hold the
-checkout drops `transfer_data`/`application_fee_amount` and persists the brand's net as HELD instead.
+The old **destination charge** (`checkout/route.ts` adding `transfer_data.destination` +
+`application_fee_amount`) is retired: under the hold the checkout sends no `payment_intent_data` at
+all and persists the brand's net as HELD instead.
 Full mechanics — the charge-model switch, the state machine, the release job, and refund branching —
 live in **[RETURNS_REFUNDS.md](RETURNS_REFUNDS.md)**.
 
-**Inert until Joe enables it.** Account creation only works once Connect is enabled on the
-platform Stripe account (otherwise Stripe rejects `/v1/accounts` and `POST /api/creator/connect`
-surfaces a friendly "Payouts aren't available yet"). The go-live gate is enforced **only** when
-`connectEnabled()` is true (`STRIPE_CONNECT_ENABLED` + `STRIPE_SECRET_KEY`); until then a store
-can go live and checkout settles to the **platform** account exactly as before
-(`platform-api/.../checkout/route.ts` only adds the `transfer_data.destination` +
-`application_fee_amount` when the creator has a `charges_enabled` account). See the
+**Account creation is gated on the platform Stripe account.** It only works once Connect is
+enabled there (otherwise Stripe rejects `/v1/accounts` and `POST /api/creator/connect` surfaces a
+friendly "Payouts aren't available yet"). The go-live gate is enforced **only** when
+`connectEnabled()` is true (`STRIPE_CONNECT_ENABLED` + `STRIPE_SECRET_KEY`). Checkout itself,
+though, enforces a **hard KYC gate** (Joe, 2026-08-16): it captures 100% to the platform, persists
+`brandNetCents` + `payoutStatus='held'` for a charges-enabled creator, and **refuses with a 409**
+("the owner is still setting up payments") for any brand whose creator lacks a `charges_enabled`
+account — the only opt-out is `PLATFORM_SETTLED_SLUGS` (comma-separated env) for platform-owned
+demo stores, which settle to the platform (`payoutStatus='none'`, `brandNetCents=0`). See the
 LIFECYCLE_ROADMAP Phase D notes for the full money split.
 </content>

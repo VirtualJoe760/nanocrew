@@ -7,20 +7,25 @@ your Stripe Dashboard + one Cloud Run env var.
 ## What it does (so you know what you're enabling)
 
 Each brand's storefront checks out through our central POS (`platform-api`). When a creator has a
-**charges-enabled** Stripe Connect account, that brand's checkout becomes a **destination charge**
+**charges-enabled** Stripe Connect account, that brand's checkout runs the **held-marketplace model
+(separate charges + transfers)**
 ([`platform-api/app/api/public/checkout/route.ts`](../../platform-api/app/api/public/checkout/route.ts)):
 
-- The customer pays through our Stripe checkout.
-- Stripe routes the sale **to the creator's connected account**.
-- We keep our **application fee** (the platform cut) automatically.
-- Product cost + Printful fulfilment are paid out of the proceeds.
+- The customer pays through our Stripe checkout — **100% is captured to the platform** (no
+  destination charge, no application fee).
+- The brand's exact net (retail minus product cost, fulfilment, and the platform commission) is
+  persisted on the order as **HELD**.
+- Once the return window closes (ship date + `RETURN_WINDOW_DAYS`), the **biweekly release job**
+  transfers each brand its net (`releasePayout()` in `src/lib/connect.ts`).
 
 The creator-facing onboarding (Stripe-hosted identity + bank verification) lives in
 [`src/lib/connect.ts`](../../src/lib/connect.ts) and the **"Set up payouts"** row on the Account
 screen (`/api/creator/connect`). Accounts are **Stripe Connect Express**.
 
-> Until this is enabled, sales still work — the money just settles to the **platform** account
-> instead of splitting to the creator. Enabling it flips on the split; nothing else changes.
+> Since going live (2026-08-16), selling is **KYC-gated**: a brand whose creator hasn't completed
+> Stripe verification can't publish (`409 payouts_required`) and its public checkout refuses on its
+> own — the only exception is platform-owned demo stores listed in `PLATFORM_SETTLED_SLUGS`, which
+> settle to the platform.
 
 ## Prerequisites
 
@@ -47,7 +52,8 @@ screen (`/api/creator/connect`). Accounts are **Stripe Connect Express**.
 
 ## Step 3 — Flip the switch on Cloud Run
 
-Set on the **app backend** (Cloud Run — `backend-production-d7eb.up.railway.app`):
+Set on the **app backend** (Cloud Run service `backend`, project `nanocrew-api` —
+`api.nanocrew.app`):
 
 ```
 STRIPE_CONNECT_ENABLED=1
@@ -83,21 +89,24 @@ webhook later that calls the same refresh — nice-to-have, not required for lau
 
 - **Digital goods** (plans + credits) → **Apple IAP** / Stripe billing — *not* Connect; that's your
   revenue, not a creator payout.
-- **Physical goods** (apparel) → **destination charge** to the creator's Connect account, minus
-  product cost, fulfilment, and the platform application fee. See
+- **Physical goods** (apparel) → captured **100% to the platform**; the brand's net (retail minus
+  product cost, fulfilment, and the platform commission) is **HELD** on the order and transferred
+  to the creator's Connect account by the biweekly release job. See
   [`BILLING_CREDITS.md`](../accounts/BILLING_CREDITS.md) and
   [`commerce-pricing-flow`](../storefront/STOREFRONT_DATA_CONTRACT.md) for the fee math.
 
 ## Rollback
 
-Unset `STRIPE_CONNECT_ENABLED` (or set to empty) and redeploy — onboarding hides and new checkouts
-stop splitting (settling to the platform). Already-connected accounts are untouched.
+Unsetting `STRIPE_CONNECT_ENABLED` only removes the **app-side publish gate** (`goLiveBlockReason`
+no-ops) and hides onboarding; the public checkout KYC gate stays on regardless and needs
+`PLATFORM_SETTLED_SLUGS` (or a code change) to bypass — so non-KYC brands still can't take orders.
+Already-connected (KYC-complete) brands keep the held-payout flow untouched.
 
 ## LIVE — 2026-08-16 (supersedes the checklist above where they differ)
 
 Connect is enabled on the platform account (`acct_1ThhvX5lsCYjUGb3`) and `STRIPE_CONNECT_ENABLED=1`
-is set. Three things changed going live; the "Money flow reference" above still says destination
-charges — the code is actually **separate charges + transfers** (100% captured to the platform,
+is set. Three things changed going live (the "What it does" / "Money flow reference" sections above
+now describe the live model — **separate charges + transfers**: 100% captured to the platform,
 brand net HELD, transferred later).
 
 - **Selling is now gated on KYC** (Joe: creators complete Stripe's verification *before* they can
@@ -118,11 +127,16 @@ brand net HELD, transferred later).
   landing between scan and transfer wins instead of being clobbered. Nothing-transferable orders now
   settle as `skipped` (honest — no transfer was ever sent), not `released`.
 
-Known follow-ups (from the 2026-08-16 money-path audit, in priority order): the platform-api twin
-refund route still uses destination-charge semantics (`reverse_transfer: true`) and must be ported to
-`refundOrder()`'s held/released branching; `charge.refunded` webhook doesn't reconcile
-`payoutStatus`; `ensureConnectedAccount` has an orphan-account race (no idempotency key, insert
-no-ops without returning the existing row); the UI never shows `payoutsEnabled` or Stripe's
-`requirements.currently_due`, so "Payouts active" can overstate; no Express dashboard login-link for
-verified creators; orders that never get a `package_shipped` webhook hold funds forever with no
-sweep.
+All follow-ups from the 2026-08-16 money-path audit have since shipped (verified 2026-08-20):
+
+- platform-api twin refund route branches on held/released with an explicit transfer reversal
+  (`platform-api/app/api/creator/orders/[id]/refund/route.ts`).
+- `charge.refunded` webhook reconciles `payoutStatus`, with idempotency keys matching the refund
+  routes (`platform-api/app/api/public/stripe-webhook/route.ts`).
+- `ensureConnectedAccount` uses a creator-keyed idempotency key + upsert + settled re-read
+  (`src/lib/connect.ts`).
+- The Account UI surfaces `payoutsEnabled` and a `requirementsDue` count — "Payouts active" needs
+  both flags (`src/app/account.tsx`).
+- `POST /api/creator/connect` returns an Express dashboard login link for verified creators.
+- The release job runs a stuck-held sweep (held >14d with a NULL `payoutReleaseAt`) surfaced as
+  `stuckHeld`/`stuckHeldIds` (`src/app/api/internal/release-payouts+api.ts`).

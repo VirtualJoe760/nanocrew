@@ -13,19 +13,20 @@ build. The wedge is **all-in-one**: an AI voice product-generator + an instant s
 one Supabase identity.
 
 ## The core user flow
-1. **Talk to Eve** (Studio tab) → she interviews the creator and authors a build brief.
+1. **Talk to Eve** (the Eve tab — the `studio` route) → she interviews the creator and authors a build brief.
 2. **Build** → a conditioned forge robot turns a template into a presentable brand site (instant).
 3. **Design** (Design tab) → the AI designer generates products/logos/model-shots → publish to Printful.
 4. **Refine** → the design generator swaps the forge's placeholders for real assets; edit the site by chatting.
-5. **Publish** → list in the in-app **Market** + on `nanocrew.app/b/<slug>` (active plan + a published product).
+5. **Publish** → list in the in-app **Market** + on `nanocrew.app/b/<slug>` (active plan + a published product + a payout-ready Stripe account).
 6. **Go live** → a custom domain / dedicated website is a separate Pro upgrade.
 
 How the pieces fit: [`../architecture/ARCHITECTURE.md`](../architecture/ARCHITECTURE.md). The build →
 refine → publish arc: [`../studio/BUILD_FLOW.md`](../studio/BUILD_FLOW.md).
 
 ## Status
-The app lands on **Studio**; the social feed is hidden for v1 (preserved at `/feed`, returns in v2),
-so the tab bar is **Studio · Design · Market · Account**. Live on TestFlight (iPhone-only), submitted
+The app lands on **Eve** (the `studio` route — Studio merged into it); the social feed is hidden for
+v1 (preserved at `/feed`, returns in v2), so the tab bar is **Eve · Design · Market · Account**. Live
+on TestFlight (iPhone-only), submitted
 to the App Store; Android in Play internal testing. Granular shipped-vs-open status is the
 progress-tracker: [`../roadmap/REMAINING_FEATURES.md`](../roadmap/REMAINING_FEATURES.md).
 

@@ -1,6 +1,7 @@
 # Spec — Collections & Lookbook
 
-**Status:** partially modeled, not surfaced (2026-06-15). **Goal:** every brand groups its products
+**Status:** partially built (2026-08-20) — covers, grouped rendering, and the Market rail exist; the
+cover-tile `/lookbook` route and collection-management UI don't. **Goal:** every brand groups its products
 into **collections** (drops), each with a **cover image**, browsable as a **lookbook** — both on the
 brand website and in the in-app marketplace. Clicking a cover opens that collection's products.
 
@@ -14,9 +15,19 @@ The screenshot that prompted this: stephenlawyer.clothing's "SUMMER 26 / HAZARD"
   data-model-ready — no schema change needed for the basics.
 - Products link to a collection via `products.catalogueId`.
 - `platform-api` already exposes `GET /api/public/stores/:slug/collections`.
+- **Setting a collection cover** — the Design tab assigns a generated graphic via
+  `POST /api/creator/site-assets` slot `'cover'` → `catalogues.cover_image_url`, then revalidates
+  the site.
+- **Templates consume collections** — the shared data layer has `getCollections()` +
+  `getProductsByCollection()` (shop grouped by drop), and every standard template ships an
+  editorial **Lookbook block** (a static image essay with `data-nano-image` slots).
+- **In-app surfacing** — the Market feed ships a `collections` rail (live drops with cover art),
+  and the in-app brand store groups products by collection with a cover (falling back to the first
+  product image).
 
-So the gap is **surfacing**: templates don't render a lookbook, and the app gives creators no clean
-way to set a cover / manage collections.
+So the remaining gap: templates group the shop by collection and ship the editorial Lookbook block,
+but there is still no **`/lookbook` page of collection COVER tiles** linking into each drop — and
+the app gives creators no way to create/rename/reorder collections or assign products to them.
 
 ## What to build
 
@@ -28,14 +39,14 @@ way to set a cover / manage collections.
 - Home can feature 1–2 collection covers (like the screenshot) pulling from the lookbook.
 
 ### In-app marketplace + brand store
-- The **Market tab** and the in-app **brand store** show collections as cover tiles; tapping one
-  opens the collection's products (the in-app product grid already exists — filter by collection).
+- The Market rail and brand-store grouping already exist (above). What remains: tapping a cover
+  opens a **dedicated collection browse** (the in-app product grid already exists — filter by
+  collection).
 - This makes "browse the brand by drop" consistent between the app and the website.
 
 ### App (creator control, Console)
-- Set/replace a collection's **cover image** (upload via the existing Cloudinary path).
 - Create/rename/reorder collections; assign products to a collection (some of this exists in the
-  designer/catalogue flow — wire the cover + ordering).
+  designer/catalogue flow — wire the ordering; the cover is already settable via the Design tab).
 - Any change calls `revalidateStorefront(slug)` so the live lookbook updates.
 
 ## Contract notes

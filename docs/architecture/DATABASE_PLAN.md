@@ -44,7 +44,7 @@ Auth itself lives in **Supabase Auth** (`auth.users`); `creators.id` mirrors the
 | `order_status` | `pending_payment`, `paid`, `submitted_to_printful`, `in_production`, `shipped`, `delivered`, `cancelled`, `refunded`, `on_hold`, `returned`, `failed`, `return_requested` (Printful webhooks drive `on_hold`/`returned`/`failed`; `return_requested` = a customer claim, distinct from `returned`) |
 | `subscription_plan` | `free`, `starter`, `pro`, `advanced` |
 | `subscription_status` | `active`, `trialing`, `past_due`, `canceled` |
-| `revision_status` | `building` → `ready` → `approved`, plus `failed` |
+| `revision_status` | `building` → `ready` → `approved` / `declined`, plus `failed` (`declined` = creator rejected the preview; the branch is discarded and production is never touched) |
 | `payout_status` | `none`, `held`, `released`, `reversed`, `skipped` (the deferred-brand-payout state on `orders`; see §5 + [RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md)) |
 | `return_reason` | `defective`, `wrong_item`, `damaged`, `not_received` (POD = made-to-order, so no buyer's-remorse) |
 | `return_request_status` | `requested` → `approved` / `declined`, plus `refunded` (terminal) |
@@ -67,11 +67,14 @@ The app users (people building stores).
   `/api/me` upserts them + stamps acceptance server-side on first sign-in (migration 0020).
 
 ### `loras`
-Krea LoRA training jobs — one per trained garment LoRA ([KREA_LORA.md](KREA_LORA.md)).
+Krea LoRA training jobs — one per trained **avatar** LoRA (persistent virtual model; **never a
+garment LoRA** — see [KREA_LORA.md](KREA_LORA.md); the schema comment still says "garment", which is
+stale — see `docs/ops/BUG_AUDIT_2026-08-20.md`).
 - `id`, `storeId` → `stores` (cascade), `productId` → `products` (cascade, nullable).
 - `kreaJobId`, `styleId` (set on completion; referenced in generation), `triggerWord`.
 - `status` (Krea job states + watchdog outcomes), `steps`, `costCents`, `errorMsg`,
-  `createdAt`/`completedAt`. Polled by the forge-watchdog cron (P7 pattern).
+  `createdAt`/`completedAt`. Will be polled by the planned forge-watchdog cron
+  ([FORGE_WATCHDOG.md](FORGE_WATCHDOG.md) — not yet built).
 
 ### `stores`
 One per creator website/store (the thing the app generates).
@@ -129,7 +132,7 @@ A catalogue **IS** a collection/drop, used for storefront grouping.
 - `name`, `slug` (unique **per store** — composite unique index on `(storeId, slug)`).
 - `season` (text — `spring` | `summer` | `fall` | `winter` | `drop` | null).
 - **`coverImageUrl`** (text) — the collection's lookbook/cover image. **Already present** — the
-  lookbook feature is data-model-ready (see `docs/COLLECTIONS_LOOKBOOK.md`).
+  lookbook feature is data-model-ready (see `docs/storefront/COLLECTIONS_LOOKBOOK.md`).
 - `isActive` (bool, default `true`), `sortOrder` (default 0), `createdAt`.
 - Index on `storeId`.
 
@@ -137,6 +140,10 @@ A catalogue **IS** a collection/drop, used for storefront grouping.
 A generated art asset within a catalogue.
 - `id`, `storeId` (cascade), `catalogueId` → `catalogues` (cascade).
 - `prompt`, `cloudinaryPublicId`, `url` (not null), `thumbUrl`, `createdBy` → `creators`, `createdAt`.
+- `technique` (nullable, 2026-08-20, migration 0029) — the print technique this art was
+  generated/adapted FOR (`EMBROIDERY` / `KNITWEAR`; null = plain full-color art). Set by
+  `/api/generate` when the destination blank is known and by the `/api/compositions` adaptation;
+  lets compositions skip re-adapting art that is already technique-ready (`lib/technique.ts`).
 
 ### `compositions`
 A design placed on a Printful template → a printable/publishable product candidate.
@@ -173,7 +180,7 @@ Design-tab canvas layout state.
 - Indexes: `storeId`; `(storeId, slug)` unique; `isPublished`.
 - **No `sortOrder` column** (despite earlier framing) — products are not yet manually orderable.
 - **No `isFeatured` column yet — PLANNED, not present.** "Featured products" needs this column
-  added in a future migration (see `docs/FEATURED_PRODUCTS.md`). Document it as a planned change.
+  added in a future migration (see `docs/storefront/FEATURED_PRODUCTS.md`). Document it as a planned change.
 
 ### `variants`
 - `id`, `productId` → `products` (**cascade**).
@@ -272,6 +279,8 @@ deploys as a preview. The creator reviews, then approves — only then does the 
 `main` and go to production. This table is also the queue the forge worker drains.
 - `id`, `storeId` → `stores` (cascade).
 - `requestMd` (text, not null) — the change request as markdown.
+- `transcript` (jsonb) — raw Eve↔creator turns that produced this request (troubleshooting "said vs captured").
+- `editPlan` (jsonb) — structured outcome of the whole submit: `{ images: [{slot, prompt, generated, placed, error?}], edits: string[], counts }`.
 - `screenshots` (jsonb) — annotated screenshot URLs the creator/Eve marked up.
 - `status` (`revision_status`, default `building`).
 - `branch` (text, not null), `previewUrl`, `errorMsg`, `createdAt`, `updatedAt`.
@@ -357,7 +366,7 @@ order/sale alerts. One row per device token; a creator can have several (phone +
 so a relation wasn't needed.
 
 Type exports (`$inferSelect`): `Creator`, `Store`, `Catalogue`, `DesignRow`, `Composition`,
-`CanvasNodeRow`, `Product`, `Variant`, `Order`, `StorePost`, `StoreRevision`.
+`CanvasNodeRow`, `Product`, `Variant`, `Order`, `StorePost`, `StoreRevision`, `BetaSignup`.
 
 ---
 

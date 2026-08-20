@@ -44,7 +44,7 @@ The app authenticates against Supabase Auth via `supabase-js`. Providers (`src/l
   (`signInWithOAuth({ skipBrowserRedirect: true })`), then hand the callback tokens to
   supabase-js via `createSessionFromUrl` (PKCE `exchangeCodeForSession`, or `setSession` with
   the returned access/refresh tokens). **Facebook is hidden for v1** (button removed, provider
-  off — see `CLAUDE.md`).
+  off).
 - **On web**, Supabase's normal full-page redirect (`redirectTo: window.location.origin`) does
   the work.
 
@@ -121,7 +121,7 @@ Paid AI endpoints layer credits (`src/lib/credits.ts`) and rate-limiting
 
 Every generated brand site ships an `/admin` that calls **platform-api** (not the app) with the
 **same Supabase account** as the Nano Crew app — no Supabase SDK in the template, just the REST
-endpoints (`lib/platform-auth.ts`, present in all four templates):
+endpoints (`lib/platform-auth.ts`, present in `_shared` and all five templates):
 
 - `sendMagicLink(email)` → `POST {supabaseUrl}/auth/v1/otp` **with `create_user: false`**.
 - `passwordLogin(email, password)` → `POST /auth/v1/token?grant_type=password`.

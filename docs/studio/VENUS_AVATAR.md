@@ -87,8 +87,11 @@ workflow) into a concrete, expo-gl-safe spec — the **`venus-art-direction` wor
   concept panel by design: A's scanlines + falling glyphs, B's chromatic aberration + glitch + HUD.
 
 ## Current state (built + verified on web)
-- 3D stack: `three` ^0.184, `@react-three/fiber` ^9 (R3F v9, React 19), `@react-three/drei` ^10,
-  `expo-gl` ~16. Web renders via plain WebGL; native uses expo-gl — **native not yet verified**.
+- 3D stack: `three` ^0.184, `@react-three/fiber` ^9 (R3F v9, React 19),
+  `expo-gl` ~16. (`@react-three/drei` was uninstalled — unused, and its stats-gl dep bundled a
+  second three copy; see EVE_CONTROL.md's overlay-retirement section. The "drei `useGLTF` breaks
+  under Metro" gotcha below stays as history.) Web renders via plain WebGL; native uses expo-gl —
+  **native not yet verified**.
 - **`src/components/backgrounds/venus-head-scene.tsx`** (the live POC, rendered by the Lab) — now
   the full **"Ascendant Cortana"** build:
   - Loads the **female** RPM head via plain three `GLTFLoader` (NOT drei `useGLTF` — see gotchas).
@@ -448,8 +451,9 @@ ever wanted again, resurrect from git history (this section's last full version:
   rms/zcr/voicing). Zero-dep, Hermes-safe, Node-tested. Shared by both drivers.
 - `src/lib/venus-viseme-map.ts` — pure **`mapFeaturesToWeights`** (the F1/F2 → ARKit jaw/funnel/
   stretch mapping that fixes "too much O"). All the tuning knobs live here.
-- `src/lib/__tests__/venus-formants.test.ts` — 47 Node tests (`npm run test:lipsync`): FFT vs naive
-  DFT, synthetic female vowels, f0-harmonic guard, anti-O histogram, sibilants, ranges, determinism.
+- `src/lib/__tests__/venus-formants.test.ts` — 76 Node tests (`npm run test:lipsync`): FFT vs naive
+  DFT, synthetic female vowels, f0-harmonic guard, anti-O histogram, sibilants, ranges, determinism,
+  plus the rich-path closure/identity/coarticulation and VoiceNorm calibration cases.
 - `src/lib/venus-lipsync.ts` — the **driver**: `SpeechLevelDriver` (native, reads the formant
   envelope) / `AnalyserDriver` (web, same extractor+mapper) / wawa behind `USE_WAWA`. Returns target
   weights for `useFrame` to damp. `speaking()` tells the scene a real source is active.
@@ -465,8 +469,8 @@ ever wanted again, resurrect from git history (this section's last full version:
   expo-gl / web R3F) that renders `venus-orb-scene`, keeping three out of the native bundle until
   mounted. Used by the Lab, the root `EveBackground`, AND the editor bubble.
 - `src/components/venus-bubble.tsx` — `<VenusBubble>`: Eve's avatar as a circular, tappable bubble
-  with a reactive halo, for the site-critique editor (`site-preview.tsx`, replaced the NC `VenusOrb`)
-  and the `EveDesign` popup.
+  with a reactive halo, for the site-critique editor only (`site-preview.tsx`, replaced the NC
+  `VenusOrb`; the `EveDesign` popup switched to the `EveEar` badge + `EveCaptions`, `eve-ear.tsx`).
   `speaking` → stage. **Native gotcha (two of them):** an expo-gl `GLView` BLANKS on iOS when clipped
   by `overflow:hidden` OR covered by an SVG mask whose `fillRule="evenodd"` iOS doesn't honor (it
   filled the whole disc). So: WEB clips with web-only `overflow:hidden`; NATIVE renders the GLView
@@ -479,11 +483,11 @@ ever wanted again, resurrect from git history (this section's last full version:
   `venus-eyes.ts`, `venus-field-scene.tsx`, `face-mesh.ts`.
 
 ## Git / how to verify
-- Branch `feature/welcome-onboarding`. Eve-arc commits: `1d68065` (canonical morph, superseded)
+- Work is on `main` (the old `feature/welcome-onboarding` branch is history). Eve-arc commits: `1d68065` (canonical morph, superseded)
   → `eeaa481` (dense dots, superseded) → `5528225` (R3F+GLTF wireframe) → `9967677` (RPM head +
   viseme) → `3c263f2` (female head + liveliness). Background-system commits: `66b0535`, `672578a`,
   `84b087a`, `91d9002`.
-- Verify on web: start the `web-preview` preview server; the Lab avatar (`venus-head-scene`)
+- Verify on web: start the `web-preview` preview server; the Lab avatar (`venus-orb-scene`)
   renders directly. `npx tsc --noEmit` must pass before committing. Verify the native bundle with
   `npx expo export --platform ios` (three is now reachable in the production bundle via the gated
   Lab, so the babel static-block plugin must compile it).

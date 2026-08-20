@@ -1,3 +1,7 @@
+> **ARCHIVED 2026-08-20.** Fully delivered plan, kept for history/rationale. Live status:
+> [`docs/roadmap/REMAINING_FEATURES.md`](../roadmap/REMAINING_FEATURES.md) · lifecycle:
+> [`docs/roadmap/LIFECYCLE_ROADMAP.md`](../roadmap/LIFECYCLE_ROADMAP.md).
+
 # Nano Crew Designer — Feature Roadmap (HISTORICAL · delivered)
 
 > **Status: this plan is delivered.** The designer parity (Track A), the Supabase/DB foundation

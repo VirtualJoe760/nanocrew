@@ -4,8 +4,10 @@ The canonical doc for the brand **build → edit → domain → go-live → Conn
 end-to-end flow, an audit of where the code is today, and the sequenced work. Written 2026-06-13.
 
 > **Status: Phases A–D are code-complete** (forge reliability, lifecycle state machine, domains,
-> Stripe Connect); Phase E needed no code. Domains + Connect are **inert until Joe's account config**
-> (see the bottom of this file). For the full feature roadmap across the app, see
+> Stripe Connect); Phase E needed no code. Go-live/domain-buy gating stays **inert until
+> `STRIPE_CONNECT_ENABLED`** (see the bottom of this file), but checkout now **hard-gates
+> regardless (2026-08-16)**: a brand cannot take orders until its creator is `charges_enabled`,
+> except slugs in `PLATFORM_SETTLED_SLUGS`. For the full feature roadmap across the app, see
 > **[REMAINING_FEATURES.md](REMAINING_FEATURES.md)** (canonical).
 
 ## Target flow
@@ -121,7 +123,7 @@ Cross-cutting guarantees:
   Vercel's price at par **+ a flat $2.99 service fee** (`DOMAIN_SERVICE_FEE_CENTS`).
   (The roadmap originally said "charge via Stripe" — credits are the simpler v1 and already paid-for.)
 
-### Phase D — Stripe Connect (G4)  ·  **created at brand establishment** (decided)  ·  ✅ done (code, inert)
+### Phase D — Stripe Connect (G4)  ·  **created at brand establishment** (decided)  ·  ✅ done (code; checkout hard-gate live, go-live gate env-inert)
 - ✅ **Born connecting**: `/api/store` fires a best-effort `ensureConnectedAccount(creatorId, email)`
   at establishment (Express account, `metadata.creatorId`, stored in `connected_accounts`). Never
   blocks store creation — no-ops if Connect isn't enabled yet.
@@ -130,23 +132,31 @@ Cross-cutting guarantees:
   `getConnectedAccount`, `goLiveBlockReason`, `connectEnabled()`.
 - ✅ **Onboarding UI**: `GET/POST /api/creator/connect` + a "Set up payouts / Finish setup / Payouts
   active" button on the Account screen (opens the Stripe-hosted account link).
-- ✅ **Routing**: storefront checkout (`platform-api`) uses a **destination charge** — when the brand's
-  creator has a `charges_enabled` account it adds `payment_intent_data.transfer_data.destination` +
-  `application_fee_amount`, persists `applicationFeeCents`, and settles the brand's profit to them.
-  (Destination, not direct-on-account as the sample demoed, so the **existing platform webhook stays
-  intact**.) Fee = COGS (`printfulCostCents`, fallback `DEFAULT_COGS_PCT`) + shipping + commission
-  (`PLATFORM_COMMISSION_PCT`, default 10%); brand gets the remainder. No account → settles to platform
-  exactly as before.
+- ✅ **Routing (revised 2026-08)**: storefront checkout (`platform-api`) uses **separate charges +
+  transfers** (the held-marketplace pattern) — the platform captures 100% of the charge (no
+  `payment_intent_data`, no application fee), computes the brand's net with the same COGS
+  (`printfulCostCents`, fallback `DEFAULT_COGS_PCT`) + shipping + commission
+  (`PLATFORM_COMMISSION_PCT`, default 10%) (+ processing fee) math, and persists it as a **HELD**
+  payout (`payoutStatus`/`brandNetCents` on the order); `/api/internal/release-payouts` transfers it
+  via `connect.ts` `releasePayout()` once the return window closes with no open claim (see
+  [../accounts/RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md)). The old no-account fallback
+  (settle 100% to the platform) is gone — see the hard gate below.
 - ✅ **Webhook sync**: `account.updated` updates `connected_accounts` capability flags;
   `charge.refunded` marks the order `refunded` (covers dashboard-initiated refunds).
-- ✅ **Refunds (Connect-aware)**: `POST /api/creator/orders/:id/refund` (platform-api, CORS,
-  ownership-checked) refunds in full and — for a destination-charge order — sets `reverse_transfer` +
-  `refund_application_fee`, so the brand's transfer and the platform fee are both clawed back
-  proportionally. Surfaced as a **Refund** button on the brand-site `/admin` order list.
+- ✅ **Refunds (payout-aware)**: `POST /api/creator/orders/:id/refund` (platform-api, CORS,
+  ownership-checked) refunds the buyer in full; a **held** payout is cancelled (never transferred,
+  marked `skipped`), a **released** payout has its transfer reversed via Stripe's transfer-reversal
+  API. No `reverse_transfer`/`refund_application_fee` — the charge carries no attached transfer
+  under separate charges + transfers. Surfaced as a **Refund** button on the brand-site `/admin`
+  order list.
 - ✅ **Gate**: `goLiveBlockReason` blocks go-live + domain-buy until `charges_enabled` — **only when
   `STRIPE_CONNECT_ENABLED` is set**, so the current domain flow is unaffected until Connect is on.
+  **Checkout itself is NOT env-gated (Joe, 2026-08-16)**: it hard-refuses (409 "This shop can't take
+  orders yet") any brand whose creator lacks a `charges_enabled` account, unconditionally — the only
+  opt-out is `PLATFORM_SETTLED_SLUGS` (platform-owned demo stores).
 - ✅ **Processing fee**: checkout adds a customer-paid "Processing fee" (grossed up, waived at
-  `PROCESSING_FEE_WAIVE_CENTS`, default $200), folded into the application fee so the platform keeps it;
+  `PROCESSING_FEE_WAIVE_CENTS`, default $200), folded into the platform's kept share
+  (`applicationFeeCents` on the order) so the platform keeps it;
   the cart shows a "save ~X% over $Y" nudge from `brand.json` `commerce` (no fee wording pre-checkout).
 - ⏳ **Needs Joe's config**: enable **Connect** on the platform Stripe account, set
   `STRIPE_CONNECT_ENABLED=1`, and add `account.updated` + `charge.refunded` (connected-account events)
