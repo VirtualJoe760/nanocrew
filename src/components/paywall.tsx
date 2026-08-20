@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 
 import { EveGlyph } from '@/components/eve/eve-glyph';
@@ -174,114 +174,120 @@ export function Paywall({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-        <View style={s.sheet}>
-          <View style={styles.headerRow}>
-            {/* Eve's constellation glyph — the current identity; the NC monogram is retired
-                everywhere (assets/brand/README.md, adopted 2026-08-16). */}
-            <EveGlyph size={26} />
-            <ThemedText type="code" style={[s.eyebrow, { marginLeft: Spacing.two }]}>PLANS &amp; CREDITS</ThemedText>
-            <View style={{ flex: 1 }} />
-            <Pressable onPress={onClose} hitSlop={12}>
-              <ThemedText type="code" style={s.dim}>close ✕</ThemedText>
-            </Pressable>
-          </View>
+      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
+          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
+          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
+          need the context too. */}
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+          <View style={s.sheet}>
+            <View style={styles.headerRow}>
+              {/* Eve's constellation glyph — the current identity; the NC monogram is retired
+                  everywhere (assets/brand/README.md, adopted 2026-08-16). */}
+              <EveGlyph size={26} />
+              <ThemedText type="code" style={[s.eyebrow, { marginLeft: Spacing.two }]}>PLANS &amp; CREDITS</ThemedText>
+              <View style={{ flex: 1 }} />
+              <Pressable onPress={onClose} hitSlop={12}>
+                <ThemedText type="code" style={s.dim}>close ✕</ThemedText>
+              </Pressable>
+            </View>
 
-          {loading ? (
-            <ActivityIndicator style={styles.center} color={p.accent} />
-          ) : (
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-              <ThemedText type="title" style={s.ink}>{title}</ThemedText>
-              <ThemedText type="small" style={s.dim}>{sub}</ThemedText>
-              {note ? <ThemedText type="small" style={s.warn}>{note}</ThemedText> : null}
+            {loading ? (
+              <ActivityIndicator style={styles.center} color={p.accent} />
+            ) : (
+              <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+                <ThemedText type="title" style={s.ink}>{title}</ThemedText>
+                <ThemedText type="small" style={s.dim}>{sub}</ThemedText>
+                {note ? <ThemedText type="small" style={s.warn}>{note}</ThemedText> : null}
 
-              {reason === 'brand_limit' && onFreeSlot ? (
-                <Pressable onPress={onFreeSlot} style={[s.btn, s.btnCurrent]}>
-                  <ThemedText type="smallBold" style={s.accent}>Free up a slot — delete a brand</ThemedText>
-                </Pressable>
-              ) : null}
-
-              {data?.tiers?.map((t) => {
-                const current = data.entitlements.active && data.entitlements.plan === t.plan;
-                return (
-                  <View key={t.plan} style={[s.card, current && s.cardCurrent]}>
-                    <View style={styles.cardTop}>
-                      <ThemedText type="subtitle" style={s.ink}>{t.label}</ThemedText>
-                      <ThemedText type="subtitle" style={s.price}>{money(t.priceCents)}<ThemedText type="code" style={s.dim}>/mo</ThemedText></ThemedText>
-                    </View>
-                    <ThemedText type="small" style={s.dim}>{t.blurb}</ThemedText>
-                    <ThemedText type="code" style={s.feat}>
-                      {[
-                        `${t.monthlyCredits.toLocaleString()} credits/mo`,
-                        t.maxBrands >= 99 ? 'unlimited brands' : `${t.maxBrands} brand${t.maxBrands > 1 ? 's' : ''}`,
-                        t.website ? 'website + custom domain' : 'in-app store',
-                        t.creditRateMultiplier < 1 ? `${Math.round((1 - t.creditRateMultiplier) * 100)}% off credit top-ups` : null,
-                      ].filter(Boolean).join(' · ')}
-                    </ThemedText>
-                    {current ? (
-                      <View style={[s.btn, s.btnCurrent]}>
-                        <ThemedText type="smallBold" style={s.accent}>Current plan</ThemedText>
-                      </View>
-                    ) : (
-                      <Pressable
-                        onPress={() => subscribe(t.plan)}
-                        disabled={!!busy}
-                        style={s.btn}
-                      >
-                        {busy === t.plan ? (
-                          <ActivityIndicator size="small" color={p.onAccent} />
-                        ) : (
-                          <ThemedText type="smallBold" style={{ color: p.onAccent }}>
-                            {data.entitlements.active ? 'Switch' : 'Subscribe'}
-                          </ThemedText>
-                        )}
-                      </Pressable>
-                    )}
-                  </View>
-                );
-              })}
-
-              <ThemedText type="code" style={[s.sectionLabel, { marginTop: Spacing.five }]}>CREDIT PACKS</ThemedText>
-              <ThemedText type="small" style={s.dim}>Credits power video ads, designs, and revisions. Top up any time.</ThemedText>
-              {data?.creditPacks?.map((pk) => {
-                const mult = data.entitlements.creditRateMultiplier ?? 1;
-                const yourPrice = Math.round(pk.priceCents * mult);
-                return (
-                <View key={pk.id} style={s.packRow}>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText type="small" style={s.ink}>{pk.label}</ThemedText>
-                    <ThemedText type="code" style={s.dim}>
-                      {money(yourPrice)}{mult < 1 ? ` · ${Math.round((1 - mult) * 100)}% off (your rate)` : ''}
-                    </ThemedText>
-                  </View>
-                  <Pressable onPress={() => buyPack(pk)} disabled={!!busy} style={s.packBtn}>
-                    {busy === pk.id ? <ActivityIndicator size="small" color={p.accent} /> : <ThemedText type="code" style={s.accent}>buy</ThemedText>}
+                {reason === 'brand_limit' && onFreeSlot ? (
+                  <Pressable onPress={onFreeSlot} style={[s.btn, s.btnCurrent]}>
+                    <ThemedText type="smallBold" style={s.accent}>Free up a slot — delete a brand</ThemedText>
                   </Pressable>
-                </View>
-                );
-              })}
+                ) : null}
 
-              {data?.entitlements.active ? (
-                <Pressable onPress={openPortal} disabled={!!busy} style={s.manageBtn}>
-                  {busy === 'portal' ? (
-                    <ActivityIndicator size="small" color={p.accent} />
-                  ) : (
-                    <ThemedText type="smallBold" style={s.accent}>Manage billing in Stripe ↗</ThemedText>
-                  )}
-                </Pressable>
-              ) : null}
+                {data?.tiers?.map((t) => {
+                  const current = data.entitlements.active && data.entitlements.plan === t.plan;
+                  return (
+                    <View key={t.plan} style={[s.card, current && s.cardCurrent]}>
+                      <View style={styles.cardTop}>
+                        <ThemedText type="subtitle" style={s.ink}>{t.label}</ThemedText>
+                        <ThemedText type="subtitle" style={s.price}>{money(t.priceCents)}<ThemedText type="code" style={s.dim}>/mo</ThemedText></ThemedText>
+                      </View>
+                      <ThemedText type="small" style={s.dim}>{t.blurb}</ThemedText>
+                      <ThemedText type="code" style={s.feat}>
+                        {[
+                          `${t.monthlyCredits.toLocaleString()} credits/mo`,
+                          t.maxBrands >= 99 ? 'unlimited brands' : `${t.maxBrands} brand${t.maxBrands > 1 ? 's' : ''}`,
+                          t.website ? 'website + custom domain' : 'in-app store',
+                          t.creditRateMultiplier < 1 ? `${Math.round((1 - t.creditRateMultiplier) * 100)}% off credit top-ups` : null,
+                        ].filter(Boolean).join(' · ')}
+                      </ThemedText>
+                      {current ? (
+                        <View style={[s.btn, s.btnCurrent]}>
+                          <ThemedText type="smallBold" style={s.accent}>Current plan</ThemedText>
+                        </View>
+                      ) : (
+                        <Pressable
+                          onPress={() => subscribe(t.plan)}
+                          disabled={!!busy}
+                          style={s.btn}
+                        >
+                          {busy === t.plan ? (
+                            <ActivityIndicator size="small" color={p.onAccent} />
+                          ) : (
+                            <ThemedText type="smallBold" style={{ color: p.onAccent }}>
+                              {data.entitlements.active ? 'Switch' : 'Subscribe'}
+                            </ThemedText>
+                          )}
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })}
 
-              <ThemedText type="code" style={s.fine}>
-                {iapOn
-                  ? 'Purchases handled by the App Store. Manage or cancel anytime in Settings.'
-                  : 'Subscriptions and credits purchased on the web. Manage or cancel any time.'}
-              </ThemedText>
-              {/* Dev-only IAP diagnostic — never shown to real users on the live paywall. */}
-              {__DEV__ && iapNote ? <ThemedText type="code" style={s.fine}>IAP status: {iapNote}</ThemedText> : null}
-            </ScrollView>
-          )}
-        </View>
-      </SafeAreaView>
+                <ThemedText type="code" style={[s.sectionLabel, { marginTop: Spacing.five }]}>CREDIT PACKS</ThemedText>
+                <ThemedText type="small" style={s.dim}>Credits power video ads, designs, and revisions. Top up any time.</ThemedText>
+                {data?.creditPacks?.map((pk) => {
+                  const mult = data.entitlements.creditRateMultiplier ?? 1;
+                  const yourPrice = Math.round(pk.priceCents * mult);
+                  return (
+                  <View key={pk.id} style={s.packRow}>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="small" style={s.ink}>{pk.label}</ThemedText>
+                      <ThemedText type="code" style={s.dim}>
+                        {money(yourPrice)}{mult < 1 ? ` · ${Math.round((1 - mult) * 100)}% off (your rate)` : ''}
+                      </ThemedText>
+                    </View>
+                    <Pressable onPress={() => buyPack(pk)} disabled={!!busy} style={s.packBtn}>
+                      {busy === pk.id ? <ActivityIndicator size="small" color={p.accent} /> : <ThemedText type="code" style={s.accent}>buy</ThemedText>}
+                    </Pressable>
+                  </View>
+                  );
+                })}
+
+                {data?.entitlements.active ? (
+                  <Pressable onPress={openPortal} disabled={!!busy} style={s.manageBtn}>
+                    {busy === 'portal' ? (
+                      <ActivityIndicator size="small" color={p.accent} />
+                    ) : (
+                      <ThemedText type="smallBold" style={s.accent}>Manage billing in Stripe ↗</ThemedText>
+                    )}
+                  </Pressable>
+                ) : null}
+
+                <ThemedText type="code" style={s.fine}>
+                  {iapOn
+                    ? 'Purchases handled by the App Store. Manage or cancel anytime in Settings.'
+                    : 'Subscriptions and credits purchased on the web. Manage or cancel any time.'}
+                </ThemedText>
+                {/* Dev-only IAP diagnostic — never shown to real users on the live paywall. */}
+                {__DEV__ && iapNote ? <ThemedText type="code" style={s.fine}>IAP status: {iapNote}</ThemedText> : null}
+              </ScrollView>
+            )}
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

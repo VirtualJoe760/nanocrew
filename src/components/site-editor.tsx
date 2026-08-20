@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GradientSlider } from '@/components/gradient-slider';
 import { ThemedText } from '@/components/themed-text';
@@ -201,143 +201,149 @@ export function SiteEditor({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.fill} edges={['top']}>
-        <View style={styles.sheet}>
-          <View style={styles.headerRow}>
-            <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Site Options</ThemedText>
-            <View style={{ flex: 1 }} />
-            <Pressable onPress={onClose} hitSlop={12}>
-              <ThemedText type="code" style={styles.dim}>close ✕</ThemedText>
-            </Pressable>
-          </View>
+      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
+          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
+          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
+          need the context too. */}
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.fill} edges={['top']}>
+          <View style={styles.sheet}>
+            <View style={styles.headerRow}>
+              <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Site Options</ThemedText>
+              <View style={{ flex: 1 }} />
+              <Pressable onPress={onClose} hitSlop={12}>
+                <ThemedText type="code" style={styles.dim}>close ✕</ThemedText>
+              </Pressable>
+            </View>
 
-          {loading ? (
-            <ActivityIndicator style={styles.center} color={pal.accent} />
-          ) : (
-            <ScrollView
-              style={styles.fillFlex}
-              contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + Spacing.six }]}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="interactive"
-              automaticallyAdjustKeyboardInsets>
-              <ThemedText type="small" style={styles.dim}>
-                Your site&apos;s current text, colors &amp; fonts — edit any of them. Changes apply
-                instantly, no rebuild. For a bigger redesign, chat with Eve in the console.
-              </ThemedText>
+            {loading ? (
+              <ActivityIndicator style={styles.center} color={pal.accent} />
+            ) : (
+              <ScrollView
+                style={styles.fillFlex}
+                contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + Spacing.six }]}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                automaticallyAdjustKeyboardInsets>
+                <ThemedText type="small" style={styles.dim}>
+                  Your site&apos;s current text, colors &amp; fonts — edit any of them. Changes apply
+                  instantly, no rebuild. For a bigger redesign, chat with Eve in the console.
+                </ThemedText>
 
-              {/* TEXT */}
-              <ThemedText type="code" style={styles.sectionLabel}>TEXT</ThemedText>
-              <View style={styles.field}>
-                <View style={styles.fieldHead}>
-                  <ThemedText type="code" style={styles.fieldLabel}>Brand name</ThemedText>
-                </View>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Your brand name"
-                  placeholderTextColor={pal.dim}
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-                />
-              </View>
-              {TEXT_FIELDS.map((f) => (
-                <View key={f.key} style={styles.field}>
+                {/* TEXT */}
+                <ThemedText type="code" style={styles.sectionLabel}>TEXT</ThemedText>
+                <View style={styles.field}>
                   <View style={styles.fieldHead}>
-                    <ThemedText type="code" style={styles.fieldLabel}>{f.label}</ThemedText>
-                    <Pressable onPress={() => enhance(f.key)} disabled={!!enhancing} hitSlop={6}>
-                      {enhancing === f.key ? (
-                        <ActivityIndicator size="small" color={pal.accent} />
-                      ) : (
-                        <ThemedText type="code" style={[styles.enhance, !!enhancing && { opacity: 0.4 }]}>✦ Enhance</ThemedText>
-                      )}
-                    </Pressable>
+                    <ThemedText type="code" style={styles.fieldLabel}>Brand name</ThemedText>
                   </View>
                   <TextInput
-                    style={[styles.input, f.multiline && styles.multiline]}
-                    placeholder={f.hint}
+                    style={styles.input}
+                    placeholder="Your brand name"
                     placeholderTextColor={pal.dim}
-                    value={copy[f.key] ?? ''}
-                    onChangeText={(t) => setCopy((c) => ({ ...c, [f.key]: t }))}
-                    multiline={f.multiline}
+                    value={name}
+                    onChangeText={setName}
+                    autoCapitalize="words"
                   />
                 </View>
-              ))}
-
-              {/* COLORS */}
-              <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>COLORS</ThemedText>
-              {COLOR_FIELDS.map((f) => {
-                const v = colors[f.key]?.trim() ?? '';
-                const valid = HEX.test(v);
-                const open = pickerField === f.key;
-                return (
-                  <View key={f.key}>
-                    <View style={styles.colorRow}>
-                      <Pressable onPress={() => setPickerField(open ? null : f.key)} hitSlop={6}>
-                        <View style={[styles.swatch, valid ? { backgroundColor: v } : styles.swatchEmpty]} />
-                      </Pressable>
-                      <ThemedText type="small" style={[styles.white, { flex: 1 }]}>{f.label}</ThemedText>
-                      <TextInput
-                        style={[styles.input, styles.hexInput]}
-                        placeholder="#hex"
-                        placeholderTextColor={pal.dim}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        value={colors[f.key] ?? ''}
-                        onChangeText={(t) => setColors((c) => ({ ...c, [f.key]: t }))}
-                      />
-                      <Pressable onPress={() => setPickerField(open ? null : f.key)} hitSlop={6}>
-                        <ThemedText type="code" style={styles.enhance}>{open ? 'close' : 'pick'}</ThemedText>
+                {TEXT_FIELDS.map((f) => (
+                  <View key={f.key} style={styles.field}>
+                    <View style={styles.fieldHead}>
+                      <ThemedText type="code" style={styles.fieldLabel}>{f.label}</ThemedText>
+                      <Pressable onPress={() => enhance(f.key)} disabled={!!enhancing} hitSlop={6}>
+                        {enhancing === f.key ? (
+                          <ActivityIndicator size="small" color={pal.accent} />
+                        ) : (
+                          <ThemedText type="code" style={[styles.enhance, !!enhancing && { opacity: 0.4 }]}>✦ Enhance</ThemedText>
+                        )}
                       </Pressable>
                     </View>
-                    {open ? (() => {
-                      const hsl = hexToHsl(v) ?? { h: 210, s: 60, l: 50 };
-                      const set = (patch: Partial<typeof hsl>) =>
-                        setColors((p) => ({ ...p, [f.key]: hslToHex(patch.h ?? hsl.h, patch.s ?? hsl.s, patch.l ?? hsl.l) }));
-                      return (
-                        <View style={styles.pickerBox}>
-                          <ThemedText type="code" style={styles.pickerCue}>Hue</ThemedText>
-                          <GradientSlider id={`${f.key}-h`} stops={HUE_STOPS} value={hsl.h / 360} onChange={(t) => set({ h: Math.round(t * 360) })} />
-                          <ThemedText type="code" style={styles.pickerCue}>Saturation</ThemedText>
-                          <GradientSlider id={`${f.key}-s`} stops={[hslToHex(hsl.h, 0, hsl.l), hslToHex(hsl.h, 100, hsl.l)]} value={hsl.s / 100} onChange={(t) => set({ s: Math.round(t * 100) })} />
-                          <ThemedText type="code" style={styles.pickerCue}>Brightness</ThemedText>
-                          <GradientSlider id={`${f.key}-l`} stops={['#000000', hslToHex(hsl.h, hsl.s, 50), '#ffffff']} value={hsl.l / 100} onChange={(t) => set({ l: Math.round(t * 100) })} />
-                        </View>
-                      );
-                    })() : null}
+                    <TextInput
+                      style={[styles.input, f.multiline && styles.multiline]}
+                      placeholder={f.hint}
+                      placeholderTextColor={pal.dim}
+                      value={copy[f.key] ?? ''}
+                      onChangeText={(t) => setCopy((c) => ({ ...c, [f.key]: t }))}
+                      multiline={f.multiline}
+                    />
                   </View>
-                );
-              })}
+                ))}
 
-              {/* FONTS */}
-              <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>FONTS</ThemedText>
-              {(['display', 'body'] as const).map((slot) => (
-                <View key={slot} style={styles.field}>
-                  <ThemedText type="code" style={styles.fieldLabel}>{slot === 'display' ? 'Headings' : 'Body'}</ThemedText>
-                  <View style={styles.fontRow}>
-                    {FONTS.map((ft) => {
-                      const on = fonts[slot] === ft.key;
-                      return (
-                        <Pressable
-                          key={ft.key}
-                          onPress={() => setFonts((f) => ({ ...f, [slot]: on ? undefined : ft.key }))}
-                          style={[styles.fontPill, on && styles.fontPillOn]}>
-                          <ThemedText type="code" style={on ? { color: pal.onAccent } : styles.dim}>{ft.label}</ThemedText>
+                {/* COLORS */}
+                <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>COLORS</ThemedText>
+                {COLOR_FIELDS.map((f) => {
+                  const v = colors[f.key]?.trim() ?? '';
+                  const valid = HEX.test(v);
+                  const open = pickerField === f.key;
+                  return (
+                    <View key={f.key}>
+                      <View style={styles.colorRow}>
+                        <Pressable onPress={() => setPickerField(open ? null : f.key)} hitSlop={6}>
+                          <View style={[styles.swatch, valid ? { backgroundColor: v } : styles.swatchEmpty]} />
                         </Pressable>
-                      );
-                    })}
+                        <ThemedText type="small" style={[styles.white, { flex: 1 }]}>{f.label}</ThemedText>
+                        <TextInput
+                          style={[styles.input, styles.hexInput]}
+                          placeholder="#hex"
+                          placeholderTextColor={pal.dim}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          value={colors[f.key] ?? ''}
+                          onChangeText={(t) => setColors((c) => ({ ...c, [f.key]: t }))}
+                        />
+                        <Pressable onPress={() => setPickerField(open ? null : f.key)} hitSlop={6}>
+                          <ThemedText type="code" style={styles.enhance}>{open ? 'close' : 'pick'}</ThemedText>
+                        </Pressable>
+                      </View>
+                      {open ? (() => {
+                        const hsl = hexToHsl(v) ?? { h: 210, s: 60, l: 50 };
+                        const set = (patch: Partial<typeof hsl>) =>
+                          setColors((p) => ({ ...p, [f.key]: hslToHex(patch.h ?? hsl.h, patch.s ?? hsl.s, patch.l ?? hsl.l) }));
+                        return (
+                          <View style={styles.pickerBox}>
+                            <ThemedText type="code" style={styles.pickerCue}>Hue</ThemedText>
+                            <GradientSlider id={`${f.key}-h`} stops={HUE_STOPS} value={hsl.h / 360} onChange={(t) => set({ h: Math.round(t * 360) })} />
+                            <ThemedText type="code" style={styles.pickerCue}>Saturation</ThemedText>
+                            <GradientSlider id={`${f.key}-s`} stops={[hslToHex(hsl.h, 0, hsl.l), hslToHex(hsl.h, 100, hsl.l)]} value={hsl.s / 100} onChange={(t) => set({ s: Math.round(t * 100) })} />
+                            <ThemedText type="code" style={styles.pickerCue}>Brightness</ThemedText>
+                            <GradientSlider id={`${f.key}-l`} stops={['#000000', hslToHex(hsl.h, hsl.s, 50), '#ffffff']} value={hsl.l / 100} onChange={(t) => set({ l: Math.round(t * 100) })} />
+                          </View>
+                        );
+                      })() : null}
+                    </View>
+                  );
+                })}
+
+                {/* FONTS */}
+                <ThemedText type="code" style={[styles.sectionLabel, { marginTop: Spacing.four }]}>FONTS</ThemedText>
+                {(['display', 'body'] as const).map((slot) => (
+                  <View key={slot} style={styles.field}>
+                    <ThemedText type="code" style={styles.fieldLabel}>{slot === 'display' ? 'Headings' : 'Body'}</ThemedText>
+                    <View style={styles.fontRow}>
+                      {FONTS.map((ft) => {
+                        const on = fonts[slot] === ft.key;
+                        return (
+                          <Pressable
+                            key={ft.key}
+                            onPress={() => setFonts((f) => ({ ...f, [slot]: on ? undefined : ft.key }))}
+                            style={[styles.fontPill, on && styles.fontPillOn]}>
+                            <ThemedText type="code" style={on ? { color: pal.onAccent } : styles.dim}>{ft.label}</ThemedText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                   </View>
-                </View>
-              ))}
+                ))}
 
-              {note ? <ThemedText type="small" style={styles.note}>{note}</ThemedText> : null}
+                {note ? <ThemedText type="small" style={styles.note}>{note}</ThemedText> : null}
 
-              <Pressable onPress={save} disabled={saving} style={[styles.saveBtn, saving && { opacity: 0.5 }]}>
-                <ThemedText type="smallBold" style={{ color: pal.onAccent }}>{saving ? 'Saving…' : 'Save changes'}</ThemedText>
-              </Pressable>
-            </ScrollView>
-          )}
-        </View>
-      </SafeAreaView>
+                <Pressable onPress={save} disabled={saving} style={[styles.saveBtn, saving && { opacity: 0.5 }]}>
+                  <ThemedText type="smallBold" style={{ color: pal.onAccent }}>{saving ? 'Saving…' : 'Save changes'}</ThemedText>
+                </Pressable>
+              </ScrollView>
+            )}
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

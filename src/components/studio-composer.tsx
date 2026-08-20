@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -675,10 +675,16 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   }
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-        <View style={styles.sheet}>{body}</View>
-      </SafeAreaView>
-      {overlays}
+      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
+          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
+          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
+          need the context too. */}
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+          <View style={styles.sheet}>{body}</View>
+        </SafeAreaView>
+        {overlays}
+      </SafeAreaProvider>
     </Modal>
   );
 }

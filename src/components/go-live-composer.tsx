@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -170,118 +170,124 @@ export function GoLiveComposer({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-        <View style={styles.sheet}>
-          <View style={styles.headerRow}>
-            <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Go live</ThemedText>
-            <View style={{ flex: 1 }} />
-            <Pressable onPress={onClose} hitSlop={12}>
-              <ThemedText type="code" style={styles.dim}>close ✕</ThemedText>
-            </Pressable>
-          </View>
+      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
+          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
+          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
+          need the context too. */}
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+          <View style={styles.sheet}>
+            <View style={styles.headerRow}>
+              <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Go live</ThemedText>
+              <View style={{ flex: 1 }} />
+              <Pressable onPress={onClose} hitSlop={12}>
+                <ThemedText type="code" style={styles.dim}>close ✕</ThemedText>
+              </Pressable>
+            </View>
 
-          {loading ? (
-            <ActivityIndicator style={styles.center} color={pal.accent} />
-          ) : (
-            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-              {/* Current status */}
-              {isLive ? (
-                <View style={styles.liveCard}>
-                  <ThemedText type="code" style={styles.sectionLabel}>LIVE</ThemedText>
-                  <ThemedText type="subtitle" style={styles.white}>{info!.customDomain}</ThemedText>
-                  <ThemedText type="small" style={styles.dim}>Your store is published on its own domain.</ThemedText>
-                </View>
-              ) : (
-                <View style={styles.statusCard}>
-                  <ThemedText type="code" style={styles.sectionLabel}>NOT LIVE YET</ThemedText>
-                  <ThemedText type="small" style={styles.dim}>
-                    Your store is on its preview URL{previewUrl ? ` (${previewUrl.replace(/^https?:\/\//, '')})` : ''}. Point it at a domain to launch.
-                  </ThemedText>
-                </View>
-              )}
-
-              {/* Mode toggle */}
-              <View style={styles.toggleRow}>
-                {([['own', 'I own a domain'], ['buy', 'Buy a domain']] as const).map(([m, label]) => (
-                  <Pressable key={m} onPress={() => { setMode(m); setNote(null); }} style={[styles.toggle, mode === m && styles.toggleOn]}>
-                    <ThemedText type="code" style={mode === m ? styles.chipTextOn : styles.chipText}>{label}</ThemedText>
-                  </Pressable>
-                ))}
-              </View>
-
-              {mode === 'own' ? (
-                <>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="mybrand.com"
-                    placeholderTextColor={pal.dim}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={domain}
-                    onChangeText={(t) => { setDomain(t); setRecords(null); }}
-                  />
-                  {records?.length ? (
-                    <View style={styles.recordsCard}>
-                      <ThemedText type="code" style={styles.sectionLabel}>SET THESE AT YOUR REGISTRAR</ThemedText>
-                      {records.map((r, i) => (
-                        <View key={i} style={styles.recordRow}>
-                          <ThemedText type="code" style={styles.recordType}>{r.type}</ThemedText>
-                          <View style={{ flex: 1 }}>
-                            <ThemedText type="code" style={styles.dim} numberOfLines={1}>{r.domain || '@'}</ThemedText>
-                            <ThemedText type="code" style={styles.white} numberOfLines={2}>{r.value}</ThemedText>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                  <Pressable onPress={attach} disabled={attaching || !domain.trim()} style={[styles.primaryBtn, (attaching || !domain.trim()) && { opacity: 0.4 }]}>
-                    <ThemedText type="smallBold" style={{ color: pal.onAccent }}>
-                      {attaching ? 'Checking…' : records?.length ? 'I’ve added them — re-check' : 'Attach & go live'}
+            {loading ? (
+              <ActivityIndicator style={styles.center} color={pal.accent} />
+            ) : (
+              <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+                {/* Current status */}
+                {isLive ? (
+                  <View style={styles.liveCard}>
+                    <ThemedText type="code" style={styles.sectionLabel}>LIVE</ThemedText>
+                    <ThemedText type="subtitle" style={styles.white}>{info!.customDomain}</ThemedText>
+                    <ThemedText type="small" style={styles.dim}>Your store is published on its own domain.</ThemedText>
+                  </View>
+                ) : (
+                  <View style={styles.statusCard}>
+                    <ThemedText type="code" style={styles.sectionLabel}>NOT LIVE YET</ThemedText>
+                    <ThemedText type="small" style={styles.dim}>
+                      Your store is on its preview URL{previewUrl ? ` (${previewUrl.replace(/^https?:\/\//, '')})` : ''}. Point it at a domain to launch.
                     </ThemedText>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <View style={styles.searchRow}>
+                  </View>
+                )}
+
+                {/* Mode toggle */}
+                <View style={styles.toggleRow}>
+                  {([['own', 'I own a domain'], ['buy', 'Buy a domain']] as const).map(([m, label]) => (
+                    <Pressable key={m} onPress={() => { setMode(m); setNote(null); }} style={[styles.toggle, mode === m && styles.toggleOn]}>
+                      <ThemedText type="code" style={mode === m ? styles.chipTextOn : styles.chipText}>{label}</ThemedText>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {mode === 'own' ? (
+                  <>
                     <TextInput
-                      style={[styles.input, { flex: 1 }]}
-                      placeholder="search a domain — mybrand.com"
+                      style={styles.input}
+                      placeholder="mybrand.com"
                       placeholderTextColor={pal.dim}
                       autoCapitalize="none"
                       autoCorrect={false}
-                      value={query}
-                      onChangeText={(t) => { setQuery(t); setOffer(null); }}
-                      onSubmitEditing={search}
+                      value={domain}
+                      onChangeText={(t) => { setDomain(t); setRecords(null); }}
                     />
-                    <Pressable onPress={search} disabled={searching || !query.trim()} style={[styles.searchBtn, (searching || !query.trim()) && { opacity: 0.4 }]}>
-                      <ThemedText type="code" style={{ color: pal.onAccent }}>{searching ? '…' : 'check'}</ThemedText>
-                    </Pressable>
-                  </View>
-
-                  {offer ? (
-                    offer.available && offer.credits != null ? (
-                      <View style={styles.offerCard}>
-                        <View style={{ flex: 1 }}>
-                          <ThemedText type="small" style={styles.white}>{offer.domain}</ThemedText>
-                          <ThemedText type="code" style={styles.green}>available · {offer.credits} credits / yr</ThemedText>
-                        </View>
-                        <Pressable onPress={buy} disabled={buying} style={[styles.primaryBtn, { marginTop: 0 }, buying && { opacity: 0.4 }]}>
-                          <ThemedText type="smallBold" style={{ color: pal.onAccent }}>{buying ? 'Buying…' : 'Buy & go live'}</ThemedText>
-                        </Pressable>
+                    {records?.length ? (
+                      <View style={styles.recordsCard}>
+                        <ThemedText type="code" style={styles.sectionLabel}>SET THESE AT YOUR REGISTRAR</ThemedText>
+                        {records.map((r, i) => (
+                          <View key={i} style={styles.recordRow}>
+                            <ThemedText type="code" style={styles.recordType}>{r.type}</ThemedText>
+                            <View style={{ flex: 1 }}>
+                              <ThemedText type="code" style={styles.dim} numberOfLines={1}>{r.domain || '@'}</ThemedText>
+                              <ThemedText type="code" style={styles.white} numberOfLines={2}>{r.value}</ThemedText>
+                            </View>
+                          </View>
+                        ))}
                       </View>
-                    ) : (
-                      <ThemedText type="small" style={styles.dim}>{offer.domain} isn’t available — try another name.</ThemedText>
-                    )
-                  ) : null}
-                  {credits !== null ? <ThemedText type="code" style={styles.dim}>balance: {credits} credits</ThemedText> : null}
-                </>
-              )}
+                    ) : null}
+                    <Pressable onPress={attach} disabled={attaching || !domain.trim()} style={[styles.primaryBtn, (attaching || !domain.trim()) && { opacity: 0.4 }]}>
+                      <ThemedText type="smallBold" style={{ color: pal.onAccent }}>
+                        {attaching ? 'Checking…' : records?.length ? 'I’ve added them — re-check' : 'Attach & go live'}
+                      </ThemedText>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.searchRow}>
+                      <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        placeholder="search a domain — mybrand.com"
+                        placeholderTextColor={pal.dim}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        value={query}
+                        onChangeText={(t) => { setQuery(t); setOffer(null); }}
+                        onSubmitEditing={search}
+                      />
+                      <Pressable onPress={search} disabled={searching || !query.trim()} style={[styles.searchBtn, (searching || !query.trim()) && { opacity: 0.4 }]}>
+                        <ThemedText type="code" style={{ color: pal.onAccent }}>{searching ? '…' : 'check'}</ThemedText>
+                      </Pressable>
+                    </View>
 
-              {note ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
-            </ScrollView>
-          )}
-        </View>
-      </SafeAreaView>
+                    {offer ? (
+                      offer.available && offer.credits != null ? (
+                        <View style={styles.offerCard}>
+                          <View style={{ flex: 1 }}>
+                            <ThemedText type="small" style={styles.white}>{offer.domain}</ThemedText>
+                            <ThemedText type="code" style={styles.green}>available · {offer.credits} credits / yr</ThemedText>
+                          </View>
+                          <Pressable onPress={buy} disabled={buying} style={[styles.primaryBtn, { marginTop: 0 }, buying && { opacity: 0.4 }]}>
+                            <ThemedText type="smallBold" style={{ color: pal.onAccent }}>{buying ? 'Buying…' : 'Buy & go live'}</ThemedText>
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <ThemedText type="small" style={styles.dim}>{offer.domain} isn’t available — try another name.</ThemedText>
+                      )
+                    ) : null}
+                    {credits !== null ? <ThemedText type="code" style={styles.dim}>balance: {credits} credits</ThemedText> : null}
+                  </>
+                )}
+
+                {note ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
+              </ScrollView>
+            )}
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
