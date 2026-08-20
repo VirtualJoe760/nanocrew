@@ -142,6 +142,12 @@ Founders, team, and demo accounts aren't billed. `COMP_EMAILS` (comma-separated;
 **top-tier free entitlements** and `debitCredits` **no-ops** (never charged). So internal use never
 spends real money or hits the paywall.
 
+**Both surfaces read the same rule (2026-08-20).** platform-api's account route resolves the plan
+badge with the app's logic — `trialing` counts as paid, and a comp email reads as `advanced` — so
+the web identity header can't say FREE while the app says Pro (BUG_AUDIT #42). That means
+`COMP_EMAILS` (or `PLATFORM_ADMIN_EMAILS`) must be set in **platform-api's** environment too, not
+just the app server's; without it, comp creators simply fall back to their real subscription.
+
 ---
 
 ## 3. Creator payouts · `src/lib/connect.ts`, `connected_accounts` table
