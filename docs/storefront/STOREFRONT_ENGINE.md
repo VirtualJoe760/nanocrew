@@ -253,13 +253,9 @@ The worker (`nanocrew-forge-worker.service`, run as the `forge` user) needs:
 The app-server side (`provision.ts`) needs `GITHUB_TOKEN`/`GITHUB_OWNER` (required, else it
 silently skips), plus `PLATFORM_API_BASE`, `EXPO_PUBLIC_SUPABASE_URL`,
 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `PROCESSING_FEE_*` baked into `brand.json`.
-(`provision.ts`'s `config()` also reads `VPS_HOST`/`VPS_USER` for legacy reasons — the provision
-path no longer dials them; the worker owns all forge execution.
-⚠️ **Currently broken in code:** `config()` still HARD-REQUIRES `VPS_HOST`/`VPS_USER` even though
-the queue path never dials them — unsetting these legacy vars on Cloud Run silently disables all
-provisioning ("[provision] skipped — env not configured"). See the bug on `provision.ts:62` in
-[docs/ops/BUG_AUDIT_2026-08-20.md](../ops/BUG_AUDIT_2026-08-20.md); until it's fixed, keep both
-vars set.)
+(`VPS_HOST`/`VPS_USER` are gone from `config()` entirely — fixed 2026-08-20, BUG_AUDIT #8: the
+queue path never dialed them, the worker owns all forge execution, and hard-requiring them meant
+an env cleanup silently disabled provisioning. They can now be removed from Cloud Run safely.)
 
 ## Commerce & data — see the data contract
 

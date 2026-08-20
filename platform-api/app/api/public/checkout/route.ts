@@ -6,17 +6,25 @@ import { stripe } from '@/lib/stripe';
 
 export const OPTIONS = corsPreflight;
 
-// POST /api/public/checkout { storeSlug, items: [{ variantId, quantity }] }
+// POST /api/public/checkout { storeSlug, items: [{ variantId, quantity }], customerEmail? }
 // → Stripe Checkout URL. Prices come from the DB — the client is never trusted.
 // The order row is created up front as pending_payment; the webhook flips it to
-// paid and fills customer/shipping details.
+// paid and fills customer/shipping details. customerEmail is the SIGNED-IN buyer's address,
+// forwarded by the app's checkout proxy so in-app purchases attribute to the account up front
+// (and prefill Stripe Checkout) — it used to be silently dropped here, leaving every order
+// 'pending@checkout' unless the buyer retyped the same address (BUG_AUDIT_2026-08-20 #7).
 export async function POST(req: Request) {
   if (!stripe) return corsJson({ error: 'Checkout is not configured yet' }, { status: 503 });
   try {
     const body = (await req.json().catch(() => null)) as {
       storeSlug?: string;
       items?: { variantId: string; quantity: number }[];
+      customerEmail?: string;
     } | null;
+    const customerEmail =
+      typeof body?.customerEmail === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.customerEmail)
+        ? body.customerEmail.slice(0, 254)
+        : null;
     const items = (body?.items ?? []).filter((i) => i.variantId && i.quantity > 0).slice(0, 50);
     if (!body?.storeSlug || !items.length) return corsJson({ error: 'storeSlug and items required' }, { status: 400 });
 
@@ -132,7 +140,9 @@ export async function POST(req: Request) {
       .insert(schema.orders)
       .values({
         storeId: store.id,
-        customerEmail: 'pending@checkout', // real email arrives via the webhook
+        // The signed-in buyer's email when the app forwarded it; the webhook still overwrites
+        // with whatever Stripe collected (normally the same address).
+        customerEmail: customerEmail ?? 'pending@checkout',
         status: 'pending_payment',
         subtotalCents,
         totalCents: subtotalCents,
@@ -191,6 +201,8 @@ export async function POST(req: Request) {
         },
       ],
       metadata: { orderId: order.id, storeSlug: store.slug, storeName: store.name },
+      // Prefill for signed-in buyers — Stripe locks the field, so attribution can't drift.
+      ...(customerEmail ? { customer_email: customerEmail } : {}),
       // No payment_intent_data: the charge settles 100% to the platform. The brand's held net is
       // transferred later by the release job — see the payout fields persisted on the order above.
       success_url: `${origin}/cart?checkout=success`,
