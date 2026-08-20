@@ -27,14 +27,16 @@ const PRINT_REALISM =
   'glossy, perfectly-flat sticker or digital overlay. Scene lighting and shadows fall across the ' +
   'print exactly as they fall across the cloth around it.';
 
-// Posed studio/editorial looks + ACTION shots in real environments — the mix a real lookbook has.
+// ACTION-FIRST (Joe, 2026-08-20: "modeling shots should be action shots — walking in the park,
+// at a coffee shop"). Real-environment candids lead the bank; one clean studio look survives as
+// the anchor so a set still carries a catalog-grade reference frame.
 const POSES = [
-  'a clean studio fashion photo, model facing forward, neutral seamless background, soft even lighting',
-  'a three-quarter editorial photo, model turned slightly, natural daylight, minimal background',
-  'a candid lifestyle photo, model in an urban setting at golden hour, shallow depth of field',
+  'an action photo, model walking through a leafy park, mid-stride, natural light, print clearly readable',
+  'a candid photo, model at a coffee shop — stepping out with a cup or laughing at an outdoor table, print clearly readable',
   'an action photo, model mid-stride crossing a city street, motion in the scene, print clearly readable',
   'an action photo, model skateboarding or leaning off a rail in a skatepark at dusk, dynamic angle',
   'an outdoor action photo, model jogging or stretching on a coastal trail in morning light',
+  'a clean studio fashion photo, model facing forward, neutral seamless background, soft even lighting',
 ];
 
 interface InlinePart {
@@ -110,9 +112,10 @@ function angleFor(placement: string): string {
   for (const k of Object.keys(PLACEMENT_ANGLE)) if (key.includes(k)) return PLACEMENT_ANGLE[k];
   return PLACEMENT_ANGLE.front;
 }
+// Action-first here too (Joe, 2026-08-20) — the studio look stays as the second frame's anchor.
 const SCENES = [
+  'Action photo, model walking through a leafy park or stepping out of a coffee shop, mid-stride, natural light, print clearly readable.',
   'Clean studio fashion photo, seamless neutral background, soft even lighting.',
-  'Candid lifestyle photo, model in a tasteful real-world setting at golden hour, shallow depth of field.',
 ];
 
 // On-model shots grounded in a REAL Printful mockup — the flat product with the design already

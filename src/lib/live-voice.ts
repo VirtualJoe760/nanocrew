@@ -507,6 +507,12 @@ export class LiveVoiceSession {
             return;
           }
           console.warn('[live] ws open → starting mic');
+          // A healthy stretch re-arms the one automatic reconnect. The counter used to latch
+          // after the first drop, so the SECOND drop — even an hour later — left her silently
+          // dead (BUG_AUDIT_2026-08-20). 15s connected = healthy; a reconnect that dies before
+          // that keeps the latch, so a flapping socket still can't loop forever.
+          if (this.healthTimer) clearTimeout(this.healthTimer);
+          this.healthTimer = setTimeout(() => { this.reconnects = 0; }, 15_000);
           this.startMic();
         },
         onmessage: (m) => this.onMessage(m),
@@ -516,6 +522,7 @@ export class LiveVoiceSession {
         },
         onclose: (e: CloseEvent) => {
           console.warn('[live] ws close', e?.code, e?.reason);
+          if (this.healthTimer) { clearTimeout(this.healthTimer); this.healthTimer = null; }
           if (this.closed) return;
           // She must not silently die mid-conversation (Joe, 2026-08-17): one automatic
           // reconnect, no re-greeting, transcript intact. Repeated failures surface as idle.
@@ -800,6 +807,8 @@ export class LiveVoiceSession {
   /** Fires when the queued cue is dispatched — lets a caller time a surface to her voice. */
   private pendingPromptSent?: () => void;
   private reconnects = 0;
+  /** Armed on ws open; fires after 15s of sustained connection → re-arms the auto-reconnect. */
+  private healthTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Mic frame → is there speech in it? RMS over the raw float buffer; called only OUTSIDE her own
    *  playback window, so her voice coming back through the speaker never reads as the creator. */
