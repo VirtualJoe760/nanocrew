@@ -54,7 +54,12 @@ A composer assembles `identity + soul + conversation + user + job(mode)` (+ refe
 the Live API setup message. Three consequences:
 
 1. **Order matters** — persona first, guardrails last (Google's guidance).
-2. **Size matters** — Google warns against multi-page instructions; the composer enforces a budget.
+2. **Size matters** — Google warns against multi-page instructions; the composer enforces a budget
+   of 12,000 chars: over budget **throws in dev**, warns and ships in production (a degraded Eve
+   beats a silent one mid-conversation). Measured 2026-08-20: the heaviest mode (`central` —
+   design + assets + status) composes to ~10,600 with a generous runtime context, so there is
+   roughly **1,300 chars of headroom**. Adding a paragraph to a job file is close to the ceiling;
+   check before you write.
 3. **It is read ONCE, at connect.** Editing a file mid-session changes nothing; the socket has to
    reconnect. (Same shape as OpenClaw's "restart the gateway" gotcha.)
 

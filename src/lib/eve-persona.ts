@@ -74,8 +74,14 @@ export function buildPersona(mode: PersonaMode, ctx: PersonaContext = {}): strin
     .filter(Boolean)
     .join('\n\n');
 
-  if (__DEV__ && instruction.length > BUDGET) {
-    console.warn(`[eve] persona over budget: ${instruction.length} > ${BUDGET} chars — trim src/eve/*.md`);
+  // The header's contract, actually enforced (BUG_AUDIT_2026-08-20 #20): over budget THROWS in
+  // dev — a persona that grew past the budget is a bug to fix in src/eve/*.md, not something to
+  // discover later as drifting behaviour. In production it warns and ships: a degraded Eve is bad,
+  // a silent Eve is worse, and the creator is mid-conversation.
+  if (instruction.length > BUDGET) {
+    const msg = `[eve] persona over budget: ${instruction.length} > ${BUDGET} chars — trim src/eve/*.md`;
+    if (__DEV__) throw new Error(msg);
+    console.warn(msg);
   }
   return instruction;
 }

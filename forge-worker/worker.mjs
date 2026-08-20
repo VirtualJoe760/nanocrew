@@ -371,7 +371,10 @@ async function processOne() {
     // Both halves are real: the robot can fail to start (auth) or run and touch nothing.
     if (out.includes('CLAUDE_FAILED')) throw new Error(`the site robot could not run — see /tmp/${repo}-revise.log on the forge`);
     if (out.includes('NO_EDITS')) throw new Error('the site robot made no changes to the site');
-    if (out.includes('BUILD_FAILED')) log(`  build failing on ${row.branch}`);
+    // A failing build is a FAILED revision, not a ready one (BUG_AUDIT_2026-08-20 #15). The local
+    // pnpm build failing means the Vercel preview build fails too, so 'ready' invited the creator
+    // to review a preview that doesn't exist. Same treatment the provision path already gives it.
+    if (out.includes('BUILD_FAILED')) throw new Error('the site build failed on that change — nothing was published');
 
     const previewUrl = await deployPreview(fullRepo, repo, row.branch);
     await sql`update store_revisions set status = 'ready', preview_url = ${previewUrl} where id = ${row.id}`;
