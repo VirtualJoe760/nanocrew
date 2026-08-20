@@ -61,6 +61,34 @@ an explicit go.
   live session receives a shrunk JPEG with a steering note, so she reacts to the actual image, not
   the prompt. Unqueued by design — sights are dropped when she isn't live.
 
+## 0c. Shipped 2026-08-19 (the Eve field-test session)
+
+- **Public beta signups now work end to end** — `POST /api/public/beta-signup` on platform-api +
+  `beta_signups`: 50 slots per platform, iOS added to the TestFlight external group via the App
+  Store Connect API, overflow waitlisted, ops notified per signup. The site form asks which phone
+  and carries it through the OAuth round trip. (They previously reached nothing at all.)
+- **Eve's site editor**: an EDIT sector on the wheel, answering "which brand?" routes, she finishes
+  her line before the editor mounts, voice-paced subtitles, visible inpaint marks, panels clear the
+  tab bar.
+- **The forge fails loudly** instead of reporting a no-op revision as ready.
+- **Outward brand surfaces** on the current identity: email shell, the social share card, the
+  generated email mark + sender avatar, and `assets/brand/README.md` as real documentation.
+
+Full record with evidence: [`../ops/SESSION_2026-08-19.json`](../ops/SESSION_2026-08-19.json).
+
+### Found in that session, still open
+- 🔴 **Designs bind to the creator's OLDEST brand** — `getCreatorStore()` (oldest by `createdAt`)
+  via `/api/catalogues`; the design flow never asks which brand. A product made right after creating
+  a brand lands in the wrong store.
+- **A returning creator's brand interview runs on the `central` persona**, which has no brand job.
+- **She suggests products outside the Printful catalogue** (`jobs/design.md` doesn't bound them).
+- **The live socket gives up after one reconnect** — the counter is never reset (`live-voice.ts`).
+- **"Put it on the All shirt"** — the CTA noun comes from the Printful category (`eve-design.tsx`).
+- **Publish defaults** to the first colour alphabetically and to the minimum retail price (no margin).
+- **No discard on the revision review** — only "Continue editing" / "Approve edits".
+- **Sender avatar** — upload `nanocrew-avatar.png` to the sending domain's profile (BIMI/Gravatar);
+  Resend's team avatar is dashboard-only.
+
 ## 1. Blocked on a native dev build (can't run in Expo Go)
 These three all unlock with **one** EAS dev build. The server sides are already built.
 

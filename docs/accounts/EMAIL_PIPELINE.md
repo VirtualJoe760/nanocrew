@@ -121,6 +121,29 @@ monochrome) so each brand's mail matches its storefront, with a consistent Nano 
 ("Sent by Nano Crew on behalf of {brand}"). Inline-styled, table-based, ≤600px (email-client
 reality). React-Email/MJML is optional polish; a single well-tested HTML template is the floor.
 
+**Nano Crew's OWN mail wears Nano Crew (2026-08-19).** `PLATFORM_STORE` used to pass
+`logoUrl: null, colors: null`, so every platform-family email rendered as the generic fallback — no
+logo, no palette, no typeface. It now carries the app's tokens and the **current** app icon:
+
+- Mark `https://nanocrew.app/brand/nanocrew-mark.png` — emitted by `scripts/gen-app-icon.mjs` from
+  the same glyph geometry as the app icon, so it cannot drift. (It previously pointed at
+  `nc-icon.png`, the retired serif NC monogram.) See [`assets/brand/README.md`](../../assets/brand/README.md).
+- Ground `#08080a`, card `#101015`, hairlines `#22232b`, muted `#8b909b`, and **Eve blue `#7fd7e6`**
+  as the accent — outward-facing surfaces use the blue because the logo is blue; in the app it stays
+  reserved for Eve herself.
+- The palette gained `headerBg`/`headerInk`, defaulting to `accent`/`onAccent` so **every brand email
+  is unchanged**. Nano Crew overrides them to the dark ground, because the glyph is light-on-black
+  and would vanish on a platinum band.
+- Type is **Jost** via a Google Fonts link with a real fallback stack. This is the one place a font
+  CDN is allowed — there is no bundler in an inbox. Apple Mail honours it; Gmail lands on the stack.
+- `color-scheme: dark` is declared so Gmail/Outlook stop inverting an already-dark palette.
+- The footer stops saying Nano Crew sent it "on behalf of" Nano Crew.
+
+**The sender avatar is not ours to set.** What a recipient sees beside the sender is resolved by
+their mail client from the sending domain (BIMI, or the address's own profile) — not from our HTML
+and not from Resend, whose team avatar is dashboard-only. `nanocrew-avatar.png` (512px, same
+generator) is the asset to upload wherever the sending address is administered.
+
 ## Lifecycle catalogue — every email, its trigger, its hook point
 
 | # | Email | Trigger · file | Notes |
@@ -138,6 +161,9 @@ reality). React-Email/MJML is optional polish; a single well-tested HTML templat
 | 11 | **Subscription receipt / renewal** | `invoice.paid` · `billing-webhook/route.ts` | Platform family. `billing_reason` distinguishes first invoice vs cycle; keyed off the invoice id (idempotent) |
 | 12 | **Subscription payment-failed** | `invoice.payment_failed` · `billing-webhook` | Platform family. Was an **unhandled event** — now also sets the row `past_due` (a dunning logic gap, not just email) |
 | 13 | **Credit-purchase receipt** | `checkout.session.completed` (`kind=credit_pack`) · `billing-webhook` | Platform family. Stripe/web only — Apple IAP relies on Apple's own receipt |
+| 15 | **Beta accepted** | `POST /api/public/beta-signup` (under the cap, tester added) | Platform family. Only sent once the address is actually on the store's tester list, so it never promises a build that isn't coming |
+| 16 | **Beta waitlisted** | same route, past the 50-per-platform cap | Platform family. Says we'll email at launch — `beta_signups.launch_emailed_at` is what records that send |
+| 17 | **Beta signup (ops)** | same route, every signup | To `OPS_EMAIL`. Who signed up, which platform, status, slots left. Sent even when the tester add fails, so a `failed` row is never silent |
 | 14 | **Brand live** | `creator/stores/[slug]/publish+api.ts` → `/internal/notify` `{brand_live, slug}` | Platform family. First publish only (`!isPublic` guard) |
 
 Hook points already load order + store + items, so recipient + per-brand `from` are derivable with

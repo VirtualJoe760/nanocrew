@@ -94,3 +94,31 @@ idea, something personal that has nothing to do with the store.
 Her identity is genuinely good and hard-won — British, dry, unhurried, never corporate. The failure
 is that restraint was over-specified and warmth was never specified at all. **The fix is additive,
 not a rewrite of who she is**, and every change is measured against the probe set before it ships.
+
+## 7. Field notes — 2026-08-19 (a live voice session, 9 of the 10 probes)
+
+**Accent drifts in the LONGEST mode, and it is a prompt problem.** Native audio rejects
+`speechConfig.languageCode`, so her accent comes from the instruction alone. In `critique` — job
+plus the whole `VOCABULARY_BRIEF`, ~10k chars — the "British" cue at the top sat far enough from the
+end that some sessions arrived Australian or American. Proven *not* to be config: `voice=Kore` and
+`outRate=24000/24000` on every session (that log line was added for exactly this). The composer now
+repeats the voice in its **last** line as well as the first.
+
+**The critique session didn't know which brand it was editing.** `critiqueInstruction()` was called
+once at module scope with no brand, so `## Right now` told her *"They have no brands yet — this is
+their first"* while the creator edited an existing brand's live site — she talked like she was
+onboarding a newcomer. It is now built per session with the brand.
+
+**Length: the ask must come BEFORE the extra room.** `conversation.md` already capped turns at ~30
+words and told her to ask for more space; she was delivering the long version and asking afterwards,
+which is not asking. The rule now says so explicitly.
+
+**Scores.** Redirect rate **3 of 5** on probes 1–4 + 10 (target 0; the pre-rewrite baseline was 3 of
+3, so this improved without landing). Opener diversity **7 distinct in 7** cold starts — pass.
+Statement:question and net-new — pass. Turn length ~19–26 words on probes but **44–60 while riffing**
+on a brand, without asking. Probe 9 ("Keep going.") not run.
+
+**Open, not fixed:** `MODE_JOBS.central` carries design/assets/status and **no brand job**, yet a
+returning creator's new-brand interview runs on it (fingerprint match, §5's method); and nothing in
+`jobs/design.md` bounds her product suggestions to the Printful catalogue — she offered
+noise-cancelling headphones and coffee blends.

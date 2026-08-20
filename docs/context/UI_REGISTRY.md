@@ -31,6 +31,13 @@ Hooks: `useTheme()` (ColorScheme → `Colors`), `useColorScheme()` (pinned dark)
 (modal palette). Niche but reusable: `HintRow` (`hint-row.tsx`), `WebBadge` (`web-badge.tsx`),
 `SectionScreen` (`section-screen.tsx`, scaffold for unbuilt tabs).
 
+## Shared behaviour — not components, but reuse them anyway
+
+| Export | Where | Use it for |
+|---|---|---|
+| `tabBarSpace(bottomInset)` | `components/app-tabs.tsx` | Bottom padding for any **full-screen surface that draws under the tab bar**. The bar is absolutely positioned, so the safe-area inset alone is ~37pt short and controls get cut in half (Joe, 2026-08-19: "the eve icon is being cut off"). `TAB_BAR_CONTENT_HEIGHT` is the bar's own height above the inset. |
+| `useSpokenText(text, window, speaking)` · `tailWords(text, n)` | `lib/caption.ts` | **Any subtitle of Eve's speech.** Her transcript arrives seconds ahead of her audio, so rendering `venusText` directly races her voice; this reveals words across the wall-clock window of her queued audio (`live.speechWindow`). `tailWords` trims to a caption line rather than a paragraph. |
+
 ## Missing — build as token-driven primitives (don't one-off)
 These are re-implemented per-screen today; promoting them removes the biggest duplication. Building
 them is part of the **UI component system** in-flight work — do it opportunistically.

@@ -11,7 +11,10 @@ signed-in **account page**. Next.js 15 on Vercel.
   reads use `lib/store.ts`; authed calls use **`lib/api.ts` → `apiFetch()`**, the web sibling of the
   app's `src/lib/api.ts` (Supabase session → bearer). If you find yourself importing `postgres` here,
   stop — add the endpoint to platform-api instead.
-  *(One legacy exception: `app/api/waitlist` opens Postgres directly. Don't copy it.)*
+  *(`app/api/waitlist` was the one exception — it opened Postgres directly. As of 2026-08-19 it is a
+  thin server-side **proxy** to platform-api `POST /api/public/beta-signup`. That is why the rule
+  exists: `DATABASE_URL` was never set here, so the table was never created and every beta signup
+  fell through to a `console.log` — no row, no email, no invite.)*
 - 🔴 **Account parity.** The account page mirrors the app's. Change one → change the app and the API
   in the same commit, and update the matrix in
   [`../docs/accounts/ACCOUNT_SURFACE.md`](../docs/accounts/ACCOUNT_SURFACE.md).
@@ -28,7 +31,11 @@ signed-in **account page**. Next.js 15 on Vercel.
   a font CDN.
 - **Eve's mark** (`app/eve-mark.tsx`) and the background field (`app/eve-sky.tsx`) mirror the
   geometry in `src/components/eve/eve-glyph.tsx` and `scripts/gen-app-icon.mjs`. Change the glyph
-  there → change it here.
+  there → change it here. The **social share card** (`app/opengraph-image.tsx`, re-exported by
+  `app/twitter-image.tsx`, so it is every share preview) draws the same geometry — it was still the
+  retired gold serif "NC" lockup until 2026-08-19. `public/brand/` holds the two rasters emailed
+  clients need; both are generated, so don't hand-edit them. See
+  [`../assets/brand/README.md`](../assets/brand/README.md).
 - **Email landing pages live here**, not on platform-api: a CTA points at one route on this site and
   that route branches (phone → `nanocrew://` deep link, desktop → complete it on the web). Never put
   a bare deep link in an email — it's a dead click on every laptop. See

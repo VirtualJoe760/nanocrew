@@ -59,6 +59,12 @@ does). This is Google's recommended client-to-server pattern.
   ≈ 600–800ms so Eve doesn't cut the creator off mid-thought.
 - **Interruption:** on `serverContent.interrupted` → `queue.clearBuffers()` + flip to listening.
 - **Transcription:** `inputAudioTranscription:{}` + `outputAudioTranscription:{}` → drive captions.
+  ⚠️ Her transcript arrives **seconds ahead of her audio**, so painting it as it lands races her
+  voice. The session reports the wall-clock window its queued audio occupies (`onSpeechWindow` →
+  `speechWindow` on the hook) and `useSpokenText` in [`src/lib/caption.ts`](../../src/lib/caption.ts)
+  reveals words across that window: 40% through the sound, 40% of the words. Shared by the site
+  editor and her home surface — subtitles anywhere should use it, not `venusText` directly
+  (Joe, 2026-08-19: "we want it to be word for word… across all subtitles").
 - **Voice:** `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` — **`Kore`** (picked in the
   Lab audition 2026-07-05: Kore × the "british robot" delivery). Set in TWO places that MUST match:
   `LIVE_VOICE` in `src/components/eve/eve-home.tsx` and `VENUS_VOICE` in `src/app/api/say+api.ts`
@@ -76,6 +82,19 @@ does). This is Google's recommended client-to-server pattern.
 - **Session longevity (TODO):** `contextWindowCompression:{ slidingWindow:{} }` (15-min audio cap →
   unlimited) + `sessionResumption:{}` (capture `SessionResumptionUpdate.handle`; on `GoAway`/close,
   reconnect with the handle — valid 2h).
+  **Observed in the field 2026-08-19**, so this TODO has a cost now: four distinct server closes in
+  one session — `1007 CONTENT_TYPE_AUDIO` **twice mid-utterance**, plus `1011` and `1001`. The
+  client allows exactly ONE automatic reconnect (`live-voice.ts`, `reconnects < 1`) and never resets
+  the counter, so a second drop leaves her idle with the mic dead. It cost a whole utterance (one
+  sentence reached the router as the single word `club`) and a dropped enhance-or-as-is line.
+
+**Setup log — what she actually got.** Every session prints
+`[live] persona files=<hash> sent=<fingerprint> chars=<n> voice=<name> outRate=<ctx>/<expected>`.
+`voice`/`outRate` were added 2026-08-19 after "she sounded like someone else for a second": they
+prove a drift is NOT a wrong voice name or a resampled graph, which leaves the instruction as the
+only suspect. Her accent is prompt-carried — native audio **rejects** `speechConfig.languageCode`
+(it kills the session), so the model infers the accent, and the longest instruction is where it
+wanders. See [`EVE_PERSONALITY.md`](EVE_PERSONALITY.md).
 
 ## Security (TODO on the token endpoint)
 
