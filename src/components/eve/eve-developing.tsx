@@ -7,7 +7,7 @@ import { usePalette } from '@/components/nc-screen';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 
-// EVE'S DEVELOPING STATE — site editing inside the overlay (docs/archive/VENUS_CENTRAL.md §2).
+// EVE'S DEVELOPING STATE — site editing inside the overlay (docs/studio/VENUS_CENTRAL.md §2).
 // The existing critique experience RE-HOMED, not rebuilt: PreviewContent (site-preview.tsx) is the
 // whole UI — WebView + circle-pen + its own critique voice session (critiqueInstruction persona,
 // started on mount, stopped on unmount). That self-hosting IS the session model here:

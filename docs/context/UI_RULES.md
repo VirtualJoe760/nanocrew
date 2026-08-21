@@ -76,11 +76,8 @@ surface isn't "tight" — it is *physically covered by hardware* on most of our 
 - **Reference values, so a comp can be checked by eye:** Island devices ≈ **59pt** top / **34pt**
   bottom; notch devices ≈ 47 / 34; the older flat phones ≈ 20 / 0. If a design puts anything in the
   top ~59pt of the frame, the design is wrong before the code is.
-- **Inside `<Modal>` insets don't resolve** — the safe-area context does not cross an RN `Modal`,
-  so every inset reads 0. **Wrap the modal body in its own `<SafeAreaProvider>`** (2026-08-20: done
-  for all nine modals) and `SafeAreaView edges={…}` works normally inside; passing app-level insets
-  down as props is the older alternative. Wrap the WHOLE body, not just the SafeAreaView — siblings
-  need the context too.
+- **Inside `<Modal>` insets don't resolve** — pass the app-level insets in as props (see "Modals /
+  sheets" below), or you reintroduce the same bug one layer down.
 - **This governs mocks and design comps too.** Draw the Island in the frame so the constraint is
   visible while the layout is being decided, rather than discovered on device.
 
@@ -91,18 +88,11 @@ Buttons glow **platinum** (`accent`); inputs glow **cool** (`accentCool`). A foc
 differently from a CTA — don't unify them.
 
 ## Modals / sheets
-The recurring pattern is a `<Modal>` over a `modalBackdrop` with a `sheet`, wrapping its body in a
-nested `<SafeAreaProvider>` so insets resolve (see the safe-area rule above). This is copy-pasted
-across ~10 surfaces — a shared `Sheet` wrapper is a **missing primitive** (see the registry), and it
-is what would stop the next modal from being born without the provider.
+The recurring pattern is a `<Modal>` over a `modalBackdrop` with a `sheet`, and a manual SafeAreaView
+inset (`Math.max(insets.top, Spacing.three)`) because insets don't resolve inside `Modal`. This is
+copy-pasted across ~5 screens — a shared `Sheet` wrapper is a **missing primitive** (see the registry).
 Until it exists, match the existing pattern rather than inventing a new modal shape.
 
 ## Adopt opportunistically (don't mass-rewrite)
-You don't have to convert all ~270 Pressables at once. When you touch a screen for any reason, swap its
+You don't have to convert all 220 Pressables at once. When you touch a screen for any reason, swap its
 bare buttons/inputs for the primitives as you go. Pair this with bug-fix work.
-
-**Same rule for accessibility.** A bare `Pressable` renders on web as a `<div tabindex="0">` no
-screen reader can operate, so every interactive one wants `accessibilityRole` (+ a label when the
-content isn't self-describing, + `accessibilityState` for selected/disabled). Done so far: the
-first-run carousel (`welcome.tsx`) and the paywall — the two surfaces a new creator meets before
-anything else. Add them to whatever screen you touch next.

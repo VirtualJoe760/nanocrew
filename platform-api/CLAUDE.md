@@ -3,9 +3,7 @@
 Thin per-unit file. **Read the root [`../CLAUDE.md`](../CLAUDE.md) + [`../docs/context/`](../docs/context/README.md) first** — this only adds what's specific to this unit.
 
 **What this is:** the public storefront API + webhooks. Next.js 16 on Vercel (`nanocrew-api.vercel.app`).
-Stripe checkout lives here (the central POS), not in the templates. The one Stripe integration NOT
-here is **Connect payouts**, which stays in the app backend (`../src/lib/connect.ts`) — don't
-duplicate it.
+Stripe lives here (the central POS), not in the app or the templates.
 
 ## Local rules
 - 🔴 **This unit serves the WEB's authed creator surface** (`/api/creator/account`, `/stores`,

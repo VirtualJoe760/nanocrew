@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
@@ -8,11 +8,6 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
-
-// ⏸️ PARKED FOR v1 (Joe, 2026-08-20). Video is out of v1 and this has NO caller — the Sell tab
-// that triggered it is gone. Preserved deliberately, exactly like the social feed at /feed: the
-// pipeline works and returns when video does. See docs/roadmap/REMAINING_FEATURES.md §"Video —
-// PARKED FOR v1". Do not delete as dead code; do not re-file as a bug.
 
 // The "cool short" composer: pick a product → a scene → format → a quality tier (Wan / Seedance /
 // Veo) → generate. Nano Banana renders an on-model still, the chosen fal model animates it, and the
@@ -161,118 +156,112 @@ export function SceneShortComposer({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
-          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
-          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
-          need the context too. */}
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-          <View style={styles.sheet}>
-            <View style={styles.headerRow}>
-              <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Make a scene short</ThemedText>
-              <View style={{ flex: 1 }} />
-              <Pressable onPress={onClose} hitSlop={12}>
-                <ThemedText type="code" style={styles.dim}>close ✕</ThemedText>
-              </Pressable>
-            </View>
-
-            {loading ? (
-              <ActivityIndicator style={styles.center} color={pal.accent} />
-            ) : !products.length ? (
-              <View style={styles.center}>
-                <ThemedText type="small" style={styles.dim}>No products with images yet — create a drop in Design first.</ThemedText>
-              </View>
-            ) : phase === 'generating' ? (
-              <View style={styles.center}>
-                <ActivityIndicator color={pal.accent} />
-                <ThemedText type="subtitle" style={styles.white}>Filming your short…</ThemedText>
-                <ThemedText type="small" style={styles.dim}>Eve is rendering an on-model scene and animating it with {model?.label}. This takes a few minutes — keep this open.</ThemedText>
-              </View>
-            ) : phase === 'done' && result ? (
-              <ScrollView contentContainerStyle={styles.scroll}>
-                <VideoPreview url={result.videoUrl} aspect={result.aspect} />
-                <ThemedText type="smallBold" style={styles.green}>
-                  Published to {target === 'feed' ? 'the Nano Crew feed' : 'your website'} ✓
-                </ThemedText>
-                <ThemedText type="small" style={styles.dim}>
-                  {target === 'feed' ? 'It’s live on your product in the feed.' : 'It’s on your product’s on-model gallery (newest 3 kept).'}
-                </ThemedText>
-                <View style={styles.row}>
-                  <Pressable onPress={reset} style={styles.primaryBtn}>
-                    <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Make another</ThemedText>
-                  </Pressable>
-                  <Pressable onPress={onClose} hitSlop={8}>
-                    <ThemedText type="code" style={styles.dim}>done</ThemedText>
-                  </Pressable>
-                </View>
-              </ScrollView>
-            ) : (
-              <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-                {/* Product */}
-                <ThemedText type="code" style={styles.sectionLabel}>PRODUCT</ThemedText>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbRow}>
-                  {products.map((p) => (
-                    <Pressable key={p.id} onPress={() => setProductId(p.id)} style={[styles.thumbWrap, productId === p.id && styles.thumbOn]}>
-                      {p.imageUrl ? <Image source={{ uri: p.imageUrl }} style={styles.thumb} contentFit="cover" /> : <View style={styles.thumb} />}
-                    </Pressable>
-                  ))}
-                </ScrollView>
-
-                {/* Scene */}
-                <ThemedText type="code" style={styles.sectionLabel}>SCENE</ThemedText>
-                <View style={styles.chipWrap}>
-                  {SCENES.map((s, i) => (
-                    <Pressable key={s} onPress={() => setScene(s)} style={[styles.chip, scene === s && styles.chipOn]}>
-                      <ThemedText type="code" style={scene === s ? styles.chipTextOn : styles.chipText}>{SCENE_LABELS[i]}</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextInput
-                  style={styles.input}
-                  placeholder="…or describe your own scene"
-                  placeholderTextColor={pal.dim}
-                  value={scene}
-                  onChangeText={setScene}
-                />
-
-                {/* Format */}
-                <ThemedText type="code" style={styles.sectionLabel}>FORMAT</ThemedText>
-                <View style={styles.toggleRow}>
-                  {(['9:16', '16:9'] as const).map((a) => (
-                    <Pressable key={a} onPress={() => setAspect(a)} style={[styles.toggle, aspect === a && styles.toggleOn]}>
-                      <ThemedText type="code" style={aspect === a ? styles.chipTextOn : styles.chipText}>{a === '9:16' ? '9:16 · Mobile' : '16:9 · Desktop'}</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-
-                {/* Quality / model tier */}
-                <ThemedText type="code" style={styles.sectionLabel}>QUALITY</ThemedText>
-                <View style={styles.toggleRow}>
-                  {models.map((m) => (
-                    <Pressable key={m.key} onPress={() => setModelKey(m.key)} style={[styles.tier, modelKey === m.key && styles.toggleOn]}>
-                      <ThemedText type="code" style={modelKey === m.key ? styles.chipTextOn : styles.chipText}>{m.label}</ThemedText>
-                      <ThemedText type="code" style={modelKey === m.key ? styles.tierCreditsOn : styles.tierCredits}>{m.credits} cr · {m.durationSec}s</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-                {model ? <ThemedText type="small" style={styles.dim}>{model.blurb}</ThemedText> : null}
-
-                {/* Target — the social feed is hidden for v1, so scene shorts post to the website
-                    (the on-model gallery). The feed target returns in v2. `target` stays 'website'. */}
-
-                {note ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
-
-                <Pressable onPress={generate} disabled={!canGenerate} style={[styles.primaryBtn, !canGenerate && { opacity: 0.4 }]}>
-                  <ThemedText type="smallBold" style={{ color: pal.onAccent }}>
-                    Generate · {model?.credits ?? ''} credits
-                  </ThemedText>
-                </Pressable>
-                {credits !== null ? <ThemedText type="code" style={[styles.dim, { textAlign: 'center' }]}>balance: {credits} credits</ThemedText> : null}
-              </ScrollView>
-            )}
+      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+        <View style={styles.sheet}>
+          <View style={styles.headerRow}>
+            <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>Make a scene short</ThemedText>
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={onClose} hitSlop={12}>
+              <ThemedText type="code" style={styles.dim}>close ✕</ThemedText>
+            </Pressable>
           </View>
-        </SafeAreaView>
-      </SafeAreaProvider>
+
+          {loading ? (
+            <ActivityIndicator style={styles.center} color={pal.accent} />
+          ) : !products.length ? (
+            <View style={styles.center}>
+              <ThemedText type="small" style={styles.dim}>No products with images yet — create a drop in Design first.</ThemedText>
+            </View>
+          ) : phase === 'generating' ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={pal.accent} />
+              <ThemedText type="subtitle" style={styles.white}>Filming your short…</ThemedText>
+              <ThemedText type="small" style={styles.dim}>Eve is rendering an on-model scene and animating it with {model?.label}. This takes a few minutes — keep this open.</ThemedText>
+            </View>
+          ) : phase === 'done' && result ? (
+            <ScrollView contentContainerStyle={styles.scroll}>
+              <VideoPreview url={result.videoUrl} aspect={result.aspect} />
+              <ThemedText type="smallBold" style={styles.green}>
+                Published to {target === 'feed' ? 'the Nano Crew feed' : 'your website'} ✓
+              </ThemedText>
+              <ThemedText type="small" style={styles.dim}>
+                {target === 'feed' ? 'It’s live on your product in the feed.' : 'It’s on your product’s on-model gallery (newest 3 kept).'}
+              </ThemedText>
+              <View style={styles.row}>
+                <Pressable onPress={reset} style={styles.primaryBtn}>
+                  <ThemedText type="smallBold" style={{ color: pal.onAccent }}>Make another</ThemedText>
+                </Pressable>
+                <Pressable onPress={onClose} hitSlop={8}>
+                  <ThemedText type="code" style={styles.dim}>done</ThemedText>
+                </Pressable>
+              </View>
+            </ScrollView>
+          ) : (
+            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+              {/* Product */}
+              <ThemedText type="code" style={styles.sectionLabel}>PRODUCT</ThemedText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbRow}>
+                {products.map((p) => (
+                  <Pressable key={p.id} onPress={() => setProductId(p.id)} style={[styles.thumbWrap, productId === p.id && styles.thumbOn]}>
+                    {p.imageUrl ? <Image source={{ uri: p.imageUrl }} style={styles.thumb} contentFit="cover" /> : <View style={styles.thumb} />}
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Scene */}
+              <ThemedText type="code" style={styles.sectionLabel}>SCENE</ThemedText>
+              <View style={styles.chipWrap}>
+                {SCENES.map((s, i) => (
+                  <Pressable key={s} onPress={() => setScene(s)} style={[styles.chip, scene === s && styles.chipOn]}>
+                    <ThemedText type="code" style={scene === s ? styles.chipTextOn : styles.chipText}>{SCENE_LABELS[i]}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="…or describe your own scene"
+                placeholderTextColor={pal.dim}
+                value={scene}
+                onChangeText={setScene}
+              />
+
+              {/* Format */}
+              <ThemedText type="code" style={styles.sectionLabel}>FORMAT</ThemedText>
+              <View style={styles.toggleRow}>
+                {(['9:16', '16:9'] as const).map((a) => (
+                  <Pressable key={a} onPress={() => setAspect(a)} style={[styles.toggle, aspect === a && styles.toggleOn]}>
+                    <ThemedText type="code" style={aspect === a ? styles.chipTextOn : styles.chipText}>{a === '9:16' ? '9:16 · Mobile' : '16:9 · Desktop'}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Quality / model tier */}
+              <ThemedText type="code" style={styles.sectionLabel}>QUALITY</ThemedText>
+              <View style={styles.toggleRow}>
+                {models.map((m) => (
+                  <Pressable key={m.key} onPress={() => setModelKey(m.key)} style={[styles.tier, modelKey === m.key && styles.toggleOn]}>
+                    <ThemedText type="code" style={modelKey === m.key ? styles.chipTextOn : styles.chipText}>{m.label}</ThemedText>
+                    <ThemedText type="code" style={modelKey === m.key ? styles.tierCreditsOn : styles.tierCredits}>{m.credits} cr · {m.durationSec}s</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+              {model ? <ThemedText type="small" style={styles.dim}>{model.blurb}</ThemedText> : null}
+
+              {/* Target — the social feed is hidden for v1, so scene shorts post to the website
+                  (the on-model gallery). The feed target returns in v2. `target` stays 'website'. */}
+
+              {note ? <ThemedText type="small" style={styles.warn}>{note}</ThemedText> : null}
+
+              <Pressable onPress={generate} disabled={!canGenerate} style={[styles.primaryBtn, !canGenerate && { opacity: 0.4 }]}>
+                <ThemedText type="smallBold" style={{ color: pal.onAccent }}>
+                  Generate · {model?.credits ?? ''} credits
+                </ThemedText>
+              </Pressable>
+              {credits !== null ? <ThemedText type="code" style={[styles.dim, { textAlign: 'center' }]}>balance: {credits} credits</ThemedText> : null}
+            </ScrollView>
+          )}
+        </View>
+      </SafeAreaView>
     </Modal>
   );
 }

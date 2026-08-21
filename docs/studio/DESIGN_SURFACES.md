@@ -5,7 +5,7 @@ Nano Crew has **two ways to make a design**, and creators expect them to be the 
 | | Surface | Entry |
 |---|---|---|
 | **Design Center** | `src/app/design.tsx` — the zoomable canvas, the docks, the editor | the Design tab |
-| **Eve's design pipeline** | `src/components/eve/eve-design.tsx` — voice-first, start to finish — plus `src/components/eve/eve-assets.tsx` (the ASSETS spoke: site graphics, same voice loop) | speaking to her |
+| **Eve's design pipeline** | `src/components/eve/eve-design.tsx` — voice-first, start to finish | speaking to her |
 
 🔴 **A capability added to one must be added to the other, in the same change.** This is the same
 rule as the account page across app · site · API ([`ACCOUNT_SURFACE.md`](../accounts/ACCOUNT_SURFACE.md)),
@@ -26,35 +26,27 @@ where it usually starts, because it's easier to build a button than a conversati
 Both call the same endpoints — `/api/generate`, `/api/enhance`, `/api/compositions`, `/api/blanks`,
 `/api/catalogues` — so parity is nearly always a **surface** problem, not a backend one.
 
-## Parity matrix (2026-08-20)
+## Parity matrix (2026-08-19)
 
 Taken from the imports and the API calls in each file, not from intent.
 
 | Capability | Design Center | Eve | Notes |
 |---|---|---|---|
-| Pick the product | ✅ `ProductPicker` | ✅ `ProductPicker` | shared — incl. the technique chip (Embroidered · Knitted · All-over print) |
-| Pick the BRAND | ✅ setup popup (brand → collection) | ✅ named aloud → lone brand → chips in-surface | Eve never blocks on it: the surface opens immediately and the brand is chosen there (2026-08-20 — a blocking spoken ask meant a 5-brand creator got a question instead of the apparel picker) |
+| Pick the product | ✅ `ProductPicker` | ✅ `ProductPicker` | shared |
 | Generate from a prompt | ✅ `/api/generate` | ✅ `/api/generate` | shared |
-| **Technique-aware generation** | ✅ composition-time adaptation | ✅ `templateKey` at generate + adaptation fallback | `lib/technique.ts`. Eve knows the blank BEFORE generating, so her art is born producible (embroidery ≤6 thread colors, knit ≤4 yarns); the tab generates product-blind and `/api/compositions` adapts at combine. `designs.technique` stops double-adaptation. |
-| Technique surfaced to the creator | ✅ picker chip + "Design adapted" alert | ✅ picker chip + she says it at pick and after adaptation | same fact, different verb (Joe, 2026-08-20: "surfaced in both") |
-| Enhance the prompt | ✅ "Enhance" | ✅ enhance-or-as-is fork | Eve asks and folds the conversation in as context; the tab is a one-shot button with an effort slider |
+| Enhance the prompt | ✅ "Enhance" | ✅ enhance-or-as-is fork | Eve asks; the tab toggles |
 | Placement on the garment | ✅ `PlacementEditor` | ✅ `PlacementEditor` | shared |
 | Pricing → publish | ✅ `FinalizeSheet` | ✅ `FinalizeSheet` | shared |
 | Retouch an existing design | ✅ `DesignEditor` (retouch · text · remix · custom) | ⚠️ "Tell Eve" only | **the widest gap** — she has one freeform path where the tab has four modes |
-| Feather (edge soften) | ✅ `PlacementEditor` | ✅ | shared `/api/creator/design-feather`, free |
-| **Remove background (cut out)** | ✅ `PlacementEditor` → `/api/edit` | ❌ | drift to close |
-| **Clean-up pass (canned refine)** | ❌ | ✅ canned `/api/edit` | drift to close — the tab has no canned pass |
-| **Marker region edit** | ✅ "Mark" (strokes → `/api/generate` `marks`) | ❌ | circle an area, the model edits only that region |
-| **On-model preview shots (pre-publish)** | ✅ `/api/creator/preview-shots` | ❌ | Combine sheet + composite review; ephemeral, 16cr |
-| Site-asset generation + assignment | ✅ Site-assets mode + slot long-press | ✅ `EveAssets` (the ASSETS spoke) | both write `/api/creator/site-assets` |
+| Clean up · feather · cut out | ✅ | ✅ Clean up · Feather | roughly matched |
 | **Idea generator** | ✅ `/api/idea` | ❌ | she could riff one aloud |
 | **Meme mode** | ✅ | ❌ | |
 | **Text / typography** | ✅ "Text" | ❌ | |
-| Upload your own art / photo | ✅ "Upload" tile → camera or library | ✅ "Add a photo" on the style step → camera or library | shared `lib/pick-photo.ts` door (2026-08-20); the photo rides `/api/generate`'s `image` reference, and Eve SEES it on the vision bus |
+| **Upload your own art** | ✅ "Upload" | ❌ | |
 | **Merge two designs** | ✅ `/api/merge` | ❌ | |
 | **Transparent / filled background** | ✅ toggle | ❌ | she passes `background` at generate time only |
 | **Share / export** | ✅ native share | ❌ | |
-| **The design library** | ✅ `/api/canvas/:id` (+ `/api/designs` writes) | ❌ | she can't reopen past work |
+| **The design library** | ✅ `/api/designs` | ❌ | she can't reopen past work |
 | **The canvas itself** | ✅ `/api/canvas` | ❌ | may be deliberate — see below |
 | Voice loop, spoken review | ❌ | ✅ | the tab is silent by design |
 

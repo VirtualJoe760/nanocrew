@@ -65,10 +65,10 @@ function StudioScreen() {
   const [eve, setEve] = useState<EveSummon | null>(null);
   useEffect(() => registerEveSummonListener((s) => setEve(s)), []);
 
-  // The brand deck (opened from the wheel's BRANDS spoke — see below).
+  // The swipe-down brand deck.
   const [deckShown, setDeckShown] = useState(false);
   // Eve only listens when her tab is actually the active one (not just mounted-but-hidden by the
-  // tab navigator) AND the brand deck isn't open over her.
+  // tab navigator) AND the brand deck isn't pulled down over her.
   const focused = usePathname().startsWith('/studio');
   // `design` is deliberately NOT deep: it renders as a translucent overlay ON TOP of EveHome so she
   // KEEPS LISTENING while you talk about the design. Swapping it in (the old behaviour) unmounted
@@ -337,8 +337,7 @@ function StudioScreen() {
                   token={session.access_token}
                   refreshKey={dashKey}
                   onClose={() => { setDeckShown(false); setDeckFocus(null); }}
-                  // design.tsx reads panel/action/prompt/meme/edit — never slot, so it isn't passed.
-                  onBounty={(panel) => { setDeckShown(false); router.navigate(`/design?panel=${panel}`); }}
+                  onBounty={(panel, slot) => { setDeckShown(false); router.navigate(`/design?panel=${panel}${slot ? `&slot=${slot}` : ''}`); }}
                 />
               </>
             ) : null}
@@ -355,8 +354,6 @@ function StudioScreen() {
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.designScrim]} />
           <EveDesign
             idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
-            storeSlug={typeof eve.payload?.storeSlug === 'string' ? eve.payload.storeSlug : undefined}
-            brands={Array.isArray(eve.payload?.brands) ? (eve.payload.brands as { slug: string; name: string }[]) : undefined}
             onExit={() => setEve(null)}
           />
         </View>

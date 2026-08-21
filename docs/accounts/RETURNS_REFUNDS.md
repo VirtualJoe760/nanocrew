@@ -47,28 +47,25 @@ no risky claw-back.
 
 `RETURN_WINDOW_DAYS` env (default `7`) is the single knob; never hard-code the window.
 
-## The charge model — separate charges and transfers · `platform-api/app/api/public/checkout/route.ts`
+## Why the charge model must change · `platform-api/app/api/public/checkout/route.ts`
 
-Checkout used to create a **Stripe destination charge** (`payment_intent_data.transfer_data.destination`
-+ `application_fee_amount`) — the instant the charge cleared, Stripe split it and the brand's profit
-landed in its connected balance **immediately**, which made a 7-day hold impossible. The switch to
-**separate charges and transfers** (Stripe's canonical held-marketplace pattern) has shipped:
+Today checkout uses a **Stripe destination charge** (`payment_intent_data.transfer_data.destination`
++ `application_fee_amount`) — the instant the charge clears, Stripe splits it and the brand's profit
+lands in its connected balance **immediately**. That makes a 7-day hold impossible.
 
-1. **No `transfer_data` / `application_fee_amount`** — checkout sends no `payment_intent_data` at
-   all; 100% of the charge is captured to the platform.
-2. **The fee/COGS math is unchanged** — it computes the brand's exact net and persists it:
-   `brandNetCents = totalCents − applicationFeeCents`,
+**Switch to separate charges and transfers** (Stripe's canonical held-marketplace pattern):
+
+1. **Drop `transfer_data` / `application_fee_amount`.** Capture 100% of the charge to the platform.
+2. **Keep the existing fee/COGS math** (`checkout/route.ts` lines ~86–95) — it already computes the
+   brand's exact net. Persist it: `brandNetCents = totalCents − applicationFeeCents`,
    `connectedAccountId = <snapshot of the destination>`, `payoutStatus = 'held'`.
-3. **KYC hard gate (Joe, 2026-08-16).** When the brand's creator has **no charges-enabled Connect
-   account**, checkout **refuses with a 409** ("This shop can't take orders yet — the owner is still
-   setting up payments") rather than settling to the platform — the old fallback completed the sale
-   with the creator silently earning nothing transferable, worse than failing. The only opt-out is
-   `PLATFORM_SETTLED_SLUGS` (comma-separated env) for platform-owned demo stores, which settle to
-   the platform (`payoutStatus = 'none'`, `brandNetCents = 0`).
+3. When the brand has **no charges-enabled Connect account**, settle to the platform as before:
+   `payoutStatus = 'none'`, `brandNetCents = 0` (nothing to transfer). Unchanged behaviour.
 4. The platform pays Printful at submission (unchanged) — out of the funds it now holds.
 
-> **Live-commerce note.** Every order records its own `payoutStatus`, so pre-cutover
-> destination-charge orders and held orders coexist unambiguously.
+> **Live-commerce risk.** This alters how every future sale settles on `sk_live`. Cut over cleanly:
+> orders record their own `payoutStatus`, so a half-migrated mix is unambiguous, but don't deploy the
+> checkout change and the release job out of step. Coordinate with `STRIPE_CONNECT_ENABLED`.
 
 ## The payout state machine · new columns on `orders`
 
@@ -92,29 +89,21 @@ held     →  refund/return in-window           →  skipped   (transfer never s
 released →  refund after release              →  reversed  (reverse_transfer fallback)
 ```
 
-### The release job — LIVE on Cloud Scheduler (2026-08-16)
+### The release job (the missing scheduler)
 
-The job runs on the **Cloud Run backend** (a persistent Node process — platform-api is Vercel
-serverless): Cloud Scheduler job `release-payouts` (project `nanocrew-api`, us-west1) POSTs
-`/api/internal/release-payouts` at `0 17 1,15 * *` UTC — the 1st and 15th, the biweekly
-disbursement. What a run does (`src/app/api/internal/release-payouts+api.ts`):
+platform-api is **Vercel serverless** — no persistent worker. Two options; **prefer the Cloud Run
+backend** (already a persistent Node process) OR a Vercel Cron hitting an internal route:
 
-- Scans `orders WHERE payoutStatus = 'held' AND payoutReleaseAt < now() AND status NOT IN
+- Scan `orders WHERE payoutStatus = 'held' AND payoutReleaseAt < now() AND status NOT IN
   ('return_requested','returned','refunded','cancelled','failed')`.
-- For each: `releasePayout(order)` (`src/lib/connect.ts`) — `stripe.transfers.create({ amount:
-  brandNetCents, currency, destination: connectedAccountId, source_transaction: stripeChargeId,
-  transfer_group: orderId })`, then `payoutTransferId` + `payoutStatus = 'released'`, plus a
-  best-effort creator payout email via `/internal/notify`.
-- **Idempotent + durable:** each order is re-guarded on `payoutStatus = 'held'` at transfer time and
-  `releasePayout()` uses a per-order Stripe idempotency key, so a retried or overlapping run can
-  never double-pay.
-- **Stuck-funds sweep:** orders `held` for >14 days with a NULL `payoutReleaseAt` (the ship webhook
-  never arrived, so the scan can never match them — `lt()` is never true for NULL) are surfaced as
-  `stuckHeld`/`stuckHeldIds`. The run returns `{ scanned, released, failed, errors, stuckHeld,
-  stuckHeldIds }`; **alerting should page on a non-zero `failed` or `stuckHeld`** (Cloud Scheduler
-  logs each run's response) — a silently-failing job means brands never get paid.
+- For each: `stripe.transfers.create({ amount: brandNetCents, currency, destination: connectedAccountId,
+  source_transaction: stripeChargeId, transfer_group: orderId })`, then set `payoutTransferId` +
+  `payoutStatus = 'released'`.
+- **Idempotent + durable:** guard on `payoutStatus`, use a Stripe idempotency key per order, and
+  **alert on failure** — a silently-failing job means brands never get paid. Put the transfer helper
+  in `src/lib/connect.ts` next to `refundPayment` as `releasePayout(order)`.
 
-The route is authed with `INTERNAL_API_KEY` (constant-time compare, as the first-drop path does).
+Auth the internal route with `INTERNAL_API_KEY` (constant-time compare, as the first-drop path does).
 
 ## The returns model · `return_requests` table
 
@@ -142,14 +131,13 @@ Storefronts carry **no commerce backend**; they only *call* these. Mirror `check
 | Endpoint | Who | Does |
 |---|---|---|
 | `POST /api/public/order-lookup` `{ email, orderNumber }` | guest (brand site) | minimal order view → gates the guest return flow (reuses `customerEmail`) |
-| `POST /api/public/returns` `{ orderId, customerEmail, reason, photoUrls, note, items? }` | guest + app | **`customerEmail` is required ownership proof** — missing or mismatched → an opaque 404 (no enumeration/IDOR; the app proxy attaches the verified account email, the guest flow the lookup email); validates window (`now < returnWindowEndsAt`) + reason + photo; inserts `return_requests`; flips order → `return_requested`; **sends the buyer ack** (a brand/creator notification is a follow-up — today a brand only discovers claims by opening the returns inbox) |
+| `POST /api/public/returns` `{ orderId, reason, photoUrls, note, items? }` | guest + app | validates window (`now < returnWindowEndsAt`) + reason + photo; inserts `return_requests`; flips order → `return_requested`; **sends buyer ack + notifies the brand** |
 | `GET /api/customer/orders` | **authed buyer** | the signed-in user's orders where `lower(customerEmail) = lower(user.email)` — the app "Purchases" surface. DIRECT API, not the forge |
-| `GET /api/creator/returns` + `POST /[id]/approve` · `POST /[id]/decline` | **authed creator** | the Studio returns inbox; **approve calls the EXISTING refund path** (do not duplicate money movement); decline → `declined` + email |
+| `GET/POST /api/creator/returns` + `/[id]/approve` `/[id]/decline` | **authed creator** | the Studio returns inbox; **approve calls the EXISTING refund path** (do not duplicate money movement); decline → `declined` + email |
 
-**Ownership scope:** `accessibleStoreIds()` everywhere — owner + collaborators. Done 2026-08-20
-(Joe's call, BUG_AUDIT #29): the refund route used to join `stores.creatorId` (owner-only) while
-order listing and return approve/decline were already collaborator-scoped — and since approving a
-return calls this very refund path, owner-only was an incoherent split rather than a safeguard.
+**Ownership scope:** use `accessibleStoreIds()` consistently (fixes the current divergence where the
+refund route joins `stores.creatorId` (owner-only) but order *listing* uses `accessibleStoreIds()`
+(owner + collaborators)).
 
 ## Refund mechanics — reuse, don't rebuild · `src/lib/connect.ts` `refundPayment`
 
@@ -183,9 +171,7 @@ Printful cancel-if-unproduced are noted as follow-ups (today's refund is full-on
   proxy `src/app/api/store/[slug]/checkout+api.ts` now resolves the signed-in user's email (token
   verified locally, no DB query) and forwards `customerEmail` to platform-api's checkout so in-app
   purchases attribute to the account up front (guests/brand-site buyers still match by Stripe email;
-  a guest `order-lookup` covers the rest). **The receiving end is currently broken in code:**
-  platform-api's checkout drops the forwarded `customerEmail` and still inserts `pending@checkout`
-  (see `docs/ops/BUG_AUDIT_2026-08-20.md`). The caller `src/components/product-detail.tsx` switched its
+  a guest `order-lookup` covers the rest). The caller `src/components/product-detail.tsx` switched its
   Buy call from `fetch` to `apiFetch` so the token is attached.
 - **Creator returns inbox** in the Studio Console (new component, mounted in `studio-composer.tsx`):
   list `requested` claims, view photos, Approve/Decline.
@@ -195,18 +181,16 @@ Printful cancel-if-unproduced are noted as follow-ups (today's refund is full-on
 Thin-client: a returns **policy page** + a **"request a return"** flow added at the template level
 (see [TEMPLATE_AUTHORING.md](../storefront/TEMPLATE_AUTHORING.md) + [COMPONENT_SYSTEM.md](../storefront/COMPONENT_SYSTEM.md)):
 
-- ✅ `'returns'` is in the `POLICIES` array + `content/policies/returns.md`; the footer carries
-  **Returns** + **Request a return** links (`components/blocks/footer.tsx`), and
-  `app/returns/request/page.tsx` hosts the claim form.
-- ✅ `submitReturnRequest()` + `lookupOrder()` live in `templates/_shared/lib/api.ts` (mirroring
-  `createCheckout()`), synced to the templates.
-- ✅ `street` is wired with its own returns prose, and the leaked `hello@stephenlawyer.clothing`
-  it hardcoded is de-branded.
-- ✅ `nanocrew-site` (the HQ store) ships the flow too (`app/store/returns/` + its `api/returns` /
-  `api/order-lookup` proxies).
-- ⬜ Author returns into the **forge brief** so newly-generated brands ship it (not there yet). If
-  returns content is vendored into `_shared`/`components.json`, the **forge-worker droplet needs a
-  re-scp** — a coordinated release (template push + worker redeploy), like the image-edit batch.
+- Add `'returns'` to the `POLICIES` array + `content/policies/returns.md`; add a **Returns** +
+  **Request a return** link to `components/blocks/footer.tsx`.
+- Add `submitReturnRequest()` + `lookupOrder()` to `templates/_shared/lib/api.ts` (mirror
+  `createCheckout()`); run `scripts/sync-shared.mjs` to the 4 standard templates.
+- Wire `street` separately (its own returns prose) and **de-brand the leaked
+  `hello@stephenlawyer.clothing`** it hardcodes.
+- Same for `nanocrew-site` (the HQ store).
+- Author returns into the **forge brief** so newly-generated brands ship it. If returns content is
+  vendored into `_shared`/`components.json`, the **forge-worker droplet needs a re-scp** — a
+  coordinated release (template push + worker redeploy), like the image-edit batch.
 
 > **Fleet drift:** template changes only reach brands provisioned *after* the change. Existing brand
 > sites need a re-provision/backfill to get the returns page.
@@ -222,7 +206,6 @@ MoR + the Terms wording with counsel. Add the POD no-buyer's-remorse constraint 
 ## Owner config (outside the repo — gates go-live, not code)
 
 - `STRIPE_CONNECT_ENABLED=1` + per-creator `charges_enabled` (the hold only matters once Connect is live).
-- ✅ The release job scheduler — Cloud Scheduler `release-payouts`, biweekly (see "The release job"
-  above) + `INTERNAL_API_KEY`. Failure alerting on `failed`/`stuckHeld` still needs a pager target.
+- The release job scheduler (Cloud Run cron or Vercel Cron) + `INTERNAL_API_KEY` + failure alerting.
 - `RETURN_WINDOW_DAYS` (default 7), `RETURNS_PHOTO_*` upload config.
 - Counsel sign-off on MoR + return policy wording.

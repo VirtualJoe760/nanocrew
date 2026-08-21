@@ -41,11 +41,8 @@ Studio interview (Eve)
   └─ brand profile + design system + transcript  →  stores row (Supabase, status='building')
        └─ provisionStorefront()  (src/lib/provision.ts — runs on the APP SERVER / Cloud Run)
             1. create the per-brand GitHub repo  store-<slug>  (GitHub API, 422 = resumable)
-            2. write brand fonts → stores.site_config.fonts (pickFontPairing) and a generated
-               hero (Nano Banana) → stores.site_assets.hero — only when unset, so a creator's
-               own pick is never clobbered; non-fatal on failure
-            3. build brand.json + briefs/01-BRAND.md + briefs/02-TEST.md from the interview
-            4. ENQUEUE a job: insert into store_revisions
+            2. build brand.json + briefs/01-BRAND.md + briefs/02-TEST.md from the interview
+            3. ENQUEUE a job: insert into store_revisions
                  branch = '__provision__'   status = 'building'
                  request_md = JSON { kind, slug, template, brandName, brandJson, brandBrief, testBrief }
             (NO SSH — the app server's job ends here)
@@ -82,7 +79,7 @@ bash pipeline is a hand-kept **mirror of `src/lib/revise.ts`** — see the sync 
 
 ## The template monorepo — `nanocrew-templates`
 
-One repo, five self-contained Next.js templates mapped 1:1 to the design-temperament
+One repo, four self-contained Next.js templates mapped 1:1 to the design-temperament
 question Eve already asks. The mapping lives in `TEMPLATE_BY_STYLE` in `src/lib/provision.ts`:
 
 | Template dir | designStyle | Character |
@@ -91,7 +88,6 @@ question Eve already asks. The mapping lives in `TEMPLATE_BY_STYLE` in `src/lib/
 | `templates/bold` | `bold` | full-bleed imagery, heavy display type, loud CTAs |
 | `templates/elegant` | `elegant` | serif-led, editorial layouts, generous spacing |
 | `templates/extravagant` | `extravagant` | motion, texture, maximal hero, statement layouts |
-| `templates/street` | `street` | full-bleed streetwear/skate, wordmark-only header, diverged data layer (excluded from the `_shared` sync) |
 
 Unknown styles fall back to `minimal`. Each template is **self-contained** (duplication over
 coupling — stability is the product) and uses placeholder images/copy until a brand lands.
@@ -119,11 +115,9 @@ the creator chose are hard constraints). Shape (from the live code):
   "name": "Alpha Master",
   "tagline": "…",
   "logoUrl": "https://res.cloudinary.com/…",
-  "logoStyle": "wordmark" | "mark",  // wordmark logos suppress the adjacent text name in the header
   "palette": { "primary": "#…", "secondary": "#…", "accent": "#…", "background": "#…", "text": "#…",
                "onPrimary": "#…", "onAccent": "#…" },
   "typography": { "display": "…", "body": "…" },
-  "fontPresets": { "display": "<preset>", "body": "<preset>" },  // pickFontPairing() — same keys written to stores.site_config.fonts at provision
   "designStyle": "bold",
   "voice": "…",  "story": "…",  "vibeKeywords": ["…"],  "products": ["…"],
   "social": {},
@@ -148,9 +142,7 @@ in the brand's voice, editable during revisions.
 
 The single most important configuration fact, and the answer to "how do all the stores share the
 same setup": **a generated brand site needs no environment variables of its own.** Template source
-contains zero *configuration* `process.env` reads (the one `process.env` touch is Vercel's
-auto-injected `VERCEL_PROJECT_PRODUCTION_URL`/`VERCEL_URL` in `lib/seo.ts`, which needs no setup) —
-everything is read from `brand.json` via `lib/brand.ts`.
+contains *zero* `process.env` reads — everything is read from `brand.json` via `lib/brand.ts`.
 `deployToVercel()` creates the Vercel project and deploys it **without setting any env vars**
 (verified) — because none are needed.
 
@@ -253,9 +245,8 @@ The worker (`nanocrew-forge-worker.service`, run as the `forge` user) needs:
 The app-server side (`provision.ts`) needs `GITHUB_TOKEN`/`GITHUB_OWNER` (required, else it
 silently skips), plus `PLATFORM_API_BASE`, `EXPO_PUBLIC_SUPABASE_URL`,
 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `PROCESSING_FEE_*` baked into `brand.json`.
-(`VPS_HOST`/`VPS_USER` are gone from `config()` entirely — fixed 2026-08-20, BUG_AUDIT #8: the
-queue path never dialed them, the worker owns all forge execution, and hard-requiring them meant
-an env cleanup silently disabled provisioning. They can now be removed from Cloud Run safely.)
+(`provision.ts`'s `config()` also reads `VPS_HOST`/`VPS_USER` for legacy reasons, but the
+provision path no longer dials them — the worker owns all forge execution.)
 
 ## Commerce & data — see the data contract
 
@@ -310,7 +301,6 @@ Wired into all 4 templates so each generated site is fully indexable, with **no 
 revenue + order count + 30-day traffic, order list. Traffic comes from a public beacon —
 brand sites POST `/api/public/beacon` per pageview into a `page_views` daily counter.
 
-**Platform admin — inside the Nano Crew app.** Section on Account gated by
-`PLATFORM_ADMIN_EMAILS`, backed by `GET /api/platform/admin`: all stores w/ status and
-platform-wide orders/revenue. Read-only today — adjustment actions (suspend store, re-provision)
-are planned, not built.
+**Platform admin — inside the Nano Crew app.** Role-gated section on Account backed by
+`/api/admin/platform`: all stores w/ status, platform-wide orders/revenue, and adjustment
+actions (suspend store, re-provision).

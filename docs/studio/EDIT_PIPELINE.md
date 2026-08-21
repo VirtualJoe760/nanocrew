@@ -14,9 +14,9 @@ failure localizes to exactly one hop.
         │                      │                    │                    │                      │
    venus.messages    ─► {images[],edits[]} ─► image url (Cloudinary) ─► stores.site_assets ─► store_revisions → droplet worker
         │                      │                    │                    │                      │
-   CP1 transcript        CP2 [pipeline:plan]   CP3 [pipeline:        CP4 [pipeline:         CP5 [pipeline:submit]
-   persisted on the      logs lastSaid →       generate] logs       site-assets] logs      logs turns + counts;
-   revision row          images/edits          prompt → url         slot + url             requestMd + transcript persisted
+   CP1 transcript        CP2 [pipeline:plan]   CP3 [pipeline:        CP4 [pipeline:         CP5 [pipeline:revise]
+   persisted on the      logs lastSaid →       generate] logs       site-assets] logs      logs turns + requestMd;
+   revision row          images/edits          prompt → url         slot + url             transcript persisted
 ```
 
 - **images** (hero / logo / og) are a pure picture **swap** — generated and placed **directly**.
@@ -39,7 +39,7 @@ failure localizes to exactly one hop.
 | **CP2 — classification** | Cloud Run log `[pipeline:plan] … lastSaid=… → images=N[…] edits=M` | Did the plan turn the request into the right shape? A hero-image ask that yields `images=0` means the subject was vague/missing (often a CP1 loss) or misclassified. |
 | **CP3 — generation** | Cloud Run log `[pipeline:generate] ok prompt=… → <url>` (or absence + an error) | Did the image actually generate? No line = generate never ran (no image in the plan) or it failed (content-safety, quota). |
 | **CP4 — placement** | Cloud Run log `[pipeline:site-assets] slug=… slot=… url=… (revalidating)` + `stores.site_assets` in DB + public API `/api/public/stores/:slug/site-assets` | Did the new asset get written and the storefront revalidated? |
-| **CP5 — submit + forge** | Cloud Run log `[pipeline:submit] slug=… turns=N requests=N images=N[hero:placed,…] edits=M forge=building(…)\|none`, then the droplet worker journal (`journalctl -u nanocrew-forge-worker`) | The one-line summary of the whole submit: how many requests, what happened to each image, and whether a forge job was enqueued. **Every submit writes exactly one `store_revisions` row** — forge edits → `status=building` (worker drains it); image-only → `status=approved` (applied straight to the live site, worker skips it). Either way the transcript + edit_plan are persisted. |
+| **CP5 — submit + forge** | Cloud Run log `[pipeline:submit] slug=… requests=N images=[hero:placed,…] edits=M forge=building(…)`, then the droplet worker journal (`journalctl -u nanocrew-forge-worker`) | The one-line summary of the whole submit: how many requests, what happened to each image, and whether a forge job was enqueued. **Every submit writes exactly one `store_revisions` row** — forge edits → `status=building` (worker drains it); image-only → `status=approved` (applied straight to the live site, worker skips it). Either way the transcript + edit_plan are persisted. |
 
 ## Worked example — the "american flag" hero that reverted to placeholder (2026-06-19)
 
@@ -56,7 +56,7 @@ Before this instrumentation we had **only** `request_md` and had to reconstruct 
 
 ```
 # one store's whole pipeline, newest last
-gcloud run services logs read backend --region us-west1 | grep -E "\[pipeline:(plan|generate|site-assets|submit)\]" | grep alpha-master
+railway logs | grep -E "\[pipeline:(plan|generate|site-assets|submit)\]" | grep alpha-master
 # said vs captured + what was attempted, for the latest submit
 select status, request_md, transcript, edit_plan
   from store_revisions

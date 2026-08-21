@@ -79,11 +79,6 @@ export const Spacing = {
 // ABOVE it and reserves NOTHING for it (the bar pads its own home-indicator inset). This is 0; the
 // named constant stays as the single knob at every call site in case the bar ever goes floating.
 // The floating tab bar's CONTENT height (icon+label cluster + paddings, EXCLUDING the safe-area
-// inset — screens add insets.bottom themselves). It was 0 while the bar was in-flow; the bar
-// floats now, so screens must reserve this much or the bar clips their last control.
+// inset — screens add insets.bottom themselves). 0 while the bar was in-flow; the bar floats now.
 export const BottomTabInset = 52;
 export const MaxContentWidth = 800;
-
-/** Breathing room under a COLLAPSED bottom dock, so its tab handle clears the tab bar.
- *  (Lived in the designer's TemplatesDock until that dock was deleted, 2026-08-20.) */
-export const DOCK_TAB_CLEARANCE = Spacing.two;

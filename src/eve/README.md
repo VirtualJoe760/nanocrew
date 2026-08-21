@@ -12,7 +12,7 @@ for a **single agent with modes** and for Google's documented ordering for voice
 | `user.md` | Who she works for + what she remembers | `USER.md` |
 | `conversation.md` | The loop: turn length, consent, net-new turns | `AGENTS.md` (rules half) |
 | `guardrails.md` | The narrow refusals + failure behaviour | (end of the SI, per Google) |
-| `jobs/*.md` | One per job: brand · design · assets · critique · status (a mode carries one or several) | `AGENTS.md` (job half) |
+| `jobs/*.md` | One per mode: brand · design · assets · critique | `AGENTS.md` (job half) |
 
 **No `TOOLS.md`.** In OpenClaw an agent won't call a tool that isn't listed in prose. Gemini takes
 tools **structurally** — `tools: [{ functionDeclarations: [...] }]` in the session setup — so prose
@@ -49,17 +49,11 @@ into the markdown.
 
 ## How these reach the model
 
-A composer assembles `identity + soul + conversation + user + job(mode)` (+ reference, for critique)
-`+ right-now + guardrails` + the closing voice line into ONE string, sent as `systemInstruction` in
-the Live API setup message. Three consequences:
+A composer assembles `identity + soul + user + conversation + job(mode) + guardrails` into ONE
+string, sent as `systemInstruction` in the Live API setup message. Three consequences:
 
 1. **Order matters** — persona first, guardrails last (Google's guidance).
-2. **Size matters** — Google warns against multi-page instructions; the composer enforces a budget
-   of 12,000 chars: over budget **throws in dev**, warns and ships in production (a degraded Eve
-   beats a silent one mid-conversation). Measured 2026-08-20: the heaviest mode (`central` —
-   design + assets + status) composes to ~10,600 with a generous runtime context, so there is
-   roughly **1,300 chars of headroom**. Adding a paragraph to a job file is close to the ceiling;
-   check before you write.
+2. **Size matters** — Google warns against multi-page instructions; the composer enforces a budget.
 3. **It is read ONCE, at connect.** Editing a file mid-session changes nothing; the socket has to
    reconnect. (Same shape as OpenClaw's "restart the gateway" gotcha.)
 

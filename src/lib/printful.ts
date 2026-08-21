@@ -21,7 +21,6 @@ interface PrintfulCatalogListProduct {
   title: string;
   image: string;
   is_discontinued: boolean;
-  techniques?: { key: string }[];
 }
 interface PrintfulCategory {
   id: number;
@@ -414,10 +413,6 @@ export interface CatalogBlank {
   image: string;
   category: BlankCategory; // gender / age bucket
   type: string; // second-level type, e.g. "T-shirts", "Hoodies"
-  /** Primary print technique (DTG / EMBROIDERY / KNITWEAR / CUT-SEW / …) — same primary the
-   *  publish + mockup paths use. Drives the picker's technique chip and technique-aware
-   *  generation (lib/technique.ts). Null when Printful lists none. */
-  technique: string | null;
 }
 
 const ROOT_TO_BUCKET: Record<string, BlankCategory> = {
@@ -467,7 +462,7 @@ async function fetchCatalogBlanks(): Promise<CatalogBlank[]> {
         const bucket = root ? ROOT_TO_BUCKET[root.title] : undefined;
         if (!bucket) continue; // skip Home & living etc.
         const type = chain.length >= 2 ? chain[chain.length - 2].title : 'Other';
-        blanks.push({ id: p.id, name: p.title, image: p.image, category: bucket, type, technique: p.techniques?.[0]?.key ?? null });
+        blanks.push({ id: p.id, name: p.title, image: p.image, category: bucket, type });
       }
       blanks.sort((a, b) => a.name.localeCompare(b.name));
       if (!blanks.length) throw new Error('Printful returned an empty catalogue'); // don't cache empty

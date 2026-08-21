@@ -21,9 +21,8 @@ export async function GET(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   try {
-    // The Design tab and Eve both name the brand they're designing for (?store=<slug>); the
-    // slug-less fallback resolves only for a single-brand creator — several brands is a 409,
-    // never a guess (BUG_AUDIT_2026-08-20 #1). storeForMember access-checks the slug.
+    // The Design tab picks which brand it's designing for (?store=<slug>); fall back to the
+    // creator's primary store. storeForMember access-checks the slug (owner or collaborator).
     const slug = new URL(req.url).searchParams.get('store');
     const store = slug ? await storeForMember(slug, user.id) : await getCreatorStore(user.id);
     if (!store) return Response.json({ error: 'store not found' }, { status: 404 });

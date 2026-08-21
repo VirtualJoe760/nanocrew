@@ -5,9 +5,7 @@
 > position, and 1099 filing must be confirmed with **counsel + a CPA** before relying on them.
 
 Nano Crew is an **online marketplace + consulting partner**: creators (brands) sell POD products
-through our central POS, get paid via **Stripe Connect (Express, separate charges and transfers —
-the platform captures 100% and holds the brand's net until ship+7d, see
-[RETURNS_REFUNDS.md](RETURNS_REFUNDS.md))**, and accept a
+through our central POS, get paid via **Stripe Connect (Express, destination charges)**, and accept a
 Terms / Creator Agreement that frames the relationship (independent contractor; creator owns their
 designs + indemnifies us — Terms v2026-06-18). That model is **much lighter-touch than gig platforms**
 (no physical interaction → no driver-style background checks), and **Stripe Connect already does most
@@ -59,7 +57,7 @@ We are an "online marketplace" with third-party sellers, so for any **high-volum
 - **Current gap:** we collect name/phone/terms but **no date of birth and no age gate** (see audit).
 
 ### 5. Sales tax / marketplace facilitator — **confirm (likely not wired)**
-Most US states have **marketplace-facilitator laws**: as the **merchant of record** (separate
+Most US states have **marketplace-facilitator laws**: as the **merchant of record** (destination
 charges through our central POS), **we may owe collection + remittance of sales tax** on creators'
 sales. **Stripe Tax / `automatic_tax` is NOT in the checkout route today** (audit). Confirm nexus +
 position with a CPA; the usual fix is enabling **Stripe Tax** on the platform checkout.
@@ -88,13 +86,11 @@ resolve.
   and the Terms wording reconciling MoR with the creator-indemnification framing. *Not legal advice* —
   flag, don't assume.
 
-## Current-state audit (code, 2026-08-20)
+## Current-state audit (code, 2026-06-20)
 - **Signup** (`src/app/account.tsx`, `src/db/schema.ts` `creators`): collects `name`, `phone`,
   `termsAcceptedAt`, `termsVersion`. **No `date_of_birth`, no age gate.**
 - **Payments:** Stripe **Connect** path in `platform-api/app/api/public/checkout/route.ts`
-  (separate charges and transfers — platform captures 100%, brand net held until ship+7d — see
-  [RETURNS_REFUNDS.md](RETURNS_REFUNDS.md)); Express onboarding via `/api/creator/connect`. Stripe
-  does KYC + tax-ID.
+  (destination charges); Express onboarding via `/api/creator/connect`. Stripe does KYC + tax-ID.
 - **Sales tax:** no `automatic_tax` / Stripe Tax found in checkout.
 - **Content/IP at publish:** `src/lib/pod-policy.ts` (`checkProviderPolicy`) screens listings.
 
@@ -124,10 +120,8 @@ must `ENABLE ROW LEVEL SECURITY`; per [[reuse-dont-rebuild]], lean on Stripe for
 2. **Seller disclosure** — surface the connected account's name + business address + contact (held by
    Stripe Connect) via a public endpoint; render it on storefront product pages for high-volume
    sellers. Update `docs/storefront/STOREFRONT_DATA_CONTRACT.md` + the templates.
-3. **Report mechanism** — ✅ the in-app half ships: authed `POST /api/report` → internal notify
-   `report` → `sendContentReport` to `OPS_EMAIL` (built for Apple Guideline 1.2 + this INFORM
-   consumer-report requirement). Remaining: a public "Report this listing" link on storefronts and
-   `nanocrew.app` routing to the same ops path.
+3. **Report mechanism** — `POST /api/public/report` (listing/seller + reason) + a "Report this
+   listing" link on storefronts and `nanocrew.app`; route reports to ops.
 4. **Suspension** — auto-suspend sellers whose Stripe verification is incomplete or who fail to
    provide info; admin control in `platform-admin`.
    *Files:* `platform-api/app/api/public/**`, templates (`_shared` + the 5), `STOREFRONT_DATA_CONTRACT.md`,

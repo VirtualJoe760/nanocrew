@@ -12,11 +12,9 @@ one job at a time (`worker.mjs`, Node ESM, systemd `nanocrew-forge-worker`).
   about building brand sites, not about working in this repo.
 
 ## Local rules
-- 🟡 **`worker.mjs` is the ONLY copy of the forge bash pipelines.** `../src/lib/provision.ts` authors
-  `brand.json` + the briefs and **enqueues**; `../src/lib/revise.ts` only approves/declines via the
-  GitHub API. Keep the worker's prompt/edit-surface text in step with the briefs `provision.ts`
-  writes. Editing it and pushing the repo does **NOT** ship it — you must **re-scp it to the
-  droplet** (see `README.md` for the line). Drift breaks builds silently. (See [`../docs/context/NEVER_VIOLATE.md`](../docs/context/NEVER_VIOLATE.md) §3.)
+- 🟡 **`worker.mjs` is a hand-kept mirror of `../src/lib/revise.ts` + `provision.ts`.** Editing it and
+  pushing the repo does **NOT** ship it — you must **re-scp it to the droplet** (see `README.md` for
+  the line). Drift breaks builds silently. (See [`../docs/context/NEVER_VIOLATE.md`](../docs/context/NEVER_VIOLATE.md) §3.)
 - After editing `forge-CLAUDE.md`, re-scp **it** too (same deal — it lives on the droplet).
 - 🔴 **A revision that changed NOTHING is a failure, not a ready preview (2026-08-19).** The scripts
   emit `CLAUDE_OK`/`CLAUDE_FAILED` and, after staging, `NO_EDITS` when the brief is the only changed

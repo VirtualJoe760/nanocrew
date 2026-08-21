@@ -6,9 +6,7 @@ import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/cred
 import { uploadImage } from '@/lib/cloudinary';
 import { guardRate } from '@/lib/rate-limit';
 import { MARKED_REGION_RULE, drawMarks, sanitizeMarks } from '@/lib/annotate';
-import { getProductTechnique } from '@/lib/printful';
 import { safeImageFetch } from '@/lib/safe-fetch';
-import { CONSTRAINED_TECHNIQUES, techniqueInfo } from '@/lib/technique';
 import { TenantError, assertCatalogueOwner } from '@/lib/tenant';
 
 // Nano Banana — Gemini 2.5 Flash Image. Runs server-side only (the key never
@@ -24,22 +22,12 @@ const GEMINI_RATIOS = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9'
 
 // Constraints come AFTER the user's description — leading with "clothing graphic, high
 // contrast" steered the model away from faithful subjects (e.g. real likenesses).
-// `technique` (EMBROIDERY / KNITWEAR) appends the fabrication constraint from lib/technique.ts —
-// a cap is stitched and a sweater is knitted, so the art must be born producible, not adapted
-// after the fact.
-function buildConstraints(
-  background: 'transparent' | 'filled',
-  aspectRatio: string,
-  meme = false,
-  technique: string | null = null,
-): string {
-  const fab = techniqueInfo(technique)?.artRule;
+function buildConstraints(background: 'transparent' | 'filled', aspectRatio: string, meme = false): string {
   const base =
     'Depict the subject exactly as described, faithfully. ' +
     'Do not add any text or watermark that was not requested — but text that is PART of the ' +
     'requested subject (a flag\'s lettering, a logo\'s name, a slogan) MUST be included, ' +
-    'complete and correctly spelled.' +
-    (fab ? ` ${fab}` : '');
+    'complete and correctly spelled.';
   if (background === 'filled') {
     return (
       `${base} Render it as full-bleed artwork with a complete background filling the ` +
@@ -139,10 +127,6 @@ export async function POST(req: Request) {
     catalogueId?: string;
     purpose?: 'logo' | 'design';
     meme?: boolean;
-    // The Printful blank this design is destined for (when known — Eve's flow always knows it,
-    // the tab's canvas usually doesn't). Non-print techniques (embroidery, knitwear) condition
-    // the prompt so the art is born producible (lib/technique.ts).
-    templateKey?: number | string;
     // Marker annotations (normalized polylines) — baked as red strokes into the reference so the
     // model can region-target the edit (Joe, 2026-08-18: "circle and edit it with a marker").
     marks?: { x: number; y: number }[][];
@@ -193,15 +177,6 @@ export async function POST(req: Request) {
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: 'GOOGLE_GENAI_API_KEY not configured' }, { status: 500 });
 
-  // Technique-aware generation: when the destination blank is known, fetch its primary print
-  // technique (cached per product) and condition the prompt for the constrained ones. Best-effort —
-  // a Printful blip must never block generation.
-  let technique: string | null = null;
-  if (body?.templateKey != null && `${body.templateKey}`.trim()) {
-    const key = await getProductTechnique(Number(body.templateKey)).catch(() => null);
-    if (key && CONSTRAINED_TECHNIQUES.has(key)) technique = key;
-  }
-
   // Credit-gate creator-initiated generation. Skip the internal first-drop system identity
   // (it generates on the creator's behalf as a free onboarding gift); debit() already no-ops
   // comp accounts. Charge BEFORE the model call, refund on any no-image failure below.
@@ -224,7 +199,7 @@ export async function POST(req: Request) {
   const ai = new GoogleGenAI({ apiKey });
 
   // Instruction text + an optional user-supplied reference image.
-  const constraints = buildConstraints(background, aspectRatio, isMeme, technique);
+  const constraints = buildConstraints(background, aspectRatio, isMeme);
   const instruction = refImage
     ? `Design: ${prompt || 'a polished version of the reference image'}\n\nUse the provided image as a visual reference. ${markedRegion ? `${MARKED_REGION_RULE} ` : ''}${constraints}`
     : `Design: ${prompt}\n\n${constraints}`;
@@ -289,15 +264,15 @@ export async function POST(req: Request) {
               const { db, schema } = await import('@/lib/db');
               const [row] = await db
                 .insert(schema.designs)
-                .values({ storeId: ownedStoreId, catalogueId, prompt: prompt || 'Generated design', url: image, technique })
+                .values({ storeId: ownedStoreId, catalogueId, prompt: prompt || 'Generated design', url: image })
                 .returning({ id: schema.designs.id });
               id = row.id;
             } catch {
               // Persistence failure shouldn't kill generation — the image still returns.
             }
           }
-          console.log(`[pipeline:generate] ok${technique ? ` technique=${technique}` : ''} prompt=${JSON.stringify((prompt || '').slice(0, 120))} → ${image.slice(0, 60)}…`);
-          return Response.json({ image, id, ...(technique ? { technique } : {}) });
+          console.log(`[pipeline:generate] ok prompt=${JSON.stringify((prompt || '').slice(0, 120))} → ${image.slice(0, 60)}…`);
+          return Response.json({ image, id });
         }
       }
 

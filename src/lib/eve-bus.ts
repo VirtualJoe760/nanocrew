@@ -1,5 +1,5 @@
 // THE EVE BUS — how the rest of the app summons (and hears from) Eve, the full-screen overlay
-// assistant (docs/archive/VENUS_CENTRAL.md). Same module-level queue+listener idiom as the design
+// assistant (docs/studio/VENUS_CENTRAL.md). Same module-level queue+listener idiom as the design
 // command bus: senders never import the overlay, and a summon fired before the overlay mounts
 // flushes on mount.
 //

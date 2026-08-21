@@ -27,9 +27,7 @@ export const metadata: Metadata = {
     description: 'AI-native creator commerce. Talk to Eve; get a brand, a shop, and a website.',
     type: 'website',
   },
-  // Eve's constellation glyph — the current identity (assets/brand/README.md); nc-icon.png is
-  // the RETIRED serif monogram and nothing may reference it (BUG_AUDIT_2026-08-20 #6).
-  icons: { icon: '/brand/nanocrew-mark.png' },
+  icons: { icon: '/nc-icon.png' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

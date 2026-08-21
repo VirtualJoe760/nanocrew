@@ -3,8 +3,7 @@
 > Continuation of [FORGE_AI.md](FORGE_AI.md) (epic #31) and
 > [BUILD_QUALITY.md](../storefront/BUILD_QUALITY.md). Those fixed *"the robot produces a bare
 > template"*; this epic fixes *"every brand's site looks like every other brand's site"*.
-> Reviewed 2026-07-04 (fonts pipeline, template/hero inventory, forge latitude — three deep reads);
-> track statuses + line anchors re-verified 2026-08-20.
+> Reviewed 2026-07-04 (fonts pipeline, template/hero inventory, forge latitude — three deep reads).
 
 ## The diagnosis (three root causes)
 
@@ -84,9 +83,8 @@ brands are untouched (their `site_config.fonts` is empty → template default, o
 
 - Ship the **sighted robot** (post-build screenshot → judge vs. brief + a "bare-template test"
   → one self-revision pass; the droplet's critique-shot rig is the foundation).
-- ✅ `|| true` dropped (2026-08-19): `CLAUDE_FAILED`/`NO_EDITS` fail the job and push-notify the
-  creator. ⬜ Still open: make `BUILD_FAILED` block the **revision** ready-flip (today only
-  provision blocks it).
+- Stop swallowing failure: drop the `|| true` blindness; make `BUILD_FAILED` block the
+  **revision** ready-flip (today only provision blocks it).
 - Cheap deterministic check: diff built copy/fonts/hero against template defaults — untouched
   defaults = fail.
 
@@ -143,16 +141,16 @@ This is the right architecture per the feasibility findings: next/font/google ca
 
 ### 1.4 Diverse picking — style-driven + anti-repetition memory
 
-Replace the 3 independent `pickFontPairing` call sites in `/Users/averagexjoe/code/nanocrew/src/lib/provision.ts` (L111 `buildBrandJson`, L285 `briefAuthorInput`, L464 site_config write) with a **resolve-once** flow at the top of `provisionStorefront()` (L428), threaded to all three consumers. Resolution order:
+Replace the 3 independent `pickFontPairing` call sites in `/Users/averagexjoe/code/nanocrew/src/lib/provision.ts` (L98 buildBrandJson, L272 briefAuthorInput, L451 site_config write) with a **resolve-once** flow at the top of `provisionStorefront()` (L415), threaded to all three consumers. Resolution order:
 
 1. **User preference wins:** `brand.fonts` (new optional BrandResult field, set in brand review — see §3) → use verbatim.
-2. Existing `site_config.fonts` already set → keep (current L463 guard, but change from "both unset" to **per-slot**: today a half-set config blocks the chooser entirely).
+2. Existing `site_config.fonts` already set → keep (current L450 guard, but change from "both unset" to **per-slot**: today a half-set config blocks the chooser entirely).
 3. Otherwise `pickFonts(brand, slug, recentPicks)` — evolved `pickFontPairing`:
    - Corpus gains `brand.siteNotes` (currently omitted; only vibeKeywords/typography/voice at font-pairings.ts L78-83).
    - Tag matching upgraded from substring `includes` to word-boundary matching (fixes 'mono' matching 'monochrome').
    - **Anti-repetition memory:** query the last N (≈10) stores' `site_config.fonts` (`stores` ordered by createdAt desc; optionally scoped per creator) and demote candidates whose display family was used recently, before the djb2 hash tie-break (L64-68). With ~70 pairings, consecutive builds provably diverge. New helper `getRecentFontPicks()` in `src/lib/font-pairings.ts` or a new `src/lib/diversity.ts`.
 
-`brand.json.fontPresets` (write-only ceremony — no template reads it) stays but carries the resolved descriptor; the brief (provision.ts L285, `briefAuthorInput`) keeps stating it as law.
+`brand.json.fontPresets` (write-only ceremony — no template reads it) stays but carries the resolved descriptor; the brief (provision.ts L272) keeps stating it as law.
 
 ---
 
@@ -182,7 +180,7 @@ layout?: {
 
 ### 2.3 `components.json` manifest (COMPONENT_SYSTEM.md phase 5c, already sketched at L44-53)
 
-Per-template machine manifest declaring sections, variants, and option enums; names aligned with `data-block` attributes and `SITE_VOCABULARY` (`/Users/averagexjoe/code/nanocrew/src/lib/site-vocabulary.ts`, whose header comment explicitly anticipates this). Consumers: (a) picker UIs — what variants exist for this store's template; (b) site-config POST validation; (c) `authorBrandBrief()` (provision.ts L324) — upgrades the mandatory prose hero decision (briefAuthorSystem, ~L200-263, FORGE_DIVERSITY track 2) into data.
+Per-template machine manifest declaring sections, variants, and option enums; names aligned with `data-block` attributes and `SITE_VOCABULARY` (`/Users/averagexjoe/code/nanocrew/src/lib/site-vocabulary.ts`, whose header comment explicitly anticipates this). Consumers: (a) picker UIs — what variants exist for this store's template; (b) site-config POST validation; (c) `authorBrandBrief()` (provision.ts L311) — upgrades the mandatory prose hero decision (briefAuthorSystem ~L231, FORGE_DIVERSITY track 2) into data.
 
 ### 2.4 Variant selection at provision
 
@@ -224,7 +222,7 @@ User-visible: every creator can set any of 1940 fonts on their site today, with 
 ### Phase 2 — Brand review typography + anti-repetition picking — **M**
 User-visible: fonts adjustable at review (Joe's explicit ask); consecutive builds stop sharing fonts.
 - `src/lib/interview.ts` `BrandResult.fonts`; `src/components/brand-review.tsx` TYPOGRAPHY card reusing font-library.tsx; `src/app/api/store+api.ts` thread-through.
-- `src/lib/provision.ts`: resolve-once refactor (kill the 3 independent pickFontPairing calls at L111/L285/L464), prefer `brand.fonts`, per-slot unset guard.
+- `src/lib/provision.ts`: resolve-once refactor (kill the 3 independent pickFontPairing calls at L98/L272/L451), prefer `brand.fonts`, per-slot unset guard.
 - `src/lib/font-pairings.ts`: pools 6→12-16 per style, siteNotes in corpus, word-boundary tags, `pickFonts()` with recent-picks penalty (query last ~10 stores' site_config.fonts).
 
 ### Phase 3 — Component variants: hero + section order, live-swappable — **L**
@@ -242,11 +240,11 @@ User-visible: homepages structurally differ per brand; hero style and section li
 
 1. **Baked clones don't update:** every deployed site froze its `lib/site-config.ts` at provision. New resolver/registry reach only future builds; existing sites need the GitHub-contents backfill or a re-provision. Gate new UI on `configVersion` or descriptor picks silently render the template default (getFontVars returns null for unknowns — the current silent-failure mode).
 2. **street is hand-kept:** every `_shared/lib` change must be mirrored manually (sync-shared.mjs excludes it, L12-13). Budget it into every templates PR or it will drift.
-3. **The "both-unset" guard (provision.ts L463):** as written, a review-time pick of only a display font would block body-font auto-pick entirely. Must become per-slot in Phase 2.
+3. **The "both-unset" guard (provision.ts L450):** as written, a review-time pick of only a display font would block body-font auto-pick entirely. Must become per-slot in Phase 2.
 4. **`fonts.google.com/metadata/fonts` is unofficial:** cache server-side, keep the keyed `webfonts` Developer API as fallback; never call it from clients.
-5. **Anti-repetition breaks strict determinism:** today same brand+slug always yields same fonts; with memory, a re-provision may differ. Acceptable, but the dry-run path (`renderProvisionArtifacts`, provision.ts L356-388) and re-provisions should snapshot the resolved choice rather than re-pick.
+5. **Anti-repetition breaks strict determinism:** today same brand+slug always yields same fonts; with memory, a re-provision may differ. Acceptable, but the dry-run path (`renderProvisionArtifacts`, provision.ts L343-375) and re-provisions should snapshot the resolved choice rather than re-pick.
 6. **POST validation currently absent:** site-config accepts arbitrary strings for fonts; opening the surface to free-form family names makes validation (catalog membership, weight whitelist) mandatory or storefronts will emit broken css2 hrefs.
-7. **Config-driven page.tsx changes the forge contract:** the forge currently expresses composition by editing page.tsx from the brief (worker.mjs:177, TEMPLATE.md hard rules). TEMPLATE.md/VOCABULARY.md and briefAuthorSystem must be updated in the same push, or forge sessions will fight the registry. The forge bash lives only in worker.mjs — re-scp it to the droplet after edits (documented invariant).
+7. **Config-driven page.tsx changes the forge contract:** the forge currently expresses composition by editing page.tsx from the brief (worker.mjs:164, TEMPLATE.md hard rules). TEMPLATE.md/VOCABULARY.md and briefAuthorSystem must be updated in the same push, or forge sessions will fight the registry. worker.mjs and `src/lib/revise.ts` must stay in sync (documented invariant).
 8. **RN font previews at scale:** 1940 remote TTFs can't be eagerly loaded — lazy on-scroll `expo-font` loads with an LRU cap, plain-label fallback while loading.
 9. **Dead baked fonts:** elegant's next/font Playfair (layout.tsx L2/L14) and street's Anton/Inter/JetBrains still download when overridden — harmless now, worth pruning when the registry path is proven.
 10. **Latency expectations:** live edits land in ~60s (revalidate) plus the belt-and-braces redeploy from `revalidateStorefront` — the picker UI's injected-CSS preview covers the gap so users don't perceive lag.

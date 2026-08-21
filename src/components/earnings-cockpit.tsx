@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -75,162 +75,156 @@ export function EarningsCockpit({ visible, onClose, token }: { visible: boolean;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
-          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
-          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
-          need the context too. */}
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-          <View style={styles.sheet}>
-            <View style={styles.headerRow}>
-              <ThemedText type="code" style={styles.eyebrow}>
-                {'// EARNINGS'}
+      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+        <View style={styles.sheet}>
+          <View style={styles.headerRow}>
+            <ThemedText type="code" style={styles.eyebrow}>
+              {'// EARNINGS'}
+            </ThemedText>
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={onClose} hitSlop={12}>
+              <ThemedText type="code" style={styles.close}>
+                close ✕
               </ThemedText>
-              <View style={{ flex: 1 }} />
-              <Pressable onPress={onClose} hitSlop={12}>
-                <ThemedText type="code" style={styles.close}>
-                  close ✕
-                </ThemedText>
-              </Pressable>
+            </Pressable>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator style={styles.center} color={pal.accent} />
+          ) : error ? (
+            <ThemedText style={[styles.center, styles.dim]}>{error}</ThemedText>
+          ) : !stores.length ? (
+            <View style={styles.center}>
+              <ThemedText type="subtitle" style={styles.white}>
+                No store yet
+              </ThemedText>
+              <ThemedText type="small" style={styles.dim}>
+                Build one with your consultant — your numbers will live here.
+              </ThemedText>
             </View>
-
-            {loading ? (
-              <ActivityIndicator style={styles.center} color={pal.accent} />
-            ) : error ? (
-              <ThemedText style={[styles.center, styles.dim]}>{error}</ThemedText>
-            ) : !stores.length ? (
-              <View style={styles.center}>
-                <ThemedText type="subtitle" style={styles.white}>
-                  No store yet
-                </ThemedText>
-                <ThemedText type="small" style={styles.dim}>
-                  Build one with your consultant — your numbers will live here.
-                </ThemedText>
+          ) : (
+            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+              {/* Headline cards */}
+              <View style={styles.cardRow}>
+                <View style={styles.card}>
+                  <ThemedText type="code" style={styles.cardLabel}>
+                    REVENUE
+                  </ThemedText>
+                  <ThemedText type="title" style={styles.cardBig}>
+                    {money(totalRevenue)}
+                  </ThemedText>
+                </View>
+                <View style={styles.card}>
+                  <ThemedText type="code" style={styles.cardLabel}>
+                    ORDERS
+                  </ThemedText>
+                  <ThemedText type="title" style={styles.cardBig}>
+                    {totalOrders}
+                  </ThemedText>
+                </View>
               </View>
-            ) : (
-              <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-                {/* Headline cards */}
-                <View style={styles.cardRow}>
-                  <View style={styles.card}>
-                    <ThemedText type="code" style={styles.cardLabel}>
-                      REVENUE
-                    </ThemedText>
-                    <ThemedText type="title" style={styles.cardBig}>
-                      {money(totalRevenue)}
-                    </ThemedText>
-                  </View>
-                  <View style={styles.card}>
-                    <ThemedText type="code" style={styles.cardLabel}>
-                      ORDERS
-                    </ThemedText>
-                    <ThemedText type="title" style={styles.cardBig}>
-                      {totalOrders}
-                    </ThemedText>
-                  </View>
+              <View style={styles.cardRow}>
+                <View style={styles.card}>
+                  <ThemedText type="code" style={styles.cardLabel}>
+                    VIEWS · 30D
+                  </ThemedText>
+                  <ThemedText type="title" style={styles.cardBig}>
+                    {totalViews.toLocaleString()}
+                  </ThemedText>
                 </View>
-                <View style={styles.cardRow}>
-                  <View style={styles.card}>
-                    <ThemedText type="code" style={styles.cardLabel}>
-                      VIEWS · 30D
-                    </ThemedText>
-                    <ThemedText type="title" style={styles.cardBig}>
-                      {totalViews.toLocaleString()}
-                    </ThemedText>
-                  </View>
-                  <View style={styles.card}>
-                    <ThemedText type="code" style={styles.cardLabel}>
-                      TO FULFILL
-                    </ThemedText>
-                    <ThemedText type="title" style={[styles.cardBig, open ? styles.alert : undefined]}>
-                      {open}
-                    </ThemedText>
-                  </View>
+                <View style={styles.card}>
+                  <ThemedText type="code" style={styles.cardLabel}>
+                    TO FULFILL
+                  </ThemedText>
+                  <ThemedText type="title" style={[styles.cardBig, open ? styles.alert : undefined]}>
+                    {open}
+                  </ThemedText>
                 </View>
+              </View>
 
-                {/* Per-store breakdown (only if more than one) */}
-                {stores.length > 1 ? (
-                  <View style={styles.section}>
-                    <ThemedText type="code" style={styles.sectionLabel}>
-                      BY STORE
-                    </ThemedText>
-                    {stores.map((s) => (
-                      <View key={s.id} style={styles.storeRow}>
-                        <ThemedText type="small" style={styles.white}>
-                          {s.name}
-                        </ThemedText>
-                        <ThemedText type="code" style={styles.dim}>
-                          {money(s.revenueCents)} · {s.orders} ord · {s.views30d} views
-                        </ThemedText>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-
-                {/* Recent orders */}
+              {/* Per-store breakdown (only if more than one) */}
+              {stores.length > 1 ? (
                 <View style={styles.section}>
                   <ThemedText type="code" style={styles.sectionLabel}>
-                    RECENT ORDERS
+                    BY STORE
                   </ThemedText>
-                  {orders.length ? (
-                    orders.slice(0, 12).map((o) => (
-                      <View key={o.id} style={styles.orderRow}>
-                        <View style={{ flex: 1 }}>
-                          <ThemedText type="small" style={styles.white}>
-                            {money(o.totalCents)}
-                          </ThemedText>
-                          <ThemedText type="code" style={styles.orderMeta}>
-                            {new Date(o.createdAt).toLocaleDateString()} · {o.storeSlug ?? ''}
-                          </ThemedText>
-                        </View>
-                        <View style={[styles.badge, o.status === 'shipped' || o.status === 'delivered' ? styles.badgeShip : undefined]}>
-                          <ThemedText type="code" style={styles.badgeText}>
-                            {STATUS_LABEL[o.status] ?? o.status}
-                          </ThemedText>
-                        </View>
-                      </View>
-                    ))
-                  ) : (
-                    <ThemedText type="small" style={styles.dim}>
-                      No orders yet — share your store to make the first sale.
-                    </ThemedText>
-                  )}
-                </View>
-
-                {/* Per-product margin — retail vs our Printful cost */}
-                {margins.length ? (
-                  <View style={styles.section}>
-                    <View style={styles.marginHead}>
-                      <ThemedText type="code" style={styles.sectionLabel}>MARGINS</ThemedText>
-                      {avgMarginPct != null ? (
-                        <ThemedText type="code" style={styles.dim}>avg {avgMarginPct}%</ThemedText>
-                      ) : null}
+                  {stores.map((s) => (
+                    <View key={s.id} style={styles.storeRow}>
+                      <ThemedText type="small" style={styles.white}>
+                        {s.name}
+                      </ThemedText>
+                      <ThemedText type="code" style={styles.dim}>
+                        {money(s.revenueCents)} · {s.orders} ord · {s.views30d} views
+                      </ThemedText>
                     </View>
-                    {margins.map((m) => (
-                      <View key={m.productId} style={styles.marginRow}>
-                        <View style={{ flex: 1 }}>
-                          <ThemedText type="small" style={styles.white} numberOfLines={1}>{m.name}</ThemedText>
-                          <ThemedText type="code" style={styles.orderMeta}>
-                            {m.retailCents != null ? money(m.retailCents) : '—'} retail
-                            {m.costCents != null ? ` · ${money(m.costCents)} cost` : ''}
-                          </ThemedText>
-                        </View>
-                        {m.marginCents != null ? (
-                          <View style={{ alignItems: 'flex-end' }}>
-                            <ThemedText type="small" style={styles.profit}>{money(m.marginCents)}</ThemedText>
-                            {m.marginPct != null ? <ThemedText type="code" style={styles.orderMeta}>{m.marginPct}%</ThemedText> : null}
-                          </View>
-                        ) : (
-                          <ThemedText type="code" style={styles.dim}>cost n/a</ThemedText>
-                        )}
+                  ))}
+                </View>
+              ) : null}
+
+              {/* Recent orders */}
+              <View style={styles.section}>
+                <ThemedText type="code" style={styles.sectionLabel}>
+                  RECENT ORDERS
+                </ThemedText>
+                {orders.length ? (
+                  orders.slice(0, 12).map((o) => (
+                    <View key={o.id} style={styles.orderRow}>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText type="small" style={styles.white}>
+                          {money(o.totalCents)}
+                        </ThemedText>
+                        <ThemedText type="code" style={styles.orderMeta}>
+                          {new Date(o.createdAt).toLocaleDateString()} · {o.storeSlug ?? ''}
+                        </ThemedText>
                       </View>
-                    ))}
+                      <View style={[styles.badge, o.status === 'shipped' || o.status === 'delivered' ? styles.badgeShip : undefined]}>
+                        <ThemedText type="code" style={styles.badgeText}>
+                          {STATUS_LABEL[o.status] ?? o.status}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <ThemedText type="small" style={styles.dim}>
+                    No orders yet — share your store to make the first sale.
+                  </ThemedText>
+                )}
+              </View>
+
+              {/* Per-product margin — retail vs our Printful cost */}
+              {margins.length ? (
+                <View style={styles.section}>
+                  <View style={styles.marginHead}>
+                    <ThemedText type="code" style={styles.sectionLabel}>MARGINS</ThemedText>
+                    {avgMarginPct != null ? (
+                      <ThemedText type="code" style={styles.dim}>avg {avgMarginPct}%</ThemedText>
+                    ) : null}
                   </View>
-                ) : null}
-              </ScrollView>
-            )}
-          </View>
-        </SafeAreaView>
-      </SafeAreaProvider>
+                  {margins.map((m) => (
+                    <View key={m.productId} style={styles.marginRow}>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText type="small" style={styles.white} numberOfLines={1}>{m.name}</ThemedText>
+                        <ThemedText type="code" style={styles.orderMeta}>
+                          {m.retailCents != null ? money(m.retailCents) : '—'} retail
+                          {m.costCents != null ? ` · ${money(m.costCents)} cost` : ''}
+                        </ThemedText>
+                      </View>
+                      {m.marginCents != null ? (
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <ThemedText type="small" style={styles.profit}>{money(m.marginCents)}</ThemedText>
+                          {m.marginPct != null ? <ThemedText type="code" style={styles.orderMeta}>{m.marginPct}%</ThemedText> : null}
+                        </View>
+                      ) : (
+                        <ThemedText type="code" style={styles.dim}>cost n/a</ThemedText>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </ScrollView>
+          )}
+        </View>
+      </SafeAreaView>
     </Modal>
   );
 }

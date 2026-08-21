@@ -54,17 +54,18 @@ function config() {
   const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
   const GITHUB_OWNER = process.env.GITHUB_OWNER;
   const TEMPLATES_REPO = process.env.TEMPLATES_REPO;
+  const VPS_HOST = process.env.VPS_HOST;
+  const VPS_USER = process.env.VPS_USER;
   const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
   const EXPO_PUBLIC_SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  // VPS_HOST/VPS_USER are GONE from the gate (BUG_AUDIT_2026-08-20 #8): the queue-based
-  // provision path never SSHes, the vars were read and never consumed, and requiring them
-  // meant an env cleanup would silently kill provisioning for every new brand.
-  if (!GITHUB_TOKEN || !GITHUB_OWNER) return null;
+  if (!GITHUB_TOKEN || !GITHUB_OWNER || !VPS_HOST || !VPS_USER) return null;
   return {
     GITHUB_TOKEN,
     GITHUB_OWNER,
     TEMPLATES_REPO: TEMPLATES_REPO ?? `${GITHUB_OWNER}/nanocrew-templates`,
+    VPS_HOST,
+    VPS_USER,
     VERCEL_TOKEN: VERCEL_TOKEN ?? null,
     SUPABASE_URL: EXPO_PUBLIC_SUPABASE_URL ?? '',
     SUPABASE_ANON_KEY: EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '',
@@ -370,6 +371,8 @@ export async function renderProvisionArtifacts(input: ProvisionInput): Promise<{
     GITHUB_TOKEN: '',
     GITHUB_OWNER: '',
     TEMPLATES_REPO: '',
+    VPS_HOST: '',
+    VPS_USER: '',
     VERCEL_TOKEN: null,
     SUPABASE_URL: '',
     SUPABASE_ANON_KEY: '',

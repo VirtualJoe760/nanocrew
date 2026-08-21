@@ -35,7 +35,7 @@ import { publishEvePulse, registerEveMuteListener } from '@/lib/eve-live-state-b
 import { publishTranscript } from '@/lib/eve-transcript-bus';
 import { emitEveEvent, type EveSummon } from '@/lib/eve-bus';
 import { EveWheel, spokeAt, type WheelId } from './eve-wheel';
-import { announce, eveCentralInstruction, eveInterviewInstruction, openerVariation, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
+import { announce, eveCentralInstruction, openerVariation, EVE_CENTRAL_GREETING, LIVE_VOICE } from '@/lib/live-voice';
 import { hoursSinceLastOpen, recentOpeners, rememberOpener } from '@/lib/eve-openers';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
@@ -206,18 +206,9 @@ export function EveHome({
   // creators get the CENTRAL persona — greeting + task awareness + the interview module verbatim
   // (the "ready to build your brand" cue survives, so buildReady below keeps working). The hook
   // reads opts at start() time and we never start before meResolved, so the choice is always final.
-  // The BRAND INTERVIEW always gets the interview persona — carrying their name and existing
-  // brands when they have them. A returning creator starting a second brand used to keep the
-  // CENTRAL instruction, whose jobs are design/assets/status with no brand job, so she ran the
-  // interview without jobs/brand.md's method (BUG_AUDIT_2026-08-20 #30).
   const centralInstruction = useMemo(
-    () =>
-      view === 'interview'
-        ? eveInterviewInstruction(creatorName, stores.map((s) => s.name))
-        : hasStore
-          ? eveCentralInstruction(creatorName, stores.map((s) => s.name))
-          : undefined,
-    [view, hasStore, creatorName, stores],
+    () => (hasStore ? eveCentralInstruction(creatorName, stores.map((s) => s.name)) : undefined),
+    [hasStore, creatorName, stores],
   );
   // SHE NEVER OPENS THE SAME WAY TWICE (Joe, 2026-08-18). Her last few openings live on this
   // device; we hand them back as a do-not-repeat list alongside the time of day and how long
@@ -247,7 +238,7 @@ export function EveHome({
     firstTime: !hasStore,
     voiceName: LIVE_VOICE,
     instruction: centralInstruction,
-    greeting: hasStore && view !== 'interview' ? EVE_CENTRAL_GREETING : undefined,
+    greeting: hasStore ? EVE_CENTRAL_GREETING : undefined,
     variation,
     onBrand: (b, transcript) => {
       setBrand(b);
@@ -344,11 +335,7 @@ export function EveHome({
     if (buildReady) return;
     const userTurns = live.messages.filter((m) => m.role === 'user').length;
     const lastEve = [...live.messages].reverse().find((m) => m.role === 'assistant')?.text ?? '';
-    // src/eve/jobs/brand.md instructs the phrasing this matches ("everything she needs" + "build
-    // it"); the variants below are the same sentence said naturally. Keep the two in step — the
-    // job file lost the instruction once and only the regex's breadth was holding the gate up
-    // (BUG_AUDIT_2026-08-20 #16).
-    const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we|you)\s+need|got everything|let'?s build|time to build|(shall|should|want me to|ready to)\s+((we|i|you)\s+)?build|build it now|ready when you are)\b/i;
+    const cue = /\b(ready to build|ready to (create|launch|go)|build your (brand|store|site|shop)|(everything|all)\s+(i|we|you)\s+need|got everything|let'?s build|time to build|shall we build)\b/i;
     if ((view === 'interview' && userTurns >= 6) || (userTurns >= 3 && cue.test(lastEve))) {
       buildHeardFrom.current = userTurns; // only turns spoken AFTER readiness can trigger the build
       setBuildReady(true);
@@ -411,17 +398,11 @@ export function EveHome({
   const awaitAssetIdea = useRef(false);
   /** She just asked WHICH brand's site to edit — the next turn is that answer, not a new topic. */
   const awaitSiteChoice = useRef(false);
-  /** She just asked WHICH brand a design / website graphic is for — the idea (and slot) ride
-   *  along so the answer only needs to name the brand. A design binds to ONE brand's catalogue,
-   *  and guessing is how test products got published onto the wrong live brand
-   *  (BUG_AUDIT_2026-08-20 #1) — so with several brands and none named, she asks. */
-  const awaitDesignBrand = useRef<{ idea: string } | null>(null);
-  const awaitAssetBrand = useRef<{ idea: string; slot?: 'hero' | 'logo' | 'mark' | 'favicon' | 'og' } | null>(null);
   /** One-shot greeting override for the NEXT session open (a spoke that wants her first line to be
    *  its own ask — e.g. DESIGN — instead of the general hello). Consumed by the gate effect. */
   const pendingGreeting = useRef<string | undefined>(undefined);
 
-  // ---- VOICE-INTENT ROUTING (docs/archive/VENUS_CENTRAL.md §3): distill-then-execute, per committed turn ----
+  // ---- VOICE-INTENT ROUTING (VENUS_CENTRAL.md §3): distill-then-execute, per committed turn ----
   // Native-audio Live can't tool-call, so each new user utterance goes to /api/eve/route (~300ms
   // flash, non-blocking, fail-open to 'none'). Returning creators only — a first-brand creator is
   // the interview funnel. The endpoint is precision-biased; interviewActive makes it stricter still.
@@ -513,10 +494,6 @@ export function EveHome({
       awaitAssetIdea.current = false;
       const awaitingSite = awaitSiteChoice.current;
       awaitSiteChoice.current = false;
-      const awaitedDesignBrand = awaitDesignBrand.current;
-      awaitDesignBrand.current = null;
-      const awaitedAssetBrand = awaitAssetBrand.current;
-      awaitAssetBrand.current = null;
       try {
         const r = await fetch(apiUrl('/api/eve/route'), {
           method: 'POST',
@@ -529,8 +506,6 @@ export function EveHome({
             awaitingDesignIdea: awaiting,
             awaitingAssetIdea: awaitingAsset,
             awaitingSiteChoice: awaitingSite,
-            awaitingDesignBrand: !!awaitedDesignBrand,
-            awaitingAssetBrand: !!awaitedAssetBrand,
           }),
         });
         const d = (await r.json().catch(() => ({}))) as {
@@ -547,10 +522,30 @@ export function EveHome({
           case 'create-brand':
             if (viewRef.current === 'guide') enterInterview();
             return;
-          case 'new-design': {
-            // The idea can arrive now, or ride along from her which-brand ask one turn ago.
-            const idea = d.idea ?? awaitedDesignBrand?.idea;
-            if (!idea) {
+          case 'new-design':
+            if (d.idea) {
+              // SHE LEADS, THEN THE MODAL (Joe, 2026-08-18: "she should lead with 'okay let me open
+              // the apparel selection for you', then give her two cents"). The picker used to mount
+              // the instant the router classified — which is often mid-thought, since routing fires
+              // on the FIRST committed turn — so the catalogue appeared over them and her cue landed
+              // as a bare instruction. Now ONE line does the acknowledging, the announcing and the
+              // two cents, and the surface opens when that line is actually dispatched (the voice
+              // gate holds it until they've stopped talking).
+              const idea = d.idea;
+              let opened = false;
+              const openDesign = () => {
+                if (opened) return;
+                opened = true;
+                onGo({ state: 'design', payload: { idea } });
+              };
+              // Cap the wait: if she can't speak at all (typed mode, dead socket), the surface must
+              // still open rather than hang on a cue that will never dispatch.
+              setTimeout(openDesign, 8000);
+              live.prompt(
+                `(They want a design: "${idea}". ONE short line, then STOP: say the idea back, tell them you're opening the product selection, and give ONE suggestion of what it'd suit. They're about to browse — nothing more until they've picked.)`,
+                openDesign,
+              );
+            } else {
               // A design ask with no subject ("make me a t-shirt") — opening EveDesign empty lands
               // in a typed form. She asks for the artwork instead (prompt, so it's actually voiced);
               // the answer re-routes with the idea via awaitDesignIdea.
@@ -558,81 +553,21 @@ export function EveHome({
               live.prompt(
                 "(They want a design but haven't said what the artwork is — in one short sentence, ask what should go on it.)",
               );
-              return;
             }
-            // The brand: a named brand wins, a lone brand goes straight through. With several and
-            // none named we do NOT block — the surface opens anyway and picks the brand THERE
-            // (chips, one tap, she asks over the top). Blocking on a spoken answer first meant a
-            // 5-brand creator asking for a design got a question instead of the apparel picker
-            // (Joe, 2026-08-20). Never guess the brand; never make them wait for it either.
-            const target = d.storeSlug
-              ? stores.find((s) => s.slug === d.storeSlug)
-              : stores.length === 1
-                ? stores[0]
-                : undefined;
-            // SHE LEADS, THEN THE MODAL (Joe, 2026-08-18: "she should lead with 'okay let me open
-            // the apparel selection for you', then give her two cents"). The picker used to mount
-            // the instant the router classified — which is often mid-thought, since routing fires
-            // on the FIRST committed turn — so the catalogue appeared over them and her cue landed
-            // as a bare instruction. Now ONE line does the acknowledging, the announcing and the
-            // two cents, and the surface opens when that line is actually dispatched (the voice
-            // gate holds it until they've stopped talking).
-            let opened = false;
-            const openDesign = () => {
-              if (opened) return;
-              opened = true;
-              onGo({
-                state: 'design',
-                payload: {
-                  idea,
-                  storeSlug: target?.slug,
-                  // When the brand is still open, the surface needs the list to offer it.
-                  brands: target ? undefined : stores.map((s) => ({ slug: s.slug, name: s.name })),
-                },
-              });
-            };
-            // Cap the wait: if she can't speak at all (typed mode, dead socket), the surface must
-            // still open rather than hang on a cue that will never dispatch.
-            setTimeout(openDesign, 8000);
-            live.prompt(
-              target
-                ? `(They want a design for "${target.name}": "${idea}". ONE short line, then STOP: say the idea back, tell them you're opening the product selection, and give ONE suggestion of what it'd suit. They're about to browse — nothing more until they've picked.)`
-                : `(They want a design: "${idea}". ONE short line, then STOP: say the idea back and ask which brand it's for — their brands are on screen to tap. Nothing more; they're about to choose.)`,
-              openDesign,
-            );
             return;
-          }
           case 'site-asset': {
             const dd = d as { idea?: string; slot?: 'hero' | 'logo' | 'mark' | 'favicon' | 'og'; storeSlug?: string };
-            const assetIdea = dd.idea ?? awaitedAssetBrand?.idea;
-            const assetSlot = dd.slot ?? awaitedAssetBrand?.slot;
-            if (!assetIdea) {
+            if (dd.idea) {
+              onGo({
+                state: 'assets',
+                payload: { idea: dd.idea, slot: dd.slot, storeSlug: dd.storeSlug ?? stores[0]?.slug },
+              });
+            } else {
               awaitAssetIdea.current = true;
               live.prompt(
                 "(They want a website graphic but haven't said what — in one short sentence, ask what it should be and for which spot: hero, wordmark, app icon, or social card.)",
               );
-              return;
             }
-            // Same brand rule as designs: named brand wins, a lone brand goes straight through,
-            // several and she asks — the old `stores[0]` fallback silently targeted whichever
-            // brand happened to list first (same defect class as BUG_AUDIT_2026-08-20 #1).
-            const assetTarget = dd.storeSlug
-              ? stores.find((s) => s.slug === dd.storeSlug)
-              : stores.length === 1
-                ? stores[0]
-                : undefined;
-            if (!assetTarget) {
-              const options = stores.map((s) => `"${s.name}"`).join(' or ');
-              awaitAssetBrand.current = { idea: assetIdea, slot: assetSlot };
-              live.sendContext(
-                `(They want a website graphic — "${assetIdea}" — but have more than one brand: ask which brand's site it's for: ${options}. One short line, nothing else. When they name one you'll open the asset flow for that brand, so just take the name.)`,
-              );
-              return;
-            }
-            onGo({
-              state: 'assets',
-              payload: { idea: assetIdea, slot: assetSlot, storeSlug: assetTarget.slug },
-            });
             return;
           }
           case 'write-post':

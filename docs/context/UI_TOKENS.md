@@ -13,7 +13,7 @@ silver, no gold).
 | File | Export | Used by | Access |
 |---|---|---|---|
 | `src/constants/theme.ts` | `Colors` (light/dark), `Fonts`, `Spacing` | App chrome, `ThemedText`/`ThemedView` via `useTheme()` | `useTheme()` → `theme.text`, `theme.background`, … |
-| `src/components/nc-screen.tsx` | `makePalette()` | The Eve/Studio screen + Eve surfaces (eve-home, eve-design, interview, welcome) + `GlowButton`/`GlowInput` (Design/Market/Account read `Colors` via `useTheme()`) | `usePalette()` → `p.accent`, `p.ink`, `p.accentCool`, … |
+| `src/components/nc-screen.tsx` | `makePalette()` | Studio/Design/Market/Account screens + `GlowButton`/`GlowInput` | `usePalette()` → `p.accent`, `p.ink`, `p.accentCool`, … |
 | `src/lib/studio-palette.ts` | `makeStudioPalette()` | Studio modals (dashboard, composer, paywall, cockpit) | `useStudioPalette()` → `sp.surface`, `sp.card`, … |
 
 Consolidating the last two onto one palette is a known follow-up; until then, keep all three aligned.
@@ -53,4 +53,4 @@ Font is **Jost** (bundled), mapped by weight: Light 300 = body/`small`/`default`
 The depth motif is the **nano-glow** (`src/constants/glow.ts` → `glow()` / `textGlow()`): platinum on
 buttons/text, a cooler hue (`accentCool`) on inputs. Use the helper, don't hand-roll shadows.
 
-> Touch a token? Update this doc in the same change ([`NEVER_VIOLATE.md`](NEVER_VIOLATE.md) §6).
+> Touch a token? Update this doc in the same change ([`NEVER_VIOLATE.md`](NEVER_VIOLATE.md) §4).

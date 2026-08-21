@@ -65,26 +65,16 @@ function liveSystemInstruction(userName?: string, firstTime?: boolean): string {
 /** Eve's CENTRAL persona — the home-state session for a RETURNING creator (has stores). One merged
  *  instruction, ordered by how often it's used: CONVERSATION FIRST (she's a collaborator they think
  *  out loud with — this is the default mode, not a fallback), then task awareness (the intent router
- *  transitions surfaces; docs/archive/VENUS_CENTRAL.md §3), then the brand-interview module CARRIED
+ *  transitions surfaces; docs/studio/VENUS_CENTRAL.md §3), then the brand-interview module CARRIED
  *  VERBATIM from liveSystemInstruction — which she now ENTERS for a new brand rather than being.
  *
  *  Two things to preserve when editing:
- *   1. the READY CUE now lives in src/eve/jobs/brand.md ("everything she needs" + "build it"), not
- *      in this wrapper — that's the sentence eve-home's buildReady regex listens for. The regex is
- *      forgiving and the interview view also unlocks after 6 user turns, but a TYPED interview in
- *      the guide view has no such floor, so the job file must keep instructing the phrasing.
+ *   1. the "ready to build your brand" cue sentence the buildReady regex (eve-home.tsx) listens for —
+ *      the regex also accepts "got everything", "let's build", etc., and unlocks after 6 user turns
+ *      regardless, so it's forgiving; still, don't drop the phrase.
  *   2. the DELIVERY paragraph — it's her voice, tuned against the live TTS. */
 export function eveCentralInstruction(userName?: string, storeNames: string[] = []): string {
   return buildPersona('central', { userName, brands: storeNames });
-}
-
-/** Eve's INTERVIEW persona for a creator who ALREADY has brands — the wheel's NEW spoke, or a
- *  spoken "let's start another label". Same brand job as a first-timer (jobs/brand.md carries the
- *  whole method), but with their name and existing brands as context so she can reference their
- *  taste instead of meeting a stranger. Without this the new-brand interview ran on the CENTRAL
- *  persona, whose jobs are design/assets/status — no brand job at all (BUG_AUDIT_2026-08-20 #30). */
-export function eveInterviewInstruction(userName?: string, storeNames: string[] = []): string {
-  return buildPersona('interview', { userName, brands: storeNames });
 }
 
 /** Greeting nudge for the central (returning-creator) session. Deliberately NOT one fixed shape —
@@ -517,12 +507,6 @@ export class LiveVoiceSession {
             return;
           }
           console.warn('[live] ws open → starting mic');
-          // A healthy stretch re-arms the one automatic reconnect. The counter used to latch
-          // after the first drop, so the SECOND drop — even an hour later — left her silently
-          // dead (BUG_AUDIT_2026-08-20). 15s connected = healthy; a reconnect that dies before
-          // that keeps the latch, so a flapping socket still can't loop forever.
-          if (this.healthTimer) clearTimeout(this.healthTimer);
-          this.healthTimer = setTimeout(() => { this.reconnects = 0; }, 15_000);
           this.startMic();
         },
         onmessage: (m) => this.onMessage(m),
@@ -532,7 +516,6 @@ export class LiveVoiceSession {
         },
         onclose: (e: CloseEvent) => {
           console.warn('[live] ws close', e?.code, e?.reason);
-          if (this.healthTimer) { clearTimeout(this.healthTimer); this.healthTimer = null; }
           if (this.closed) return;
           // She must not silently die mid-conversation (Joe, 2026-08-17): one automatic
           // reconnect, no re-greeting, transcript intact. Repeated failures surface as idle.
@@ -817,8 +800,6 @@ export class LiveVoiceSession {
   /** Fires when the queued cue is dispatched — lets a caller time a surface to her voice. */
   private pendingPromptSent?: () => void;
   private reconnects = 0;
-  /** Armed on ws open; fires after 15s of sustained connection → re-arms the auto-reconnect. */
-  private healthTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Mic frame → is there speech in it? RMS over the raw float buffer; called only OUTSIDE her own
    *  playback window, so her voice coming back through the speaker never reads as the creator. */

@@ -16,14 +16,12 @@ division references the storefront docs rather than duplicating them.
 |---|---|
 | **[EVE_CONTROL.md](EVE_CONTROL.md)** | **The division's current center of gravity** — THE PIVOT: Eve as the app's persistent living background + control surface, the capability tree, and the P3′ voice design loop. Code comments point here for the current architecture. |
 | [`EVE_VOICE.md`](EVE_VOICE.md) | How she TALKS — register, the golden-circle method, the noun test. Product logic, not copy. |
-| [EVE_PERSONALITY.md](EVE_PERSONALITY.md) | Her persona/personality contract — the doc AGENTS.md's mapping table points at for persona changes. |
 | **[BUILD_FLOW.md](BUILD_FLOW.md)** | The end-to-end build → refine → publish arc from the creator's POV. The narrative spine; links out to the mechanics. **Honest about CURRENT vs TARGET.** |
 | **[FORGE_AI.md](FORGE_AI.md)** | THE doc on how our AI talks to the forge robot — Eve authors the brief (gemini-2.5-pro in `provision.ts`; mail-merge only as fallback) and the Master `CLAUDE.md` conditions the robot on every build; the remaining gap is eyes + a real quality gate. |
 | **[DESIGN_GENERATOR.md](DESIGN_GENERATOR.md)** | The Design tab + generator: making products (Printful publish), model shots, and scene video — and how those assets flow to the storefront, replacing the temporary placeholders the forge ships. |
-| **[DESIGN_SURFACES.md](DESIGN_SURFACES.md)** | The Design tab and Eve's design pipeline are ONE product — the parity matrix and the shared `designer/` seam. CLAUDE.md's design parity rule points here. |
 | [EDIT_PIPELINE.md](EDIT_PIPELINE.md) | The live-site edit flow (voice → plan → generate → place → forge), its 5 checkpoints, and how to trace a failed edit in logs + DB. |
 | [GEMINI_LIVE.md](GEMINI_LIVE.md) | The live-voice stack — Eve on Gemini Live realtime speech-to-speech (`live-voice.ts` + `use-live-voice.ts`, ephemeral token, `/api/say`). SHIPPED. |
-| [VENUS_CENTRAL.md](../archive/VENUS_CENTRAL.md) | The "Eve as the operating system" game plan (2026-07-05) — the grounded inventory + phase plan behind the pivot; EVE_CONTROL.md carries the current state. |
+| [VENUS_CENTRAL.md](VENUS_CENTRAL.md) | The "Eve as the operating system" game plan (2026-07-05) — the grounded inventory + phase plan behind the pivot; EVE_CONTROL.md carries the current state. |
 | [FORGE_DIVERSITY.md](FORGE_DIVERSITY.md) | Why every generated site looks the same — the root causes (fonts pipeline, template/hero inventory, forge latitude) + the fix tracks. Continuation of FORGE_AI.md. |
 | [VENUS_AVATAR.md](VENUS_AVATAR.md) | Eve's avatar — the persistent orb/nucleus embodiment (the wireframe-face POC was retired), formant lip-sync, the shader/native gotchas, and the Eve Lab. |
 

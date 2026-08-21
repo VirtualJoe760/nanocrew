@@ -19,12 +19,12 @@ import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
 import { apiFetch } from '@/lib/api';
-import { minRetailCents, suggestedRetailCents } from '@/lib/pricing';
+import { minRetailCents } from '@/lib/pricing';
 
 // Finalize & publish (port of stephen-lawyer's FinalizeForm): pick colors, set one retail
 // price (default ≈ 2× base cost), name it → creates the live Printful sync product.
 
-const MODEL_SHOTS_COST = 50; // display-only mirror of CREDIT_COSTS.model_shots (server is source of truth)
+const MODEL_SHOTS_COST = 25; // display-only mirror of CREDIT_COSTS.model_shots (server is source of truth)
 
 type Variant = { id: number; size: string; color: string; colorCode: string; priceCents: number };
 
@@ -82,24 +82,16 @@ export function FinalizeSheet({
 
   useEffect(() => {
     let alive = true;
-    // The variants AND the print-area response — the latter names the variant every mockup was
-    // rendered on, which is the colour the creator has been looking at all along.
-    Promise.all([
-      apiFetch(`/api/blank/${templateKey}/variants`).then((r) => r.json()),
-      apiFetch(`/api/blank/${templateKey}/printareas`).then((r) => r.json()).catch(() => ({})),
-    ])
-      .then(([d, pa]: [{ variants?: Variant[] }, { variantId?: number | null }]) => {
+    apiFetch(`/api/blank/${templateKey}/variants`)
+      .then((r) => r.json())
+      .then((d: { variants?: Variant[] }) => {
         if (!alive || !d.variants?.length) return;
         setVariants(d.variants);
-        // The floor is the highest base cost + margin; OPEN at a real markup above it, never at
-        // the floor itself (BUG_AUDIT_2026-08-20 #46 — accepting the default earned ~$5 a sale).
+        // Pricing standard: the floor is the highest base cost + margin; default to it.
         const maxBase = Math.max(...d.variants.map((v) => v.priceCents));
         setMaxBaseCents(maxBase);
-        setPrice((suggestedRetailCents(maxBase) / 100).toFixed(2));
-        // Pre-select the PREVIEWED colour, not the alphabetically-first one — "Aqua" was the
-        // default for a charcoal brand whose design had been previewed on black (#46).
-        const previewed = pa?.variantId ? d.variants.find((v) => v.id === pa.variantId)?.color : undefined;
-        const first = previewed ?? d.variants[0]?.color;
+        setPrice((minRetailCents(maxBase) / 100).toFixed(2));
+        const first = d.variants[0]?.color;
         if (first) setSelectedColors(new Set([first]));
       })
       .catch(() => setError('Failed to load variants'))
@@ -313,11 +305,6 @@ export function FinalizeSheet({
               </ThemedText>
               <ThemedText type="small" themeColor="textSecondary" style={styles.doneTitle}>
                 Sync product #{publishedId} · {selectedCount} variants
-              </ThemedText>
-              {/* HONEST TIMING (BUG_AUDIT_2026-08-20 #1b): the brand site rebuilds itself after a
-                  publish (~2–5 min) — without this line the delay reads as a failed publish. */}
-              <ThemedText type="small" themeColor="textSecondary" style={styles.doneTitle}>
-                Your site refreshes itself in a couple of minutes.
               </ThemedText>
               {warnings.length ? (
                 <View style={styles.warnBox}>

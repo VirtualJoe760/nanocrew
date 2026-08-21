@@ -24,9 +24,7 @@ Node script, and two `next/og` surfaces can't import the same file — so this t
 
 ## Colour
 
-Ground, text and platinum come from `src/constants/theme.ts`; surface (`#131317`), edge (`#212127`)
-and dim (`#8b909b`) are the site's cooled web adaptations, defined in `nanocrew-site/app/globals.css`
-(the app itself uses `backgroundElement` `#161619` / `textSecondary` `#ebedf1`). Cool monochrome
+Taken from `src/constants/theme.ts`, mirrored into `nanocrew-site/app/globals.css`. Cool monochrome
 plus one accent. **No gold, no warm neutrals** — the old identity was warm and none of it survives.
 
 | Token | Hex | Use |
@@ -62,7 +60,7 @@ Written by `scripts/gen-app-icon.mjs`. Don't hand-edit them — regenerate.
 | `assets/brand/play-store-icon-512.png` | 512 | Play Store listing |
 | `assets/images/favicon.png` | 196 | app web favicon |
 | `assets/images/android-icon-{foreground,background,monochrome}.png` | 1024 | Android adaptive icon |
-| `assets/images/splash-icon.png` | — | nothing today — kept for a splash config that wants the small centred mark (the live splash is `eve-boot.png`) |
+| `assets/images/splash-icon.png` | — | splash |
 | `assets/brand/eve-boot.png` | 1024×1536 | the launch loader (`animated-icon.tsx`, expo-splash-screen) |
 | `nanocrew-site/public/brand/nanocrew-mark.png` | 240 | **the masthead in every Nano Crew email** |
 | `nanocrew-site/public/brand/nanocrew-avatar.png` | 512 | **the sender profile photo** (see below) |

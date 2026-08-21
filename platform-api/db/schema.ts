@@ -78,7 +78,7 @@ export const returnRequestStatus = pgEnum('return_request_status', [
 ]);
 
 // Free = browse + shop only. The three paid tiers gate launching a store (Joe, 2026-06-12):
-// starter $10 · pro $50 · advanced $175 (source of truth: TIERS in src/lib/billing.ts). Each carries a monthly credit allotment + brand cap.
+// starter $10 · pro $50 · advanced $149 (source of truth: TIERS in src/lib/billing.ts). Each carries a monthly credit allotment + brand cap.
 export const subscriptionPlan = pgEnum('subscription_plan', ['free', 'starter', 'pro', 'advanced']);
 
 export const subscriptionStatus = pgEnum('subscription_status', [
@@ -195,10 +195,6 @@ export const designs = pgTable(
     cloudinaryPublicId: text('cloudinary_public_id'),
     url: text('url').notNull(),
     thumbUrl: text('thumb_url'),
-    // Print technique this art was generated/adapted FOR (EMBROIDERY / KNITWEAR). Null = plain
-    // full-color art. Lets /api/compositions skip re-adapting a design that was already
-    // generated technique-ready (lib/technique.ts in the app repo).
-    technique: text('technique'),
     createdBy: uuid('created_by').references(() => creators.id),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
@@ -286,10 +282,6 @@ export const products = pgTable(
       .references(() => stores.id, { onDelete: 'cascade' }),
     // Which collection/drop this product belongs to (for storefront grouping).
     catalogueId: uuid('catalogue_id').references(() => catalogues.id, { onDelete: 'set null' }),
-    // The composition this product was published FROM (2026-08-20, migration 0031) — the only
-    // path back to its placements (front/back/sleeve), which the model-shot pipeline needs to
-    // angle-match shots so a back print isn't photographed from the front. Null on pre-link rows.
-    compositionId: uuid('composition_id').references(() => compositions.id, { onDelete: 'set null' }),
     printfulSyncProductId: text('printful_sync_product_id').unique(),
     slug: text('slug').notNull(),
     name: text('name').notNull(),
@@ -553,21 +545,15 @@ export const revisionStatus = pgEnum('revision_status', [
   'declined', // creator rejected the preview → branch discarded, never merged (production untouched)
 ]);
 
-// Krea AVATAR LoRAs (docs/architecture/KREA_LORA.md — avatar-only, Joe 2026-08-15: there will
-// never be a garment LoRA). One row per trained modeling avatar: a persistent virtual model.
-// creator_id NULL + store_id NULL = the house library every creator can shoot on; creator_id set
-// = a personal avatar (trained from their own photos with consent), private to that account.
-// Status mirrors Krea's job states; NOTHING polls non-terminal rows yet — the forge-watchdog
-// cron that will own stalled/retry/abandoned is still unbuilt (FORGE_WATCHDOG.md), so the list
-// endpoint refreshes lazily for now.
+// Krea LoRA training jobs (docs/architecture/KREA_LORA.md) — one row per trained garment LoRA.
+// Status mirrors Krea's job states plus watchdog outcomes; the forge-watchdog cron polls
+// non-terminal rows via /jobs/{id} (P7/P8 share the stalled/retry/abandoned pattern).
 export const loras = pgTable('loras', {
   id: uuid('id').defaultRandom().primaryKey(),
-  // Legacy pre-pivot columns, now nullable: avatars are account-level, not brand/product-level.
-  storeId: uuid('store_id').references(() => stores.id, { onDelete: 'cascade' }),
+  storeId: uuid('store_id')
+    .notNull()
+    .references(() => stores.id, { onDelete: 'cascade' }),
   productId: uuid('product_id').references(() => products.id, { onDelete: 'cascade' }),
-  creatorId: uuid('creator_id').references(() => creators.id, { onDelete: 'cascade' }),
-  name: text('name'), // the avatar's display name in the picker
-  photoUrls: jsonb('photo_urls'), // the Cloudinary training set (string[])
   kreaJobId: text('krea_job_id').notNull(),
   styleId: text('style_id'), // set when training completes — referenced in generation requests
   triggerWord: text('trigger_word').notNull(),

@@ -9,9 +9,6 @@ the AI agent (Claude) you'll be pairing with. Read it once; it'll save you a lot
 >
 > **How to use a skill:** type its slash-command to the agent in your session — e.g.
 > `/architect add a returns dashboard`. (Memory + review are automatic, not commands — see below.)
->
-> **Drift note (2026-08-20):** the doc audit patched this guide in place (five units; the CLAUDE.md /
-> AGENTS.md split). A full `/instructions` regeneration is due.
 
 ## What this system is, and why
 
@@ -33,10 +30,9 @@ architecture, the rules, and where everything lives.
 ## The map & the read-order
 
 Two always-loaded files sit at the repo root:
-- **`AGENTS.md`** — the durable core (what this is, the five deployable units, conventions, the
-  documentation-discipline rule, the "where things live" table). Tool-agnostic.
-- **`CLAUDE.md`** — the rules that stay in working memory: the read-order, the doc-drift and parity
-  rules, UI preferences, the working loop, and the skills.
+- **`AGENTS.md`** — the durable core (what this is, the four deployable units, conventions, the
+  documentation-discipline rule). Tool-agnostic.
+- **`CLAUDE.md`** — the orchestrator: the read-order, a "where things live" table, and the skills.
 
 Everything else lives in **`docs/`**, split into two layers:
 - **`docs/context/`** — the *working layer*: how to build here + the rules (this folder).

@@ -13,8 +13,8 @@ import { useTheme } from '@/hooks/use-theme';
 // thumb to a sector; release to choose. Releasing in the centre cancels and she carries on exactly
 // as she was.
 //
-// Nine sectors at 40° apart (see SPOKES) — a large target you can hit without looking, which is
-// the whole point: this is operated by feel, not by aim.
+// Eight sectors on the cardinals and diagonals — 45° is the largest target you can hit without
+// looking, which is the whole point: this is operated by feel, not by aim.
 //
 // This component OWNS NO STATE about Eve. It reports a chosen id and the parent decides; that keeps
 // the "only a creator opens a socket" rule in one place (eve-home).

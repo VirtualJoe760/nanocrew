@@ -1,6 +1,6 @@
 # Nano Crew — Architecture
 
-> **Last refreshed 2026-08-20.** This is the authoritative system map — read it before changing
+> **Last refreshed 2026-06-20.** This is the authoritative system map — read it before changing
 > anything, and keep it true as the system moves. It is verified against the code, not memory; when
 > it disagrees with the code, that's a bug in one of them — surface it.
 
@@ -18,19 +18,19 @@ Companion docs: [DATABASE_PLAN.md](DATABASE_PLAN.md) · [API.md](API.md) ·
 [BUILD_FLOW.md](../studio/BUILD_FLOW.md) + [FORGE_AI.md](../studio/FORGE_AI.md) (the Eve→forge arc) ·
 [PAGES.md](../app/PAGES.md) · [PRODUCTION_CHECKLIST.md](../ops/PRODUCTION_CHECKLIST.md).
 
-## The five deployable units (one shared Supabase Postgres)
+## The four deployable units (one shared Supabase Postgres)
 
 | Unit | What | Where it runs |
 |---|---|---|
 | **Mobile app** | The product — Expo / React Native (this repo). Its `src/app/api/**+api.ts` server routes hold the authenticated **creator** logic (design, publish, billing, site edits). | **Google Cloud Run** — `api.nanocrew.app` (direct URL `backend-927523030808.us-west1.run.app`), a persistent Node server (`expo serve`). The iOS build's `EXPO_PUBLIC_API_URL` points here. Deploy with `./scripts/deploy-cloudrun.sh nanocrew-api us-west1 backend`. **Not EAS Hosting** (see below). |
 | **platform-api** | The **public** Next.js API the storefront websites consume + all webhooks. Holds the central commerce + secrets. | Vercel — `nanocrew-api.vercel.app` (rootDirectory `platform-api/`). |
-| **nanocrew-site** | The public web surface at **nanocrew.app** (Next.js 15, `nanocrew-site/` in this repo) — marketing, the HQ store, the free `nanocrew.app/b/<slug>` web storefronts, and the **signed-in account page**. Holds **no** database credential: it consumes platform-api over HTTP, anonymously for the catalogue and with a Supabase bearer via `lib/api.ts` (see "The site ↔ API contract" below). | Vercel — `nanocrew.app`. |
 | **nanocrew-templates** | Sibling repo of **5** self-contained Next.js storefront templates — `minimal · bold · elegant · extravagant · street`. One `brand.json` token file turns a template into a brand. | GitHub source; each provisioned brand → its own Vercel project. |
 | **forge** | DigitalOcean droplet running headless Claude. A systemd **`nanocrew-forge-worker`** drains the revision queue and provisions/revises brand websites **locally** on the box. | VPS (`ssh nanocrew-forge`). |
 
-All five share **one Supabase Postgres** (Drizzle ORM) — except nanocrew-site, which reaches it only
-through platform-api. **`platform-api/db/schema.ts` is a COPY of `src/db/schema.ts`** — re-sync it
-on every migration (this is the #1 invariant that bites).
+All four share **one Supabase Postgres** (Drizzle ORM). **`platform-api/db/schema.ts` is a COPY of
+`src/db/schema.ts`** — re-sync it on every migration (this is the #1 invariant that bites). The
+`./nanocrew-site` Next.js app (the `nanocrew.app` marketing site + the company store + the free
+`nanocrew.app/b/<slug>` web storefronts) lives in this repo and also reads platform-api.
 
 ### Why the app backend is a PERSISTENT NODE SERVER, not EAS Hosting
 
@@ -255,19 +255,7 @@ contract every template must ship, and registration across `src/lib/interview.ts
 | `iap.ios.ts` / `iap-products.ts` / `app-store.ts` | Apple IAP (StoreKit 2) client + catalogue + server verify (App Store Server API). |
 | `push.ts` / `notify.ts` / `oauth.ts` | Push registration + delivery (Expo) · native Sign in with Apple. |
 | `posts.ts` / `adapt.ts` / `effort.ts` / `voices.ts` | Feed posts · content adaptation · effort/spend · the AI consultant/ElevenLabs voice roster. |
-| `logo.ts` / `logo-kit.ts` | Eve's logo pipeline (mark/wordmark masters — no-text mark, name-only wordmark, backdrop-validation retry + chroma-key) · the full LogoKit: 2 generated masters + derived Cloudinary variants (mono / appTile / touchIcon / favicon). |
-| `hero-image.ts` | Generated brand hero imagery for the site (Nano Banana + Cloudinary). |
-| `annotate.ts` | Pure-JS marker baking — normalized polylines drawn as red strokes into a reference image for region-targeted `/api/generate` edits. |
-| `krea.ts` | Krea API client — avatar-LoRA training + LoRA inference for on-model shots (client shipped; endpoints/UI not wired yet — [KREA_LORA.md](KREA_LORA.md)). |
-| `meme.ts` | Meme-format prompt steering behind the Design center's "Meme" button. |
-| `site-vocabulary.ts` / `font-pairings.ts` | Plain-English storefront component vocabulary (Eve teaches from it in live-site critique) · per-brand font-pairing selection for the storefront's live font system. |
-| `notify-internal.ts` | Fire-and-forget bridge to platform-api `/api/internal/notify` — Resend lives ONLY in platform-api. |
-| `legal.ts` | The current Terms + Creator Agreement version string, recorded on `creators.terms_version` at acceptance. |
 | `studio-palette.ts` / `supabase.ts` | Studio modal palette · Supabase client. |
-
-(`src/lib/` also holds client-side/shared helpers not listed here — e.g. `caption.ts` voice-paced
-subtitles, `blocklist.ts` on-device Market blocks, `web-billing.ts` web-billing rules,
-`eve-digest.ts` and the `eve-*-bus` modules — this table covers the server core.)
 
 ## Data model
 
@@ -344,8 +332,4 @@ the marketing page's job is sign-ups and the real avatar is far too heavy for th
 starfield is site-wide; the constellation is homepage-only and fades out as the hero scrolls away.
 
 Creating an account on the site IS the waitlist and the beta-tester queue — `app/beta-signup.tsx`,
-using the site's Supabase auth, plus a POST to `/api/waitlist`, a thin server-side proxy to
-platform-api `POST /api/public/beta-signup` — the sole writer of `beta_signups` (per-platform caps,
-the TestFlight invite, the emails). The site never touches the database — its old direct
-`waitlist`-table write against an unset `DATABASE_URL` silently no-op'd, which is exactly what lost
-the 2026-08-18 signup.
+using the site's Supabase auth, plus a best-effort write to the existing `waitlist` table.

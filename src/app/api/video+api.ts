@@ -8,11 +8,6 @@ import { generateProductVideo } from '@/lib/veo';
 import { generateVoiceoverAd } from '@/lib/voiceover-ad';
 import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
 
-// ⏸️ PARKED FOR v1 (Joe, 2026-08-20). Video is out of v1 and this has NO caller — the Sell tab
-// that triggered it is gone. Preserved deliberately, exactly like the social feed at /feed: the
-// pipeline works and returns when video does. See docs/roadmap/REMAINING_FEATURES.md §"Video —
-// PARKED FOR v1". Do not delete as dead code; do not re-file as a bug.
-
 // POST /api/video { productId, mode? } — generate a product video for the feed and save
 // videoUrl on the product.
 //   mode 'voiceover' (default) — CHEAP (~$0.10): product image + Ken-Burns + ElevenLabs

@@ -8,9 +8,8 @@ import { notifyPlatform } from '@/lib/notify-internal';
 
 // POST /api/creator/stores/:slug/publish { listed?: boolean } — open (or close) the brand's shop in
 // the Nano Crew ecosystem. This is the APP-ONLY "go live": it lists the brand in the in-app Market
-// AND on nanocrew.app/b/<slug> (both read `isPublic = true` + `status = 'live'`). It needs an
-// active plan, at least one published product, AND a payout-ready Stripe account (enforced below,
-// so a shop can never open without a way to pay its creator) — but NO website and NO custom domain. A custom domain /
+// AND on nanocrew.app/<slug> (both read `isPublic = true` + `status = 'live'`). It needs ONLY an
+// active plan + at least one published product — NO website and NO custom domain. A custom domain /
 // dedicated website stays a separate Pro upgrade (see go-live), layered on top; it is not required
 // to sell. listed:false closes the shop (back to private/ready).
 export async function POST(req: Request, { slug }: Record<string, string>) {
@@ -40,7 +39,7 @@ export async function POST(req: Request, { slug }: Record<string, string>) {
     // $0 transferable — checkout settles 100% to the platform when there's no charges-enabled
     // account (payoutStatus 'none', brandNetCents 0), a silent underpayment, not an error. The gate
     // was previously only on the custom-domain flow; opening the shop is the real "start selling".
-    const payoutBlock = await goLiveBlockReason(user.id, slug);
+    const payoutBlock = await goLiveBlockReason(user.id);
     if (payoutBlock) return Response.json({ error: payoutBlock, code: 'payouts_required' }, { status: 409 });
 
     // Don't open an empty shop.

@@ -27,16 +27,14 @@ const PRINT_REALISM =
   'glossy, perfectly-flat sticker or digital overlay. Scene lighting and shadows fall across the ' +
   'print exactly as they fall across the cloth around it.';
 
-// ACTION-FIRST (Joe, 2026-08-20: "modeling shots should be action shots — walking in the park,
-// at a coffee shop"). Real-environment candids lead the bank; one clean studio look survives as
-// the anchor so a set still carries a catalog-grade reference frame.
+// Posed studio/editorial looks + ACTION shots in real environments — the mix a real lookbook has.
 const POSES = [
-  'an action photo, model walking through a leafy park, mid-stride, natural light, print clearly readable',
-  'a candid photo, model at a coffee shop — stepping out with a cup or laughing at an outdoor table, print clearly readable',
+  'a clean studio fashion photo, model facing forward, neutral seamless background, soft even lighting',
+  'a three-quarter editorial photo, model turned slightly, natural daylight, minimal background',
+  'a candid lifestyle photo, model in an urban setting at golden hour, shallow depth of field',
   'an action photo, model mid-stride crossing a city street, motion in the scene, print clearly readable',
   'an action photo, model skateboarding or leaning off a rail in a skatepark at dusk, dynamic angle',
   'an outdoor action photo, model jogging or stretching on a coastal trail in morning light',
-  'a clean studio fashion photo, model facing forward, neutral seamless background, soft even lighting',
 ];
 
 interface InlinePart {
@@ -58,9 +56,6 @@ async function urlToInline(url: string): Promise<InlinePart> {
   };
 }
 
-/** @deprecated 2026-08-20 — both callers (publish auto-shots, /api/creator/model-shots) moved to
- *  the placement-aware `generateModelShotsFromMockup`, which angle-matches the print's placement
- *  (a back print is shot from behind). This pose-bank generator shoots front-ish regardless. */
 export async function generateModelShots(productImageUrl: string, count = 3): Promise<string[]> {
   const apiKey = process.env.GOOGLE_GENAI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GOOGLE_GENAI_API_KEY not configured');
@@ -115,14 +110,9 @@ function angleFor(placement: string): string {
   for (const k of Object.keys(PLACEMENT_ANGLE)) if (key.includes(k)) return PLACEMENT_ANGLE[k];
   return PLACEMENT_ANGLE.front;
 }
-// Action-first here too (Joe, 2026-08-20) — the studio look stays as one anchor frame. Four
-// scenes, not two: the publish path pads to 6 shots by rotating this bank, so more variety here
-// is directly more variety in every product gallery.
 const SCENES = [
-  'Action photo, model walking through a leafy park, mid-stride, natural light, print clearly readable.',
-  'Candid photo, model at a coffee shop — stepping out with a cup or at an outdoor table, print clearly readable.',
-  'Action photo, model mid-stride crossing a city street, motion in the scene, print clearly readable.',
   'Clean studio fashion photo, seamless neutral background, soft even lighting.',
+  'Candid lifestyle photo, model in a tasteful real-world setting at golden hour, shallow depth of field.',
 ];
 
 // On-model shots grounded in a REAL Printful mockup — the flat product with the design already

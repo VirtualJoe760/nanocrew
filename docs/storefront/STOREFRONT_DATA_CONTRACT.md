@@ -17,8 +17,6 @@ Supabase Postgres  ── THE source of truth ──  stores · catalogues(colle
 platform-api  (Vercel: nanocrew-api.vercel.app)  ── public, read-only, CORS ──  the CONTRACT
    │   GET /api/public/stores/:slug/products
    │   GET /api/public/stores/:slug/collections
-   │   GET /api/public/stores/:slug/videos   (on-model video wall)
-   │   GET /api/public/stores/:slug/posts    (+ /posts/:postSlug — the blog)
    │   POST /api/public/checkout
    │   POST /api/public/order-lookup   (guest return gate)
    │   POST /api/public/returns        (open a return claim)
@@ -39,19 +37,9 @@ stephenlawyer.clothing — see "Cutover" below).
 These are the only catalogue surface a storefront may use. Source: `platform-api/app/api/public/`.
 Keep this section in lockstep with those routes.
 
-> ⚠️ **This route exists TWICE** — `platform-api` (Vercel, `nanocrew-api.vercel.app`) and the app
-> backend (Cloud Run, `api.nanocrew.app`) — and each brand points at one of them through
-> `brand.json`'s `apiBase`. A change to a public store route must land in **both** copies or brands
-> behave differently depending on which host they were provisioned against (2026-08-20: the
-> newest-first fix shipped to Vercel first and stephenlawyer.clothing, on Cloud Run, kept the old
-> order).
-
 ### `GET /api/public/stores/:slug/products`
 
-Returns **published products with NESTED variants** (not flat rows — the #1 gotcha), ordered
-**newest first** (2026-08-20 — this is the drop feed: templates take the head of the list for
-"Latest Drop" rails, and the old oldest-first order meant a new product could never appear there;
-`/videos` orders the same way):
+Returns **published products with NESTED variants** (not flat rows — the #1 gotcha):
 
 ```jsonc
 {
@@ -89,22 +77,6 @@ Gotchas that have bitten us:
 Collections (a.k.a. catalogues / drops). The `catalogues` table already carries `coverImageUrl`,
 `season`, `sortOrder`, `isActive` — so collection covers + a lookbook are **data-model-ready**; what's
 missing is template rendering + app UI (see `docs/COLLECTIONS_LOOKBOOK.md`).
-
-### `GET /api/public/stores/:slug/videos`
-
-The store's **on-model video wall** — every published product's `modelVideos` flattened, each
-carrying its product for a "shop this look" link. Backs the templates' homepage VideoGallery block
-via the shared `getStoreVideos()`:
-
-```jsonc
-{ "videos": [{ "src": "url", "poster": "url | null", "productSlug": "…", "productName": "…" }] }
-```
-
-### `GET /api/public/stores/:slug/posts` (+ `/posts/:postSlug`)
-
-The **blog rail**: DB-backed posts (`store_posts`) the templates fetch for `/blog`, falling back to
-the baked `content/blog/*.md` files when offline. Authoring from Studio or the site's `/admin` is
-instant — no forge session, no redeploy.
 
 ### `GET /api/public/stores/:slug/site-assets`
 
@@ -155,8 +127,7 @@ now self-canonical (were inheriting `canonical:'/'`).
 }
 ```
 
-Template wiring (`lib/site-config.ts`, all 5 templates — street keeps a diverged copy, see
-`templates/_shared/README.md`): `getBrandColors()` feeds `layout.tsx`'s CSS
+Template wiring (`lib/site-config.ts`, all 4 templates): `getBrandColors()` feeds `layout.tsx`'s CSS
 vars, `getSiteCopy()` drives the hero + Our Story copy, `getFontVars()` resolves the font presets to
 CSS stacks + a Google Fonts `<link>`. The write path is **direct** (`POST /api/creator/site-config`,
 access-checked), distinct from the Eve→forge revision flow used for open-ended redesigns.
@@ -176,13 +147,6 @@ order to Printful. The in-app store proxies this via `/api/store/:slug/checkout`
 "add to cart → checkout" MUST go through here — never its own Stripe — so variant IDs, pricing, and
 fulfilment are single-source.
 
-A brand cannot take money until its creator completes Stripe KYC — checkout **409s** ("the owner is
-still setting up payments") unless the connected account is `charges_enabled` or the slug is in
-`PLATFORM_SETTLED_SLUGS` (platform-owned demo stores). Paid orders hold the brand's net on the
-platform (`payoutStatus: 'held'` / `brandNetCents` — the charge settles 100% to the platform, no
-application fee) until the return window closes (see
-[RETURNS_REFUNDS.md](../accounts/RETURNS_REFUNDS.md)).
-
 ### `POST /api/public/order-lookup`  `{ email, orderNumber }` → `{ order }`
 
 The **guest return gate**: a brand-site visitor with no account confirms an order by its email +
@@ -191,12 +155,9 @@ tracking, `returnWindowEndsAt`, and an `inWindow` flag. Both must match or it's 
 whether the id or the email is wrong — no order-existence leak). Thin-client rule: the storefront
 only *calls* this; the lookup logic stays central.
 
-### `POST /api/public/returns`  `{ orderId, customerEmail, reason, photoUrls?, note?, items? }` → `{ returnRequest }`
+### `POST /api/public/returns`  `{ orderId, reason, photoUrls?, note?, items? }` → `{ returnRequest }`
 
-Opens a **return claim**. `customerEmail` is **REQUIRED** and must match the order's checkout email
-— same opaque `404` as order-lookup on a mismatch, so a leaked order id alone can't open a claim;
-the guest flow reuses the email it just looked the order up with (`submitReturnRequest` in the
-shared lib maps `email` → `customerEmail`). `reason` ∈ `defective` | `wrong_item` | `damaged` | `not_received` (POD is
+Opens a **return claim**. `reason` ∈ `defective` | `wrong_item` | `damaged` | `not_received` (POD is
 made-to-order — no buyer's-remorse ship-backs); a photo is required for defective/damaged. The
 platform validates the window is open, inserts the claim, flips the order to `return_requested`, and
 acks the buyer by email. A template's **"request a return"** flow (a policy page + form, wired into
@@ -221,9 +182,7 @@ The home, shop, product, and cart pages all read through this one data layer —
 data layer re-points the whole site (this is what made the stephenlawyer.clothing cutover one file).
 
 **Brand sites are env-less — the connection config lives in `brand.json`, not Vercel env.** Template
-source has zero *configuration* `process.env` reads (the only touch is Vercel's auto-injected
-`VERCEL_PROJECT_PRODUCTION_URL`/`VERCEL_URL` in `lib/seo.ts`, which needs no setup); `apiBase`, the
-Supabase URL/anon key, and the fee terms are
+source has *zero* `process.env` reads; `apiBase`, the Supabase URL/anon key, and the fee terms are
 all baked into `brand.json` at provision and committed to the repo, so a new brand connects to the
 platform with no per-site env setup. Crucially, **no brand repo ever holds a Stripe or Printful
 secret** — checkout proxies to the central POS (`/api/public/checkout`). The values in `brand.json`
@@ -248,9 +207,8 @@ matched:
    *if the page is requested*. Not instant, and not guaranteed if traffic is low.
 2. **On-demand rebuild** — `src/lib/storefront-revalidate.ts` `revalidateStorefront(slug)` triggers a
    fresh Vercel build of the brand's project (tries project names `<slug>` and `store-<slug>`). It's
-   wired fire-and-forget into **every catalogue/site mutation** — product publish, hide/show (PATCH),
-   delete, the site-config and site-assets writes, and store edits — so any such change rebuilds that
-   brand's site. Requires `VERCEL_TOKEN` on the app host (set on Cloud Run).
+   wired fire-and-forget into the product **DELETE** and **publish** endpoints, so deleting/publishing
+   a product rebuilds that brand's site. Requires `VERCEL_TOKEN` on the app host (set on Cloud Run).
 
 If a site shows stale products after a change: it either (a) hasn't rebuilt yet (force via
 `revalidateStorefront`), or (b) isn't reading platform-api at all (a custom/un-cutover site).

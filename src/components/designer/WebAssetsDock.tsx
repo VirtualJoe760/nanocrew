@@ -1,0 +1,64 @@
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { Spacing } from '@/constants/theme';
+import { DOCK_TAB_CLEARANCE } from '@/components/designer/TemplatesDock';
+
+export type WebSlot = 'hero' | 'logo' | 'mark' | 'favicon' | 'cover' | 'og';
+
+// The website spots that can hold a creator-generated graphic. These map 1:1 to the
+// /api/creator/site-assets slots; connecting a design to one overrides the template placeholder.
+// (Hero video lives under Content; section slots come later.)
+const SLOTS: { slot: WebSlot; label: string; hint: string }[] = [
+  { slot: 'hero', label: 'Website hero', hint: 'The big image at the top of your site' },
+  { slot: 'logo', label: 'Wordmark', hint: 'Your wide logo (header + footer)' },
+  { slot: 'mark', label: 'App icon', hint: 'The square mark — favicon, app tile, avatar' },
+  { slot: 'favicon', label: 'Favicon', hint: 'The little browser-tab icon' },
+  { slot: 'cover', label: 'Collection cover', hint: 'The cover for the current collection' },
+  { slot: 'og', label: 'Social image', hint: 'The card shown when your site is shared (1200×630)' },
+];
+
+/**
+ * Web assets panel — tap a slot to drop a labeled target onto the canvas, then connect a graphic
+ * to it (drag a design onto the target) to assign it. Mirrors how Products work: pull up a target,
+ * attach the generation. The connect + write is handled on the canvas (onAddSlot adds the node).
+ */
+export function WebAssetsDock({
+  onAddSlot,
+  hideCover,
+}: {
+  onAddSlot: (slot: WebSlot) => void;
+  hideCover?: boolean; // Site assets mode has no product collection → no cover slot.
+}) {
+  const slots = hideCover ? SLOTS.filter((s) => s.slot !== 'cover') : SLOTS;
+  return (
+    <View style={styles.dock}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {slots.map((s) => (
+          <Pressable key={s.slot} onPress={() => onAddSlot(s.slot)}>
+            <ThemedView type="backgroundElement" style={styles.card}>
+              <ThemedText type="small" numberOfLines={1}>
+                {s.label}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" numberOfLines={2} style={styles.hint}>
+                {s.hint}
+              </ThemedText>
+            </ThemedView>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.pickLabel}>
+        Tap a spot to drop it on the canvas, then connect a graphic to it.
+      </ThemedText>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  dock: { paddingTop: Spacing.two, paddingBottom: DOCK_TAB_CLEARANCE, gap: Spacing.two },
+  row: { gap: Spacing.two, paddingHorizontal: Spacing.three },
+  card: { width: 150, padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.one },
+  hint: { lineHeight: 15 },
+  pickLabel: { paddingHorizontal: Spacing.three },
+});

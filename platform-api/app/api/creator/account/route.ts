@@ -32,26 +32,15 @@ const PROFILE = {
   createdAt: schema.creators.createdAt,
 };
 
-// The app's rule, mirrored exactly (src/lib/billing.ts): a TRIALING subscription is a paid plan,
-// and comp accounts read as 'advanced'. Counting only 'active' showed a trialing subscriber (or
-// the founder) their real plan in the app and 'FREE' on the web — the exact parity break
-// ACCOUNT_SURFACE.md forbids (BUG_AUDIT_2026-08-20 #42).
-const ACTIVE_STATUSES = ['active', 'trialing'];
-const COMP_EMAILS = (process.env.COMP_EMAILS ?? process.env.PLATFORM_ADMIN_EMAILS ?? '')
-  .toLowerCase()
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-async function planFor(creatorId: string, email: string | null | undefined): Promise<string> {
-  if (email && COMP_EMAILS.includes(email.toLowerCase())) return 'advanced';
+async function planFor(creatorId: string): Promise<string> {
   const [sub] = await db
     .select({ plan: schema.subscriptions.plan, status: schema.subscriptions.status })
     .from(schema.subscriptions)
     .where(eq(schema.subscriptions.creatorId, creatorId))
     .orderBy(desc(schema.subscriptions.createdAt))
     .limit(1);
-  return sub && ACTIVE_STATUSES.includes(sub.status) ? sub.plan : 'free';
+  // Mirrors the app: anything not actively subscribed reads as 'free'.
+  return sub && sub.status === 'active' ? sub.plan : 'free';
 }
 
 export async function GET(req: Request) {
@@ -67,7 +56,7 @@ export async function GET(req: Request) {
 
   const [me] = await db.select(PROFILE).from(schema.creators).where(eq(schema.creators.id, user.id)).limit(1);
   if (!me) return corsJson({ error: 'not found' }, { status: 404 });
-  return corsJson({ profile: me, plan: await planFor(user.id, me.email) });
+  return corsJson({ profile: me, plan: await planFor(user.id) });
 }
 
 export async function PATCH(req: Request) {
@@ -106,5 +95,5 @@ export async function PATCH(req: Request) {
     .returning(PROFILE);
   if (!updated) return corsJson({ error: 'not found' }, { status: 404 });
 
-  return corsJson({ profile: updated, plan: await planFor(user.id, updated.email) });
+  return corsJson({ profile: updated, plan: await planFor(user.id) });
 }

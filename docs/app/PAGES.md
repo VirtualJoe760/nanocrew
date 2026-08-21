@@ -43,18 +43,14 @@ photo fallback. The active card autoplays its video (looped, muted); others paus
 
 ## 2. Market (`src/app/market.tsx`)
 
-Brand discovery + in-app storefronts. Fully public. A tabbed browser — monochrome "MARKET" eyebrow +
-"Discover" title, then a tab nav: **Discover · Shop · Brands** (+ **My stores** for signed-in
-creators). Searching hides the tabs and shows compact brand rows.
+Brand discovery + in-app storefronts. Fully public. Monochrome "Marketplace" eyebrow + "Market" title.
 
 - **Search** (debounced 300ms) → `/api/market?q=` filters brands; refresh-to-reload.
-- **Discover** tab: a full-bleed paged **featured hero**, a **"Fresh drops"** collections rail, and
-  a **"New this week"** 2-up product grid. All cards open the BrandStore sheet; product tiles
-  deep-open the product inside it (`initialProductSlug`).
-- **Shop** tab: a category-chip-filtered product grid.
-- **Brands** tab: the directory grid of **brand tiles** (`BrandTile`) — a preview shot + logo +
-  piece count; the whole tile opens the in-app store. (No website pill on the card — the website
-  links live inside the BrandStore sheet: "visit website →" / "Shop the website ↗".)
+- **Trending** rail (horizontal, hidden while searching): newest product shots across live shops;
+  tapping one opens its brand's in-app store.
+- **Brand cards:** logo, name, tagline (or drop count), product-count badge, a preview thumbnail
+  strip, and a footer with **"Open store →"** (whole card opens the in-app store) plus a separate
+  **"Website ↗"** pill that opens the live site (custom domain preferred) in a browser.
 - **My stores** (signed-in creators only, 2026-08-18): their OWN marketplace — every owned store with
   its products (including hidden ones, dimmed with a HIDDEN badge; `/api/creator/products?storeSlug=`).
   Tap a tile to open the store as shoppers see it; **long-press → Hide from store / Show in store /
@@ -66,8 +62,8 @@ creators). Searching hides the tabs and shows compact brand rows.
 In-app storefront for one brand, painted in **that brand's own palette** (bg/text/accent hex, with
 monochrome fallbacks). Full-screen slide-up `Modal`.
 
-- **SquareCarousel hero** (`src/components/square-carousel.tsx`) above the title — product shots
-  lead (deduped, up to 8); the OG card appears only when the brand has no product imagery yet.
+- **SquareCarousel hero** (`src/components/square-carousel.tsx`) above the title — OG art leads, then
+  the newest product shots (deduped, up to 8).
 - **Header:** logo, brand name, tagline, piece count, and (when a site exists) a **"Shop the website ↗"**
   button. A top bar carries **✕ close** and a **"visit website →"** link.
 - **Collections grid:** products grouped by **collection/drop** with a season badge, two-column cards
@@ -93,12 +89,8 @@ The in-app product page (full-screen `Modal`, brand-coloured, **← back**).
 The app's home — Eve's page (tab label **Eve**; the route is still `studio`). No screen chrome of
 its own: the container is transparent, so the **persistent root Eve avatar** (mounted app-wide via
 `src/components/eve/eve-background.tsx`) glows through. The default surface is **EveHome**
-(`src/components/eve/eve-home.tsx`). A **long-press summons the Eve wheel**
-(`src/components/eve/eve-wheel.tsx`) — a radial menu of spokes (Talk · Type instead · New brand ·
-New design · Your brands · Edit your site · Site assets · Digest · Brand info; brand-scoped spokes
-dim until the creator has a brand). The **BrandDeck opens only from the wheel's BRANDS spoke** —
-the old top-edge pull-down/handle is gone (2026-08-17). A quick tap still toggles her between
-silent and talking.
+(`src/components/eve/eve-home.tsx`). A top-edge swipe down (or a tap on the pill) pulls the
+**BrandDeck** down over her.
 
 **She arrives SILENT, and only a creator starts her.** Two states — `silent` and `talking` — with a
 tap anywhere on her surface (or on the state pill, top-right at the safe-area inset) moving between
@@ -138,38 +130,31 @@ re-introduces herself (`src/lib/live-voice.ts`).
   toggle the **keyboard** to type into the same session. The streaming transcript drives the
   captions. When she's gathered enough, the `BrandResult` is extracted (`/api/extract-brand`) → the
   **BrandReview** summary → **Create my store** → `POST /api/store`. A `402` opens the **Paywall**
-  (`subscription_required` or `brand_limit`); on success Eve announces the launch in her real voice
-  via a speak-only live session (`announce()` in `src/lib/live-voice.ts` — `/api/say`'s one-shot TTS
-  rendered the same voice name as a different-sounding person) and points you to Design.
-- **BrandDeck (`src/components/eve/brand-deck.tsx`):** opens from the wheel's BRANDS spoke and
-  cross-dissolves over Eve (replaces the old dashboard — `studio-dashboard.tsx` is deleted).
-  **The deck IS the console** (the merge, 2026-08-17): the overview shows the brand banner
-  (tap → EveDeveloping), a forge revision-status row (building → failed / **Review**),
-  **✦ Site Options** → the `SiteEditor` mini-CMS, and **FINISH YOUR SITE** bounties (→ Design);
-  **Posts / Settings** pills embed the `StudioComposer` console inline; the last page builds a new
-  brand. (Billing lives in Account → Subscription & billing, not in the deck.) Only offered once
-  the creator has a brand.
+  (`subscription_required` or `brand_limit`); on success Eve announces the launch in her own voice
+  (`/api/say`) and points you to Design.
+- **BrandDeck (`src/components/eve/brand-deck.tsx`):** the swipe-down brand UI (replaces the old
+  dashboard — `studio-dashboard.tsx` is deleted). Full-screen, swipe between brand cards; **edit**
+  opens that brand's **Console**, **Build a new brand** closes the deck (EveHome underneath is
+  already listening), **billing** opens the Paywall in `manage` mode, and asset bounties jump to
+  Design. Only offered once the creator has a brand.
 - **EveDeveloping (`src/components/eve/eve-developing.tsx`):** the DEEP voice surface for site
-  edits (the `developing` state) — swaps in full-screen over everything; on submit it opens the
-  BrandDeck on that brand, where the revision-status row shows building → Review.
+  edits (the `developing` state) — swaps in full-screen over everything; on submit it opens that
+  brand's Console on the Edit tab.
 - **EveDesign (`src/components/eve/eve-design.tsx`):** the design popup Eve **spawns over her own
   screen** — a translucent overlay ON TOP of EveHome (deliberately NOT a screen swap: EveHome stays
-  mounted, so her mic keeps listening while you talk about the design); she finishes the whole flow
-  in place — ProductPicker → generate → PlacementEditor → FinalizeSheet → publish, all composed from
-  the shared `src/components/designer/` seam. No hand-off to the Design tab, ever.
-- **Calls:** `/api/me`, `/api/voice-live-token`, `/api/eve/route`, `/api/extract-brand`,
-  `/api/store`, `/api/creator/{stats,subscription,onboarding}`.
+  mounted, so her mic keeps listening while you talk about the design); the hand-off jumps to the
+  Design tab.
+- **Calls:** `/api/me`, `/api/voice-live-token`, `/api/eve/route`, `/api/extract-brand`, `/api/say`,
+  `/api/store`, `/api/creator/{stats,credits,subscription,onboarding}`.
 
 ### Brand Console (`src/components/studio-composer.tsx`)
-Per-brand management, embedded INLINE in the BrandDeck (opened from its **Posts / Settings** pills,
-or by a "changes ready" push deep-link). Swiping the deck's pager switches brands; the pills switch
-tabs. Two tabs — **Posts · Settings** — plus the deck **overview**, which absorbed the old Edit-site
-tab (Sell was removed, to be rebuilt later):
+Per-brand management sheet (opened from the BrandDeck's edit action, or by a "changes ready" push
+deep-link). Pills switch brands
+when you have several. Four tabs:
 
-- **Overview (on the deck, not a tab)** — the Edit-site content re-homed: the brand banner (tap →
-  **EveDeveloping**, the voice-edit surface), the forge **revision-status row**, and **✦ Site
-  Options** — the mini-CMS (`SiteEditor`). Two distinct paths: the **mini-CMS is direct + instant**
-  (edit site copy / colors / fonts →
+- **Edit site** — if a site exists: OG-image preview (tap → in-app browser with critique), a **go-live /
+  custom-domain** row (`GoLiveComposer`), **✦ Site Options** — the mini-CMS (`SiteEditor`), and **chat with
+  Eve**. Two distinct paths: the **mini-CMS is direct + instant** (edit site copy / colors / fonts →
   `POST /api/creator/site-config` → `stores.site_config`, read live by the template, **no rebuild**;
   each text box has a **✦ Enhance** button — AI rewrites it in the brand voice via
   `/api/creator/enhance-copy`, free + rate-limited like `/api/enhance`).
@@ -187,54 +172,39 @@ tab (Sell was removed, to be rebuilt later):
     app tells the creator to remake them. `brand_profile.transcript` keeps the old name (it's a record).
   - Any identity change revalidates the storefront; story/tagline edits now cascade too (previously only
     a name change did, which left stale "Alpha Master" SEO descriptions — fixed).
-  Open-ended redesigns go through **Eve — the forge** (EveDeveloping → preview → approve). If no
-  site: `/api/creator/build-site` (Pro-gated; a `402` prompts the upgrade) provisions the website —
-  but the **Build site button died with the Edit-site tab**, so the endpoint currently has no in-app
-  door (bug — see `docs/ops/BUG_AUDIT_2026-08-20.md`). → `/api/creator/{site-config,enhance-copy,
-  revise,revisions[/:id/approve|decline]}`.
+  the **Eve chat is the forge** (open-ended redesigns → preview → approve). If no site: **Build site**
+  (`/api/creator/build-site`; a `402` prompts the Pro upgrade). → `/api/creator/{site-config,enhance-copy,
+  revise,revisions[/:id/approve]}`.
 - **Posts** — write/edit/publish/hide/delete journal posts with an optional cover image
   (`/api/creator/posts*`, `/api/creator/upload`). DB-backed, no redeploy.
-- *(The Sell tab is gone — to be rebuilt later. **On-model shots** moved into the designer: the
-  FinalizeSheet renders them at publish time (`POST /api/creator/model-shots`; the shots ride
-  `/api/publish`), and the canvas offers ephemeral preview shots (`/api/creator/preview-shots`).
-  Hide/show/delete products moved to **Market → My stores**. Scene shorts (`SceneShortComposer`)
-  and the feed video ad (`/api/video`) are currently unreachable/parked — see
-  `docs/ops/BUG_AUDIT_2026-08-20.md`.)*
-- **Settings** — brand controls + performance. **Take your site live**: list the brand in the
-  in-app Market + on nanocrew.app/<slug> with no website needed
-  (`POST /api/creator/stores/:slug/publish`; `402` without an active plan, `409` with no published
-  products). **Domain**: assign a custom domain / go live (`GoLiveComposer`). **Performance**:
-  revenue, orders, 30-day views, avg margin, per-product margins, and recent orders with **refund**
-  on refundable statuses. **Returns**: the return-claims inbox (`ReturnsInbox` →
-  `/api/creator/returns`; approve → refund, or decline). **Danger zone**: **Delete this brand**
-  (confirm dialog → `DELETE /api/creator/stores/:slug`, owner-only; cascades the store →
+- **Sell** — per-product actions with a **credits display** (taps → Paywall to top up): **on-model
+  shots** (`/api/creator/model-shots`, ~20cr), **on-model film** (`/api/creator/model-videos`, ~Veo
+  cost), feed **video ad** (`/api/video`, voiceover mode), and **delete** (removes the product from
+  the catalog, storefront site, and Printful — see the delete-a-product loop). Plus **✦ Make a scene
+  short** (`SceneShortComposer` → fal.ai, pick Wan/Seedance/Veo 3). 402s prompt a top-up.
+- **Settings** — brand controls + performance. **Domain**: assign a custom domain / go live
+  (`GoLiveComposer`). **Performance**: revenue, orders, 30-day views, avg margin, per-product
+  margins, and recent orders with **refund** on refundable statuses. **Danger zone**: **Delete this
+  brand** (confirm dialog → `DELETE /api/creator/stores/:slug`, owner-only; cascades the store →
   catalogues/designs/products/variants/orders/posts/revisions; external resources cleaned out of
-  band). On delete the console closes and the deck refetches.
-- **Calls:** `/api/creator/{stats,orders,margins,posts,revisions[/:id/approve|decline],revise,
-  site-config,enhance-copy,upload,credits,returns[/:id/approve|decline]}`, `/api/creator/stores/:slug`
-  (PATCH/**DELETE**), `/api/creator/stores/:slug/publish`, `/api/creator/orders/:id/refund`.
+  band). On delete the console closes and the dashboard refetches.
+- **Calls:** `/api/creator/{stats,orders,margins,posts,revisions,products,credits,build-site,revise,
+  site-config,enhance-copy,model-shots,model-videos,upload}`, `/api/creator/stores/:slug` (GET/PATCH/
+  **DELETE**), `/api/creator/orders/:id/refund`, `/api/video`.
 
 ### Earnings Cockpit (`src/components/earnings-cockpit.tsx`)
 All-brands business overview (opened from Account → Earnings): revenue / orders / 30-day views /
 to-fulfill, per-store breakdown, recent orders, product margins.
 
 ### Paywall (`src/components/paywall.tsx`)
-Opens on a store-launch `402` (Studio) or from **Account → Subscription & billing**
-(`reason="manage"`). Title/subtext adapt to the reason (`subscription_required`,
+Opens on a store-launch `402` (Studio) or from **Account → Subscription & billing** / the Studio
+credits pill (`reason="manage"`). Title/subtext adapt to the reason (`subscription_required`,
 `brand_limit`, `manage`). Lists **subscription tiers** (credits/mo, brand cap, in-app store vs
 website + custom domain, credit-rate discount) and **credit packs** (priced at your plan's rate).
-On iOS, checkout runs through **Apple IAP** whenever it's ready (subscriptions + consumable credit
-packs, verified by `/api/creator/billing/iap-verify`), falling back to **web Stripe Checkout**
-(`/api/creator/billing/checkout`) otherwise; active subscribers get a
+Checkout opens **Stripe in the browser** (`/api/creator/billing/checkout`); active subscribers get a
 **"Manage billing in Stripe ↗"** portal link. Reads `/api/creator/subscription`.
 
 ### Site Preview + Critique (`src/components/site-preview.tsx`)
-
-**Review mode has three answers (2026-08-20).** A previewed revision can be approved, kept for more
-editing, or **discarded** — the quiet third action confirms, then calls
-`/api/creator/revisions/:id/decline` (branch discarded; production was never touched). Before it,
-saying no meant closing the sheet, which left the revision `ready` forever and the deck kept
-offering it (BUG_AUDIT_2026-08-20 #47).
 In-app browser (back / reload / open-in-browser). On **web** the site loads in an `<iframe>`
 (react-native-webview has no web build); on native it's a real WebView. **Critique mode** for the
 live site: mark up the page + record a spoken critique → posts to `/api/creator/revise`
@@ -255,11 +225,10 @@ strokes `src/lib/annotate.ts` bakes into the reference image.
 **Subtitles live under the URL bar (2026-08-19).** They used to sit at the bottom of the Eve panel,
 where the tab bar cut them in half. They are also trimmed to the LAST few words (`tailWords`,
 `CAPTION_WORDS = 5`) so a long sentence rolls past like a caption instead of growing a paragraph,
-and they are **speech-paced**: her transcript arrives from the model far ahead of her audio, so
-words are revealed in proportion to the audio actually playing (`useSpokenText` + `SpeechWindow` in
-`src/lib/caption.ts`, re-read every `TICK_MS` = 80ms off live-voice's `playStartedAt`/`playEndsAt`) —
-at 40% through the sound, 40% of the words show — never running ahead of her voice and landing on
-the last word as she stops. Rendering the stream directly raced her voice.
+and they are **speech-paced**: her transcript arrives from the model far ahead of her audio, so a
+cursor walks the words at ~`WORD_MS` each (catching up in bigger steps when it falls behind, never
+past what has arrived) and flushes to the end when her turn finishes. Rendering the stream directly
+raced her voice.
 
 **Preview-ready push:** the forge **worker** (which marks revisions/provisions ready on the box)
 push-notifies the creator on **ready** and on **failed** (Expo push to their `device_tokens`) — so
@@ -278,20 +247,16 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   `/api/me` computes the OG card at read time for any logo'd brand missing one, so "Add a brand
   image" appears only for brands with no logo at all. The popup is a `<Modal>`, so it applies the
   screen's insets by hand (UI_RULES "Safe areas"). One brand → it's pre-selected and you land on the
-  second step. The top-left chip (`Site assets ▾` or the collection name — no brand prefix) opens
-  the full-screen product picker on tap (in Site-assets mode, this switcher instead); a long-press
-  always reopens the brand/collection switcher.
-  Catalogues are brand-scoped (`/api/catalogues?store=<slug>`, access-checked).
-  - **Site assets mode** (`assetMode`): the dock opens on the **Site assets** segment and the session is
+  second step. The top-left chip (`BRAND · Site assets` or `BRAND · COLLECTION ▾`) reopens it to
+  switch. Catalogues are brand-scoped (`/api/catalogues?store=<slug>`, access-checked).
+  - **Site assets mode** (`assetMode`): the dock opens straight to **Web assets** and the session is
     backed by the brand's one persistent **"Web Assets"** collection (found or created on entry, the
     `WEB_ASSETS_COLLECTION` const) — so every graphic generated here is **stored** and reappears. That
     collection holds only design graphics (no published products), so it never shows as a shop
     collection (the public collections endpoint inner-joins published products). Site-asset slots write
     to the store (`/api/creator/site-assets` resolves the store from the catalogue); `cover` is hidden
     (it's a product-collection cover). Picking/creating a real collection exits the mode.
-- **Top bar:** the collection chip (tap → full-screen product picker; long-press → switch
-  brand/collection) + a strip of the products on the canvas (where the design-history strip used to
-  be — tap a product to recenter on it; "＋" opens the picker).
+- **Top bar:** the brand·collection chip + design-history strip.
 - **Canvas:** node kinds — `design`, `template` (blank garment), `composition` (design-on-garment),
   `webslot` (a website-asset target), `group`. Pan/zoom, tap, box-select, blend. Auto-saves to
   `/api/canvas/:catalogueId`.
@@ -319,12 +284,10 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   name/collection/sizes/colors and publishes (`/api/publish`, with the cost+$5 price floor enforced).
 - **Blend / Combine:** merge two designs (`/api/merge`) or pick placements for a design+product.
 - **Catalogues/drops:** create with season presets, scoped to the chosen brand (`/api/catalogues`).
-- **Dock (2 segments):** **Collection designs** (this collection's designs strip) · **Site assets**
-  (the asset-tile strip below). Products are picked in a full-screen **ProductPicker**
-  (`src/components/designer/ProductPicker.tsx` — the full Printful catalogue, `/api/blanks`,
-  `/api/blank/:id/*`; large product cards — gender → type → product — with full, 2-line names so
-  blanks read clearly), opened from the chip, "Add products", and right after setup.
-- **Site assets — ASSET TILES (2026-08-18):** the text slot cards are GONE. One visual strip is
+- **Dock (3 panels):** **Products** (the full Printful catalogue — `/api/blanks`, `/api/blank/:id/*`;
+  browsed as large product cards — gender → type → product — with full, 2-line names so blanks read
+  clearly), **Web assets** (the site's slots: hero / cover / logo), **Content**.
+- **Web assets — ASSET TILES (2026-08-18):** the text slot cards are GONE. One visual strip is
   both the live inventory and the entry points: Hero · Wordmark · App icon · Favicon · Social ·
   sections · **Images** (the free bucket — memes and anything else, no site slot). **Tap a tile**
   → the full-screen generator opens PRECONFIGURED for that asset (dimensions + background locked,
@@ -340,7 +303,7 @@ required; signed-out shows a graceful sign-in prompt rather than the canvas.
   ("Set as hero" etc.) assigns straight to the slot. **Long-press a tile** drops its connect-target
   on the canvas (the drag-to-assign flow stays). Auto-generation (OG card, derived kit) is
   unchanged — these are creator overrides on top.
-- **Site assets:** the LOGO surface is the **LogoKit** (`src/lib/logo-kit.ts`): two editable MASTERS —
+- **Web assets:** the LOGO surface is the **LogoKit** (`src/lib/logo-kit.ts`): two editable MASTERS —
   the wide **Wordmark** (slot `logo`) and the square **App icon** mark (slot `mark`) — with the mono
   variants, 1024² app tile, touch icon and favicon DERIVED on assignment (a new master re-derives the
   kit + `favicon_url`; pre-kit brands derive read-time from `logo_url`). Square tiles display the

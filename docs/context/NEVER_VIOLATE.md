@@ -73,8 +73,8 @@ Sourced verbatim from the codebase's existing warnings (root `CLAUDE.md`, `TECH_
 
 ## 5. Account-surface parity
 
-**The account page exists in three places — the app (`src/app/account.tsx`), the website
-(`nanocrew-site/app/account/`) and the API. Never change one without the others.**
+**The account page exists twice — the app (`src/app/account.tsx`) and the website
+(`nanocrew-site/app/account/`). Never change one without the other.**
 
 One creator identity, two front doors. A capability added to the app and not the web (or the
 reverse) is a defect, not a backlog item: the creator who opens a laptop finds a different product.
@@ -95,7 +95,7 @@ drift.
   DATABASE_PLAN; an API shape → API.md (+ STOREFRONT_DATA_CONTRACT if public); a reusable component →
   [`UI_REGISTRY.md`](UI_REGISTRY.md). A PR that ships code with stale docs is incomplete.
 - **🟡 Commit often + push at each logical milestone.** End every commit message with the
-  `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` trailer.
+  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` trailer.
 
 ---
 

@@ -98,8 +98,7 @@ caller's action). Accepted actions:
 | `{ action: 'approved'\|'declined', returnId, reason? }` | claim → store → buyer → `sendReturnApproved`/`sendReturnDeclined` | `creator/returns/[id]/approve+api.ts` · `decline+api.ts` |
 | `{ action: 'brand_live', slug }` | store → creator → `sendBrandLive` (url = customDomain or `nanocrew.app/b/{slug}`) | `creator/stores/[slug]/publish+api.ts` (first publish only) |
 | `{ action: 'payout', orderId }` | order → store → creator → `sendPayoutNotification` | `internal/release-payouts+api.ts` (per released order) |
-| `{ action: 'collab_invite', inviteId }` | invite (pending only) → store + inviter → `sendCollabInvite` to the invitee, CTA → `nanocrew.app/invite/<token>` (data + accept on platform-api) | `stores/[slug]/collaborators+api.ts` POST |
-| `{ action: 'report', targetType, slug, reason, reporter? }` | → `sendContentReport` to `OPS_EMAIL` (Market content report) | `report+api.ts` (authed `POST /api/report`) |
+| `{ action: 'collab_invite', inviteId }` | invite (pending only) → store + inviter → `sendCollabInvite` to the invitee, CTA → `/invite/<token>` on platform-api | `stores/[slug]/collaborators+api.ts` POST |
 
 The app posts via the shared `notifyPlatform(payload)` helper (`src/lib/notify-internal.ts`) — no-ops
 in dev when `PLATFORM_API_BASE`/`INTERNAL_API_KEY` are unset. The other emails fire directly from their
@@ -151,8 +150,8 @@ generator) is the asset to upload wherever the sending address is administered.
 |---|---|---|---|
 | 1 | **Account verification / welcome** | Supabase Auth signup | Today: Supabase default SMTP (unbranded, off-domain). Move to Supabase **custom SMTP → Resend** + branded templates so it originates from `send.nanocrew.app`. Dashboard config — see "Owner config" |
 | 2 | **Order confirmation** | `checkout.session.completed` · `stripe-webhook/route.ts` | New. Discloses the returns policy + window. The webhook already loads order + email + items |
-| 3 | **Shipped + tracking** | `package_shipped` · `printful-webhook/route.ts` | **Exists** (`sendShippedEmail`), per-brand sender/branding via the `store` the webhook passes |
-| 4 | **Delivered + review request** | `package_shipped` · `printful-webhook` (v1 proxy) | Fired with the shipped email — Printful v1 emits no carrier "delivered" event, so the copy is scoped to "once it arrives". Move to a real delivered branch when carrier tracking lands. Asks for a review/feedback |
+| 3 | **Shipped + tracking** | `package_shipped` · `printful-webhook/route.ts` | **Exists** (`sendShippedEmail`). Add `store` for per-brand sender/branding |
+| 4 | **Delivered + review request** | delivery branch · `printful-webhook` (or the release path) | New. With ship+7d there's no carrier "delivered" event in v1 — fire on a `shippedAt + N` proxy or alongside window close. Asks for a review/feedback |
 | 5 | **Return requested (ack)** | `POST /api/public/returns` | New. Confirms the claim, sets expectations |
 | 6 | **Return approved** | creator approve · `/api/creator/returns/[id]/approve` | New. Often bundled with #7 |
 | 7 | **Refund confirmation** | refund issued (approve path **and** `charge.refunded` for dashboard refunds) | New. Both code-initiated and Stripe-dashboard refunds should notify |
@@ -166,8 +165,6 @@ generator) is the asset to upload wherever the sending address is administered.
 | 16 | **Beta waitlisted** | same route, past the 50-per-platform cap | Platform family. Says we'll email at launch — `beta_signups.launch_emailed_at` is what records that send |
 | 17 | **Beta signup (ops)** | same route, every signup | To `OPS_EMAIL`. Who signed up, which platform, status, slots left. Sent even when the tester add fails, so a `failed` row is never silent |
 | 14 | **Brand live** | `creator/stores/[slug]/publish+api.ts` → `/internal/notify` `{brand_live, slug}` | Platform family. First publish only (`!isPublic` guard) |
-| 18 | **Collaborator invite** | `stores/[slug]/collaborators+api.ts` POST → `/internal/notify` `{collab_invite, inviteId}` | Platform family. `sendCollabInvite` to the invitee; CTA → `nanocrew.app/invite/<token>` (the CTA-rule landing page) |
-| 19 | **Market content report (ops)** | app `POST /api/report` → `/internal/notify` `{report, …}` | To `OPS_EMAIL` via `sendContentReport` (Apple 1.2 UGC moderation + the INFORM consumer-report mechanism). Logged, not lost, when `OPS_EMAIL` is unset |
 
 Hook points already load order + store + items, so recipient + per-brand `from` are derivable with
 **no schema change** (`orders.customerEmail` + `stores.name/slug/logo_url`); creator-family recipient is

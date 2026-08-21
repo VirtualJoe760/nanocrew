@@ -15,14 +15,7 @@ export async function POST(req: Request) {
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
   const limited = await guardRate(`ai:${user.id}`, 60, 60);
   if (limited) return limited;
-  const body = (await req.json().catch(() => null)) as {
-    prompt?: string;
-    effort?: number;
-    context?: { role?: string; text?: string }[];
-    // Destination print technique (EMBROIDERY / KNITWEAR) — the enhanced prompt must not talk
-    // the image model into gradients and photo detail the fabrication can't produce.
-    technique?: string;
-  } | null;
+  const body = (await req.json().catch(() => null)) as { prompt?: string; effort?: number; context?: { role?: string; text?: string }[] } | null;
   const prompt = body?.prompt?.trim();
   if (!prompt) return Response.json({ error: 'prompt required' }, { status: 400 });
   try {
@@ -55,11 +48,6 @@ export async function POST(req: Request) {
                 `"${prompt}". Keep the same subject and intent where possible. ` +
                 (context
                   ? `They just talked it over with Eve — fold in the SPECIFIC creative directions from this conversation (details Eve suggested that the creator liked or didn't reject), not generic embellishment:\n${context}\n` : '') +
-                (body?.technique === 'EMBROIDERY'
-                  ? 'The artwork will be EMBROIDERED in stitched thread: steer the enhanced prompt toward bold simplified shapes in a few solid colors — never gradients, photographic detail, or fine lines. '
-                  : body?.technique === 'KNITWEAR'
-                    ? 'The artwork will be KNITTED from yarn: steer the enhanced prompt toward bold flat shapes in at most 4 colors — never gradients, shading, or tiny details. '
-                    : '') +
                 `${enhanceGuidance(effort)} ` +
                 `${GENERATABLE_GUIDANCE} ` +
                 'Reply with ONLY the enhanced prompt — no quotes, no preamble.',

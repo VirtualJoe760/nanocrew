@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import { db, schema } from '@/lib/db';
 
@@ -32,11 +32,7 @@ export async function GET(_req: Request, { slug }: Record<string, string>) {
       .from(schema.products)
       .leftJoin(schema.variants, eq(schema.variants.productId, schema.products.id))
       .where(and(eq(schema.products.storeId, store.id), eq(schema.products.isPublished, true)))
-      // NEWEST FIRST — the storefronts' drop feed. Templates take the head of this list for their
-      // "Latest Drop" rail, so oldest-first meant a new product could never appear there (Joe's
-      // bulldog report; BUG_AUDIT_2026-08-20 #1c). MUST match platform-api's copy of this route —
-      // brands point at one host or the other via brand.json's apiBase.
-      .orderBy(desc(schema.products.createdAt));
+      .orderBy(asc(schema.products.createdAt));
 
     const byId = new Map<
       string,

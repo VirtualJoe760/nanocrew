@@ -1,14 +1,14 @@
 import { Dimensions, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import Svg, { Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-import { EveGlyph } from '@/components/eve/eve-glyph';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Shared app "chrome": the monochrome silk background, the brand mark (Eve's constellation
-// glyph — the NC monogram is retired), and the screen palette — so Eve, Design, Market and
-// Account all read as one product. The Eve page imports these too, so the look stays in ONE place.
+// Shared Studio "chrome": the monochrome silk background, the NC brand mark, and the screen
+// palette — so Studio, Design, Market, and Account all read as one product. (Extracted from
+// studio.tsx; Studio imports these too, so the look stays in ONE place.)
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -84,12 +84,17 @@ export function FabricBackground({ p }: { p: Palette }) {
   );
 }
 
-/** The Nano Crew brand mark — Eve's constellation glyph (the CURRENT identity, 2026-08-16;
- *  the serif NC monogram is retired everywhere — assets/brand/README.md). `color`/`metallic`
- *  are accepted for back-compat with older callers but no longer used: the glyph carries its
- *  own identity color. */
-export function NCMark({ size }: { size: number; color?: string; metallic?: boolean }) {
-  return <EveGlyph size={size} />;
+/** The Nano Crew "NC" brand mark — the real logo asset, tinted to the foreground.
+ *  (`metallic` is accepted for back-compat with older callers but no longer used — the asset is flat.) */
+export function NCMark({ size, color }: { size: number; color: string; metallic?: boolean }) {
+  return (
+    <Image
+      source={require('../assets/brand/nc-mark.png')}
+      style={{ width: size, height: size }}
+      contentFit="contain"
+      tintColor={color}
+    />
+  );
 }
 
 /** The standard page header: NC mark + an uppercase label (e.g. NC mark + "MARKET" reads "NC MARKET"). */

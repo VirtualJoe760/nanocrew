@@ -34,7 +34,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import { choosePhoto } from '@/lib/pick-photo';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DesignTile, tileColor } from '@/components/design-tile';
@@ -43,6 +43,7 @@ import { DesignEditor } from '@/components/designer/DesignEditor';
 import { FinalizeSheet } from '@/components/designer/FinalizeSheet';
 import { ProductDetailSheet } from '@/components/designer/ProductDetailSheet';
 import { PlacementEditor } from '@/components/designer/PlacementEditor';
+import { DOCK_TAB_CLEARANCE } from '@/components/designer/TemplatesDock';
 import { ProductPicker } from '@/components/designer/ProductPicker';
 import { GlowButton } from '@/components/glow-button';
 import { GlowInput } from '@/components/glow-input';
@@ -50,7 +51,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, DOCK_TAB_CLEARANCE, Spacing } from '@/constants/theme';
+import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch, readJson } from '@/lib/api';
@@ -210,6 +211,36 @@ function reflowGroups(nodes: CanvasNode[]): CanvasNode[] {
     });
   }
   return out;
+}
+
+async function toDataUrl(uri: string): Promise<string> {
+  if (uri.startsWith('data:')) return uri;
+  try {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => resolve(uri);
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return uri;
+  }
+}
+
+async function pickImage(): Promise<string | null> {
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (perm.status !== 'granted') return null;
+  const res = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    base64: true,
+    quality: 0.9,
+  });
+  if (res.canceled || !res.assets?.[0]) return null;
+  const a = res.assets[0];
+  if (a.base64) return `data:${a.mimeType ?? 'image/png'};base64,${a.base64}`;
+  return toDataUrl(a.uri);
 }
 
 let designCounter = 0;
@@ -1343,10 +1374,8 @@ function DesignScreen() {
               ...prev,
             ]);
             Alert.alert(
-              d.technique === 'EMBROIDERY' ? 'Design adapted for embroidery' : 'Design adapted for knitting',
-              d.technique === 'EMBROIDERY'
-                ? 'This product is embroidered in stitched thread, which can only reproduce bold shapes in a few solid colors. We generated an embroidery-friendly version of your design and used it for this product — the original is untouched.'
-                : 'This product is knitted from yarn, which can only reproduce bold flat shapes in a few colors. We generated a knit-friendly version of your design and used it for this product — the original is untouched.',
+              'Design adapted for knitting',
+              'This product is knitted from yarn, which can only reproduce bold flat shapes in a few colors. We generated a knit-friendly version of your design and used it for this product — the original is untouched.',
             );
           }
           if (compositionId) {
@@ -1412,7 +1441,7 @@ function DesignScreen() {
   };
 
   // ── THE DESIGN COMMAND BUS (src/lib/design-bus.ts) ────────────────────────
-  // External actors (deep links today, Venus tomorrow — docs/archive/VENUS_CENTRAL.md) drive the canvas
+  // External actors (deep links today, Venus tomorrow — VENUS_CENTRAL.md) drive the canvas
   // through commands: open the generator prefilled, land an external image in the collection,
   // show it, edit it. The handler lives in a ref so the registered listener never closes over
   // stale state; commands whose data isn't loaded yet (catalogue / designs) wait in a retry queue.
@@ -3062,8 +3091,7 @@ function GenerateModal({
   };
 
   const pick = async () => {
-    // Camera OR library (shared lib/pick-photo — Eve's "Add a photo" is the same door).
-    const uri = await choosePhoto();
+    const uri = await pickImage();
     if (uri) setRefImage(uri);
   };
 

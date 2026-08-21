@@ -36,15 +36,10 @@ shared POS (see [STOREFRONT_DATA_CONTRACT.md](../storefront/STOREFRONT_DATA_CONT
 2. An order row is inserted **`pending_payment`** with a **placeholder
    `customerEmail: 'pending@checkout'`** — because at this point we don't know who the buyer is
    yet. The real identity comes from Stripe.
-3. A Stripe Checkout Session is created (with a processing fee line + flat shipping). The charge is
-   captured **100% to the platform** — separate charges and transfers, no `payment_intent_data`:
-   for a charges-enabled creator the brand's net is persisted on the order as **held**
-   (`brandNetCents` / `connectedAccountId` / `payoutStatus='held'`) and transferred later by the
-   release job. A brand whose creator has **no** charges-enabled Connect account is **hard-blocked**
-   (409 "the owner is still setting up payments") unless its slug is in `PLATFORM_SETTLED_SLUGS`
-   (platform-owned demo stores, which settle to the platform with `payoutStatus='none'`). See
-   [BILLING_CREDITS.md](BILLING_CREDITS.md) + [RETURNS_REFUNDS.md](RETURNS_REFUNDS.md).
-   `metadata.orderId` ties the session back to the row.
+3. A Stripe Checkout Session is created (with a processing fee line + flat shipping, and — if the
+   brand's creator has a charges-enabled Connect account — destination-charge routing with an
+   application fee; see [BILLING_CREDITS.md](BILLING_CREDITS.md)). `metadata.orderId` ties the
+   session back to the row.
 
 The in-app store proxies this via `/api/store/[slug]/checkout`; storefront templates POST it
 directly. Either way the customer's identity is whatever they type into **Stripe Checkout**, not
@@ -64,9 +59,8 @@ shippingAddress: collected?.shipping_details ?? s.customer_details ?? null,
 So `customerEmail` is **populated from Stripe**, not from any Nano Crew session. It then submits
 the paid order to Printful (`submitOrderToPrintful`) and sends the order-confirmation email. Other
 events: `checkout.session.expired` → `cancelled`; `charge.refunded` (full) → `refunded` +
-refund-confirmation email. Further fulfilment transitions (`shipped`, `on_hold`, `returned`,
-`failed`, `cancelled`) come from the Printful webhook (there is no `delivered` transition —
-Printful v1 emits no carrier delivered event) — and `package_shipped` now also stamps
+refund-confirmation email. Further fulfilment transitions (`shipped`, `delivered`, `on_hold`,
+`returned`, `failed`) come from the Printful webhook — and `package_shipped` now also stamps
 `shippedAt` + `returnWindowEndsAt` = `payoutReleaseAt` (ship + `RETURN_WINDOW_DAYS`, default 7),
 opening the return window and the payout hold (see [BILLING_CREDITS.md](BILLING_CREDITS.md) →
 "Payout timing" and [RETURNS_REFUNDS.md](RETURNS_REFUNDS.md)).
@@ -90,10 +84,9 @@ hit different backends:
   across `accessibleStoreIds(user.id)`, newest first, capped at 100, each tagged with its
   `storeSlug`. Stats live at `src/app/api/creator/stats+api.ts` (revenue + order count for
   paid-and-beyond statuses, 30-day pageviews). Refund at
-  `src/app/api/creator/orders/[id]/refund+api.ts` (`POST`) — ownership-checked, full refund via the
-  shared `refundOrder()` (`src/lib/connect.ts`), which branches on `payoutStatus`: `held` → the
-  un-sent transfer is skipped, `released` → the Transfer object is reversed, `none` → plain
-  platform refund; idempotent on an already-`refunded` order.
+  `src/app/api/creator/orders/[id]/refund+api.ts` (`POST`) — ownership-checked, full refund,
+  reverses the Connect transfer + platform fee when `applicationFeeCents > 0`, idempotent on an
+  already-`refunded` order.
 - **platform-api** — `platform-api/app/api/creator/orders/route.ts` (+ `/[id]/refund`, `/stats`):
   the **same** authed, `accessibleStoreIds`-scoped logic, called by the storefront `/admin`.
 
@@ -124,11 +117,8 @@ from); the brand-site shopper account page is the remaining template-level half.
 
 Implementation note: the email match only covers orders placed with that same email; orders checked
 out under a different email than the account won't appear (acceptable for v1). The in-app checkout
-proxy resolves the signed-in user's email up front and forwards it so in-app purchases attribute to
-the account (guests/brand-site buyers still match by Stripe email) — **currently broken in code**:
-platform-api's checkout drops the forwarded `customerEmail` and still inserts `pending@checkout`,
-so attribution only happens via the Stripe-collected email at the webhook (see
-`docs/ops/BUG_AUDIT_2026-08-20.md`). Wire the brand-site half at the **template
+proxy now resolves the signed-in user's email up front so in-app purchases attribute to the account
+(guests/brand-site buyers still match by Stripe email). Wire the brand-site half at the **template
 level** so every generated site ships it, and update this doc + [AUTH_IDENTITY.md](AUTH_IDENTITY.md)
 in the same change. The return flow on top of this surface is in
 [RETURNS_REFUNDS.md](RETURNS_REFUNDS.md).

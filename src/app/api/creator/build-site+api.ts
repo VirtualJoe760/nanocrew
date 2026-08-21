@@ -6,12 +6,6 @@ import { provisionStorefront } from '@/lib/provision';
 import { getEntitlements } from '@/lib/billing';
 import type { BrandResult, ChatMessage } from '@/lib/interview';
 
-// ⚠️ DEPRECATED (Joe, 2026-08-20): **there is no "build my website" button, by design.** A brand's
-// site is provisioned by the BUILD FLOW at creation (Eve → /api/store → provisionStorefront), not
-// bolted onto an existing shop-only brand later. This route has no caller and should not get one —
-// if you are here because an audit flagged it as an orphan, that is the intended state. Kept only
-// so an old client build can't 404 mid-flight; delete once no shipped binary calls it.
-
 // POST /api/creator/build-site { storeSlug } — provision a website for an existing brand
 // that doesn't have one yet (e.g. it launched shop-only on Starter). A website is a Pro+ feature.
 // Rebuilds the BrandResult from the stored profile + design system and fires the forge pipeline.

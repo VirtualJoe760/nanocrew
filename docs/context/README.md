@@ -5,10 +5,9 @@ breaking. The rest of `docs/` is the **domain layer** (how the product actually 
 Read [`CONTEXT_GUIDE.md`](CONTEXT_GUIDE.md) — the plain-English onboarding guide.
 
 ## The canonical read-order
-The root [`CLAUDE.md`](../../CLAUDE.md) loads the core of this order (AGENTS → NEVER_VIOLATE →
-CODE_STANDARDS → your division doc); the full canonical read-order for picking up any task is:
+The root [`CLAUDE.md`](../../CLAUDE.md) loads these in order; an agent picking up any task should too:
 
-1. [`../../AGENTS.md`](../../AGENTS.md) — what this is, the five deployable units, documentation discipline.
+1. [`../../AGENTS.md`](../../AGENTS.md) — what this is, the four deployable units, documentation discipline.
 2. [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) — the product, the user flow, and what's in/out of scope.
 3. [`NEVER_VIOLATE.md`](NEVER_VIOLATE.md) — the hard rules. **Read before any change.**
 4. [`CODE_STANDARDS.md`](CODE_STANDARDS.md) — how we write code (types, naming, errors, the pre-push gate).

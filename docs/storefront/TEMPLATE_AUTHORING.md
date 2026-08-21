@@ -17,8 +17,7 @@
   sites.** That's the whole point of the thin-client model: we never push commerce updates to the fleet.
 - `brand.json` carries **public config only**: `apiBase`, `platform.{supabaseUrl,supabaseAnonKey}`,
   `commerce` fees, palette/typography/name/tagline/story/logoUrl. Secrets never leave platform-api.
-- Public config is rotatable fleet-wide with **no forge session** via `scripts/resync-brand-config.mjs`
-  — a plain git push per brand repo; Vercel redeploys each site.
+- Public config is rotatable fleet-wide with **no rebuild** via `scripts/resync-brand-config.mjs`.
 
 ## What every template must ship (the contract)
 Read [STOREFRONT_DATA_CONTRACT.md](STOREFRONT_DATA_CONTRACT.md) — these are non-negotiable so the
@@ -33,21 +32,16 @@ brand's data flows in:
    - **Per-brand favicon**: derive the monogram from `brand.name` (never hardcode initials — the
      street "SL"/Stephen-Lawyer leak). Honor a creator-assigned OG image (`site_assets.og`).
 3. **Pages/blocks**: home, `/shop`, `/about`, `/contact`, `/blog` (+ `/blog/[slug]`),
-   `/product/[slug]`, `/policies/[policy]`, `/returns` (guest order lookup → return claim, via
-   `lookupOrder`/`submitReturnRequest` in the shared lib), `/admin`, `opengraph-image`,
-   `sitemap.ts`, `robots`. Static subpages must be **self-canonical**.
+   `/product/[slug]`, `/policies/[policy]`, `/admin`, `opengraph-image`, `sitemap.ts`, `robots`.
+   Static subpages must be **self-canonical**.
 4. **`TEMPLATE.md`** (the block dictionary + hard rules the forge obeys) and **`VOCABULARY.md`**
    (creator-phrase → block map). The forge brands the site from these — no `TEMPLATE.md` = the forge
    guesses = drift.
 
 ## Steps to create one
-1. **Seed**: `cp -R templates/minimal templates/<new>` (until the `base` seed exists, minimal is the
+1. **Seed**: `cp -R templates/minimal templates/<new>` (until `_shared`+`base` exist, minimal is the
    reference thin client). Restyle freely — components, Tailwind, layout are the template's job.
 2. **Keep the contract** above intact (data layer, live SEO, favicon, pages, TEMPLATE.md/VOCABULARY.md).
-   **The lib data layer is GENERATED** (Phase 5a landed): never hand-edit
-   `lib/{platform-auth,seo,site-config,api,content}.ts` — edit `templates/_shared/lib` and run
-   `node scripts/sync-shared.mjs`, and add your new template to `TARGETS` in that script. Run
-   `node scripts/sync-shared.mjs --check` before committing.
 3. **Register it** so the system can pick it (single source of truth = `src/lib/provision.ts`):
    - **New design style?** add the style to the `designStyle` union in `src/lib/interview.ts`, the
      Eve tool schema in `src/lib/live-voice.ts`, the `TEMPLATE_BY_STYLE` map in
@@ -62,7 +56,7 @@ brand's data flows in:
 
 ## How a template reaches a live site (so you know what propagates)
 The forge worker provisions by `cp -R templates/<template>/.` into a fresh per-brand repo
-(`buildProvisionScript()`, [forge-worker/worker.mjs:158-161](../../forge-worker/worker.mjs)), writes `brand.json` + briefs, lets
+([forge-worker/worker.mjs:145-148](../../forge-worker/worker.mjs)), writes `brand.json` + briefs, lets
 Claude brand it, build-gates, and pushes → Vercel deploys. Consequences:
 - A new/edited template only reaches **brands provisioned after** the change (or via an explicit
   rebuild/backfill of a brand's repo).

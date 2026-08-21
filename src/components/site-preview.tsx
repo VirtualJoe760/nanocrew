@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, type LayoutChangeEvent, Linking, Modal, NativeModules, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, TurboModuleRegistry, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, type LayoutChangeEvent, Linking, Modal, NativeModules, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, TurboModuleRegistry, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { G, Line, Path, Polygon, Polyline } from 'react-native-svg';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -154,7 +154,7 @@ function describeHit(d: Hit): string | null {
 
 // Review mode: a read-only preview of a pending change with two choices — keep editing (which loads
 // the Eve editor) or approve. NO Eve until the creator opts in via "Continue editing".
-type Review = { onContinueEditing: () => void; onApprove: () => void; onDiscard?: () => void; approving?: boolean };
+type Review = { onContinueEditing: () => void; onApprove: () => void; approving?: boolean };
 
 export function SitePreview({
   visible,
@@ -668,7 +668,7 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
             editing", which swaps this for the critique panel below. */}
         {review && !critique ? (
           <View style={[styles.panel, { paddingBottom: tabBarSpace(insets.bottom) + Spacing.two }]}>
-            <ThemedText type="code" style={styles.hint}>Reviewing your change — approve it, keep editing, or discard it.</ThemedText>
+            <ThemedText type="code" style={styles.hint}>Reviewing your change — approve it, or keep editing.</ThemedText>
             <View style={styles.reviewRow}>
               <Pressable onPress={review.onContinueEditing} style={styles.reviewSecondary}>
                 <ThemedText type="smallBold" style={styles.reviewSecondaryText}>Continue editing</ThemedText>
@@ -677,28 +677,6 @@ export function PreviewContent({ url, onClose, critique, review }: { url: string
                 <ThemedText type="smallBold" style={styles.reviewPrimaryText}>{review.approving ? 'Approving…' : 'Approve edits'}</ThemedText>
               </Pressable>
             </View>
-            {/* SAYING NO IS AN ANSWER (BUG_AUDIT_2026-08-20 #47). Without this the only way out was
-                closing the sheet, which left the revision 'ready' forever — the deck kept offering
-                it and its branch was never cleaned up. Quiet + confirmed: it throws work away, but
-                production was never touched (the change only ever lived on a working branch). */}
-            {review.onDiscard ? (
-              <Pressable
-                onPress={() =>
-                  Alert.alert(
-                    'Discard this change?',
-                    'Your site stays exactly as it is now. The edit is thrown away and can’t be recovered.',
-                    [
-                      { text: 'Keep it', style: 'cancel' },
-                      { text: 'Discard', style: 'destructive', onPress: review.onDiscard },
-                    ],
-                  )
-                }
-                disabled={review.approving}
-                style={styles.reviewDiscard}
-                hitSlop={8}>
-                <ThemedText type="code" style={styles.reviewDiscardText}>Discard this change</ThemedText>
-              </Pressable>
-            ) : null}
           </View>
         ) : null}
 
@@ -834,8 +812,6 @@ const styles = StyleSheet.create({
   reviewSecondaryText: { color: GOLD },
   reviewPrimary: { flex: 1, backgroundColor: GOLD, borderRadius: 999, paddingVertical: Spacing.three, alignItems: 'center' },
   reviewPrimaryText: { color: '#0b0b0d' },
-  reviewDiscard: { alignSelf: 'center', paddingVertical: Spacing.two },
-  reviewDiscardText: { color: 'rgba(205,209,217,0.55)', fontSize: 13 },
 
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', alignSelf: 'stretch', gap: Spacing.two },
   typeInput: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: 'rgba(205,209,217,0.3)', borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, color: INK, fontSize: 15, textAlignVertical: 'top' },

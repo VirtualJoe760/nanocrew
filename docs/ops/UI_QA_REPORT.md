@@ -1,7 +1,3 @@
-> **ARCHIVED 2026-08-20.** Every open item verified fixed or moot in code (paywall guard,
-> reflowGroups, site-preview snapshot, doCombine, nav-bar colour, template favicon; the onBounty P0
-> died with the Studio dashboard). QA state lives in [`docs/ops/BUG_REPORT_2026-08-14.md`](../ops/BUG_REPORT_2026-08-14.md).
-
 # Full System QA Report — 2026-06-20
 
 A combined **empirical** (live, driven in the web preview on the Alpha Patriot brand, logged in as

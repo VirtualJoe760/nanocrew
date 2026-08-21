@@ -1,6 +1,6 @@
 // THE DESIGN COMMAND BUS — the design tab's programmatic control surface.
 //
-// Anything in the app (deep links today; VENUS tomorrow — docs/archive/VENUS_CENTRAL.md) can
+// Anything in the app (deep links today; VENUS tomorrow — docs/studio/VENUS_CENTRAL.md) can
 // drive the design canvas without touching its internals: open the generator prefilled, land an
 // externally-generated image (e.g. a meme Venus made in conversation) in the current collection,
 // put it on the canvas, and pull it up in the editor for immediate review.

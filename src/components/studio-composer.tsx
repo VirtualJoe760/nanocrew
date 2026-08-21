@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -352,23 +352,6 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
     }
   };
 
-  /** Say NO to a previewed change: the branch is discarded, production was never touched
-   *  (BUG_AUDIT_2026-08-20 #47 — before this, closing the sheet left it 'ready' forever). */
-  const discardFromReview = async (rev: Revision) => {
-    setPreviewTarget(null);
-    setReviewRev(null);
-    setCritiquePreview(false);
-    try {
-      const res = await fetch(apiUrl(`/api/creator/revisions/${rev.id}/decline`), { method: 'POST', headers });
-      if (!res.ok) throw new Error();
-      setNote('Discarded — your site is unchanged.');
-    } catch {
-      setNote('Couldn’t discard that change. Try again in a moment.');
-    } finally {
-      await loadRevisions();
-    }
-  };
-
   // EMBEDDED (inside the BrandDeck): no Modal shell, no own header/tab bar — the deck names the
   // brand and drives `tab` via initialTab. The overlays (site preview, short composer) are RN
   // Modals, which render fine from any parent. Standalone keeps the original sheet.
@@ -621,7 +604,7 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
           url={previewTarget}
           onClose={() => { setPreviewTarget(null); setReviewRev(null); setCritiquePreview(false); }}
           critique={critiquePreview && active ? { slug: active, token, onSent: () => { void loadRevisions(); } } : undefined}
-          review={reviewRev && !critiquePreview ? { onContinueEditing: () => setCritiquePreview(true), onApprove: () => void approveFromReview(reviewRev), onDiscard: () => void discardFromReview(reviewRev), approving } : undefined}
+          review={reviewRev && !critiquePreview ? { onContinueEditing: () => setCritiquePreview(true), onApprove: () => void approveFromReview(reviewRev), approving } : undefined}
         />
       ) : null}
       {shortComposer && active ? (
@@ -675,16 +658,10 @@ export function StudioComposer({ visible, onClose, token, onOpenBilling, onDelet
   }
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
-          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
-          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
-          need the context too. */}
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-          <View style={styles.sheet}>{body}</View>
-        </SafeAreaView>
-        {overlays}
-      </SafeAreaProvider>
+      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+        <View style={styles.sheet}>{body}</View>
+      </SafeAreaView>
+      {overlays}
     </Modal>
   );
 }

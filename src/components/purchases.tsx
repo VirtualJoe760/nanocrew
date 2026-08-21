@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -96,68 +96,62 @@ export function Purchases({ visible, onClose }: { visible: boolean; onClose: () 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
-          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
-          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
-          need the context too. */}
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-          <View style={styles.sheet}>
-            <View style={styles.headerRow}>
-              <ThemedText type="code" style={styles.eyebrow}>
-                {'// PURCHASES'}
+      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+        <View style={styles.sheet}>
+          <View style={styles.headerRow}>
+            <ThemedText type="code" style={styles.eyebrow}>
+              {'// PURCHASES'}
+            </ThemedText>
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={onClose} hitSlop={12}>
+              <ThemedText type="code" themeColor="textSecondary">
+                close ✕
               </ThemedText>
-              <View style={{ flex: 1 }} />
-              <Pressable onPress={onClose} hitSlop={12}>
-                <ThemedText type="code" themeColor="textSecondary">
-                  close ✕
+            </Pressable>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator style={styles.center} color={theme.tint} />
+          ) : error ? (
+            <View style={styles.center}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {error}
+              </ThemedText>
+              <Pressable onPress={() => void load()} hitSlop={8}>
+                <ThemedText type="smallBold" themeColor="tint" style={styles.retry}>
+                  Retry
                 </ThemedText>
               </Pressable>
             </View>
+          ) : !orders.length ? (
+            <View style={styles.center}>
+              <ThemedText type="subtitle">No purchases yet</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.emptySub}>
+                Orders you place from any Nano Crew brand show up here — with tracking and returns.
+              </ThemedText>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+              {orders.map((o) => (
+                <OrderCard key={o.id} order={o} theme={theme} styles={styles} onReturn={() => setReturnFor(o)} />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </SafeAreaView>
 
-            {loading ? (
-              <ActivityIndicator style={styles.center} color={theme.tint} />
-            ) : error ? (
-              <View style={styles.center}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {error}
-                </ThemedText>
-                <Pressable onPress={() => void load()} hitSlop={8}>
-                  <ThemedText type="smallBold" themeColor="tint" style={styles.retry}>
-                    Retry
-                  </ThemedText>
-                </Pressable>
-              </View>
-            ) : !orders.length ? (
-              <View style={styles.center}>
-                <ThemedText type="subtitle">No purchases yet</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.emptySub}>
-                  Orders you place from any Nano Crew brand show up here — with tracking and returns.
-                </ThemedText>
-              </View>
-            ) : (
-              <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-                {orders.map((o) => (
-                  <OrderCard key={o.id} order={o} theme={theme} styles={styles} onReturn={() => setReturnFor(o)} />
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </SafeAreaView>
-
-        {returnFor ? (
-          <ReturnForm
-            order={returnFor}
-            theme={theme}
-            styles={styles}
-            onClose={() => setReturnFor(null)}
-            onDone={() => {
-              setReturnFor(null);
-              void load(); // refresh so the order flips to "Return requested"
-            }}
-          />
-        ) : null}
-      </SafeAreaProvider>
+      {returnFor ? (
+        <ReturnForm
+          order={returnFor}
+          theme={theme}
+          styles={styles}
+          onClose={() => setReturnFor(null)}
+          onDone={() => {
+            setReturnFor(null);
+            void load(); // refresh so the order flips to "Return requested"
+          }}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -290,100 +284,94 @@ function ReturnForm({
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      {/* Nested provider: the app's safe-area context does NOT cross an RN <Modal>, so every
-          inset inside resolved to 0 and content tucked under the Dynamic Island (B18 /
-          BUG_AUDIT_2026-08-20 #31). Wraps the whole modal body — siblings of the SafeAreaView
-          need the context too. */}
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-          <View style={styles.sheet}>
-            <View style={styles.headerRow}>
-              <ThemedText type="code" style={styles.eyebrow}>
-                {'// REQUEST A RETURN'}
+      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+        <View style={styles.sheet}>
+          <View style={styles.headerRow}>
+            <ThemedText type="code" style={styles.eyebrow}>
+              {'// REQUEST A RETURN'}
+            </ThemedText>
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={onClose} hitSlop={12}>
+              <ThemedText type="code" themeColor="textSecondary">
+                cancel ✕
               </ThemedText>
-              <View style={{ flex: 1 }} />
-              <Pressable onPress={onClose} hitSlop={12}>
-                <ThemedText type="code" themeColor="textSecondary">
-                  cancel ✕
-                </ThemedText>
-              </Pressable>
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.formIntro}>
+              {order.storeName || order.storeSlug || 'This order'} · {money(order.totalCents)}. Returns cover items that
+              arrived defective, wrong, damaged, or never arrived.
+            </ThemedText>
+
+            <ThemedText type="code" style={styles.formLabel}>
+              REASON
+            </ThemedText>
+            <View style={styles.reasons}>
+              {REASONS.map((r) => {
+                const active = reason === r.key;
+                return (
+                  <Pressable
+                    key={r.key}
+                    onPress={() => setReason(r.key)}
+                    style={[
+                      styles.chip,
+                      { borderColor: active ? theme.text : `${theme.textSecondary}55`, backgroundColor: active ? theme.text : 'transparent' },
+                    ]}>
+                    <ThemedText type="small" style={{ color: active ? theme.background : theme.text }}>
+                      {r.label}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
             </View>
 
-            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.formIntro}>
-                {order.storeName || order.storeSlug || 'This order'} · {money(order.totalCents)}. Returns cover items that
-                arrived defective, wrong, damaged, or never arrived.
-              </ThemedText>
+            <ThemedText type="code" style={styles.formLabel}>
+              PHOTOS {needsPhoto ? '(required)' : '(optional)'}
+            </ThemedText>
+            <TextInput
+              value={photos}
+              onChangeText={setPhotos}
+              placeholder="Paste photo URLs, separated by spaces"
+              placeholderTextColor={theme.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              multiline
+              style={[styles.input, styles.inputMulti, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+            />
 
-              <ThemedText type="code" style={styles.formLabel}>
-                REASON
+            <ThemedText type="code" style={styles.formLabel}>
+              NOTE (optional)
+            </ThemedText>
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              placeholder="Tell the brand what went wrong"
+              placeholderTextColor={theme.textSecondary}
+              multiline
+              style={[styles.input, styles.inputMulti, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+            />
+
+            {err ? (
+              <ThemedText type="small" style={styles.err}>
+                {err}
               </ThemedText>
-              <View style={styles.reasons}>
-                {REASONS.map((r) => {
-                  const active = reason === r.key;
-                  return (
-                    <Pressable
-                      key={r.key}
-                      onPress={() => setReason(r.key)}
-                      style={[
-                        styles.chip,
-                        { borderColor: active ? theme.text : `${theme.textSecondary}55`, backgroundColor: active ? theme.text : 'transparent' },
-                      ]}>
-                      <ThemedText type="small" style={{ color: active ? theme.background : theme.text }}>
-                        {r.label}
-                      </ThemedText>
-                    </Pressable>
-                  );
-                })}
+            ) : null}
+
+            <Pressable onPress={submit} disabled={busy}>
+              <View style={[styles.submit, { backgroundColor: theme.text, opacity: busy ? 0.5 : 1 }]}>
+                {busy ? (
+                  <ActivityIndicator color={theme.background} />
+                ) : (
+                  <ThemedText type="smallBold" style={{ color: theme.background }}>
+                    Submit return request
+                  </ThemedText>
+                )}
               </View>
-
-              <ThemedText type="code" style={styles.formLabel}>
-                PHOTOS {needsPhoto ? '(required)' : '(optional)'}
-              </ThemedText>
-              <TextInput
-                value={photos}
-                onChangeText={setPhotos}
-                placeholder="Paste photo URLs, separated by spaces"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                autoCorrect={false}
-                multiline
-                style={[styles.input, styles.inputMulti, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-              />
-
-              <ThemedText type="code" style={styles.formLabel}>
-                NOTE (optional)
-              </ThemedText>
-              <TextInput
-                value={note}
-                onChangeText={setNote}
-                placeholder="Tell the brand what went wrong"
-                placeholderTextColor={theme.textSecondary}
-                multiline
-                style={[styles.input, styles.inputMulti, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-              />
-
-              {err ? (
-                <ThemedText type="small" style={styles.err}>
-                  {err}
-                </ThemedText>
-              ) : null}
-
-              <Pressable onPress={submit} disabled={busy}>
-                <View style={[styles.submit, { backgroundColor: theme.text, opacity: busy ? 0.5 : 1 }]}>
-                  {busy ? (
-                    <ActivityIndicator color={theme.background} />
-                  ) : (
-                    <ThemedText type="smallBold" style={{ color: theme.background }}>
-                      Submit return request
-                    </ThemedText>
-                  )}
-                </View>
-              </Pressable>
-            </ScrollView>
-          </View>
-        </SafeAreaView>
-      </SafeAreaProvider>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
     </Modal>
   );
 }

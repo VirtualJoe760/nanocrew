@@ -14,13 +14,10 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { apiFetch, apiUrl, readJson } from '@/lib/api';
 import { armNextTurn } from '@/lib/eve-edit-bus';
-import { choosePhoto } from '@/lib/pick-photo';
 import { recentTranscript } from '@/lib/eve-transcript-bus';
 import { sayEve } from '@/lib/eve-say-bus';
 import { showEve } from '@/lib/eve-vision-bus';
 import type { CatalogBlank } from '@/lib/printful';
-import { blankLabel, garmentNoun } from '@/lib/garment-noun';
-import { techniqueInfo } from '@/lib/technique';
 
 // EVE'S DESIGN PIPELINE — voice-first, product-first, START to FINISH inside her tab (Joe's
 // california-flag-tee walkthrough, 2026-08-17):
@@ -35,24 +32,15 @@ import { techniqueInfo } from '@/lib/technique';
 const BG = '#08080a';
 const GENERATE_COST = 8; // display mirror of CREDIT_COSTS.design_generate (server is source of truth)
 
-type Step = 'loading' | 'brand' | 'pick' | 'style' | 'busy' | 'review' | 'place' | 'finalize' | 'done' | 'error';
+type Step = 'loading' | 'pick' | 'style' | 'busy' | 'review' | 'place' | 'finalize' | 'done' | 'error';
 type Design = { id: string; url: string; prompt: string };
 
 export function EveDesign({
   idea,
-  storeSlug,
-  brands,
   onExit,
 }: {
   /** The concept to make (from the routed spoken intent). */
   idea?: string;
-  /** The brand this design is FOR, when EveHome could resolve it (named brand, or a lone brand).
-   *  Without it a multi-brand creator's /api/catalogues fallback is a 409, never a guess. */
-  storeSlug?: string;
-  /** The creator's brands — passed ONLY when the brand is still open, so this surface can ask
-   *  with one tap instead of EveHome blocking the flow on a spoken answer (Joe, 2026-08-20:
-   *  asking for a design produced a question instead of the apparel picker). */
-  brands?: { slug: string; name: string }[];
   /** Back to Eve's home state. */
   onExit: () => void;
 }) {
@@ -61,17 +49,11 @@ export function EveDesign({
   const { session } = useAuth();
   const token = session?.access_token;
 
-  /** The brand actually in use: the resolved one, or whichever they tap in the brand step. */
-  const [slug, setSlug] = useState<string | undefined>(storeSlug ?? (brands?.length === 1 ? brands[0].slug : undefined));
-  const slugRef = useRef(slug);
-  slugRef.current = slug;
   const [step, setStep] = useState<Step>('loading');
   const [blanks, setBlanks] = useState<CatalogBlank[]>([]);
   const [blanksError, setBlanksError] = useState(false);
   const [blank, setBlank] = useState<CatalogBlank | null>(null);
   const [design, setDesign] = useState<Design | null>(null);
-  /** Inspiration photo (camera/library) riding the next generation as the image reference. */
-  const [refImage, setRefImage] = useState<string | null>(null);
   const [compositionId, setCompositionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const catalogueRef = useRef<string | null>(null);
@@ -81,18 +63,15 @@ export function EveDesign({
     [token],
   );
 
-  // Resolve the collection to persist into: THIS brand's first catalogue, or create "Designs".
-  // Always store-scoped — the slug-less fallback used to bind to the creator's oldest brand
-  // (BUG_AUDIT_2026-08-20 #1); the server now 409s that instead of guessing.
+  // Resolve the collection to persist into: the primary store's first catalogue, or create "Designs".
   const resolveCatalogue = useCallback(async (): Promise<string | null> => {
     if (catalogueRef.current) return catalogueRef.current;
     try {
-      const q = slug ? `?store=${encodeURIComponent(slug)}` : '';
-      const r = await fetch(apiUrl(`/api/catalogues${q}`), { headers: authHeaders() });
+      const r = await fetch(apiUrl('/api/catalogues'), { headers: authHeaders() });
       const d = (await r.json().catch(() => ({}))) as { catalogues?: { id: string }[] };
       let id = d.catalogues?.[0]?.id;
       if (!id) {
-        const c = await fetch(apiUrl('/api/catalogues'), { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: 'Designs', storeSlug: slug }) });
+        const c = await fetch(apiUrl('/api/catalogues'), { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: 'Designs' }) });
         const cd = (await c.json().catch(() => ({}))) as { catalogue?: { id: string } };
         id = cd.catalogue?.id;
       }
@@ -101,18 +80,15 @@ export function EveDesign({
     } catch {
       return null;
     }
-  }, [authHeaders, slug]);
+  }, [authHeaders]);
 
   const loadBlanks = useCallback(() => {
     setBlanksError(false);
     return apiFetch('/api/blanks')
       .then(readJson<{ blanks?: CatalogBlank[] }>)
       .then((d) => {
-        if (d.blanks?.length) {
-          setBlanks(d.blanks);
-          // Brand first when it's still open — otherwise straight to the products, as before.
-          setStep((cur) => (cur === 'loading' ? (slugRef.current ? 'pick' : 'brand') : cur));
-        } else setBlanksError(true);
+        if (d.blanks?.length) { setBlanks(d.blanks); setStep('pick'); }
+        else setBlanksError(true);
       })
       .catch(() => setBlanksError(true));
   }, []);
@@ -122,7 +98,7 @@ export function EveDesign({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (slug) void resolveCatalogue();
+    void resolveCatalogue();
     void loadBlanks();
     // NO cue here (Joe, 2026-08-18): the routing line already said the idea back, announced the
     // catalogue and gave her one suggestion — a second utterance the moment the picker mounts is
@@ -147,10 +123,8 @@ export function EveDesign({
           method: 'POST',
           headers: authHeaders(),
           // 'transparent' = the chroma-key pipeline: a print-ready cutout graphic, never a photo
-          // OF the product (the Design tab's product default). templateKey = the picked blank, so
-          // an embroidered cap or knitted sweater gets art born producible (lib/technique.ts).
-          // image = their inspiration photo, when they gave one (camera/library).
-          body: JSON.stringify({ prompt, catalogueId, background: 'transparent', aspectRatio: '1:1', templateKey: blank?.id, image: refImage ?? undefined }),
+          // OF the product (the Design tab's product default).
+          body: JSON.stringify({ prompt, catalogueId, background: 'transparent', aspectRatio: '1:1' }),
         });
         const d = (await r.json().catch(() => ({}))) as { image?: string; id?: string; error?: string; needed?: number };
         if (!r.ok || !d.image || !d.id) throw new Error(failFrom(r.status, d));
@@ -166,19 +140,8 @@ export function EveDesign({
         setStep(design ? 'review' : 'error');
       }
     },
-    [token, authHeaders, resolveCatalogue, blank?.name, blank?.id, design, refImage],
+    [token, authHeaders, resolveCatalogue, blank?.name, design],
   );
-
-  /** Camera or photo library → the inspiration reference for the next generation. She sees it. */
-  const addPhoto = useCallback(async () => {
-    const url = await choosePhoto();
-    if (!url) return;
-    setRefImage(url);
-    showEve({
-      url,
-      note: "(They just handed you an inspiration photo for this design — you can SEE it. React in one short sentence and say you'll fold it into the artwork.)",
-    });
-  }, []);
 
   /** Apply an edit instruction to the CURRENT design via /api/edit (custom mode, die-cut gated). */
   const applyEdit = useCallback(
@@ -259,15 +222,14 @@ export function EveDesign({
         headers: authHeaders(),
         // Fold in the conversation: her riffs ("I'd do neon sunglasses") become part of the
         // design when they hit ✦ Enhance (Joe, 2026-08-17 — as-is stays literal on purpose).
-        // technique keeps the enhanced prompt inside what the blank can fabricate.
-        body: JSON.stringify({ prompt: idea, context: recentTranscript(), technique: blank?.technique ?? undefined }),
+        body: JSON.stringify({ prompt: idea, context: recentTranscript() }),
       });
       const d = (await r.json().catch(() => ({}))) as { enhanced?: string };
       await generate(d.enhanced?.trim() || idea);
     } catch {
       await generate(idea);
     }
-  }, [idea, authHeaders, generate, blank?.technique]);
+  }, [idea, authHeaders, generate]);
 
   // Approve → a composition on the chosen blank (front placement; the editor refines it).
   const toPlacement = useCallback(async () => {
@@ -284,34 +246,12 @@ export function EveDesign({
           placement: 'front',
         }),
       });
-      const d = (await r.json().catch(() => ({}))) as {
-        composition?: { id: string };
-        id?: string;
-        adaptedDesign?: { id: string; url: string; prompt: string };
-        technique?: string;
-        error?: string;
-      };
+      const d = (await r.json().catch(() => ({}))) as { composition?: { id: string }; id?: string; error?: string };
       const id = d.composition?.id ?? d.id;
       if (!r.ok || !id) throw new Error(d.error ?? 'Could not stage the product');
-      if (d.adaptedDesign) {
-        // Fabrication requirement (knitwear / embroidery): the server regenerated the art to what
-        // the technique can produce, and the composition points at the NEW design row — swap to it
-        // or the shared PlacementEditor renders blank tiles (BUG_AUDIT_2026-08-20 #4). Parity
-        // with the tab's "Design adapted" alert: she SAYS it instead.
-        const how = d.technique === 'EMBROIDERY' ? 'embroidered in stitched thread' : 'knitted from yarn';
-        setDesign({ id: d.adaptedDesign.id, url: d.adaptedDesign.url, prompt: d.adaptedDesign.prompt });
-        showEve({
-          url: d.adaptedDesign.url,
-          note: `(This product is ${how}, so the design was regenerated as bold flat fabrication-friendly art — this is the version that will be produced.)`,
-        });
-        sayEve(
-          `(The placement editor just opened. In one warm sentence: this product is ${how}, so you remade their design as bold flat art that fabricates cleanly — the original is untouched — and they can size and position it now.)`,
-        );
-      } else {
-        sayEve('(The placement editor just opened — one short sentence: they can size and position the print, then hit Done.)');
-      }
       setCompositionId(id);
       setStep('place');
+      sayEve('(The placement editor just opened — one short sentence: they can size and position the print, then hit Done.)');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not stage the product');
       setStep('review');
@@ -333,37 +273,8 @@ export function EveDesign({
         </Pressable>
       </View>
 
-      {/* 0 — which brand? Only when EveHome couldn't resolve it (several brands, none named).
-          One tap, then the product picker — the flow never waits on a spoken round trip. */}
-      {step === 'brand' && brands?.length ? (
-        <View style={styles.stage}>
-          <View style={styles.avatarWindow} />
-          {idea ? <ThemedText style={[styles.line, { color: p.ink }]}>“{idea}”</ThemedText> : null}
-          <ThemedText type="small" style={{ color: p.dim }}>which brand is it for?</ThemedText>
-          <View style={styles.actions}>
-            {brands.map((b) => (
-              <Pressable
-                key={b.slug}
-                onPress={() => {
-                  setSlug(b.slug);
-                  slugRef.current = b.slug;
-                  void resolveCatalogue();
-                  setStep('pick');
-                  sayEve(`(They picked the brand "${b.name}". One SHORT line acknowledging it, then stop — the product catalogue is opening.)`);
-                }}
-                style={[styles.action, { borderColor: `${p.dim}66` }]}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={`Design for ${b.name}`}>
-                <ThemedText type="code" style={{ color: p.ink }}>{b.name}</ThemedText>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : null}
-
       {/* 1 — pick the product (the catalogue modal, single pick). */}
-      {step === 'pick' || (step === 'loading' && !!slug) ? (
+      {step === 'pick' || step === 'loading' ? (
         <ProductPicker
           visible
           blanks={blanks}
@@ -378,11 +289,8 @@ export function EveDesign({
             if (!chosen) return;
             setBlank(chosen);
             setStep('style');
-            // Surfaced technique awareness (Joe, 2026-08-20): when the blank is stitched or
-            // knitted she SAYS so — the tab shows the same fact as a chip in the picker.
-            const fab = techniqueInfo(chosen.technique)?.spoken;
             sayEve(
-              `(They picked the ${chosen.name}.${fab ? ` First, in one natural clause, mention that ${fab} — you'll design for that.` : ''} Now RIFF on the idea with them — react in one short sentence with ONE build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; do NOT mention the enhance/as-is buttons until they say they're done — then one line: ✦ Enhance folds this whole conversation in, as-is stays literal. If they mention having a photo, a sketch, or wanting to snap a picture for inspiration, point them at the "Add a photo" button on screen.)`,
+              `(They picked the ${chosen.name}. Now RIFF on the idea with them — react in one short sentence with ONE build-on of your own, then ask if there's anything else they want in it. Keep building turn by turn; do NOT mention the enhance/as-is buttons until they say they're done — then one line: ✦ Enhance folds this whole conversation in, as-is stays literal.)`,
             );
           }}
         />
@@ -394,23 +302,13 @@ export function EveDesign({
           {/* The REAL Eve glows through from the root behind this overlay — no stand-in orb. */}
           <View style={styles.avatarWindow} />
           <ThemedText style={[styles.line, { color: p.ink }]}>“{idea}”</ThemedText>
-          <ThemedText type="small" style={{ color: p.dim }}>on the {blankLabel(blank?.name)}</ThemedText>
+          <ThemedText type="small" style={{ color: p.dim }}>on the {blank?.name}</ThemedText>
           <View style={styles.actions}>
             <Pressable onPress={() => void enhanceAndGenerate()} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
               <ThemedText type="smallBold" style={{ color: BG }}>✦ Enhance it</ThemedText>
             </Pressable>
             <Pressable onPress={() => idea && void generate(idea)} style={[styles.action, { borderColor: `${p.dim}66` }]} hitSlop={6}>
               <ThemedText type="code" style={{ color: p.ink }}>Print as-is</ThemedText>
-            </Pressable>
-          </View>
-          {/* Inspiration photo (Joe, 2026-08-20): camera or library via the shared door
-              (lib/pick-photo — the tab's Upload tile is the same). The photo rides the
-              generation as /api/generate's `image` reference, and she SEES it. */}
-          <View style={styles.actions}>
-            <Pressable onPress={() => void addPhoto()} style={[styles.action, refImage ? { borderColor: p.accent, backgroundColor: `${p.accent}22` } : { borderColor: `${p.dim}66` }]} hitSlop={6}>
-              <ThemedText type="code" style={{ color: refImage ? p.accent : p.ink }}>
-                {refImage ? '📷 Photo added — tap to change' : '📷 Add a photo'}
-              </ThemedText>
             </Pressable>
           </View>
         </View>
@@ -451,7 +349,7 @@ export function EveDesign({
           </View>
           <View style={styles.actions}>
             <Pressable onPress={() => void toPlacement()} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
-              <ThemedText type="smallBold" style={{ color: BG }}>Put it on the {garmentNoun(blank?.name)} ›</ThemedText>
+              <ThemedText type="smallBold" style={{ color: BG }}>Put it on the {blank?.type?.replace(/s$/, '') ?? 'product'} ›</ThemedText>
             </Pressable>
           </View>
         </>
@@ -485,7 +383,7 @@ export function EveDesign({
           onClose={() => setStep('review')}
           onPublished={() => {
             setStep('done');
-            sayEve('(It published! One warm sentence: the product is in their catalogue now, their website is rebuilding itself and will show it in a couple of minutes, and model photos are rendering. Do NOT say it is already on the site — the rebuild takes a few minutes.)');
+            sayEve('(It published! One warm sentence: the product is in their catalogue and live on their site — model photos are rendering now.)');
           }}
         />
       ) : null}
@@ -494,10 +392,7 @@ export function EveDesign({
       {step === 'done' ? (
         <View style={styles.stage}>
           {design ? <Image source={{ uri: design.url }} style={styles.doneImage} contentFit="contain" /> : null}
-          {/* HONEST TIMING (BUG_AUDIT_2026-08-20 #1b): publish is instant in the catalogue, but the
-              brand site does a full rebuild (~2–5 min) — saying "on your site" here made a creator
-              file the delay as a broken publish. */}
-          <ThemedText style={[styles.line, { color: p.ink }]}>It’s live in your catalogue — your site refreshes in a couple of minutes.</ThemedText>
+          <ThemedText style={[styles.line, { color: p.ink }]}>It’s live — in your catalogue and on your site.</ThemedText>
           <View style={styles.actions}>
             <Pressable onPress={onExit} style={[styles.action, styles.actionPrimary, { backgroundColor: p.accent }, glow(p.accent, 12, 0.4)]} hitSlop={6}>
               <ThemedText type="smallBold" style={{ color: BG }}>Done</ThemedText>

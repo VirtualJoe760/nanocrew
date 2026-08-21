@@ -7,11 +7,6 @@ import { guardRate } from '@/lib/rate-limit';
 import { CREDIT_COSTS, debit, grant, InsufficientCreditsError } from '@/lib/credits';
 import { generateModelVideo } from '@/lib/model-video';
 
-// ⏸️ PARKED FOR v1 (Joe, 2026-08-20). Video is out of v1 and this has NO caller — the Sell tab
-// that triggered it is gone. Preserved deliberately, exactly like the social feed at /feed: the
-// pipeline works and returns when video does. See docs/roadmap/REMAINING_FEATURES.md §"Video —
-// PARKED FOR v1". Do not delete as dead code; do not re-file as a bug.
-
 // POST /api/creator/model-videos { productId } — generate one on-model Veo video for a product
 // (the video sibling of /api/creator/model-shots). Builds the storefront's on-model video
 // gallery + the site's featured video wall. Ownership-checked, rate-limited (Veo is the

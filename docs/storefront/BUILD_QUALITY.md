@@ -19,19 +19,12 @@ site against a fresh forge-generated one.
 
 ## Root causes (each maps to a fix in our flow)
 
-1. ~~**No hero/section imagery direction** → blank white hero.~~ → **✅ FIXED**, twice over:
-   provisioning pre-generates a brand hero (Nano Banana, `generateHeroImage()` in
-   `src/lib/provision.ts`) into `site_assets.hero` before the forge runs, and the Master `CLAUDE.md`
-   mandates "Hero with real atmosphere — never a blank/white hero."
-2. ~~**Template placeholders never replaced** → coffee beans as "patriotic apparel."~~ → **✅ largely
-   FIXED.** The forge conditioning owns a placeholder protocol — temporary content lives only in
-   `content/placeholders.json`, must be on-brand (never generic stock, never invented external
-   URLs) — and `AUTO_FIRST_DROP=1` generates real first products at store creation
-   (`src/lib/first-drop.ts`). Validation at scale is what remains.
-3. ~~**CTA looks broken** → no standing rule that primary CTAs must be styled, high-contrast,
-   working.~~ → **✅ FIXED** on both fronts: the Master `CLAUDE.md` carries the standing CTA rule,
-   and `brand.json` ships contrast-safe `onPrimary`/`onAccent` tokens (WCAG AA via
-   `lib/contrast.ts`) with a template-local luminance fallback (B9, 2026-08-14, all 5 templates).
+1. **No hero/section imagery direction** → blank white hero. The brief never tells the robot to
+   establish presentable, brand-appropriate **temporary imagery** on first build.
+2. **Template placeholders never replaced** → coffee beans as "patriotic apparel." When a store has
+   **no real products**, the template's built-in mock products show through unchanged, and nothing
+   swaps the stock images for anything on-brand.
+3. **CTA looks broken** → no standing rule that primary CTAs must be styled, high-contrast, working.
 4. ~~**Brief is a mail-merge, not a prompt**~~ → **✅ FIXED.** `authorBrandBrief()` in
    `src/lib/provision.ts` now has `gemini-2.5-pro` *author* an art-directed `01-BRAND.md` from the
    `BrandResult` + transcript + `siteNotes` (mail-merge kept only as never-break fallback). See
@@ -40,12 +33,9 @@ site against a fresh forge-generated one.
    → `/home/forge/.claude/CLAUDE.md`) now conditions every build + revision with the quality bar,
    anti-kitsch rule, "make it presentable" mandate, data-is-law, the off-limits rails, and
    always-build + self-check. See [../studio/FORGE_AI.md](../studio/FORGE_AI.md).
-6. **No eyes, no visual self-check** → the robot never screenshots its own output and judges it
-   against the brief — that half is still open. The *silent-failure* half is **✅ FIXED**: the
-   worker no longer swallows failures with `|| true` — it detects a failed claude run
-   (`CLAUDE_FAILED`) and a failed build (`BUILD_FAILED`), sets the store to `'draft'` (never a
-   false `'ready'`), marks the revision `'failed'`, skips the deploy, and notifies the creator
-   (`forge-worker/worker.mjs`).
+6. **No eyes, no self-check, silent failure** → the forge runs the robot one-shot, ends the command
+   in `|| true`, and only checks "does it compile" — never "does it look good." A bad build ships and
+   the store flips to `ready` anyway.
 7. ~~**Edit-fidelity gap — a correct copy edit silently doesn't render**~~ → **✅ FIXED**
    (2026-06-17). Eve edited `content/copy.json` `hero.cta` → "Shop the drop", the build was green,
    the branch + preview deployed — but the hero kept showing "Discover". Root cause: at provision the

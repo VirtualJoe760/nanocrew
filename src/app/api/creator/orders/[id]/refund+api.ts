@@ -1,28 +1,18 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { getUserFromRequest } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
 import { refundOrder } from '@/lib/connect';
-import { accessibleStoreIds } from '@/lib/tenant';
 
 // POST /api/creator/orders/:id/refund — refund one of the creator's own orders from the app
 // (parity with the brand-site /admin). Full refund; the money movement is routed through
 // refundOrder(), which branches on payoutStatus (held→skip the un-sent transfer, released→reverse
-// it). Mirrors the platform-api route. See docs/accounts/RETURNS_REFUNDS.md.
-//
-// SCOPE: owner OR collaborator (Joe, 2026-08-20 — BUG_AUDIT #29). Approving a RETURN already
-// triggers this same refund path and has always been collaborator-scoped, so owner-only here was
-// an incoherent split, not a safeguard: a collaborator could move the money through the other
-// door. Both doors now carry the same permission.
+// it). Ownership-checked. Mirrors the platform-api route. See docs/accounts/RETURNS_REFUNDS.md.
 const REFUNDABLE = ['paid', 'submitted_to_printful', 'in_production', 'shipped', 'delivered', 'on_hold', 'returned', 'return_requested'];
 
 export async function POST(req: Request, { id }: Record<string, string>) {
   const user = await getUserFromRequest(req);
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
-
-  // Every store this creator can act on — owned + collaborated (same set the returns inbox uses).
-  const storeIds = await accessibleStoreIds(user.id);
-  if (!storeIds.length) return Response.json({ error: 'not found' }, { status: 404 });
 
   const [order] = await db
     .select({
@@ -32,7 +22,7 @@ export async function POST(req: Request, { id }: Record<string, string>) {
     })
     .from(schema.orders)
     .innerJoin(schema.stores, eq(schema.stores.id, schema.orders.storeId))
-    .where(and(eq(schema.orders.id, id), inArray(schema.orders.storeId, storeIds)))
+    .where(and(eq(schema.orders.id, id), eq(schema.stores.creatorId, user.id)))
     .limit(1);
   if (!order) return Response.json({ error: 'not found' }, { status: 404 });
   if (order.status === 'refunded') return Response.json({ status: 'refunded' }); // idempotent

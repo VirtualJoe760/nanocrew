@@ -1,1 +1,0 @@
-ALTER TABLE "designs" ADD COLUMN "technique" text;

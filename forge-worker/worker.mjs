@@ -7,10 +7,8 @@
 // ~/stores/.forge.lock ⇒ never two forge jobs at once (RAM-safe), and the 30-min build no
 // longer depends on the app server staying alive (serverless-safe).
 //
-// ⚠️ The bash pipeline below is the ONLY copy of the forge run (persistent-clone + pnpm + render
-// + global-lock). src/lib/revise.ts no longer holds it — that module is now just the post-review
-// actions (approve → merge, decline → discard). Editing this file does NOT ship it: re-scp to the
-// droplet (see forge-worker/CLAUDE.md).
+// ⚠️ The bash pipeline below MUST stay in sync with src/lib/revise.ts (same persistent-clone +
+// pnpm + render + global-lock recipe). It's duplicated here so the worker stays dependency-light.
 //
 // Run as the `forge` user via systemd (see nanocrew-forge-worker.service). Env required:
 //   DATABASE_URL, GITHUB_TOKEN, GITHUB_OWNER, VERCEL_TOKEN
@@ -371,10 +369,7 @@ async function processOne() {
     // Both halves are real: the robot can fail to start (auth) or run and touch nothing.
     if (out.includes('CLAUDE_FAILED')) throw new Error(`the site robot could not run — see /tmp/${repo}-revise.log on the forge`);
     if (out.includes('NO_EDITS')) throw new Error('the site robot made no changes to the site');
-    // A failing build is a FAILED revision, not a ready one (BUG_AUDIT_2026-08-20 #15). The local
-    // pnpm build failing means the Vercel preview build fails too, so 'ready' invited the creator
-    // to review a preview that doesn't exist. Same treatment the provision path already gives it.
-    if (out.includes('BUILD_FAILED')) throw new Error('the site build failed on that change — nothing was published');
+    if (out.includes('BUILD_FAILED')) log(`  build failing on ${row.branch}`);
 
     const previewUrl = await deployPreview(fullRepo, repo, row.branch);
     await sql`update store_revisions set status = 'ready', preview_url = ${previewUrl} where id = ${row.id}`;

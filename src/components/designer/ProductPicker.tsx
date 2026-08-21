@@ -10,7 +10,6 @@ import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
 import type { BlankCategory, CatalogBlank } from '@/lib/printful';
-import { techniqueInfo } from '@/lib/technique';
 
 // The full-screen product picker — the visual drill-down that replaces the old bottom products dock.
 // Hierarchy: Supplier → Type of product → Gender → Product category → Product. Supplier is a single
@@ -204,14 +203,6 @@ export function ProductPicker({
             <ThemedText type="smallBold" numberOfLines={2} style={styles.overlayLabel}>
               {b.name}
             </ThemedText>
-            {/* Technique chip (Joe, 2026-08-20): a cap is Embroidered, a sweater Knitted, an
-                all-over product prints edge to edge — the creator sees what they're designing
-                for BEFORE the art exists. Shared card → the tab and Eve show the same fact. */}
-            {techniqueInfo(b.technique)?.chip ? (
-              <ThemedText type="small" numberOfLines={1} style={styles.overlaySub}>
-                {techniqueInfo(b.technique)!.chip}
-              </ThemedText>
-            ) : null}
           </View>
         </ThemedView>
       </Pressable>

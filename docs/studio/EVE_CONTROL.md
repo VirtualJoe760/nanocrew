@@ -1,12 +1,12 @@
 # EVE — AI-to-UI CONTROL (grounded build plan)
 
-> Companion to `docs/archive/VENUS_CENTRAL.md` (archived). This is the plan for the *greater vision*: Eve as the app's
+> Companion to `VENUS_CENTRAL.md`. This is the plan for the *greater vision*: Eve as the app's
 > central, morphing control surface, grounded against a full codebase inventory (2026-07-05).
 > Current state: **Eve lives on her own tab** — `/studio` hosts EveHome as the default surface (the
 > pull-down overlay is retired, see "The overlay retirement"; brands are the BrandDeck, opened ONLY
 > by the wheel's BRANDS spoke — the top-edge summon pill/pull-down was removed 2026-08-17),
 > plus the `developing` site-edit state and the intent router (`/api/eve/route`). `design` is a
-> translucent popup over EveHome (P3′ shipped end-to-end as the in-tab pipeline — see the loop below).
+> translucent popup over EveHome (P3′ steps 1–3 + 6 shipped; 4–5 open — see the loop below).
 
 ## The model (settled with Joe)
 
@@ -50,9 +50,8 @@ intent to the node; `pose` (later) is the per-node net reshape.
 ~55 nodes; the large majority are **already callable** (routes/buses exist). The concentrated work:
 - `pick` selection handshakes (see below).
 - URL-addressability of second-level nouns (Account sub-sections are local `useState`, not routable).
-- Product lifecycle gaps: **unpublish exists** — `PATCH /api/creator/products/:id { isPublished }`
-  (2026-08-18) hides/shows without destroying, with a storefront revalidate. **Price/details editing
-  is still the missing product write** — build it when a tree node needs it.
+- Product lifecycle gaps: **there is no creator route to unpublish or edit price/details** — delete
+  is the only product write today. Build those when a tree node needs them.
 - New routes: `GET /api/creator/sales-series` (units live in `order_items.quantity`, untouched),
   `POST /api/venus/draft-post`, post `scheduledAt` + cron.
 - The `design` hands-free state — **SHIPPED** as `eve-design.tsx` (see P3′); spoken-turn iteration
@@ -102,8 +101,7 @@ routes → money/stats. Cleanup interleaves.
   colMix). Spike the overlay compositing first.
 - **C3 — Design state:** `eve-design.tsx` + `POST /api/venus/design-turn`; land handshakes #1/#2.
 - **D — Posts + scheduling:** `draft-post` + `scheduledAt` + cron; handshake #6.
-- **E — Store/product lifecycle + stats:** build the missing price-edit route (unpublish shipped
-  2026-08-18) + `sales-series`;
+- **E — Store/product lifecycle + stats:** build the missing unpublish/price routes + `sales-series`;
   402 interceptor through the overlay; handshake #4.
 
 ## Deprecation (as Eve absorbs these flows)
@@ -271,8 +269,7 @@ The credit bleed, fixed. No redesign, no new files.
   re-opened under an ongoing conversation, so she picks up rather than re-introducing herself.
 - **The state pill** (top-right, at `insets.top` — see the Safe areas rule in `UI_RULES.md`) is her
   state, always on screen and tappable: SILENT · CONNECTING · LISTENING · THINKING · SPEAKING ·
-  PAUSED. At rest a barely-there 14% scrim sits over her (lowered from 30% — "she's never dim",
-  Joe 2026-08-18); it lifts when she talks.
+  PAUSED. At rest a 30% scrim dims her; it lifts when she talks.
 - **Verified in a foregrounded browser with full network capture:** arrival → pill SILENT, zero
   `/api/voice-live-token`, zero Gemini sockets. Tap → one token, one socket, one greeting, pill
   LISTENING. Opening the deck and then the Brand Console → **no** new token, socket or greeting, and
@@ -282,8 +279,7 @@ The credit bleed, fixed. No redesign, no new files.
 ### Follow-ups from Joe's device pass (2026-08-16)
 
 - **Tint** — the brand-review screen is a form over a moving avatar and was unreadable. EveHome's
-  scrim now tracks how much reading the surface demands: none while talking, `0.14` at rest
-  (lowered from `0.30` on 2026-08-18 — "barely-there — she's never dim"), `0.82`
+  scrim now tracks how much reading the surface demands: none while talking, `0.30` at rest, `0.82`
   behind brand review and the interview topic list. Same fix covers the post-create "store online"
   state, which is the same screen. Also drops `talking` when the `BrandResult` lands — the socket was
   already closed by `finalize()`, but the intent flag stayed set and the pill claimed she was
@@ -313,7 +309,7 @@ on exposed one latent bug, now fixed:
   `billing/success`.** That keeps the money surfaces off the app bundle — isolated from Apple's rules
   — and gives one web host serving iOS, Android and web identically. `connect/return` +
   `connect/refresh` are now platform-api pages with a `nanocrew://` deep link home. The
-  nanocrew-site copies now redirect to platform-api so they can't drift.
+  nanocrew-site copies are superseded and should be deleted or redirected.
 - **Status refresh on return.** Account read payout status once per session, so a creator came back
   from a completed onboarding and still saw "Finish payout setup". It now re-reads on the deep-link
   param and on foregrounding (most people swipe back rather than tapping the button).
@@ -323,7 +319,7 @@ should see "payouts active" / "finish setup" on the brand that earns the money. 
 to end: no creator has completed real Connect onboarding yet, so the return round-trip is
 code-verified only.
 
-### Revised plan (2026-08-16; statuses updated 2026-08-20)
+### Revised plan (2026-08-16)
 
 | | | Status |
 |---|---|---|
@@ -335,7 +331,7 @@ code-verified only.
 | **P3** | **Brand sheet** — replaces the deck AND the un-revisitable post-build success screen: identity (logo · palette · story · vibe, already served by `GET /api/creator/stores/:slug`), earnings + orders + views, unfinished tasks, **payout status**, site link | open — next |
 | **P3.1** | Edit identity in place — **must** go through `buildBrandPatch()` (NEVER_VIOLATE §2) | open |
 | **P4** | The D-01…D-18 batch | **shipped 2026-08-16** (OTA `ec614fd6`) — D-01/02/07/08/14/15/16/17/18; D-03/04/23 landed with P0/P1 work; D-05/06/09–12 close with the wheel + brand sheet (P2/P3) |
-| **P4.1** | **Collaborator invite** — endpoints shipped 2026-08-16 (`/api/creator/stores/:slug/collaborators`, owner-only manage; membership admin stays owner-only, go-live/publish/domain unchanged). **UI shipped** — `src/components/collaborators.tsx` (Account → Brand collaborators: invite by email, revoke pending, remove members) + `GET/POST /api/creator/invites` (accept/decline, email-match enforced) powering the Account page's "You've been invited" section. The surface landed in **Account**, not the Console/Brand sheet. | **shipped** (endpoints + UI) |
+| **P4.1** | **Collaborator invite** — endpoints shipped 2026-08-16 (`/api/creator/stores/:slug/collaborators`, owner-only manage; membership admin stays owner-only, go-live/publish/domain unchanged). **UI still open** — needs a surface in the Console or Brand sheet. | endpoints shipped · UI open |
 | **P5** | Optional wake phrase (needs an on-device keyword spotter) | deferred |
 
 ---
@@ -354,7 +350,7 @@ machinery already exists — this phase is four ADDITIVE changes, no new tables,
 
 | Piece | Where | State |
 |---|---|---|
-| Intent router | `src/app/api/eve/route+api.ts` | live; intents `create-brand · edit-site · new-design · site-asset · write-post · digest · done` (+`none`), with slot extraction (hero·logo·mark·favicon·og), storeSlug extraction for `edit-site`/`new-design`/`site-asset` (validated against the caller's stores), and the `awaitingSiteChoice`/`awaitingDesignIdea`/`awaitingAssetIdea`/`awaitingDesignBrand`/`awaitingAssetBrand` one-shot flags. `new-design` and `site-asset` resolve the brand like `edit-site` — a named brand wins, a lone brand goes straight through, several and she ASKS (the idea/slot ride the awaiting ref) — never a guess (2026-08-20, BUG_AUDIT #1: the old fallbacks bound designs to the oldest brand and assets to `stores[0]`) |
+| Intent router | `src/app/api/eve/route+api.ts` | live; intents `create-brand · edit-site · new-design · write-post · digest · done` |
 | Digest | `src/lib/eve-digest.ts` + `/api/creator/stats` | **works end-to-end** — renders + she narrates the headline |
 | Design in her own surface | `src/components/eve/eve-design.tsx` | generate `/api/generate`, show large, iterate `/api/edit` |
 | Context injection | `live.sendContext()` (`live-voice.ts`) | the primitive for feeding her facts mid-turn |
@@ -383,13 +379,9 @@ tool-calling** — that is why the router exists. New capabilities go through **
 Rebalance `eveCentralInstruction` (`src/lib/live-voice.ts`): conversation and ideation first, brand
 interview demoted to a module she *enters*. Tell her plainly what she can do, including the digest
 (today her prompt never mentions it).
-- **⚠ Fragile coupling (revised by the 2026-08-19 persona migration):** the `buildReady` coupling is
-  now a broad cue regex (`eve-home.tsx` — "ready to build" / "got everything" / "let's build" and
-  kin) plus a 6-turn floor that applies in the interview VIEW only. No persona file carries the old
-  verbatim *"ready to build your brand"* sentence any more (`src/eve/jobs/brand.md` says only "When
-  she has enough, she says so") — so if you edit `brand.md`, keep her ready-signal inside the regex
-  family or typed guide-mode interviews never unlock Build (see
-  [`BUG_AUDIT_2026-08-20.md`](../ops/BUG_AUDIT_2026-08-20.md)).
+- **⚠ Fragile coupling:** the interview module must keep the literal *"ready to build your brand"*
+  phrasing — `eve-home.tsx`'s `buildReady` regex listens for it. Change the wording and the Build
+  button silently never unlocks. Carry that sentence verbatim.
 - **Shipped:** `eveCentralInstruction` reordered — a new HOW YOU TALK section makes conversation the
   job ("a conversation that produces no task is a fine conversation"), the old
   "always nudging toward making something" steer is gone, the brand interview is a module she ENTERS,
@@ -475,11 +467,14 @@ down.** No session-lifting needed.
    handoffs are gone. The router's `idea` is the ARTWORK concept, never the garment.
 3. She SEES it — `eve-vision-bus` (`showEve` in EveDesign → `imageForEve` → `live.sendImage` in
    EveHome) fires on every settled generation/edit, and she reacts to the actual image (**shipped**).
-4.–6. **SUPERSEDED by step 2's full pipeline (2026-08-17):** product choice happens in the reused
-   `ProductPicker` modal, placement in `PlacementEditor`, pricing/publish in `FinalizeSheet` — all
-   inside her tab. There is no hand-off out of the popup any more: `eve-design.tsx` never imports
-   `sendDesignCommand` or routes to `/design` ("No redirects, ever" — the bus's remaining callers
-   are internal to `design.tsx`).
+4. "put it on a hoodie" → she offers options from `GET /api/blanks` (**open** — endpoint exists,
+   cached server-side; the voice loop that drives it is unbuilt).
+5. She applies it — `POST /api/composite` ("Nano Banana renders the design ON the garment photo",
+   review-only, returns a Cloudinary URL). Mockup replaces the design in the same modal (**open**).
+6. **Hand off to finalize** (**shipped**) — the popup's designs already exist server-side with ids,
+   so the hand-off is `sendDesignCommand({ kind: 'open-editor' | 'show-design', designId })` + route
+   to `/design` (not `ingest-design`, which is for external URLs). The bus queues while that screen
+   is unmounted and flushes on mount.
 
 ### Scope boundary (Joe's call)
 Voice does the CREATIVE work; the Design center does the COMMITTING. Nothing is published to the

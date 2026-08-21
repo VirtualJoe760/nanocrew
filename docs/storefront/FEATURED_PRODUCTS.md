@@ -30,9 +30,8 @@ Featured set = `isFeatured && isPublished`, ordered by `featuredOrder asc, creat
 ## App (creator control)
 
 - **Console (`src/components/studio-composer.tsx`)**: a "Feature ★ / Featured ✓" toggle per product
-  row (mirrors the existing delete action), extending the existing `PATCH /api/creator/products/:id`
-  (today it handles `isPublished` hide/show, 2026-08-18) with `{ isFeatured }`. Reordering can come
-  later (drag, or up/down).
+  row (mirrors the existing delete action), calling a new `PATCH /api/creator/products/:id`
+  `{ isFeatured }`. Reordering can come later (drag, or up/down).
 - The mutation must call `revalidateStorefront(slug)` (fire-and-forget) so the live site reflects the
   change — same pattern as delete/publish.
 

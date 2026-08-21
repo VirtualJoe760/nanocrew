@@ -3,10 +3,9 @@ import { createExpressLoginLink, createOnboardingLink, ensureConnectedAccount, g
 
 // GET  /api/creator/connect — the creator's payout/Connect status (refreshed from Stripe).
 // POST /api/creator/connect — create the account if needed and return a Stripe-hosted onboarding URL.
-// Money from each brand's storefront is captured to the platform and TRANSFERRED to this account
-// after the return window (separate charges + transfers, not a destination charge — see
-// src/lib/connect.ts). Needs Stripe Connect enabled on the platform account — until then POST
-// returns a clear "not available yet".
+// Money from each brand's storefront routes to this account (a destination charge with the platform's
+// application fee). Needs Stripe Connect enabled on the platform account — until then POST returns a
+// clear "not available yet".
 
 export async function GET(req: Request) {
   const user = await getUserFromRequest(req);
