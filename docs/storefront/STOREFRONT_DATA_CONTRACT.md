@@ -39,6 +39,13 @@ stephenlawyer.clothing — see "Cutover" below).
 These are the only catalogue surface a storefront may use. Source: `platform-api/app/api/public/`.
 Keep this section in lockstep with those routes.
 
+> ⚠️ **This route exists TWICE** — `platform-api` (Vercel, `nanocrew-api.vercel.app`) and the app
+> backend (Cloud Run, `api.nanocrew.app`) — and each brand points at one of them through
+> `brand.json`'s `apiBase`. A change to a public store route must land in **both** copies or brands
+> behave differently depending on which host they were provisioned against (2026-08-20: the
+> newest-first fix shipped to Vercel first and stephenlawyer.clothing, on Cloud Run, kept the old
+> order).
+
 ### `GET /api/public/stores/:slug/products`
 
 Returns **published products with NESTED variants** (not flat rows — the #1 gotcha), ordered
