@@ -74,3 +74,8 @@ Intentional exceptions are recorded in those matrices with a reason, never left 
 **/architect** plan a big feature first · **/recover** rebuild context after a compaction ·
 **/imprint** refresh the context docs from the code · **/instructions** regenerate
 [`CONTEXT_GUIDE.md`](docs/context/CONTEXT_GUIDE.md).
+
+**Testing loops** — drive the real thing, don't reason about it: **/eve-test** talk to her out loud
+through the ElevenLabs rig (preflight, the ten probes, the scenarios, evidence) · **/design-test**
+front-end test of both design surfaces, including the technique/placement safeguards that stop art
+landing on a product that cannot produce it.
