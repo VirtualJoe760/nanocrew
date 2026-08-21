@@ -79,10 +79,10 @@ horizontal picker that renders all 5 templates as live mini-mockups painted in t
 Edits mutate the `BrandResult` in place, so whatever they approve is exactly what `createStore` sends.
 Only on **Create my store** is the row created.
 
-The store row is created and `provisionStorefront()` is fired. (A brand that launched shop-only on
-Starter can add a website later via `POST /api/creator/build-site` — a Pro+ feature — which rebuilds
-the `BrandResult` from the stored profile and fires the same pipeline. `build-site` now **refuses a
-brand with no `designSystem`** — `422 no_design_system` — instead of firing a doomed provision.)
+The store row is created and `provisionStorefront()` is fired. **This is the only way a site gets
+built.** There is no "build my website" button and there should never be one (Joe, 2026-08-20):
+`POST /api/creator/build-site` is **deprecated**, has no caller by design, and must not be given
+one — an audit flagging it as an orphan is finding the intended state, not a gap.
 
 **The "building…" state is durable.** The Studio console's Edit-site tab
 (`src/components/studio-composer.tsx`) derives "building" from **durable signals** — the store's

@@ -65,7 +65,7 @@ Legend: **bearer** = authed via `apiFetch` + `getUserFromRequest` · **RL** = ra
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | POST | `/api/store` | bearer | Persist a finished interview → logo + OG + provision site. **402** if no plan / over brand cap. |
-| POST | `/api/creator/build-site` | bearer | Provision a website for a shop-only brand (409 if it already has one). |
+| ~~POST~~ | ~~`/api/creator/build-site`~~ | — | **DEPRECATED 2026-08-20 — do not call, do not add a button.** There is no "build my website" action: a site is provisioned by the build flow at brand creation. Kept only so an old client build can't 404. |
 | POST | `/api/creator/revise` | bearer | Request a site change on a `revision/<id>` branch (enqueues; never edits `main`). |
 | GET | `/api/creator/revisions?storeSlug=` | bearer | Revision history + status + preview URLs. |
 | POST | `/api/creator/revisions/:id/approve` | bearer | Merge a `ready` preview branch → production. |
