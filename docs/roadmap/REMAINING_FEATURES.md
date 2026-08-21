@@ -140,12 +140,17 @@ These three all unlock with **one** EAS dev build. The server sides are already 
 - 🟢 **Product-page model gallery** — done (Task #31): `products.model_shots` + `/api/creator/model-shots`
   (Nano Banana, credit-gated) + Sell-tab trigger; surfaced on the storefront product page (all 5 templates)
   via the public catalog. Generating spends real AI credits — validate on one product.
-- 🟢 **Veo on-model videos on websites** — done (Task #33): `products.model_videos` +
-  `/api/creator/model-videos` (Veo, ownership + rate-limited + 400-credit-gated, appends up to 3
-  angles) + Studio Sell-tab "film" trigger. Surfaced on the storefront product page (on-model film
-  gallery) and the homepage **featured video wall** (new `VideoGallery` block, 4 of the 5 templates
-  — street lacks it, see the parity item below) via the public `/videos` endpoint. Generating
-  spends real Veo credits — validate on one product.
+- ⏸️ **Video — PARKED FOR v1 (Joe, 2026-08-20), code preserved.** Same treatment as the social
+  feed: nothing is deleted, nothing is reachable. Built and kept: `products.model_videos` +
+  `products.video_url`, `/api/creator/model-videos` (Veo, rate-limited, credit-gated),
+  `/api/video` (voiceover ad), `/api/creator/scene-video` + `SceneShortComposer` (the "cool short"),
+  `src/lib/{fal-video,model-video,scene-video}.ts`, the `video_veo` / `video_voiceover` /
+  `scene_video` credit keys, the public `/videos` endpoint, and the templates' film gallery +
+  `VideoGallery` block. **No UI opens any of it** — the Sell tab that held the triggers is gone, and
+  `SceneShortComposer` has a close handler with no opener. Verified 2026-08-20: **0 of 31 products
+  have any video data**, so no live storefront renders a video either way. To un-park: give the
+  triggers a home (Market tab or an Eve intent) — the pipelines themselves still work.
+  (Formerly Task #33, marked done; it was never reachable after the tab merge.)
 - 🟢 **Template polish** — done (Task #32): dependency-free premium-motion layer (smooth scroll,
   transitions, image hover-zoom, page-entrance fade) in 4 of the 5 templates' `globals.css`
   (street lacks it, see the parity item below).

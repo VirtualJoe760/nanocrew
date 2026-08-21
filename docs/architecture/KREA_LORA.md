@@ -16,7 +16,7 @@ clothing — consistent, on-brand model photography of the real product, not gen
 ## Unit economics for us
 - One-time per avatar: ~**$3.00** (1000-step LoRA on the person).
 - Per model shot: ~**$0.04–0.07** → a 6-shot set ≈ $0.30.
-- Compare today's `model_shots` (3 Nano Banana renders, ~$0.12, 25 credits): similar per-shot
+- Compare today's `model_shots` (6 Nano Banana renders, ~$0.234, 50 credits): similar per-shot
   cost, but the LoRA gives a **consistent model identity across unlimited shots/scenes/angles**.
   Credits suggestion: `lora_train: 600` (≈2× cost
   margin, one-time per product) · `lora_shot: 10` per image. Comp accounts exempt as usual.

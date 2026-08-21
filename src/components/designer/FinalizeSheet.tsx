@@ -24,7 +24,7 @@ import { minRetailCents, suggestedRetailCents } from '@/lib/pricing';
 // Finalize & publish (port of stephen-lawyer's FinalizeForm): pick colors, set one retail
 // price (default ≈ 2× base cost), name it → creates the live Printful sync product.
 
-const MODEL_SHOTS_COST = 25; // display-only mirror of CREDIT_COSTS.model_shots (server is source of truth)
+const MODEL_SHOTS_COST = 50; // display-only mirror of CREDIT_COSTS.model_shots (server is source of truth)
 
 type Variant = { id: number; size: string; color: string; colorCode: string; priceCents: number };
 

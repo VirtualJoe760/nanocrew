@@ -146,9 +146,10 @@ Storefronts carry **no commerce backend**; they only *call* these. Mirror `check
 | `GET /api/customer/orders` | **authed buyer** | the signed-in user's orders where `lower(customerEmail) = lower(user.email)` — the app "Purchases" surface. DIRECT API, not the forge |
 | `GET /api/creator/returns` + `POST /[id]/approve` · `POST /[id]/decline` | **authed creator** | the Studio returns inbox; **approve calls the EXISTING refund path** (do not duplicate money movement); decline → `declined` + email |
 
-**Ownership scope:** use `accessibleStoreIds()` consistently (fixes the current divergence where the
-refund route joins `stores.creatorId` (owner-only) but order *listing* uses `accessibleStoreIds()`
-(owner + collaborators)).
+**Ownership scope:** `accessibleStoreIds()` everywhere — owner + collaborators. Done 2026-08-20
+(Joe's call, BUG_AUDIT #29): the refund route used to join `stores.creatorId` (owner-only) while
+order listing and return approve/decline were already collaborator-scoped — and since approving a
+return calls this very refund path, owner-only was an incoherent split rather than a safeguard.
 
 ## Refund mechanics — reuse, don't rebuild · `src/lib/connect.ts` `refundPayment`
 

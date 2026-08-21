@@ -9,6 +9,11 @@ import { Spacing } from '@/constants/theme';
 import { apiUrl } from '@/lib/api';
 import { type StudioPalette, useStudioPalette } from '@/lib/studio-palette';
 
+// ⏸️ PARKED FOR v1 (Joe, 2026-08-20). Video is out of v1 and this has NO caller — the Sell tab
+// that triggered it is gone. Preserved deliberately, exactly like the social feed at /feed: the
+// pipeline works and returns when video does. See docs/roadmap/REMAINING_FEATURES.md §"Video —
+// PARKED FOR v1". Do not delete as dead code; do not re-file as a bug.
+
 // The "cool short" composer: pick a product → a scene → format → a quality tier (Wan / Seedance /
 // Veo) → generate. Nano Banana renders an on-model still, the chosen fal model animates it, and the
 // short publishes straight to the brand site or the Nano Crew feed. Mirrors the post-composer shape.
