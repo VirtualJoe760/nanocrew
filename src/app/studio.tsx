@@ -356,6 +356,7 @@ function StudioScreen() {
           <EveDesign
             idea={typeof eve.payload?.idea === 'string' ? eve.payload.idea : undefined}
             storeSlug={typeof eve.payload?.storeSlug === 'string' ? eve.payload.storeSlug : undefined}
+            brands={Array.isArray(eve.payload?.brands) ? (eve.payload.brands as { slug: string; name: string }[]) : undefined}
             onExit={() => setEve(null)}
           />
         </View>

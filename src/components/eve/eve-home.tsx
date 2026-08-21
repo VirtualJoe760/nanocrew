@@ -560,22 +560,16 @@ export function EveHome({
               );
               return;
             }
-            // The brand next: same resolution as the site editor — a named brand wins, a lone
-            // brand goes straight through, more than one and she ASKS (the idea is carried so the
-            // answer only needs the name). Never guess: a design binds to one brand's catalogue.
+            // The brand: a named brand wins, a lone brand goes straight through. With several and
+            // none named we do NOT block — the surface opens anyway and picks the brand THERE
+            // (chips, one tap, she asks over the top). Blocking on a spoken answer first meant a
+            // 5-brand creator asking for a design got a question instead of the apparel picker
+            // (Joe, 2026-08-20). Never guess the brand; never make them wait for it either.
             const target = d.storeSlug
               ? stores.find((s) => s.slug === d.storeSlug)
               : stores.length === 1
                 ? stores[0]
                 : undefined;
-            if (!target) {
-              const options = stores.map((s) => `"${s.name}"`).join(' or ');
-              awaitDesignBrand.current = { idea };
-              live.sendContext(
-                `(They want a design — "${idea}" — but have more than one brand: ask which brand it's for: ${options}. One short line, nothing else. When they name one you'll open the design flow for that brand, so just take the name.)`,
-              );
-              return;
-            }
             // SHE LEADS, THEN THE MODAL (Joe, 2026-08-18: "she should lead with 'okay let me open
             // the apparel selection for you', then give her two cents"). The picker used to mount
             // the instant the router classified — which is often mid-thought, since routing fires
@@ -587,13 +581,23 @@ export function EveHome({
             const openDesign = () => {
               if (opened) return;
               opened = true;
-              onGo({ state: 'design', payload: { idea, storeSlug: target.slug } });
+              onGo({
+                state: 'design',
+                payload: {
+                  idea,
+                  storeSlug: target?.slug,
+                  // When the brand is still open, the surface needs the list to offer it.
+                  brands: target ? undefined : stores.map((s) => ({ slug: s.slug, name: s.name })),
+                },
+              });
             };
             // Cap the wait: if she can't speak at all (typed mode, dead socket), the surface must
             // still open rather than hang on a cue that will never dispatch.
             setTimeout(openDesign, 8000);
             live.prompt(
-              `(They want a design for "${target.name}": "${idea}". ONE short line, then STOP: say the idea back, tell them you're opening the product selection, and give ONE suggestion of what it'd suit. They're about to browse — nothing more until they've picked.)`,
+              target
+                ? `(They want a design for "${target.name}": "${idea}". ONE short line, then STOP: say the idea back, tell them you're opening the product selection, and give ONE suggestion of what it'd suit. They're about to browse — nothing more until they've picked.)`
+                : `(They want a design: "${idea}". ONE short line, then STOP: say the idea back and ask which brand it's for — their brands are on screen to tap. Nothing more; they're about to choose.)`,
               openDesign,
             );
             return;

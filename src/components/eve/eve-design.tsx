@@ -35,19 +35,24 @@ import { techniqueInfo } from '@/lib/technique';
 const BG = '#08080a';
 const GENERATE_COST = 8; // display mirror of CREDIT_COSTS.design_generate (server is source of truth)
 
-type Step = 'loading' | 'pick' | 'style' | 'busy' | 'review' | 'place' | 'finalize' | 'done' | 'error';
+type Step = 'loading' | 'brand' | 'pick' | 'style' | 'busy' | 'review' | 'place' | 'finalize' | 'done' | 'error';
 type Design = { id: string; url: string; prompt: string };
 
 export function EveDesign({
   idea,
   storeSlug,
+  brands,
   onExit,
 }: {
   /** The concept to make (from the routed spoken intent). */
   idea?: string;
-  /** The brand this design is FOR (resolved by EveHome: named brand → lone brand → she asked).
+  /** The brand this design is FOR, when EveHome could resolve it (named brand, or a lone brand).
    *  Without it a multi-brand creator's /api/catalogues fallback is a 409, never a guess. */
   storeSlug?: string;
+  /** The creator's brands — passed ONLY when the brand is still open, so this surface can ask
+   *  with one tap instead of EveHome blocking the flow on a spoken answer (Joe, 2026-08-20:
+   *  asking for a design produced a question instead of the apparel picker). */
+  brands?: { slug: string; name: string }[];
   /** Back to Eve's home state. */
   onExit: () => void;
 }) {
@@ -56,6 +61,10 @@ export function EveDesign({
   const { session } = useAuth();
   const token = session?.access_token;
 
+  /** The brand actually in use: the resolved one, or whichever they tap in the brand step. */
+  const [slug, setSlug] = useState<string | undefined>(storeSlug ?? (brands?.length === 1 ? brands[0].slug : undefined));
+  const slugRef = useRef(slug);
+  slugRef.current = slug;
   const [step, setStep] = useState<Step>('loading');
   const [blanks, setBlanks] = useState<CatalogBlank[]>([]);
   const [blanksError, setBlanksError] = useState(false);
@@ -78,12 +87,12 @@ export function EveDesign({
   const resolveCatalogue = useCallback(async (): Promise<string | null> => {
     if (catalogueRef.current) return catalogueRef.current;
     try {
-      const q = storeSlug ? `?store=${encodeURIComponent(storeSlug)}` : '';
+      const q = slug ? `?store=${encodeURIComponent(slug)}` : '';
       const r = await fetch(apiUrl(`/api/catalogues${q}`), { headers: authHeaders() });
       const d = (await r.json().catch(() => ({}))) as { catalogues?: { id: string }[] };
       let id = d.catalogues?.[0]?.id;
       if (!id) {
-        const c = await fetch(apiUrl('/api/catalogues'), { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: 'Designs', storeSlug }) });
+        const c = await fetch(apiUrl('/api/catalogues'), { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: 'Designs', storeSlug: slug }) });
         const cd = (await c.json().catch(() => ({}))) as { catalogue?: { id: string } };
         id = cd.catalogue?.id;
       }
@@ -92,15 +101,18 @@ export function EveDesign({
     } catch {
       return null;
     }
-  }, [authHeaders, storeSlug]);
+  }, [authHeaders, slug]);
 
   const loadBlanks = useCallback(() => {
     setBlanksError(false);
     return apiFetch('/api/blanks')
       .then(readJson<{ blanks?: CatalogBlank[] }>)
       .then((d) => {
-        if (d.blanks?.length) { setBlanks(d.blanks); setStep('pick'); }
-        else setBlanksError(true);
+        if (d.blanks?.length) {
+          setBlanks(d.blanks);
+          // Brand first when it's still open — otherwise straight to the products, as before.
+          setStep((cur) => (cur === 'loading' ? (slugRef.current ? 'pick' : 'brand') : cur));
+        } else setBlanksError(true);
       })
       .catch(() => setBlanksError(true));
   }, []);
@@ -110,7 +122,7 @@ export function EveDesign({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    void resolveCatalogue();
+    if (slug) void resolveCatalogue();
     void loadBlanks();
     // NO cue here (Joe, 2026-08-18): the routing line already said the idea back, announced the
     // catalogue and gave her one suggestion — a second utterance the moment the picker mounts is
@@ -321,8 +333,37 @@ export function EveDesign({
         </Pressable>
       </View>
 
+      {/* 0 — which brand? Only when EveHome couldn't resolve it (several brands, none named).
+          One tap, then the product picker — the flow never waits on a spoken round trip. */}
+      {step === 'brand' && brands?.length ? (
+        <View style={styles.stage}>
+          <View style={styles.avatarWindow} />
+          {idea ? <ThemedText style={[styles.line, { color: p.ink }]}>“{idea}”</ThemedText> : null}
+          <ThemedText type="small" style={{ color: p.dim }}>which brand is it for?</ThemedText>
+          <View style={styles.actions}>
+            {brands.map((b) => (
+              <Pressable
+                key={b.slug}
+                onPress={() => {
+                  setSlug(b.slug);
+                  slugRef.current = b.slug;
+                  void resolveCatalogue();
+                  setStep('pick');
+                  sayEve(`(They picked the brand "${b.name}". One SHORT line acknowledging it, then stop — the product catalogue is opening.)`);
+                }}
+                style={[styles.action, { borderColor: `${p.dim}66` }]}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`Design for ${b.name}`}>
+                <ThemedText type="code" style={{ color: p.ink }}>{b.name}</ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       {/* 1 — pick the product (the catalogue modal, single pick). */}
-      {step === 'pick' || step === 'loading' ? (
+      {step === 'pick' || (step === 'loading' && !!slug) ? (
         <ProductPicker
           visible
           blanks={blanks}

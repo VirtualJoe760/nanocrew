@@ -12,25 +12,36 @@ import { AppState } from 'react-native';
 // So: when a downloaded update is pending, reload into it as soon as doing so can't interrupt
 // anything — on the next return from background. Never mid-session, because reloading under a
 // creator's thumb would drop an interview transcript or a live voice turn.
+/** How long after launch an automatic reload is still free. Past this the creator is plausibly
+ *  mid-something — typing credentials, reading, talking to Eve — and we wait for a background hop
+ *  instead. Long enough that a normal fast download still lands in ONE launch. */
+const COLD_RELOAD_WINDOW_MS = 4000;
+
 export function UpdateGate() {
   const pending = useRef(false);
 
   useEffect(() => {
+    const mountedAt = Date.now();
+
     // Disabled in dev: the bundle comes from Metro, and expo-updates isn't in play.
     if (__DEV__ || !Updates.isEnabled) return;
 
     let cancelled = false;
 
-    // `coldStart` is the difference between a change landing in ONE launch and needing two. On a
-    // cold start nothing is in progress — no transcript, no live turn — so reloading the moment the
-    // download finishes is free. Later in the session we wait for a background/foreground hop.
+    // `coldStart` is the difference between a change landing in ONE launch and needing two. The
+    // first seconds after launch are genuinely free — nothing is in progress. But the check +
+    // download can take many seconds, and "cold start" was treated as safe for however long that
+    // took: if the creator had started signing in meanwhile, the app reloaded out from under them,
+    // wiping the email and password they were typing (Joe, 2026-08-20: "when I first login there's
+    // a moment where it reloads and flickers"). So the fast path is now WINDOWED — if the download
+    // lands after the window, it waits for a background hop like any other mid-session update.
     const check = async (coldStart = false) => {
       try {
         const result = await Updates.checkForUpdateAsync();
         if (cancelled || !result.isAvailable) return;
         await Updates.fetchUpdateAsync();
         if (cancelled) return;
-        if (coldStart) {
+        if (coldStart && Date.now() - mountedAt < COLD_RELOAD_WINDOW_MS) {
           void Updates.reloadAsync().catch(() => {});
           return;
         }

@@ -33,6 +33,7 @@ Taken from the imports and the API calls in each file, not from intent.
 | Capability | Design Center | Eve | Notes |
 |---|---|---|---|
 | Pick the product | ✅ `ProductPicker` | ✅ `ProductPicker` | shared — incl. the technique chip (Embroidered · Knitted · All-over print) |
+| Pick the BRAND | ✅ setup popup (brand → collection) | ✅ named aloud → lone brand → chips in-surface | Eve never blocks on it: the surface opens immediately and the brand is chosen there (2026-08-20 — a blocking spoken ask meant a 5-brand creator got a question instead of the apparel picker) |
 | Generate from a prompt | ✅ `/api/generate` | ✅ `/api/generate` | shared |
 | **Technique-aware generation** | ✅ composition-time adaptation | ✅ `templateKey` at generate + adaptation fallback | `lib/technique.ts`. Eve knows the blank BEFORE generating, so her art is born producible (embroidery ≤6 thread colors, knit ≤4 yarns); the tab generates product-blind and `/api/compositions` adapts at combine. `designs.technique` stops double-adaptation. |
 | Technique surfaced to the creator | ✅ picker chip + "Design adapted" alert | ✅ picker chip + she says it at pick and after adaptation | same fact, different verb (Joe, 2026-08-20: "surfaced in both") |
